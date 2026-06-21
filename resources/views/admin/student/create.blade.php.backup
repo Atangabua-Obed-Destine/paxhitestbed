@@ -1,0 +1,254 @@
+@extends('admin.layouts.master')
+@section('title', $title)
+
+@section('page_css')
+<style>
+  .form-section-title {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    padding-bottom: .35rem;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    font-size: .75rem;
+    letter-spacing: .08rem;
+  }
+  .form-section + .form-section {
+    border-top: 1px dashed rgba(0, 0, 0, 0.05);
+    padding-top: 1.5rem;
+  }
+  .repeatable-row-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+</style>
+@endsection
+
+@section('content')
+@php
+  $field = fn(string $slug) => \App\Models\Field::field($slug);
+  $fieldStatusCache = [];
+  $fieldEnabled = function (string $slug) use (&$fieldStatusCache, $field): bool {
+    if (!array_key_exists($slug, $fieldStatusCache)) {
+      $fieldStatusCache[$slug] = (int) optional($field($slug))->status === 1;
+    }
+    return $fieldStatusCache[$slug];
+  };
+
+  $guardianCount = max(count(old('relations', [])), 1);
+  $documentCount = count(old('titles', []));
+  $documentRepeaterCount = $fieldEnabled('student_documents') ? max($documentCount, 1) : 0;
+  $documentsEnabled = $fieldEnabled('student_school_transcript')
+    || $fieldEnabled('student_school_certificate')
+    || $fieldEnabled('student_collage_transcript')
+    || $fieldEnabled('student_collage_certificate')
+    || $fieldEnabled('student_photo')
+    || $fieldEnabled('student_signature')
+    || $fieldEnabled('student_documents');
+  $selectedStatuses = collect(old('statuses', []))->filter();
+
+  $identitySectionEnabled = $fieldEnabled('student_religion')
+    || $fieldEnabled('student_caste')
+    || $fieldEnabled('student_mother_tongue')
+    || $fieldEnabled('student_nationality')
+    || $fieldEnabled('student_marital_status')
+    || $fieldEnabled('student_blood_group')
+    || $fieldEnabled('student_national_id')
+    || $fieldEnabled('student_passport_no');
+  $addressSectionEnabled = $fieldEnabled('student_address');
+  $familyFieldsEnabled = $fieldEnabled('student_father_name')
+    || $fieldEnabled('student_father_occupation')
+    || $fieldEnabled('student_mother_name')
+    || $fieldEnabled('student_mother_occupation');
+  $guardianSectionEnabled = $fieldEnabled('student_relatives');
+  $familyOrGuardianEnabled = $familyFieldsEnabled || $guardianSectionEnabled;
+@endphp
+
+<div class='main-body'>
+  <div class='page-wrapper'>
+    <div class='row'>
+      <div class='col-12'>
+        <form id='admin-student-create' action='{{ route($route.'.store') }}' method='post' enctype='multipart/form-data' class='card needs-validation' novalidate>
+          @csrf
+          <div class='card-header d-flex flex-wrap justify-content-between align-items-center gap-2'>
+            <h5 class='mb-0'>{{ __('modal_add') }} {{ $title }}</h5>
+            <div class='d-flex flex-wrap gap-2'>
+              <button type='submit' class='btn btn-primary'><i class='fas fa-save'></i> {{ __('btn_submit') }}</button>
+              <a href='{{ route($route.'.create') }}' class='btn btn-info'><i class='fas fa-sync-alt'></i> {{ __('btn_refresh') }}</a>
+              <a href='{{ route($route.'.index') }}' class='btn btn-light'><i class='fas fa-arrow-left'></i> {{ __('btn_back') }}</a>
+            </div>
+          </div>
+          <div class='card-block'>
+            @if($errors->any())
+              <div class='alert alert-danger'>
+                <strong>{{ __('msg_error') }}</strong>
+                <ul class='mb-0 mt-2'>
+                  @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                  @endforeach
+                </ul>
+              </div>
+            @endif
+
+            <div class='form-section mb-4'>
+              <h6 class='form-section-title'>{{ __('Personal Information') }}</h6>
+              <div class='row g-3'>
+                <div class='form-group col-md-6'>
+                  <label for='first_name'>{{ __('field_first_name') }} <span>*</span></label>
+                  <input type='text' class='form-control @error('first_name') is-invalid @enderror' name='first_name' id='first_name' value='{{ old('first_name') }}' required>
+                  @error('first_name')
+                    <div class='invalid-feedback d-block'>{{ $message }}</div>
+                  @enderror
+                </div>
+                <div class='form-group col-md-6'>
+                  <label for='last_name'>{{ __('field_last_name') }} <span>*</span></label>
+                  <input type='text' class='form-control @error('last_name') is-invalid @enderror' name='last_name' id='last_name' value='{{ old('last_name') }}' required>
+                  @error('last_name')
+                    <div class='invalid-feedback d-block'>{{ $message }}</div>
+                  @enderror
+                </div>
+                <div class='form-group col-md-6'>
+                  <label for='gender'>{{ __('field_gender') }} <span>*</span></label>
+                  <select class='form-control @error('gender') is-invalid @enderror' name='gender' id='gender' required>
+                    <option value=''>{{ __('select') }}</option>
+                    <option value='1' @selected(old('gender') == 1)>{{ __('gender_male') }}</option>
+                    <option value='2' @selected(old('gender') == 2)>{{ __('gender_female') }}</option>
+                    <option value='3' @selected(old('gender') == 3)>{{ __('gender_other') }}</option>
+                  </select>
+                  @error('gender')
+                    <div class='invalid-feedback d-block'>{{ $message }}</div>
+                  @enderror
+                </div>
+                <div class='form-group col-md-6'>
+                  <label for='dob'>{{ __('field_dob') }} <span>*</span></label>
+                  <input type='date' class='form-control @error('dob') is-invalid @enderror' name='dob' id='dob' value='{{ old('dob') }}' required>
+                  @error('dob')
+                    <div class='invalid-feedback d-block'>{{ $message }}</div>
+                  @enderror
+                </div>
+              </div>
+            </div>
+
+            @if($identitySectionEnabled)
+              <div class='form-section mb-4'>
+                <h6 class='form-section-title'>{{ __('Identity & Background') }}</h6>
+                <div class='row g-3'>
+                  @if($fieldEnabled('student_nationality'))
+                    <div class='form-group col-md-6'>
+                      <label for='nationality'>{{ __('field_nationality') }}</label>
+                      <input type='text' class='form-control @error('nationality') is-invalid @enderror' name='nationality' id='nationality' value='{{ old('nationality') }}'>
+                      @error('nationality')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                  @if($fieldEnabled('student_religion'))
+                    <div class='form-group col-md-6'>
+                      <label for='religion'>{{ __('field_religion') }}</label>
+                      <input type='text' class='form-control @error('religion') is-invalid @enderror' name='religion' id='religion' value='{{ old('religion') }}'>
+                      @error('religion')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                  @if($fieldEnabled('student_caste'))
+                    <div class='form-group col-md-6'>
+                      <label for='caste'>{{ __('field_caste') }}</label>
+                      <input type='text' class='form-control @error('caste') is-invalid @enderror' name='caste' id='caste' value='{{ old('caste') }}'>
+                      @error('caste')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                  @if($fieldEnabled('student_mother_tongue'))
+                    <div class='form-group col-md-6'>
+                      <label for='mother_tongue'>{{ __('field_mother_tongue') }}</label>
+                      <input type='text' class='form-control @error('mother_tongue') is-invalid @enderror' name='mother_tongue' id='mother_tongue' value='{{ old('mother_tongue') }}'>
+                      @error('mother_tongue')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                  @if($fieldEnabled('student_marital_status'))
+                    <div class='form-group col-md-6'>
+                      <label for='marital_status'>{{ __('field_marital_status') }}</label>
+                      <select class='form-control @error('marital_status') is-invalid @enderror' name='marital_status' id='marital_status'>
+                        <option value=''>{{ __('select') }}</option>
+                        <option value='1' @selected(old('marital_status') == 1)>{{ __('marital_status_single') }}</option>
+                        <option value='2' @selected(old('marital_status') == 2)>{{ __('marital_status_married') }}</option>
+                        <option value='3' @selected(old('marital_status') == 3)>{{ __('marital_status_widowed') }}</option>
+                        <option value='4' @selected(old('marital_status') == 4)>{{ __('marital_status_divorced') }}</option>
+                        <option value='5' @selected(old('marital_status') == 5)>{{ __('marital_status_other') }}</option>
+                      </select>
+                      @error('marital_status')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                  @if($fieldEnabled('student_blood_group'))
+                    <div class='form-group col-md-6'>
+                      <label for='blood_group'>{{ __('field_blood_group') }}</label>
+                      <select class='form-control @error('blood_group') is-invalid @enderror' name='blood_group' id='blood_group'>
+                        <option value=''>{{ __('select') }}</option>
+                        <option value='1' @selected(old('blood_group') == 1)>{{ __('A+') }}</option>
+                        <option value='2' @selected(old('blood_group') == 2)>{{ __('A-') }}</option>
+                        <option value='3' @selected(old('blood_group') == 3)>{{ __('B+') }}</option>
+                        <option value='4' @selected(old('blood_group') == 4)>{{ __('B-') }}</option>
+                        <option value='5' @selected(old('blood_group') == 5)>{{ __('AB+') }}</option>
+                        <option value='6' @selected(old('blood_group') == 6)>{{ __('AB-') }}</option>
+                        <option value='7' @selected(old('blood_group') == 7)>{{ __('O+') }}</option>
+                        <option value='8' @selected(old('blood_group') == 8)>{{ __('O-') }}</option>
+                      </select>
+                      @error('blood_group')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                  @if($fieldEnabled('student_national_id'))
+                    <div class='form-group col-md-6'>
+                      <label for='national_id'>{{ __('field_national_id') }}</label>
+                      <input type='text' class='form-control @error('national_id') is-invalid @enderror' name='national_id' id='national_id' value='{{ old('national_id') }}'>
+                      @error('national_id')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                  @if($fieldEnabled('student_passport_no'))
+                    <div class='form-group col-md-6'>
+                      <label for='passport_no'>{{ __('field_passport_no') }}</label>
+                      <input type='text' class='form-control @error('passport_no') is-invalid @enderror' name='passport_no' id='passport_no' value='{{ old('passport_no') }}'>
+                      @error('passport_no')
+                        <div class='invalid-feedback d-block'>{{ $message }}</div>
+                      @enderror
+                    </div>
+                  @endif
+                </div>
+              </div>
+            @endif
+
+            <div class='form-section mb-4'>
+              <h6 class='form-section-title'>{{ __('Contact Details') }}</h6>
+              <div class='row g-3'>
+                <div class='form-group col-md-6'>
+                  <label for='phone'>{{ __('field_phone') }} <span>*</span></label>
+                  <input type='text' class='form-control @error('phone') is-invalid @enderror' name='phone' id='phone' value='{{ old('phone') }}' required>
+                  @error('phone')
+                    <div class='invalid-feedback d-block'>{{ $message }}</div>
+                  @enderror
+                </div>
+                <div class='form-group col-md-6'>
+                  <label for='email'>{{ __('field_email') }} <span>*</span></label>
+                  <input type='email' class='form-control @error('email') is-invalid @enderror' name='email' id='email' value='{{ old('email') }}' required>
+                  @error('email')
+                    <div class='invalid-feedback d-block'>{{ $message }}</div>
+                  @enderror
+                </div>
+                @if($fieldEnabled('student_emergency_phone'))
+                  <div class='form-group col-md-6'>
+                    <label for='emergency_phone'>{{ __('field_emergency_phone') }}</label>
+                    <input type='text' class='form-control @error('emergency_phone') is-invalid @enderror' name='emergency_phone' id='emergency_phone' value='{{ old('emergency_phone') }}'>
+                    @error('emergency_phone')
+                      <div class='invalid-feedback d-block'>{{ $message }}</div>
+                    @enderror
+                  </div>
+                @endif
+              </div>
+            </div>

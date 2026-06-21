@@ -1,0 +1,1119 @@
+/* ========================================
+   Student Portal — Header & Sidebar
+   Modern Warm-Gradient Design
+   Designed for Pcoded/Ablestar framework
+   ======================================== */
+
+/* ----------------------------------------
+   CSS Custom Properties
+   ---------------------------------------- */
+:root {
+    --stu-header-height: 56px;
+    --stu-sidebar-width: 240px;
+
+    /* --- Student Palette (Indigo / Violet) --- */
+    --stu-from: #1e1b4b;
+    --stu-via: #312e81;
+    --stu-to: #3730a3;
+    --stu-accent: #818cf8;
+    --stu-accent-glow: rgba(129, 140, 248, 0.35);
+    --stu-accent-dim: rgba(129, 140, 248, 0.12);
+    --stu-teal: #2dd4bf;
+    --stu-teal-glow: rgba(45, 212, 191, 0.25);
+    --stu-emerald: #34d399;
+    --stu-emerald-glow: rgba(52, 211, 153, 0.25);
+    --stu-rose: #fb7185;
+    --stu-rose-glow: rgba(251, 113, 133, 0.25);
+    --stu-amber: #fbbf24;
+    --stu-amber-glow: rgba(251, 191, 36, 0.25);
+    --stu-slate: rgba(255, 255, 255, 0.55);
+
+    /* --- Glass --- */
+    --stu-glass: rgba(255, 255, 255, 0.07);
+    --stu-glass-hover: rgba(255, 255, 255, 0.14);
+    --stu-glass-border: rgba(255, 255, 255, 0.09);
+    --stu-glass-card: rgba(255, 255, 255, 0.97);
+
+    /* --- Text --- */
+    --stu-text-primary: rgba(255, 255, 255, 0.95);
+    --stu-text-secondary: rgba(255, 255, 255, 0.58);
+
+    /* --- Effects --- */
+    --stu-fast: 0.18s ease;
+    --stu-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --stu-radius-sm: 8px;
+    --stu-radius-md: 12px;
+    --stu-radius-lg: 16px;
+    --stu-radius-pill: 50px;
+    --stu-shadow-dropdown: 0 12px 48px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    --stu-shadow-header: 0 1px 0 0 rgba(255, 255, 255, 0.04), 0 4px 24px -2px rgba(0, 0, 0, 0.25);
+}
+
+/* ========================================
+   1. HEADER — Gradient Base
+   ======================================== */
+.pcoded-header {
+    position: fixed;
+    top: 0;
+    z-index: 1028;
+    background: linear-gradient(135deg, var(--stu-from), var(--stu-via), var(--stu-to)) !important;
+    box-shadow: var(--stu-shadow-header);
+    border-bottom: 1px solid var(--stu-glass-border);
+    min-height: var(--stu-header-height) !important;
+    height: var(--stu-header-height) !important;
+    max-height: var(--stu-header-height) !important;
+    display: flex !important;
+    align-items: center;
+    flex-wrap: nowrap !important;
+    overflow: visible;
+    padding: 0 !important;
+    transition: none;
+}
+
+.pcoded-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+/* ========================================
+   1a. HEADER — Left side
+   ======================================== */
+.pcoded-header .collapse .navbar-nav.me-auto {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    padding-left: 8px;
+}
+
+/* Fullscreen toggle */
+.pcoded-header .collapse .navbar-nav.me-auto > li > a.full-screen {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--stu-radius-sm);
+    background: var(--stu-glass);
+    border: 1px solid var(--stu-glass-border);
+    color: var(--stu-text-primary);
+    transition: var(--stu-fast);
+    font-size: 16px;
+}
+.pcoded-header .collapse .navbar-nav.me-auto > li > a.full-screen:hover {
+    background: var(--stu-glass-hover);
+    color: var(--stu-accent);
+    box-shadow: 0 0 14px var(--stu-accent-glow);
+}
+
+/* Title text */
+.pcoded-header .topbar-title {
+    color: var(--stu-text-primary) !important;
+    margin: 0 !important;
+    font-size: 15px !important;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+/* Session / Semester badges */
+.pcoded-header .collapse .navbar-nav.me-auto .badge.bg-success {
+    background: linear-gradient(135deg, #059669, #34d399) !important;
+    color: #fff !important;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: var(--stu-radius-pill);
+    box-shadow: 0 0 10px var(--stu-emerald-glow);
+}
+.pcoded-header .collapse .navbar-nav.me-auto .badge.bg-info {
+    background: linear-gradient(135deg, var(--stu-from), var(--stu-accent)) !important;
+    color: #fff !important;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: var(--stu-radius-pill);
+    box-shadow: 0 0 10px var(--stu-accent-glow);
+}
+
+/* ========================================
+   1b. HEADER — Right side (dropdowns)
+   ======================================== */
+.pcoded-header .navbar-nav.ms-auto {
+    display: flex !important;
+    align-items: center;
+    gap: 2px;
+    padding-right: 12px;
+}
+
+/* Override framework's 70px line-height and inline-block on ALL nav items */
+.pcoded-header .navbar-nav > li {
+    line-height: normal !important;
+    display: flex !important;
+    align-items: center;
+    padding: 0 4px !important;
+}
+.pcoded-header .navbar-nav > li:first-child {
+    padding-left: 4px !important;
+}
+.pcoded-header .navbar-nav > li:last-child {
+    padding-right: 4px !important;
+}
+
+/* Override framework's dropdown toggle line-height */
+.pcoded-header .navbar-nav.ms-auto .dropdown .dropdown-toggle,
+.pcoded-header .navbar-nav.ms-auto > li > .dropdown > a,
+.pcoded-header .navbar-nav.ms-auto > li > div > a,
+.pcoded-header .navbar-nav.ms-auto > li > a {
+    line-height: normal !important;
+    display: flex !important;
+    align-items: center;
+    height: auto;
+    padding: 0 !important;
+}
+
+/* Generic icon buttons on right */
+.pcoded-header .navbar-nav.ms-auto > li > .dropdown > .dropdown-toggle,
+.pcoded-header .navbar-nav.ms-auto > li > div > .dropdown-toggle {
+    width: 38px;
+    height: 38px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--stu-radius-sm);
+    background: var(--stu-glass);
+    border: 1px solid var(--stu-glass-border);
+    color: var(--stu-text-primary) !important;
+    font-size: 16px;
+    transition: var(--stu-fast);
+    text-decoration: none;
+}
+.pcoded-header .navbar-nav.ms-auto > li > .dropdown > .dropdown-toggle:hover,
+.pcoded-header .navbar-nav.ms-auto > li > div > .dropdown-toggle:hover {
+    background: var(--stu-glass-hover);
+    color: var(--stu-accent) !important;
+    box-shadow: 0 0 14px var(--stu-accent-glow);
+}
+
+/* Hide Bootstrap dropdown carets on header nav items */
+.pcoded-header .navbar-nav .dropdown-toggle::after {
+    display: none !important;
+}
+
+/* Override framework's header-lightblue link colors at ALL sizes */
+.pcoded-header.header-lightblue a,
+.pcoded-header.header-lightblue .input-group .input-group-text,
+.pcoded-header.header-lightblue dropdown-toggle {
+    color: var(--stu-text-primary) !important;
+}
+.pcoded-header.header-lightblue a:hover,
+.pcoded-header.header-lightblue dropdown-toggle:hover {
+    color: #fff !important;
+}
+
+/* Language icon */
+.pcoded-header .navbar-nav.ms-auto .fa-language {
+    font-size: 17px;
+    margin-right: 4px;
+}
+
+/* Notification bell */
+.pcoded-header .navbar-nav.ms-auto .icon.feather.icon-bell {
+    font-size: 16px;
+    color: var(--stu-text-primary);
+}
+/* Notification active dot */
+.pcoded-header .navbar-nav.ms-auto .notification-active {
+    position: absolute !important;
+    top: 4px;
+    right: 4px;
+    width: 8px;
+    height: 8px;
+    background: var(--stu-rose);
+    border-radius: 50%;
+    border: 2px solid var(--stu-from);
+    animation: stu-pulse 2s ease-in-out infinite;
+}
+@keyframes stu-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--stu-rose-glow); }
+    50% { box-shadow: 0 0 0 6px transparent; }
+}
+/* Notification badge count */
+.pcoded-header .navbar-nav.ms-auto .notification-badge {
+    position: absolute !important;
+    top: -2px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 16px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #ef4444, var(--stu-rose)) !important;
+    color: #fff;
+    text-align: center;
+    z-index: 2;
+    box-shadow: 0 2px 8px var(--stu-rose-glow);
+}
+
+/* ========================================
+   1c. PROGRAM SWITCHER pill (right side)
+   ======================================== */
+.pcoded-header .program-switcher-dropdown > .dropdown-toggle {
+    width: auto !important;
+    height: auto !important;
+    background: rgba(255,255,255,0.1) !important;
+    border: 1px solid var(--stu-glass-border) !important;
+    border-radius: var(--stu-radius-pill) !important;
+    padding: 4px 14px !important;
+    gap: 6px;
+    transition: var(--stu-fast);
+}
+.pcoded-header .program-switcher-dropdown > .dropdown-toggle:hover {
+    background: var(--stu-glass-hover) !important;
+    box-shadow: 0 0 14px var(--stu-accent-glow);
+}
+
+/* ========================================
+   1d. PROGRESSION BUTTON
+   ======================================== */
+.pcoded-header #progression-button {
+    border-radius: var(--stu-radius-pill);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    background: linear-gradient(135deg, #059669, #10b981) !important;
+    border: none;
+    box-shadow: 0 0 16px var(--stu-emerald-glow);
+    animation: stu-glow-green 3s ease-in-out infinite;
+}
+@keyframes stu-glow-green {
+    0%, 100% { box-shadow: 0 0 10px var(--stu-emerald-glow); }
+    50% { box-shadow: 0 0 24px var(--stu-emerald-glow), 0 0 48px rgba(52, 211, 153, 0.1); }
+}
+.pcoded-header #progression-button .pulse-animation {
+    animation: stu-pulse 2s ease-in-out infinite;
+}
+
+/* ========================================
+   1e. PROFILE pill (right side)
+   ======================================== */
+.pcoded-header .drp-user > .dropdown-toggle {
+    width: auto !important;
+    height: auto !important;
+    background: rgba(255,255,255,0.1) !important;
+    border: 1px solid var(--stu-glass-border) !important;
+    border-radius: var(--stu-radius-pill) !important;
+    padding: 3px 10px 3px 12px !important;
+    gap: 8px;
+    transition: var(--stu-fast);
+}
+.pcoded-header .drp-user > .dropdown-toggle:hover {
+    background: var(--stu-glass-hover) !important;
+}
+/* Profile name */
+.pcoded-header .drp-user > .dropdown-toggle .text-white {
+    color: var(--stu-text-primary) !important;
+    font-weight: 500;
+    font-size: 13px;
+}
+/* Profile avatar circle */
+.pcoded-header .drp-user > .dropdown-toggle > div:last-child {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--stu-accent), var(--stu-teal)) !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 0 2px var(--stu-via), 0 0 10px var(--stu-accent-glow);
+}
+.pcoded-header .drp-user > .dropdown-toggle > div:last-child i {
+    color: #fff !important;
+    font-size: 14px;
+}
+
+/* ========================================
+   2. DROPDOWN CARDS — Glass Style
+   ======================================== */
+.pcoded-header .dropdown-menu {
+    border: none !important;
+    border-radius: var(--stu-radius-md) !important;
+    background: var(--stu-glass-card) !important;
+    box-shadow: var(--stu-shadow-dropdown) !important;
+    overflow: hidden;
+    padding: 0;
+    animation: stu-dropdown-in 0.2s ease-out;
+}
+@keyframes stu-dropdown-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Notification dropdown header */
+.pcoded-header .dropdown-menu .noti-head {
+    background: linear-gradient(135deg, var(--stu-from), var(--stu-via)) !important;
+    color: #fff !important;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.pcoded-header .dropdown-menu .noti-head h6 {
+    color: #fff !important;
+    font-weight: 600;
+    font-size: 14px;
+}
+.pcoded-header .dropdown-menu .noti-head .badge {
+    background: var(--stu-rose) !important;
+}
+
+/* Notification list items */
+.pcoded-header .dropdown-menu .noti-body li.notification {
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    transition: var(--stu-fast);
+}
+.pcoded-header .dropdown-menu .noti-body li.notification:hover,
+.pcoded-header.header-lightblue .dropdown .notification .noti-body li.notification:hover,
+.pcoded-header.header-lightblue .dropdown .notification .noti-body li.notification.active {
+    background: rgba(129, 140, 248, 0.08) !important;
+}
+.pcoded-header .dropdown-menu .noti-body li.notification a {
+    color: #334155 !important;
+}
+
+/* Language dropdown items */
+.pcoded-header .dropdown-menu .noti-body li.notification.active a {
+    color: var(--stu-to) !important;
+    font-weight: 600;
+}
+
+/* Profile dropdown */
+.pcoded-header .profile-notification .pro-head {
+    background: linear-gradient(135deg, var(--stu-from), var(--stu-via)) !important;
+    padding: 16px 20px;
+    color: #fff;
+}
+.pcoded-header .profile-notification .pro-head span {
+    color: #fff !important;
+}
+.pcoded-header .profile-notification .pro-head img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3);
+    object-fit: cover;
+}
+.pcoded-header .profile-notification .pro-head .dud-logout {
+    color: var(--stu-rose) !important;
+    transition: var(--stu-fast);
+}
+.pcoded-header .profile-notification .pro-head .dud-logout:hover {
+    color: #fff !important;
+}
+.pcoded-header .profile-notification .pro-body li a {
+    padding: 10px 20px;
+    color: #475569 !important;
+    transition: var(--stu-fast);
+    font-weight: 500;
+}
+.pcoded-header .profile-notification .pro-body li a:hover {
+    background: rgba(129, 140, 248, 0.08) !important;
+    color: var(--stu-to) !important;
+}
+
+/* Override framework's header-lightblue dropdown hover color */
+.pcoded-header.header-lightblue .dropdown-menu > li.active,
+.pcoded-header.header-lightblue .dropdown-menu > li:active,
+.pcoded-header.header-lightblue .dropdown-menu > li:focus,
+.pcoded-header.header-lightblue .dropdown-menu > li:hover {
+    background: rgba(129, 140, 248, 0.06) !important;
+}
+.pcoded-header.header-lightblue .dropdown-menu a {
+    color: #475569 !important;
+}
+.pcoded-header.header-lightblue .dropdown-menu > li.active > a,
+.pcoded-header.header-lightblue .dropdown-menu > li:hover > a {
+    color: var(--stu-to) !important;
+    background: transparent !important;
+}
+
+/* ========================================
+   3. HEADER-LOGO (in sidebar nav)
+   ======================================== */
+.pcoded-header + .pcoded-main-container,
+.headerpos-fixed ~ .pcoded-main-container {
+    padding-top: var(--stu-header-height) !important;
+}
+.pcoded-navbar .header-logo {
+    height: var(--stu-header-height) !important;
+}
+
+/* ========================================
+   4. SIDEBAR — Modern Indigo Design
+   ======================================== */
+.pcoded-navbar {
+    background: linear-gradient(180deg, #1e1b4b 0%, #1e1b4b 40%, #0f0d2e 100%) !important;
+    border-right: 1px solid rgba(129, 140, 248, 0.08);
+    transition: width var(--stu-smooth);
+}
+
+/* Logo area */
+.pcoded-navbar .header-logo {
+    background: transparent !important;
+}
+.pcoded-navbar .header-logo .b-brand img {
+    max-height: 32px;
+}
+.pcoded-navbar .header-logo .mobile-menu span,
+.pcoded-navbar .header-logo .mobile-menu span::before,
+.pcoded-navbar .header-logo .mobile-menu span::after {
+    background: var(--stu-accent) !important;
+}
+
+/* Sidebar scrollable area */
+.pcoded-navbar .navbar-content {
+    overflow-y: auto !important;
+    z-index: 1;
+    height: calc(100vh - var(--stu-header-height));
+    background: transparent;
+}
+
+/* Scrollbar styling */
+.pcoded-navbar .navbar-content::-webkit-scrollbar {
+    width: 4px;
+}
+.pcoded-navbar .navbar-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.pcoded-navbar .navbar-content::-webkit-scrollbar-thumb {
+    background: rgba(129, 140, 248, 0.2);
+    border-radius: 4px;
+}
+.pcoded-navbar .navbar-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(129, 140, 248, 0.35);
+}
+
+/* Sidebar overlay (framework's ::before) — don't block scrolling */
+.pcoded-navbar::before {
+    pointer-events: none !important;
+}
+
+/* ----------------------------------------
+   4a. MENU ITEMS — Base
+   ----------------------------------------
+   Framework uses: li > a { display: block; padding: 7px 10px }
+     .pcoded-micon { display: inline-flex; width: 30px; height: 30px; padding: 4px 7px; margin-right: 7px }
+     .pcoded-micon + .pcoded-mtext { position: absolute; top: 11px }
+   We KEEP the display:block layout and override mtext to position:relative
+   so icon + text align naturally on the same line.
+   ---------------------------------------- */
+.pcoded-navbar .pcoded-inner-navbar > li {
+    margin: 1px 8px;
+}
+.pcoded-navbar .pcoded-inner-navbar > li > a {
+    padding: 9px 14px !important;
+    border-radius: var(--stu-radius-sm);
+    color: rgba(255, 255, 255, 0.65) !important;
+    font-size: 13px;
+    font-weight: 500;
+    transition: var(--stu-fast);
+    position: relative;
+    display: flex !important;
+    align-items: center;
+    line-height: 1.4;
+}
+
+/* Icon — keep framework's inline-flex but restyle */
+.pcoded-navbar .pcoded-inner-navbar > li > a > .pcoded-micon {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 30px !important;
+    height: 30px !important;
+    padding: 0 !important;
+    border-radius: 6px;
+    margin-right: 10px !important;
+    background: rgba(129, 140, 248, 0.08);
+    transition: var(--stu-fast);
+    flex-shrink: 0;
+}
+.pcoded-navbar .pcoded-inner-navbar > li > a > .pcoded-micon i {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+    transition: var(--stu-fast);
+}
+
+/* Text — CRITICAL: override framework's absolute positioning */
+.pcoded-navbar .pcoded-inner-navbar > li > a > .pcoded-micon + .pcoded-mtext {
+    position: relative !important;
+    top: auto !important;
+}
+.pcoded-navbar .pcoded-inner-navbar > li > a .pcoded-mtext {
+    font-size: 13px;
+    letter-spacing: 0.2px;
+    position: relative !important;
+    top: auto !important;
+}
+
+/* ----------------------------------------
+   4b. MENU ITEMS — Hover
+   ---------------------------------------- */
+.pcoded-navbar .pcoded-inner-navbar > li:not(.active):not(.pcoded-trigger) > a:hover {
+    background: rgba(129, 140, 248, 0.08) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+.pcoded-navbar .pcoded-inner-navbar > li:not(.active):not(.pcoded-trigger) > a:hover > .pcoded-micon {
+    background: rgba(129, 140, 248, 0.15);
+}
+.pcoded-navbar .pcoded-inner-navbar > li:not(.active):not(.pcoded-trigger) > a:hover > .pcoded-micon i {
+    color: var(--stu-accent);
+}
+
+/* Override framework active-lightblue theme color on hover */
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar li:hover > a,
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar li:focus > a {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* ----------------------------------------
+   4c. MENU ITEMS — Active
+   Kill framework's ::after left-bar + active-lightblue background
+   Replace with our own gradient style
+   ---------------------------------------- */
+/* Kill framework's active ::after indicator */
+.pcoded-navbar .pcoded-inner-navbar > li.active:after,
+.pcoded-navbar .pcoded-inner-navbar > li.pcoded-trigger:after,
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar > li.active:after,
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar > li.pcoded-trigger:after {
+    display: none !important;
+}
+
+/* Kill framework's active-lightblue active background */
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar > li.active > a,
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar > li.pcoded-trigger > a,
+.pcoded-navbar .pcoded-inner-navbar > li.active > a,
+.pcoded-navbar .pcoded-inner-navbar > li.pcoded-trigger > a {
+    background: linear-gradient(135deg, rgba(129, 140, 248, 0.18), rgba(45, 212, 191, 0.10)) !important;
+    color: #fff !important;
+    box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.15);
+}
+/* Our left accent bar via ::before on the <a> */
+.pcoded-navbar .pcoded-inner-navbar > li.active > a::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    background: linear-gradient(180deg, var(--stu-accent), var(--stu-teal));
+    border-radius: 0 3px 3px 0;
+}
+.pcoded-navbar .pcoded-inner-navbar > li.active > a > .pcoded-micon,
+.pcoded-navbar .pcoded-inner-navbar > li.pcoded-trigger > a > .pcoded-micon {
+    background: linear-gradient(135deg, rgba(129, 140, 248, 0.25), rgba(45, 212, 191, 0.15));
+}
+.pcoded-navbar .pcoded-inner-navbar > li.active > a > .pcoded-micon i,
+.pcoded-navbar .pcoded-inner-navbar > li.pcoded-trigger > a > .pcoded-micon i {
+    color: var(--stu-accent);
+}
+
+/* Override framework active-lightblue for active link color */
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar li.active > a {
+    color: #fff !important;
+}
+
+/* ----------------------------------------
+   4d. SUBMENU — Class Hub / E-Library
+   ---------------------------------------- */
+/* Chevron arrow */
+.pcoded-navbar .pcoded-inner-navbar > li.pcoded-hasmenu > a::after {
+    color: rgba(255, 255, 255, 0.35) !important;
+    transition: var(--stu-fast);
+    top: 50% !important;
+    transform: translateY(-50%);
+    right: 14px !important;
+}
+.pcoded-navbar .pcoded-inner-navbar > li.pcoded-hasmenu.pcoded-trigger > a::after {
+    color: var(--stu-accent) !important;
+    transform: translateY(-50%) rotate(90deg);
+}
+
+/* Submenu container */
+.pcoded-navbar .pcoded-submenu {
+    background: rgba(0, 0, 0, 0.12) !important;
+    border-radius: 0 0 var(--stu-radius-sm) var(--stu-radius-sm);
+    margin: 0 4px;
+    padding: 4px 0 !important;
+}
+
+/* Submenu items — override framework's 60px left padding */
+.pcoded-navbar .pcoded-submenu li > a {
+    padding: 8px 14px 8px 54px !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-size: 12px !important;
+    font-weight: 500;
+    border-radius: 6px;
+    margin: 0 4px;
+    transition: var(--stu-fast);
+}
+
+/* Hide framework's ::before bullet/icon on submenu items (we have our own <i> icons) */
+.pcoded-navbar .pcoded-inner-navbar li.pcoded-hasmenu .pcoded-submenu li > a:before {
+    display: none !important;
+}
+
+.pcoded-navbar .pcoded-submenu li > a:hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+    background: rgba(129, 140, 248, 0.08) !important;
+}
+.pcoded-navbar .pcoded-submenu li.active > a,
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar li .pcoded-submenu > li.active > a {
+    color: var(--stu-accent) !important;
+    background: rgba(129, 140, 248, 0.1) !important;
+}
+/* Active submenu bullet override */
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar li .pcoded-submenu > li.active > a:before,
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar li .pcoded-submenu > li:focus > a:before,
+.pcoded-navbar.active-lightblue .pcoded-inner-navbar li .pcoded-submenu > li:hover > a:before {
+    display: none !important;
+}
+
+/* Submenu <i> icon styling */
+.pcoded-navbar .pcoded-submenu li > a i {
+    margin-right: 8px;
+    width: 16px;
+    text-align: center;
+    font-size: 11px;
+    opacity: 0.7;
+}
+.pcoded-navbar .pcoded-submenu li > a:hover i,
+.pcoded-navbar .pcoded-submenu li.active > a i {
+    opacity: 1;
+}
+
+/* LIVE badge */
+.pcoded-navbar .pcoded-badge.badge-success {
+    background: linear-gradient(135deg, #059669, var(--stu-emerald)) !important;
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: var(--stu-radius-pill);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 12px var(--stu-emerald-glow);
+}
+
+/* Submenu divider */
+.pcoded-navbar .pcoded-submenu li.nav-item-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 4px 14px;
+}
+
+/* ----------------------------------------
+   4e. SIDEBAR LINK general color
+   Override framework's navbar-lightblue link color
+   ---------------------------------------- */
+.pcoded-navbar.navbar-lightblue .pcoded-inner-navbar li a {
+    color: rgba(255, 255, 255, 0.65) !important;
+}
+.pcoded-navbar.navbar-lightblue .pcoded-inner-navbar li.active > a,
+.pcoded-navbar.navbar-lightblue .pcoded-inner-navbar li.pcoded-trigger > a {
+    color: #fff !important;
+}
+.pcoded-navbar .pcoded-submenu {
+    background: rgba(0, 0, 0, 0.12) !important;
+}
+.pcoded-navbar.navbar-lightblue .pcoded-submenu {
+    background: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ========================================
+   5. SIDEBAR OVERLAY (mobile backdrop)
+   ======================================== */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 13, 46, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1029;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+/* ========================================
+   6. MOBILE-HEADER area (.m-header)
+   ======================================== */
+@media (max-width: 991px) {
+    /* Override framework's white collapse background */
+    .pcoded-header > .collapse:not(.show),
+    .pcoded-header > .collapse {
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    /* Override framework's header-lightblue mobile link color (framework sets #3f4d67) */
+    .pcoded-header.header-lightblue .input-group .input-group-text,
+    .pcoded-header.header-lightblue a,
+    .pcoded-header.header-lightblue dropdown-toggle {
+        color: var(--stu-text-primary) !important;
+    }
+    .pcoded-header.header-lightblue a:hover,
+    .pcoded-header.header-lightblue dropdown-toggle:hover {
+        color: #fff !important;
+    }
+
+    .pcoded-header .m-header {
+        display: flex !important;
+        align-items: center;
+        padding: 0 8px;
+        flex-shrink: 1;
+        min-width: 0;
+        width: auto !important; /* Override framework's width: 100% */
+        height: var(--stu-header-height) !important; /* Override framework's 70px */
+    }
+
+    /* Hamburger button */
+    .pcoded-header .m-header .mobile-menu {
+        position: relative !important;
+        right: auto !important;
+        width: 36px;
+        height: 36px;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        background: var(--stu-glass);
+        border: 1px solid var(--stu-glass-border);
+        border-radius: var(--stu-radius-sm);
+        color: var(--stu-text-primary);
+        flex-shrink: 0;
+        margin-right: 8px;
+    }
+    .pcoded-header .m-header .mobile-menu span,
+    .pcoded-header .m-header .mobile-menu span::before,
+    .pcoded-header .m-header .mobile-menu span::after {
+        background: var(--stu-text-primary) !important;
+    }
+
+    /* Logo in mobile header */
+    .pcoded-header .m-header .b-brand {
+        margin-left: 0 !important; /* Override framework's margin-left: 20px */
+    }
+    .pcoded-header .m-header .b-brand img {
+        max-height: 24px;
+    }
+
+    /* three-dot more icon (mobile-header toggle) — HIDE */
+    .pcoded-header > a.mobile-menu#mobile-header {
+        display: none !important;
+    }
+
+    /* Override framework's fullscreen hide on mobile */
+    .pcoded-header .full-screen {
+        display: flex !important;
+    }
+}
+
+/* Desktop: hide .m-header (framework handles this via display:none) */
+@media (min-width: 992px) {
+    .pcoded-header .m-header {
+        /* Let framework handle desktop visibility */
+    }
+}
+
+/* ========================================
+   7. HEADER-RIGHT on mobile
+   ======================================== */
+@media (max-width: 991px) {
+    /* Show collapse content always — override Bootstrap collapse behavior */
+    .pcoded-header .collapse.navbar-collapse {
+        display: flex !important;
+        flex-basis: auto;
+        flex-grow: 1;
+        min-width: 0;
+    }
+
+    /* Hide left-side items on mobile */
+    .pcoded-header .collapse .navbar-nav.me-auto {
+        display: none !important;
+    }
+
+    /* Right side: horizontal row */
+    .pcoded-header .collapse .navbar-nav.ms-auto {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 4px;
+        padding-right: 8px;
+        margin-left: auto;
+        flex-shrink: 1;
+    }
+
+    /* Reset framework's nav item padding on mobile */
+    .pcoded-header .navbar-nav.ms-auto > li {
+        padding: 0 2px !important;
+    }
+    .pcoded-header .navbar-nav.ms-auto > li:first-child {
+        padding-left: 2px !important;
+    }
+    .pcoded-header .navbar-nav.ms-auto > li:last-child {
+        padding-right: 2px !important;
+    }
+
+    /* Sidebar on mobile */
+    .pcoded-navbar {
+        position: fixed !important;
+        top: 0 !important;
+        height: 100% !important;
+        z-index: 1030;
+        margin-left: -240px;
+        transition: var(--stu-smooth);
+    }
+    .pcoded-navbar.mob-open {
+        margin-left: 0;
+    }
+}
+
+/* ========================================
+   8. SMALL PHONES — Strip to essentials
+   ======================================== */
+@media (max-width: 575px) {
+    /* Override framework's position: static on dropdowns */
+    .pcoded-header .dropdown {
+        position: relative !important;
+    }
+    /* Override framework's full-width dropdown menu */
+    .pcoded-header .dropdown .dropdown-menu {
+        width: auto !important;
+        max-width: 320px;
+        min-width: 260px;
+    }
+    .pcoded-header .dropdown .dropdown-menu-right {
+        max-width: 320px !important;
+        right: 0 !important;
+        left: auto !important;
+    }
+
+    /* Hide program switcher on very small phones */
+    .pcoded-header .program-switcher-dropdown {
+        display: none !important;
+    }
+
+    /* Hide language entirely on tiny screens */
+    .pcoded-header .navbar-nav.ms-auto > li > .dropdown > .dropdown-toggle .fa-language,
+    .pcoded-header .navbar-nav.ms-auto > li > div > .dropdown-toggle .fa-language {
+        font-size: 14px;
+    }
+    .pcoded-header .navbar-nav.ms-auto > li > .dropdown > .dropdown-toggle .fa-language + span,
+    .pcoded-header .navbar-nav.ms-auto > li > div > .dropdown-toggle .fa-language ~ span {
+        display: none !important;
+    }
+
+    /* Smaller icon buttons */
+    .pcoded-header .navbar-nav.ms-auto > li > .dropdown > .dropdown-toggle,
+    .pcoded-header .navbar-nav.ms-auto > li > div > .dropdown-toggle {
+        width: 32px;
+        height: 32px;
+        font-size: 13px;
+        border-radius: 6px;
+    }
+
+    /* Hide profile name, make avatar-only circle */
+    .pcoded-header .drp-user > .dropdown-toggle .text-white.me-2 {
+        display: none !important;
+    }
+    .pcoded-header .drp-user > .dropdown-toggle {
+        padding: 2px !important;
+        border-radius: 50% !important;
+        width: 32px !important;
+        height: 32px !important;
+    }
+
+    /* Progression button: compact */
+    .pcoded-header #progression-button {
+        padding: 4px 8px !important;
+        font-size: 10px;
+        white-space: nowrap;
+    }
+
+    /* Hamburger button smaller */
+    .pcoded-header .m-header .mobile-menu {
+        width: 32px;
+        height: 32px;
+        margin-right: 6px;
+    }
+}
+
+/* ========================================
+   9. TABLET — Hide some text
+   ======================================== */
+@media (max-width: 767px) {
+    /* Hide language text */
+    .pcoded-header .navbar-nav.ms-auto .fa-language + span {
+        display: none !important;
+    }
+    /* Program switcher: compact — hide text part */
+    .pcoded-header .program-switcher-dropdown > .dropdown-toggle {
+        padding: 4px 10px !important;
+    }
+    .pcoded-header .program-switcher-dropdown > .dropdown-toggle div[style*="text-align: left"] {
+        display: none !important;
+    }
+    /* Hide profile name on tablets too */
+    .pcoded-header .drp-user > .dropdown-toggle .text-white.me-2 {
+        display: none !important;
+    }
+}
+
+/* ========================================
+   10. CHAT SECTIONS — Hide empty stubs
+   ======================================== */
+section.header-user-list,
+section.header-chat {
+    display: none !important;
+}
+
+/* ========================================
+   11. FRAMEWORK OVERRIDE — Header height
+   ======================================== */
+.pcoded-header[class*="headerpos-fixed"] {
+    min-height: var(--stu-header-height) !important;
+}
+/* Override framework 70px padding-top */
+.headerpos-fixed ~ .pcoded-main-container {
+    padding-top: var(--stu-header-height) !important;
+}
+/* .scroll-div.navbar-content height */
+.pcoded-navbar .scroll-div.navbar-content {
+    height: calc(100vh - var(--stu-header-height)) !important;
+}
+
+/* ========================================
+   12. ANNOUNCEMENT BAR adjustment
+   ======================================== */
+/* When announcement bar is present, its inline styles handle top offsets.
+   We just ensure our sidebar overlay sits above it. */
+.site-announcement + .loader-bg + nav.pcoded-navbar,
+.site-announcement ~ nav.pcoded-navbar {
+    z-index: 1029;
+}
+
+/* ========================================
+   13. PRELOADER — match theme
+   ======================================== */
+.loader-bg {
+    background: var(--stu-from);
+}
+.loader-bg .loader-track .loader-fill {
+    background: linear-gradient(90deg, var(--stu-accent), var(--stu-teal));
+}
+
+/* ========================================
+   14. BREADCRUMB enhancement
+   ======================================== */
+.pcoded-content .page-header {
+    margin-bottom: 16px;
+}
+.pcoded-content .page-header .page-header-title h5 {
+    font-weight: 700;
+    color: #1e293b;
+}
+.pcoded-content .page-header .breadcrumb {
+    background: transparent;
+    padding: 0;
+}
+.pcoded-content .page-header .breadcrumb .breadcrumb-item a {
+    color: var(--stu-to);
+}
+
+/* ========================================
+   15. CARD styling upgrades
+   ======================================== */
+.pcoded-content .card {
+    border: none;
+    border-radius: var(--stu-radius-md);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    transition: box-shadow 0.2s ease;
+}
+.pcoded-content .card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.pcoded-content .card .card-header {
+    background: transparent;
+    border-bottom: 1px solid #f1f5f9;
+    font-weight: 600;
+}
+
+/* ========================================
+   16. DESKTOP SIDEBAR collapsed state
+   ======================================== */
+@media (min-width: 992px) {
+    /* When sidebar is collapsed on desktop, icons center */
+    .pcoded-navbar.navbar-collapsed .pcoded-inner-navbar > li > a > .pcoded-micon {
+        margin-right: 0 !important;
+    }
+    /* Restore mtext to absolute position when collapsed (framework hides it this way) */
+    .pcoded-navbar.navbar-collapsed .pcoded-inner-navbar > li > a > .pcoded-mtext {
+        position: absolute !important;
+        top: 11px !important;
+    }
+    /* When hovering collapsed sidebar, restore our flex layout */
+    .pcoded-navbar.navbar-collapsed:hover .pcoded-inner-navbar > li > a > .pcoded-micon {
+        margin-right: 10px !important;
+    }
+    .pcoded-navbar.navbar-collapsed:hover .pcoded-inner-navbar > li > a > .pcoded-mtext {
+        position: relative !important;
+        top: auto !important;
+    }
+}
+
+/* ========================================
+   17. PRINT — hide nav elements
+   ======================================== */
+@media print {
+    .pcoded-header,
+    .pcoded-navbar,
+    .sidebar-overlay,
+    .site-announcement {
+        display: none !important;
+    }
+    .pcoded-main-container {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}
+
+/* ========================================
+   18. SMOOTH SCROLL
+   ======================================== */
+html {
+    scroll-behavior: smooth;
+}
+
+/* ========================================
+   19. FOCUS STATES (Accessibility)
+   ======================================== */
+.pcoded-header a:focus-visible,
+.pcoded-header button:focus-visible,
+.pcoded-navbar a:focus-visible {
+    outline: 2px solid var(--stu-accent);
+    outline-offset: 2px;
+}
+
+/* ========================================
+   20. TRANSITIONS & ANIMATIONS
+   ======================================== */
+@keyframes stu-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}

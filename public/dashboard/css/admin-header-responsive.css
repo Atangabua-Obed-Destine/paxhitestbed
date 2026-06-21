@@ -1,0 +1,1144 @@
+/* ========================================
+   Admin Header & Sidebar — Modern Glassmorphic Design
+   Designed for Pcoded/Ablestar framework
+   ======================================== */
+
+/* ----------------------------------------
+   CSS Custom Properties
+   ---------------------------------------- */
+:root {
+    --header-height: 56px;
+    --sidebar-width: 240px;
+
+    /* --- Palette --- */
+    --hdr-from: #0f172a;
+    --hdr-via: #162340;
+    --hdr-to: #1a2e4a;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56, 189, 248, 0.35);
+    --accent-dim: rgba(56, 189, 248, 0.12);
+    --emerald: #34d399;
+    --emerald-glow: rgba(52, 211, 153, 0.25);
+    --rose: #fb7185;
+    --rose-glow: rgba(251, 113, 133, 0.25);
+    --amber: #fbbf24;
+    --slate: rgba(255, 255, 255, 0.55);
+    --glass-white: rgba(255, 255, 255, 0.07);
+    --glass-white-hover: rgba(255, 255, 255, 0.13);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-card: rgba(255, 255, 255, 0.95);
+    --text-primary: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.58);
+
+    /* --- Effects --- */
+    --transition-fast: 0.18s ease;
+    --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-pill: 50px;
+    --shadow-dropdown: 0 12px 48px -8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    --shadow-header: 0 1px 0 0 rgba(255, 255, 255, 0.04), 0 4px 24px -2px rgba(0, 0, 0, 0.25);
+}
+
+/* ----------------------------------------
+   1. HEADER — Gradient Base
+   ---------------------------------------- */
+.pcoded-header {
+    position: fixed;
+    top: 0;
+    z-index: 1028;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap !important;
+    min-height: var(--header-height) !important;
+    height: var(--header-height);
+    padding: 0;
+    transition: all var(--transition-smooth);
+    box-shadow: var(--shadow-header);
+    overflow: visible;
+}
+
+/* Fix main content spacing for shorter header */
+.pcoded-header.headerpos-fixed ~ .pcoded-main-container {
+    padding-top: var(--header-height) !important;
+}
+
+/* Modern gradient override for header-lightblue */
+.pcoded-header.header-lightblue {
+    background: linear-gradient(125deg, var(--hdr-from) 0%, var(--hdr-via) 45%, var(--hdr-to) 100%) !important;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+/* Subtle animated glow line at bottom */
+.pcoded-header.header-lightblue::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        var(--accent-glow) 25%,
+        var(--accent) 50%,
+        var(--accent-glow) 75%,
+        transparent 100%);
+    opacity: 0.4;
+}
+
+/* Text colors */
+.pcoded-header.header-lightblue a,
+.pcoded-header.header-lightblue .dropdown-toggle {
+    color: var(--text-primary);
+}
+.pcoded-header.header-lightblue a:hover,
+.pcoded-header.header-lightblue .dropdown-toggle:hover {
+    color: #fff;
+}
+
+/* ----------------------------------------
+   1a. Mobile Header (.m-header)
+   On desktop the framework hides .m-header (display:none).
+   We only restyle it for mobile where the framework shows it.
+   ---------------------------------------- */
+@media only screen and (max-width: 991px) {
+    .pcoded-header .m-header {
+        display: flex;
+        align-items: center;
+        height: var(--header-height) !important;
+        padding: 0 12px 0 0;
+        flex-shrink: 1;
+        min-width: 0;
+    }
+
+    /* Mobile menu hamburger — adjust for shorter header */
+    .pcoded-header .m-header .mobile-menu {
+        height: var(--header-height);
+        position: relative;
+        right: auto;
+        flex-shrink: 0;
+    }
+}
+
+.pcoded-header .m-header .b-brand {
+    margin-left: 20px;
+}
+
+.pcoded-header .m-header .b-brand .b-bg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--accent) 0%, #818cf8 100%);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    transition: all var(--transition-fast);
+    box-shadow: 0 2px 12px rgba(56, 189, 248, 0.25);
+}
+
+.pcoded-header .m-header .b-brand .b-bg:hover {
+    box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
+    transform: translateY(-1px);
+}
+
+/* ----------------------------------------
+   1b. Desktop Left Section
+   ---------------------------------------- */
+.header-left {
+    gap: 14px;
+    padding: 0 16px;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Glass icon button — fullscreen */
+.header-left .full-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--glass-white);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-size: 15px;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+    flex-shrink: 0;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.header-left .full-screen:hover {
+    background: var(--glass-white-hover);
+    color: var(--accent);
+    border-color: var(--accent-dim);
+    box-shadow: 0 0 16px var(--accent-glow);
+    transform: scale(1.08);
+}
+
+/* Topbar title — subtle glass pill */
+.header-left .topbar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    padding: 6px 14px;
+    background: var(--glass-white);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-pill);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+/* Clock — muted, elegant */
+.header-clock {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    font-variant-numeric: tabular-nums;
+    padding: 5px 12px;
+    background: var(--glass-white);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+}
+.header-clock i {
+    font-size: 12px;
+    color: var(--accent);
+    margin: 0;
+}
+
+/* Session badge — emerald glass */
+.header-session-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--emerald-glow);
+    border: 1px solid rgba(52, 211, 153, 0.2);
+    color: var(--emerald) !important;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+.header-session-badge:hover {
+    background: rgba(52, 211, 153, 0.35);
+    color: #6ee7b7 !important;
+    box-shadow: 0 0 20px rgba(52, 211, 153, 0.2);
+    transform: translateY(-1px);
+}
+.header-session-badge i {
+    font-size: 12px;
+}
+
+/* ----------------------------------------
+   1c. Header Right (Always Visible)
+   ---------------------------------------- */
+.header-right {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+    padding: 0 14px 0 0;
+    margin-left: auto;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.header-right > li {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+/* ---- Divider between groups ---- */
+.header-right > li.header-attendance::after {
+    content: '';
+    display: block;
+    width: 1px;
+    height: 24px;
+    background: var(--glass-border);
+    margin-left: 8px;
+}
+
+/* ---- Attendance Badge ---- */
+.att-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    font-size: 11.5px;
+    font-weight: 700;
+    text-decoration: none !important;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.att-badge i { font-size: 12px; }
+.att-badge span { line-height: 1; }
+
+.att-in {
+    background: var(--emerald-glow);
+    border-color: rgba(52, 211, 153, 0.18);
+    color: var(--emerald) !important;
+}
+.att-in:hover {
+    background: rgba(52, 211, 153, 0.35);
+    box-shadow: 0 0 16px rgba(52, 211, 153, 0.2);
+}
+
+.att-done {
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.15);
+    color: #94a3b8 !important;
+}
+.att-done:hover {
+    background: rgba(148, 163, 184, 0.2);
+}
+
+.att-out {
+    background: var(--rose-glow);
+    border-color: rgba(251, 113, 133, 0.18);
+    color: var(--rose) !important;
+}
+.att-out:hover {
+    background: rgba(251, 113, 133, 0.35);
+    box-shadow: 0 0 16px rgba(251, 113, 133, 0.2);
+}
+
+/* ---- Connection Status ---- */
+.connection-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 13px;
+    transition: all var(--transition-fast);
+    background: var(--glass-white);
+    border: 1px solid var(--glass-border);
+}
+.connection-status.online {
+    color: var(--emerald);
+    border-color: rgba(52, 211, 153, 0.2);
+    background: rgba(52, 211, 153, 0.08);
+}
+.connection-status.online i {
+    filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5));
+}
+.connection-status.offline {
+    color: var(--rose);
+    border-color: rgba(251, 113, 133, 0.2);
+    background: rgba(251, 113, 133, 0.08);
+}
+
+/* ---- Header Icon Buttons (lang, notif, profile) ---- */
+/* Override framework's .pcoded-header .dropdown .dropdown-toggle line-height:70px */
+.pcoded-header .header-right .dropdown .dropdown-toggle,
+.header-right .header-lang > a,
+.header-right .header-notif > a,
+.header-right .header-profile > a {
+    display: flex !important;
+    align-items: center;
+    line-height: normal !important;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 14px;
+    transition: all var(--transition-fast);
+    position: relative;
+    background: var(--glass-white);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.header-right .header-lang > a:hover,
+.header-right .header-notif > a:hover,
+.header-right .header-profile > a:hover {
+    background: var(--glass-white-hover);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Remove ::after caret and extra padding from pcoded framework */
+.header-right .dropdown-toggle::after,
+.pcoded-header .header-right .dropdown .dropdown-toggle::after {
+    display: none !important;
+}
+.pcoded-header .header-right .dropdown .dropdown-toggle {
+    padding-right: 10px !important;
+}
+
+/* ---- Notification Bell ---- */
+.header-notif .icon {
+    position: relative;
+    font-size: 17px;
+}
+
+.notification-badge {
+    position: absolute !important;
+    top: -4px;
+    right: -6px;
+    font-size: 9px;
+    padding: 0 4px;
+    min-width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    border-radius: 8px;
+    border: 2px solid var(--hdr-from);
+    z-index: 2;
+    font-weight: 800;
+    background: linear-gradient(135deg, #ef4444, #f43f5e) !important;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+}
+
+/* ---- Profile Trigger ---- */
+.profile-pic-wrapper {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), #818cf8);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+    position: relative;
+}
+.profile-pic-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: linear-gradient(135deg, var(--accent), #818cf8) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.4;
+    transition: opacity var(--transition-fast);
+}
+.profile-pic-wrapper i {
+    font-size: 15px;
+    color: #fff;
+}
+
+.header-profile > a:hover .profile-pic-wrapper {
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3), 0 0 20px var(--accent-glow);
+    transform: scale(1.06);
+}
+.header-profile > a:hover .profile-pic-wrapper::before {
+    opacity: 0.8;
+}
+
+.header-profile > a > span {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+/* ----------------------------------------
+   2. DROPDOWN MENUS — Glass Card Design
+   ---------------------------------------- */
+.header-right .dropdown-menu {
+    position: absolute;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-dropdown);
+    padding: 6px;
+    margin-top: 12px;
+    min-width: 240px;
+    max-height: 80vh;
+    overflow: hidden;
+    z-index: 9999;
+    animation: headerDropIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    background: var(--glass-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+@keyframes headerDropIn {
+    from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.header-right .dropdown-header {
+    padding: 12px 14px;
+    font-weight: 800;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+    background: transparent;
+    border-bottom: 1px solid #f1f5f9;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.header-right .dropdown-item {
+    padding: 10px 14px;
+    font-size: 13.5px;
+    color: #334155;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    border: none;
+    border-radius: var(--radius-sm);
+    margin: 1px 0;
+    font-weight: 500;
+}
+.header-right .dropdown-item:hover {
+    background: linear-gradient(135deg, #f0f9ff, #eff6ff);
+    color: #0369a1;
+    transform: translateX(2px);
+}
+.header-right .dropdown-item.active {
+    background: linear-gradient(135deg, #dbeafe, #e0f2fe);
+    color: #0c4a6e;
+    font-weight: 700;
+}
+.header-right .dropdown-item i {
+    width: 22px;
+    font-size: 14px;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+.header-right .dropdown-item:hover i {
+    opacity: 1;
+}
+.header-right .dropdown-item.text-danger {
+    color: #dc2626;
+}
+.header-right .dropdown-item.text-danger:hover {
+    background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+    color: #b91c1c;
+}
+
+.header-right .dropdown-divider {
+    margin: 4px 8px;
+    border-color: #f1f5f9;
+}
+
+/* ---- Language Dropdown ---- */
+.header-lang .dropdown-menu {
+    min-width: 200px;
+}
+
+/* ---- Notification Dropdown ---- */
+.notification-dropdown {
+    min-width: 360px;
+    max-width: 400px;
+    padding: 0;
+}
+.notification-dropdown > .dropdown-header {
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+}
+.notification-dropdown > .dropdown-header .badge {
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(135deg, #ef4444, #f43f5e) !important;
+}
+
+.notification-body {
+    max-height: 340px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px;
+}
+.notification-body .dropdown-item {
+    white-space: normal;
+    padding: 14px 16px;
+    border-bottom: none;
+    flex-direction: column;
+    align-items: flex-start;
+    border-radius: var(--radius-md);
+    margin-bottom: 4px;
+    background: #f8fafc;
+    border: 1px solid #f1f5f9;
+    position: relative;
+}
+.notification-body .dropdown-item:last-child {
+    margin-bottom: 0;
+}
+.notification-body .dropdown-item:hover {
+    background: linear-gradient(135deg, #eff6ff, #f0f9ff);
+    border-color: #dbeafe;
+    transform: translateX(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.notification-body .dropdown-item strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 600;
+}
+.notification-body .dropdown-item small {
+    display: block;
+    font-size: 11.5px;
+    margin-top: 2px;
+    color: #94a3b8;
+}
+.notification-body .dropdown-item small.text-primary {
+    color: var(--accent) !important;
+    font-weight: 600;
+}
+.notification-body .dropdown-item-text {
+    padding: 28px 18px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* ---- Profile Dropdown ---- */
+.profile-dropdown {
+    min-width: 280px;
+    overflow: hidden;
+    padding: 0;
+}
+.profile-dropdown .dropdown-header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #1e3a5f 100%);
+    color: #fff;
+    text-align: center;
+    padding: 28px 18px 22px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 14px;
+    border-bottom: none;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
+}
+/* Decorative mesh gradient */
+.profile-dropdown .dropdown-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -30%;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, transparent 70%);
+}
+.profile-dropdown .dropdown-header::after {
+    content: '';
+    position: absolute;
+    bottom: -40%;
+    left: -20%;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(129, 140, 248, 0.12) 0%, transparent 70%);
+}
+.profile-dropdown .dropdown-header img {
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    object-fit: cover;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 1;
+}
+.profile-dropdown .dropdown-header .fw-bold {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #fff;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+}
+.profile-dropdown .dropdown-header small {
+    font-size: 11.5px;
+    opacity: 0.6;
+    color: #fff;
+    position: relative;
+    z-index: 1;
+}
+.profile-dropdown > li:not(:first-child) {
+    padding: 2px 6px;
+}
+.profile-dropdown > li:last-child {
+    padding-bottom: 6px;
+}
+
+/* ---- Scrollbar ---- */
+.notification-body::-webkit-scrollbar,
+.header-right .dropdown-menu::-webkit-scrollbar {
+    width: 4px;
+}
+.notification-body::-webkit-scrollbar-track,
+.header-right .dropdown-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+.notification-body::-webkit-scrollbar-thumb,
+.header-right .dropdown-menu::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+.notification-body::-webkit-scrollbar-thumb:hover,
+.header-right .dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* ----------------------------------------
+   3. SIDEBAR — Modern Glass Treatment
+   ---------------------------------------- */
+
+/* Override the harsh 70% black overlay with a softer gradient */
+.pcoded-navbar[class*="navbar-image"]::before {
+    background: linear-gradient(
+        180deg,
+        rgba(15, 23, 42, 0.88) 0%,
+        rgba(15, 23, 42, 0.82) 30%,
+        rgba(30, 41, 59, 0.78) 60%,
+        rgba(15, 23, 42, 0.92) 100%
+    ) !important;
+    pointer-events: none;
+}
+
+/* Ensure navbar-content can scroll */
+.pcoded-navbar .navbar-content {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: relative;
+    z-index: 1;
+}
+
+/* Fix scroll-div height for shorter header-logo */
+.pcoded-navbar .scroll-div.navbar-content {
+    height: calc(100vh - var(--header-height)) !important;
+}
+
+/* Sidebar overlay backdrop on mobile */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1028;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity var(--transition-smooth);
+}
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+/* Sidebar inner scrollbar */
+.pcoded-navbar .navbar-content::-webkit-scrollbar {
+    width: 4px;
+}
+.pcoded-navbar .navbar-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.pcoded-navbar .navbar-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+}
+.pcoded-navbar .navbar-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* ---- Sidebar Header / Logo area ---- */
+.pcoded-navbar .header-logo {
+    height: var(--header-height) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    position: relative;
+}
+.pcoded-navbar .header-logo::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 20px;
+    right: 20px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.2), transparent);
+}
+
+/* ---- Menu Items — Glass hover ---- */
+.pcoded-navbar .pcoded-inner-navbar > li > a {
+    padding: 10px 14px 10px 18px;
+    margin: 2px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    position: relative;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.pcoded-navbar .pcoded-inner-navbar > li > a:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #fff !important;
+}
+
+/* Active state — accent glow pill */
+.pcoded-navbar .pcoded-inner-navbar > li.active > a,
+.pcoded-navbar .pcoded-inner-navbar > li.pcoded-trigger > a {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(129, 140, 248, 0.08)) !important;
+    color: #fff !important;
+    border: 1px solid rgba(56, 189, 248, 0.15);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Remove old left-bar indicator, replace with left dot */
+.pcoded-navbar .pcoded-inner-navbar > li.active > a::before {
+    content: '';
+    position: absolute;
+    left: -2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Submenu */
+.pcoded-navbar .pcoded-submenu {
+    position: relative;
+}
+.pcoded-navbar .pcoded-submenu::before {
+    content: '';
+    position: absolute;
+    left: 32px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+}
+.pcoded-navbar .pcoded-submenu > li > a {
+    padding: 8px 14px 8px 48px;
+    margin: 1px 10px;
+    font-size: 12.5px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.55);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+.pcoded-navbar .pcoded-submenu > li > a:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.04);
+}
+.pcoded-navbar .pcoded-submenu > li.active > a {
+    color: var(--accent);
+    background: rgba(56, 189, 248, 0.06);
+    font-weight: 600;
+}
+
+/* Submenu dot indicator */
+.pcoded-navbar .pcoded-submenu > li.active > a::before,
+.pcoded-navbar .pcoded-submenu > li:focus > a::before,
+.pcoded-navbar .pcoded-submenu > li:hover > a::before {
+    background: var(--accent) !important;
+    width: 5px !important;
+    height: 5px !important;
+    border-radius: 50% !important;
+    box-shadow: 0 0 6px var(--accent-glow);
+}
+
+/* Menu section captions */
+.pcoded-navbar .pcoded-menu-caption {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 22px 18px 8px 28px;
+    color: var(--accent) !important;
+    opacity: 0.6;
+    position: relative;
+}
+
+/* Menu icons */
+.pcoded-navbar .pcoded-micon {
+    width: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    margin-right: 10px;
+    opacity: 0.6;
+    transition: all var(--transition-fast);
+}
+.pcoded-navbar .pcoded-inner-navbar > li:hover > a .pcoded-micon,
+.pcoded-navbar .pcoded-inner-navbar > li.active > a .pcoded-micon {
+    opacity: 1;
+    color: var(--accent);
+}
+
+/* pcoded-badge modernize */
+.pcoded-navbar .pcoded-badge {
+    border-radius: var(--radius-pill);
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    letter-spacing: 0.02em;
+}
+
+/* ----------------------------------------
+   4. RESPONSIVE — Small phones (< 576px)
+   ---------------------------------------- */
+@media (max-width: 575.98px) {
+    .header-right {
+        padding-right: 4px;
+        gap: 2px;
+    }
+
+    /* Hide language on small phones */
+    .header-right .header-lang {
+        display: none !important;
+    }
+
+    .header-right .header-notif > a,
+    .header-right .header-profile > a {
+        padding: 4px 7px;
+        font-size: 13px;
+    }
+
+    .notification-dropdown {
+        min-width: 0;
+        width: calc(100vw - 20px);
+        max-width: 380px;
+        right: -60px !important;
+    }
+
+    .profile-dropdown {
+        width: calc(100vw - 20px);
+        max-width: 300px;
+        right: -10px !important;
+    }
+
+    .att-badge span { display: none; }
+    .att-badge { padding: 5px 8px; }
+
+    /* Simplify profile wrapper on small screens */
+    .profile-pic-wrapper {
+        width: 28px;
+        height: 28px;
+    }
+    .profile-pic-wrapper i {
+        font-size: 13px;
+    }
+    .header-profile > a {
+        background: transparent !important;
+        border-color: transparent !important;
+        padding: 3px !important;
+    }
+    .header-profile > a > span {
+        display: none !important;
+    }
+
+    /* Smaller notification icon */
+    .header-notif > a {
+        background: transparent !important;
+        border-color: transparent !important;
+    }
+    .header-notif .icon {
+        font-size: 15px;
+    }
+}
+
+/* ---- Tablet-down: hide language text, streamline ---- */
+@media (max-width: 991px) {
+    .header-right .header-lang > a span {
+        display: none !important;
+    }
+
+    /* Ensure header-right doesn't overflow */
+    .header-right {
+        flex-shrink: 1;
+        min-width: 0;
+        overflow: visible;
+    }
+}
+
+/* ----------------------------------------
+   5. RESPONSIVE — Tablet (>= 576px)
+   ---------------------------------------- */
+@media (min-width: 576px) {
+    .header-right {
+        gap: 5px;
+    }
+}
+
+/* ----------------------------------------
+   6. RESPONSIVE — Desktop (>= 992px)
+   ---------------------------------------- */
+@media (min-width: 992px) {
+    .header-left {
+        display: flex !important;
+    }
+
+    .header-right {
+        gap: 6px;
+        padding-right: 22px;
+    }
+
+    .notification-dropdown {
+        right: 0 !important;
+    }
+
+    .profile-dropdown {
+        right: 0 !important;
+    }
+}
+
+/* ----------------------------------------
+   7. RESPONSIVE — Large desktop (>= 1200px)
+   ---------------------------------------- */
+@media (min-width: 1200px) {
+    .header-left {
+        gap: 16px;
+    }
+
+    .header-right {
+        gap: 8px;
+        padding-right: 28px;
+    }
+}
+
+/* ----------------------------------------
+   8. MOBILE OVERRIDES for pcoded framework
+   ---------------------------------------- */
+@media only screen and (max-width: 991px) {
+    .pcoded-header.header-lightblue {
+        background: linear-gradient(125deg, var(--hdr-from) 0%, var(--hdr-via) 45%, var(--hdr-to) 100%) !important;
+        color: var(--text-primary);
+    }
+
+    .pcoded-header.header-lightblue .input-group-text,
+    .pcoded-header.header-lightblue a,
+    .pcoded-header.header-lightblue dropdown-toggle {
+        color: var(--text-primary);
+    }
+
+    .pcoded-header.header-lightblue .input-group-text:hover,
+    .pcoded-header.header-lightblue a:hover,
+    .pcoded-header.header-lightblue dropdown-toggle:hover {
+        color: #fff;
+    }
+
+    /* Keep dropdown text dark on white bg */
+    .pcoded-header.header-lightblue .dropdown-menu,
+    .pcoded-header.header-lightblue .dropdown-menu a {
+        color: #334155;
+    }
+
+    /* Mobile sidebar - smooth slide */
+    .pcoded-navbar {
+        transition: margin-left var(--transition-smooth), box-shadow var(--transition-smooth);
+        z-index: 1030;
+        position: fixed;
+        top: 0;
+        height: 100%;
+    }
+
+    .pcoded-navbar.mob-open {
+        margin-left: 0 !important;
+        box-shadow: 8px 0 32px rgba(0, 0, 0, 0.3);
+    }
+}
+
+/* ----------------------------------------
+   9. PRINT STYLES
+   ---------------------------------------- */
+@media print {
+    .pcoded-header,
+    .pcoded-navbar,
+    .header-right,
+    .header-left,
+    .sidebar-overlay {
+        display: none !important;
+    }
+
+    .pcoded-main-container {
+        margin-left: 0 !important;
+        margin-top: 0 !important;
+    }
+}
+
+/* ----------------------------------------
+   10. ACCESSIBILITY & Micro-interactions
+   ---------------------------------------- */
+.header-right > li > a:focus-visible,
+.header-left .full-screen:focus-visible,
+.header-session-badge:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Notification badge pulse */
+@keyframes notifPulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5); }
+    50% { box-shadow: 0 2px 14px rgba(239, 68, 68, 0.8), 0 0 0 3px rgba(239, 68, 68, 0.15); }
+}
+.notification-badge {
+    animation: notifPulse 2.5s ease-in-out infinite;
+}
+.notification-badge:hover {
+    animation: none;
+}
+
+/* Profile dropdown avatar hover */
+.profile-dropdown .dropdown-header img {
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.profile-dropdown .dropdown-header:hover img {
+    transform: scale(1.06);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Sidebar collapsed state polish (desktop) ---- */
+@media (min-width: 992px) {
+    .pcoded-navbar.navbar-collapsed .pcoded-inner-navbar > li > a {
+        margin: 2px 6px;
+        padding: 10px;
+        justify-content: center;
+    }
+    .pcoded-navbar.navbar-collapsed .pcoded-inner-navbar > li.active > a::before {
+        left: 0;
+    }
+    .pcoded-navbar.navbar-collapsed:hover .pcoded-inner-navbar > li > a {
+        margin: 2px 10px;
+        padding: 10px 14px 10px 18px;
+        justify-content: flex-start;
+    }
+}

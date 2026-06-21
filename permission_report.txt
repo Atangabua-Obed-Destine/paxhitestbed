@@ -1,0 +1,1163 @@
+﻿<pre>=== PERMISSION ANALYSIS ===
+
+Total permissions in database: 654
+
+Permission Groups in database (159):
+------------------------------------------------------------
+  (No Group)                              : 6 permissions
+  About Us                                : 1 permissions
+  Academic                                : 8 permissions
+  Accounting                              : 14 permissions
+  Accounting Period                       : 5 permissions
+  Accounting Reports                      : 8 permissions
+  Accreditation                           : 4 permissions
+  Admission Date                          : 4 permissions
+  Admit Card                              : 4 permissions
+  Allowance Type                          : 4 permissions
+  Announcement                            : 2 permissions
+  Application                             : 4 permissions
+  Application Setting                     : 1 permissions
+  Assign Fees                             : 2 permissions
+  Assignment                              : 5 permissions
+  Attendance Setting                      : 2 permissions
+  Audit Trail                             : 2 permissions
+  Batch                                   : 4 permissions
+  Book Category                           : 4 permissions
+  Book List                               : 6 permissions
+  Book Request                            : 4 permissions
+  Budget                                  : 11 permissions
+  Call To Action                          : 1 permissions
+  Catholic Students                       : 2 permissions
+  Certificate                             : 5 permissions
+  Certificate Template                    : 4 permissions
+  Chart of Accounts                       : 4 permissions
+  Class Hub                               : 1 permissions
+  Class Room                              : 4 permissions
+  Class Routine                           : 4 permissions
+  Class Session                           : 11 permissions
+  Complain                                : 4 permissions
+  Complain Source                         : 4 permissions
+  Complain Type                           : 4 permissions
+  Contact Setting                         : 1 permissions
+  Content                                 : 4 permissions
+  Content Type                            : 4 permissions
+  Course                                  : 9 permissions
+  Course Final                            : 8 permissions
+  Deduction Type                          : 4 permissions
+  Department                              : 4 permissions
+  Designation                             : 4 permissions
+  District/City                           : 4 permissions
+  E-Library                               : 4 permissions
+  Enquiry                                 : 4 permissions
+  Enquiry Reference                       : 4 permissions
+  Enquiry Source                          : 4 permissions
+  Enroll Course                           : 4 permissions
+  Enrollments                             : 5 permissions
+  Event                                   : 5 permissions
+  Exam                                    : 4 permissions
+  Exam Publishing                         : 5 permissions
+  Exam Routine                            : 5 permissions
+  Exam Type                               : 4 permissions
+  Expense                                 : 4 permissions
+  Expense Category                        : 4 permissions
+  Faculty                                 : 4 permissions
+  Faq                                     : 4 permissions
+  Feature                                 : 4 permissions
+  Fees                                    : 3 permissions
+  Fees Discount                           : 4 permissions
+  Fees Fine                               : 4 permissions
+  Fees Receipt                            : 1 permissions
+  Fees Type                               : 4 permissions
+  Field Setting                           : 3 permissions
+  Footer Page                             : 4 permissions
+  Form A3                                 : 2 permissions
+  Gallery                                 : 4 permissions
+  Grading System                          : 4 permissions
+  History Timeline                        : 4 permissions
+  Hostel                                  : 4 permissions
+  Hostel Member                           : 2 permissions
+  Hostel Room                             : 4 permissions
+  ID Card                                 : 1 permissions
+  Income                                  : 4 permissions
+  Income Category                         : 4 permissions
+  Issue Book                              : 3 permissions
+  Issue Item                              : 3 permissions
+  Item Category                           : 4 permissions
+  Item List                               : 4 permissions
+  Item Stock                              : 4 permissions
+  Journal Entry                           : 5 permissions
+  Language                                : 4 permissions
+  Leadership Team                         : 4 permissions
+  Leave Type                              : 4 permissions
+  Library Card                            : 1 permissions
+  Library Member                          : 5 permissions
+  Mark Distribution                       : 1 permissions
+  Marksheet                               : 4 permissions
+  Meeting Schedule                        : 4 permissions
+  Meeting Type                            : 4 permissions
+  My Profile                              : 3 permissions
+  News                                    : 4 permissions
+  Notice Category                         : 4 permissions
+  Notice List                             : 4 permissions
+  Outcome Overview                        : 1 permissions
+  Pay Slip                                : 1 permissions
+  Payment Account                         : 11 permissions
+  Payment Account Report                  : 1 permissions
+  Payment Account Transfer                : 3 permissions
+  Payment Plan                            : 9 permissions
+  Payment Verification                    : 1 permissions
+  Payroll                                 : 4 permissions
+  Phone Log                               : 4 permissions
+  Platform Fee                            : 3 permissions
+  Postal Exchange                         : 4 permissions
+  Postal Type                             : 4 permissions
+  Program                                 : 4 permissions
+  Project                                 : 4 permissions
+  Religion                                : 4 permissions
+  Report                                  : 1 permissions
+  Reports                                 : 15 permissions
+  Resit                                   : 6 permissions
+  Results Summary                         : 2 permissions
+  Role and Permissions                    : 4 permissions
+  Room Type                               : 4 permissions
+  Routine Setting                         : 2 permissions
+  Section                                 : 4 permissions
+  Security                                : 11 permissions
+  Semester                                : 4 permissions
+  Send Email                              : 3 permissions
+  Send SMS                                : 3 permissions
+  Session                                 : 4 permissions
+  Setting                                 : 7 permissions
+  Slider                                  : 4 permissions
+  Social Setting                          : 1 permissions
+  Staff                                   : 6 permissions
+  Staff Apply Leave                       : 3 permissions
+  Staff Daily Attendance                  : 2 permissions
+  Staff Hourly Attendance                 : 2 permissions
+  Staff Leave Manage                      : 3 permissions
+  Staff List                              : 6 permissions
+  Staff Note                              : 4 permissions
+  State/Province                          : 4 permissions
+  Status Type                             : 4 permissions
+  Store                                   : 4 permissions
+  Student                                 : 13 permissions
+  Student Attendance                      : 3 permissions
+  Student Fees                            : 6 permissions
+  Student Leave                           : 3 permissions
+  Student Note                            : 4 permissions
+  Student Panel                           : 1 permissions
+  Supplier                                : 4 permissions
+  Support Service                         : 4 permissions
+  Tax Setting                             : 4 permissions
+  Testimonial                             : 4 permissions
+  Transaction Mapping                     : 2 permissions
+  Transfer In                             : 3 permissions
+  Transfer Out                            : 3 permissions
+  Translation                             : 3 permissions
+  Transport Member                        : 2 permissions
+  Transport Route                         : 4 permissions
+  Transport Vehicle                       : 4 permissions
+  Visit Purpose                           : 4 permissions
+  Visitor                                 : 5 permissions
+  Visitor Token                           : 1 permissions
+  Web                                     : 10 permissions
+  Web Event                               : 4 permissions
+  Work Shift Type                         : 4 permissions
+
+============================================================
+PERMISSIONS WITHOUT GROUP:
+------------------------------------------------------------
+  - attendance-setting-view (title: )
+  - class-hub-reports-export (title: )
+  - dynamic-popup-view (title: )
+  - dynamic-popup-create (title: )
+  - dynamic-popup-edit (title: )
+  - dynamic-popup-delete (title: )
+
+============================================================
+PERMISSIONS WITHOUT TITLE:
+------------------------------------------------------------
+  - attendance-setting-view (group: )
+  - class-hub-reports-export (group: )
+  - dynamic-popup-view (group: )
+  - dynamic-popup-create (group: )
+  - dynamic-popup-edit (group: )
+  - dynamic-popup-delete (group: )
+
+============================================================
+FULL PERMISSION LIST BY GROUP:
+------------------------------------------------------------
+
+[(No Group)]
+  - attendance-setting-view => (No title)
+  - class-hub-reports-export => (No title)
+  - dynamic-popup-create => (No title)
+  - dynamic-popup-delete => (No title)
+  - dynamic-popup-edit => (No title)
+  - dynamic-popup-view => (No title)
+
+[About Us]
+  - about-us-view => Manage
+
+[Academic]
+  - academic-department-create => Create Academic Department
+  - academic-department-view => View Academic Department
+  - degree-type-create => Create Degree Type
+  - degree-type-view => View Degree Type
+  - sector-create => Create Sector
+  - sector-delete => Delete Sector
+  - sector-edit => Edit Sector
+  - sector-view => View Sector
+
+[Accounting]
+  - accounting-period-view => View Accounting Period
+  - accounting-report-view => View Accounting Reports
+  - bank-reconciliation-list => List Bank Reconciliations
+  - chart-of-accounts-view => View Chart of Accounts
+  - fixed-asset-create => Create Fixed Asset
+  - fixed-asset-depreciation => Manage Asset Depreciation
+  - fixed-asset-list => List Fixed Assets
+  - general-ledger-view => View General Ledger
+  - journal-entry-view => View Journal Entry
+  - recurring-entry-list => List Recurring Entries
+  - transaction-mapping-settings => Transaction Mapping Settings
+  - transaction-mapping-view => View Transaction Mapping
+  - trial-balance-view => View Trial Balance
+  - year-end-closing-list => List Year End Closings
+
+[Accounting Period]
+  - accounting-period-close => Close Accounting Period
+  - accounting-period-create => Create Accounting Period
+  - accounting-period-delete => Delete Accounting Period
+  - accounting-period-edit => Edit Accounting Period
+  - accounting-period-reopen => Reopen Accounting Period
+
+[Accounting Reports]
+  - balance-sheet-export => Export Balance Sheet
+  - balance-sheet-view => View Balance Sheet
+  - cash-flow-export => Export Cash Flow Statement
+  - cash-flow-view => View Cash Flow Statement
+  - general-ledger-export => Export General Ledger
+  - income-statement-export => Export Income Statement
+  - income-statement-view => View Income Statement
+  - trial-balance-export => Export Trial Balance
+
+[Accreditation]
+  - accreditation-create => Create
+  - accreditation-delete => Delete
+  - accreditation-edit => Edit
+  - accreditation-view => View
+
+[Admission Date]
+  - admission-date-create => Create
+  - admission-date-delete => Delete
+  - admission-date-edit => Edit
+  - admission-date-view => View
+
+[Admit Card]
+  - admit-card-download => Download
+  - admit-card-print => Print
+  - admit-card-view => View
+  - admit-setting-view => Setting
+
+[Allowance Type]
+  - allowance-type-create => Create
+  - allowance-type-delete => Delete
+  - allowance-type-edit => Edit
+  - allowance-type-view => View
+
+[Announcement]
+  - announcement-delete => Delete
+  - announcement-edit => Edit
+
+[Application]
+  - application-create => Admission
+  - application-delete => Delete
+  - application-edit => Action
+  - application-view => View
+
+[Application Setting]
+  - application-setting-view => Manage
+
+[Assign Fees]
+  - fees-master-create => Manage
+  - fees-master-view => Report
+
+[Assignment]
+  - assignment-create => Create
+  - assignment-delete => Delete
+  - assignment-edit => Edit
+  - assignment-marking => Mark Ledger
+  - assignment-view => View
+
+[Attendance Setting]
+  - attendance-setting-edit => Edit Attendance Settings
+  - attendance-setting-list => List Attendance Settings
+
+[Audit Trail]
+  - audit-log-export => Export
+  - audit-log-view => View
+
+[Batch]
+  - batch-create => Create
+  - batch-delete => Delete
+  - batch-edit => Edit
+  - batch-view => View
+
+[Book Category]
+  - book-category-create => Create
+  - book-category-delete => Delete
+  - book-category-edit => Edit
+  - book-category-view => View
+
+[Book List]
+  - book-create => Create
+  - book-delete => Delete
+  - book-edit => Edit
+  - book-import => Import
+  - book-print => Token Print
+  - book-view => View
+
+[Book Request]
+  - book-request-create => Create
+  - book-request-delete => Delete
+  - book-request-edit => Edit
+  - book-request-view => View
+
+[Budget]
+  - budget-activate => Activate Budget
+  - budget-allocation-create => Create Allocation
+  - budget-allocation-delete => Delete Allocation
+  - budget-allocation-edit => Edit Allocation
+  - budget-approve => Approve Budget
+  - budget-cancel => Cancel Budget
+  - budget-close => Close Budget
+  - budget-create => Create Budget
+  - budget-delete => Delete Budget
+  - budget-edit => Edit Budget
+  - budget-view => View Budget
+
+[Call To Action]
+  - call-to-action-view => Manage
+
+[Catholic Students]
+  - catholic-student-edit => Edit
+  - catholic-student-view => View
+
+[Certificate]
+  - certificate-create => Genarate
+  - certificate-download => Download
+  - certificate-edit => Edit
+  - certificate-print => Print
+  - certificate-view => View
+
+[Certificate Template]
+  - certificate-template-create => Create
+  - certificate-template-delete => Delete
+  - certificate-template-edit => Edit
+  - certificate-template-view => View
+
+[Chart of Accounts]
+  - chart-of-accounts-activate => Activate/Deactivate Account
+  - chart-of-accounts-create => Create Account
+  - chart-of-accounts-delete => Delete Account
+  - chart-of-accounts-edit => Edit Account
+
+[Class Hub]
+  - class-hub-reports-view => View Class Hub Reports
+
+[Class Room]
+  - class-room-create => Create
+  - class-room-delete => Delete
+  - class-room-edit => Edit
+  - class-room-view => View
+
+[Class Routine]
+  - class-routine-create => Manage
+  - class-routine-print => Print
+  - class-routine-teacher => Teacher
+  - class-routine-view => View
+
+[Class Session]
+  - class-session-attendance => Manage Class Attendance
+  - class-session-create => Create Class Session
+  - class-session-delegate => Delegate Class Rep
+  - class-session-delete => Delete Class Session
+  - class-session-edit => Edit Class Session
+  - class-session-end => End Class Session
+  - class-session-list => List Class Sessions
+  - class-session-logbook => Manage Class Logbook
+  - class-session-messages => View Class Messages
+  - class-session-start => Start Class Session
+  - class-session-view => View Class Session
+
+[Complain]
+  - complain-create => Create
+  - complain-delete => Delete
+  - complain-edit => Edit
+  - complain-view => View
+
+[Complain Source]
+  - complain-source-create => Create
+  - complain-source-delete => Delete
+  - complain-source-edit => Edit
+  - complain-source-view => View
+
+[Complain Type]
+  - complain-type-create => Create
+  - complain-type-delete => Delete
+  - complain-type-edit => Edit
+  - complain-type-view => View
+
+[Contact Setting]
+  - topbar-setting-view => Manage
+
+[Content]
+  - content-create => Create
+  - content-delete => Delete
+  - content-edit => Edit
+  - content-view => View
+
+[Content Type]
+  - content-type-create => Create
+  - content-type-delete => Delete
+  - content-type-edit => Edit
+  - content-type-view => View
+
+[Course]
+  - course-create => Create
+  - course-delete => Delete
+  - course-edit => Edit
+  - course-view => View
+  - subject-create => Create
+  - subject-delete => Delete
+  - subject-edit => Edit
+  - subject-import => Import
+  - subject-view => View
+
+[Course Final]
+  - subject-marking => Mark Ledger
+  - subject-marking-approve => Approve Marks
+  - subject-marking-check => Check Marks
+  - subject-marking-publish => Publish Marks
+  - subject-marking-submit => Submit For Check
+  - subject-marking-unlock => Unlock Exam/Attendance
+  - subject-marking-unpublish => Unpublish Individual Results
+  - subject-result => Result
+
+[Deduction Type]
+  - deduction-type-create => Create
+  - deduction-type-delete => Delete
+  - deduction-type-edit => Edit
+  - deduction-type-view => View
+
+[Department]
+  - department-create => Create
+  - department-delete => Delete
+  - department-edit => Edit
+  - department-view => View
+
+[Designation]
+  - designation-create => Create
+  - designation-delete => Delete
+  - designation-edit => Edit
+  - designation-view => View
+
+[District/City]
+  - district-create => Create
+  - district-delete => Delete
+  - district-edit => Edit
+  - district-view => View
+
+[E-Library]
+  - e-library-create => Create
+  - e-library-delete => Delete
+  - e-library-edit => Edit
+  - e-library-view => View
+
+[Enquiry]
+  - enquiry-create => Create
+  - enquiry-delete => Delete
+  - enquiry-edit => Edit
+  - enquiry-view => View
+
+[Enquiry Reference]
+  - enquiry-reference-create => Create
+  - enquiry-reference-delete => Delete
+  - enquiry-reference-edit => Edit
+  - enquiry-reference-view => View
+
+[Enquiry Source]
+  - enquiry-source-create => Create
+  - enquiry-source-delete => Delete
+  - enquiry-source-edit => Edit
+  - enquiry-source-view => View
+
+[Enroll Course]
+  - enroll-subject-create => Create
+  - enroll-subject-delete => Delete
+  - enroll-subject-edit => Edit
+  - enroll-subject-view => View
+
+[Enrollments]
+  - student-enroll-adddrop => Course Add Drop
+  - student-enroll-alumni => Alumni List
+  - student-enroll-complete => Course Graduation
+  - student-enroll-group => Group Enroll
+  - student-enroll-single => Single Enroll
+
+[Event]
+  - event-calendar => Calendar
+  - event-create => Create
+  - event-delete => Delete
+  - event-edit => Edit
+  - event-view => View
+
+[Exam]
+  - exam-attendance => Attendance
+  - exam-import => Import
+  - exam-marking => Mark Ledger
+  - exam-result => Result
+
+[Exam Publishing]
+  - exam-publishing-approve => Approve
+  - exam-publishing-check => Check
+  - exam-publishing-publish => Publish
+  - exam-publishing-submit => Submit
+  - exam-publishing-view => View
+
+[Exam Routine]
+  - exam-routine-create => Manage
+  - exam-routine-delete => Delete
+  - exam-routine-edit => Edit
+  - exam-routine-print => Print
+  - exam-routine-view => View
+
+[Exam Type]
+  - exam-type-create => Create
+  - exam-type-delete => Delete
+  - exam-type-edit => Edit
+  - exam-type-view => View
+
+[Expense]
+  - expense-create => Create
+  - expense-delete => Delete
+  - expense-edit => Edit
+  - expense-view => View
+
+[Expense Category]
+  - expense-category-create => Create
+  - expense-category-delete => Delete
+  - expense-category-edit => Edit
+  - expense-category-view => View
+
+[Faculty]
+  - faculty-create => Create
+  - faculty-delete => Delete
+  - faculty-edit => Edit
+  - faculty-view => View
+
+[Faq]
+  - faq-create => Create
+  - faq-delete => Delete
+  - faq-edit => Edit
+  - faq-view => View
+
+[Feature]
+  - feature-create => Create
+  - feature-delete => Delete
+  - feature-edit => Edit
+  - feature-view => View
+
+[Fees]
+  - payment-plan.index => View Payment Plans
+  - program-semester-fee-create => Create Program Semester Fee
+  - program-semester-fee-view => View Program Semester Fee
+
+[Fees Discount]
+  - fees-discount-create => Create
+  - fees-discount-delete => Delete
+  - fees-discount-edit => Edit
+  - fees-discount-view => View
+
+[Fees Fine]
+  - fees-fine-create => Create
+  - fees-fine-delete => Delete
+  - fees-fine-edit => Edit
+  - fees-fine-view => View
+
+[Fees Receipt]
+  - fees-receipt-view => Setting
+
+[Fees Type]
+  - fees-category-create => Create
+  - fees-category-delete => Delete
+  - fees-category-edit => Edit
+  - fees-category-view => View
+
+[Field Setting]
+  - field-application => Application
+  - field-staff => Staff
+  - field-student => Student
+
+[Footer Page]
+  - page-create => Create
+  - page-delete => Delete
+  - page-edit => Edit
+  - page-view => View
+
+[Form A3]
+  - form-a3-setting-edit => Edit Form A3 Settings
+  - form-a3-setting-view => View Form A3 Settings
+
+[Gallery]
+  - gallery-create => Create
+  - gallery-delete => Delete
+  - gallery-edit => Edit
+  - gallery-view => View
+
+[Grading System]
+  - grade-create => Create
+  - grade-delete => Delete
+  - grade-edit => Edit
+  - grade-view => View
+
+[History Timeline]
+  - history-timeline-create => Create
+  - history-timeline-delete => Delete
+  - history-timeline-edit => Edit
+  - history-timeline-view => View
+
+[Hostel]
+  - hostel-create => Create
+  - hostel-delete => Delete
+  - hostel-edit => Edit
+  - hostel-view => View
+
+[Hostel Member]
+  - hostel-member-create => Manage
+  - hostel-member-view => View
+
+[Hostel Room]
+  - hostel-room-create => Create
+  - hostel-room-delete => Delete
+  - hostel-room-edit => Edit
+  - hostel-room-view => View
+
+[ID Card]
+  - id-card-setting-view => Setting
+
+[Income]
+  - income-create => Create
+  - income-delete => Delete
+  - income-edit => Edit
+  - income-view => View
+
+[Income Category]
+  - income-category-create => Create
+  - income-category-delete => Delete
+  - income-category-edit => Edit
+  - income-category-view => View
+
+[Issue Book]
+  - book-issue-action => Action
+  - book-issue-delete => Delete
+  - book-issue-view => View
+
+[Issue Item]
+  - item-issue-action => Action
+  - item-issue-delete => Delete
+  - item-issue-view => View
+
+[Item Category]
+  - item-category-create => Create
+  - item-category-delete => Delete
+  - item-category-edit => Edit
+  - item-category-view => View
+
+[Item List]
+  - item-create => Create
+  - item-delete => Delete
+  - item-edit => Edit
+  - item-view => View
+
+[Item Stock]
+  - item-stock-create => Create
+  - item-stock-delete => Delete
+  - item-stock-edit => Edit
+  - item-stock-view => View
+
+[Journal Entry]
+  - journal-entry-create => Create Manual Journal Entry
+  - journal-entry-delete => Delete Journal Entry
+  - journal-entry-edit => Edit Journal Entry
+  - journal-entry-post => Post Journal Entry
+  - journal-entry-reverse => Reverse Journal Entry
+
+[Language]
+  - language-create => Create
+  - language-delete => Delete
+  - language-edit => Edit
+  - language-view => View
+
+[Leadership Team]
+  - leadership-team-create => Create
+  - leadership-team-delete => Delete
+  - leadership-team-edit => Edit
+  - leadership-team-view => View
+
+[Leave Type]
+  - leave-type-create => Create
+  - leave-type-delete => Delete
+  - leave-type-edit => Edit
+  - leave-type-view => View
+
+[Library Card]
+  - library-card-setting-view => Setting
+
+[Library Member]
+  - library-member-card => Card Print
+  - library-member-create => Create
+  - library-member-delete => Delete
+  - library-member-edit => Edit
+  - library-member-view => View
+
+[Mark Distribution]
+  - result-contribution-view => Setting
+
+[Marksheet]
+  - marksheet-download => Download
+  - marksheet-print => Print
+  - marksheet-setting-view => Setting
+  - marksheet-view => View
+
+[Meeting Schedule]
+  - meeting-create => Create
+  - meeting-delete => Delete
+  - meeting-edit => Edit
+  - meeting-view => View
+
+[Meeting Type]
+  - meeting-type-create => Create
+  - meeting-type-delete => Delete
+  - meeting-type-edit => Edit
+  - meeting-type-view => View
+
+[My Profile]
+  - profile-account => Account
+  - profile-edit => Edit
+  - profile-view => View
+
+[News]
+  - news-create => Create
+  - news-delete => Delete
+  - news-edit => Edit
+  - news-view => View
+
+[Notice Category]
+  - notice-category-create => Create
+  - notice-category-delete => Delete
+  - notice-category-edit => Edit
+  - notice-category-view => View
+
+[Notice List]
+  - notice-create => Create
+  - notice-delete => Delete
+  - notice-edit => Edit
+  - notice-view => View
+
+[Outcome Overview]
+  - outcome-view => View
+
+[Pay Slip]
+  - pay-slip-setting-view => Setting
+
+[Payment Account]
+  - payment-account-book => View Account Book
+  - payment-account-create => Create Payment Account
+  - payment-account-delete => Delete Payment Account
+  - payment-account-deposit => Make Deposits
+  - payment-account-edit => Edit Payment Account
+  - payment-account-report-view => View Payment Account Report
+  - payment-account-transaction-delete => Delete Transactions
+  - payment-account-transaction-edit => Edit Transactions
+  - payment-account-transfer-view => View Payment Account Transfer
+  - payment-account-view => View Payment Account
+  - payment-account-withdraw => Make Withdrawals
+
+[Payment Account Report]
+  - payment-account-report-export => Export Payment Account Reports
+
+[Payment Account Transfer]
+  - payment-account-transfer-create => Create Transfer
+  - payment-account-transfer-delete => Delete Transfer
+  - payment-account-transfer-edit => Edit Transfer
+
+[Payment Plan]
+  - payment-plan.approve => Approve
+  - payment-plan.cancel => Cancel
+  - payment-plan.create => Create
+  - payment-plan.destroy => Delete
+  - payment-plan.edit => Edit
+  - payment-plan.pay => Process Payment
+  - payment-plan.show => View Details
+  - payment-plan.store => Store
+  - payment-plan.update => Update
+
+[Payment Verification]
+  - payment-receipt-verify => Verify
+
+[Payroll]
+  - payroll-action => Action
+  - payroll-print => Print
+  - payroll-report => Report
+  - payroll-view => View
+
+[Phone Log]
+  - phone-log-create => Create
+  - phone-log-delete => Delete
+  - phone-log-edit => Edit
+  - phone-log-view => View
+
+[Platform Fee]
+  - platform-fee-action => Action
+  - platform-fee-delete => Delete
+  - platform-fee-view => View
+
+[Postal Exchange]
+  - postal-exchange-create => Create
+  - postal-exchange-delete => Delete
+  - postal-exchange-edit => Edit
+  - postal-exchange-view => View
+
+[Postal Type]
+  - postal-type-create => Create
+  - postal-type-delete => Delete
+  - postal-type-edit => Edit
+  - postal-type-view => View
+
+[Program]
+  - program-create => Create
+  - program-delete => Delete
+  - program-edit => Edit
+  - program-view => View
+
+[Project]
+  - project-create => Create
+  - project-delete => Delete
+  - project-edit => Edit
+  - project-view => View
+
+[Religion]
+  - religion-create => Create
+  - religion-delete => Delete
+  - religion-edit => Edit
+  - religion-view => View
+
+[Report]
+  - partial-payment-report-view => View Partial Payment Report
+
+[Reports]
+  - report-book-return => Book Return Due
+  - report-collected-fees => Collected Fees
+  - report-expense => Total Expense
+  - report-hostel => Hostel Members
+  - report-income => Total Income
+  - report-inventory => Inventory History
+  - report-library => Library History
+  - report-salary-paid => Salary Paid
+  - report-staff-leaves => Staff Leaves
+  - report-student-attendance => Student Attendance
+  - report-student-fees => Student Fees
+  - report-student-progress => Student Progress
+  - report-subject-attendance => Subject Attendance
+  - report-subject-students => Course Students
+  - report-transport => Transport Members
+
+[Resit]
+  - resit-request-approve => Academic Approval
+  - resit-request-finance => Finance Review
+  - resit-request-reject => Reject
+  - resit-request-schedule => Schedule
+  - resit-request-transition => Manage Workflow
+  - resit-request-view => View Requests
+
+[Results Summary]
+  - results-summary-export => Export
+  - results-summary-view => View
+
+[Role and Permissions]
+  - role-create => Create
+  - role-delete => Delete
+  - role-edit => Edit
+  - role-view => View
+
+[Room Type]
+  - room-type-create => Create
+  - room-type-delete => Delete
+  - room-type-edit => Edit
+  - room-type-view => View
+
+[Routine Setting]
+  - routine-setting-class => Class Routine
+  - routine-setting-exam => Exam Routine
+
+[Section]
+  - section-create => Create
+  - section-delete => Delete
+  - section-edit => Edit
+  - section-view => View
+
+[Security]
+  - security-active-sessions-terminate => Terminate Active Sessions
+  - security-active-sessions-view => View Active Sessions
+  - security-audit-export => Export Audit Logs
+  - security-audit-view => View Audit Logs
+  - security-blocked-ips-manage => Manage Blocked IPs
+  - security-blocked-ips-view => View Blocked IPs
+  - security-dashboard-view => View Security Dashboard
+  - security-failed-logins-view => View Failed Logins
+  - security-ip-whitelist-manage => Manage IP Whitelist
+  - security-ip-whitelist-view => View IP Whitelist
+  - security-login-history-view => View Login History
+
+[Semester]
+  - semester-create => Create
+  - semester-delete => Delete
+  - semester-edit => Edit
+  - semester-view => View
+
+[Send Email]
+  - email-notify-create => Send
+  - email-notify-delete => Delete
+  - email-notify-view => View
+
+[Send SMS]
+  - sms-notify-create => Send
+  - sms-notify-delete => Delete
+  - sms-notify-view => View
+
+[Session]
+  - session-create => Create
+  - session-delete => Delete
+  - session-edit => Edit
+  - session-view => View
+
+[Setting]
+  - form-a2-access-view => View Form A2 Access
+  - form-a2-setting-view => View Form A2 Config
+  - schedule-setting-view => View Schedule Setting
+  - setting-mail => Mail Setting
+  - setting-payment => Payment Getaways
+  - setting-sms => SMS Getaways
+  - setting-view => General
+
+[Slider]
+  - slider-create => Create
+  - slider-delete => Delete
+  - slider-edit => Edit
+  - slider-view => View
+
+[Social Setting]
+  - social-setting-view => Manage
+
+[Staff]
+  - staff-assignment-create => Create Staff Assignment
+  - staff-assignment-delete => Delete Staff Assignment
+  - staff-assignment-edit => Edit Staff Assignment
+  - staff-assignment-index => View Staff Assignment
+  - staff-view => View Staff
+  - user-password-print => Print User Password
+
+[Staff Apply Leave]
+  - staff-leave-create => Apply
+  - staff-leave-delete => Delete
+  - staff-leave-view => View
+
+[Staff Daily Attendance]
+  - staff-daily-attendance-action => Manage
+  - staff-daily-attendance-report => Report
+
+[Staff Hourly Attendance]
+  - staff-hourly-attendance-action => Manage
+  - staff-hourly-attendance-report => Report
+
+[Staff Leave Manage]
+  - staff-leave-manage-delete => Delete
+  - staff-leave-manage-edit => Action
+  - staff-leave-manage-view => View
+
+[Staff List]
+  - user-create => Create
+  - user-delete => Delete
+  - user-edit => Edit
+  - user-import => Import
+  - user-password-change => Password Change
+  - user-view => View
+
+[Staff Note]
+  - staff-note-create => Create
+  - staff-note-delete => Delete
+  - staff-note-edit => Edit
+  - staff-note-view => View
+
+[State/Province]
+  - province-create => Create
+  - province-delete => Delete
+  - province-edit => Edit
+  - province-view => View
+
+[Status Type]
+  - status-type-create => Create
+  - status-type-delete => Delete
+  - status-type-edit => Edit
+  - status-type-view => View
+
+[Store]
+  - item-store-create => Create
+  - item-store-delete => Delete
+  - item-store-edit => Edit
+  - item-store-view => View
+
+[Student]
+  - student-archive-edit => Edit Student Archive
+  - student-archive-password-change => Change Student Archive Password
+  - student-archive-view => View Student Archive
+  - student-card => ID Card
+  - student-create => Create
+  - student-delete => Delete
+  - student-edit => Edit
+  - student-form-a2-view => View Student Form A2
+  - student-form-a3-view => View Student Form A3
+  - student-import => Import
+  - student-password-change => Password Change
+  - student-password-print => Password Print
+  - student-view => View
+
+[Student Attendance]
+  - student-attendance-action => Manage
+  - student-attendance-import => Import
+  - student-attendance-report => Report
+
+[Student Fees]
+  - fees-student-action => Action
+  - fees-student-due => Fees Due
+  - fees-student-print => Print
+  - fees-student-quick-assign => Quick Assign
+  - fees-student-quick-received => Quick Received
+  - fees-student-report => Report
+
+[Student Leave]
+  - student-leave-manage-delete => Delete
+  - student-leave-manage-edit => Action
+  - student-leave-manage-view => View
+
+[Student Note]
+  - student-note-create => Create
+  - student-note-delete => Delete
+  - student-note-edit => Edit
+  - student-note-view => View
+
+[Student Panel]
+  - student-panel-view => Manage
+
+[Supplier]
+  - item-supplier-create => Create
+  - item-supplier-delete => Delete
+  - item-supplier-edit => Edit
+  - item-supplier-view => View
+
+[Support Service]
+  - support-service-create => Create
+  - support-service-delete => Delete
+  - support-service-edit => Edit
+  - support-service-view => View
+
+[Tax Setting]
+  - tax-setting-create => Create
+  - tax-setting-delete => Delete
+  - tax-setting-edit => Edit
+  - tax-setting-view => View
+
+[Testimonial]
+  - testimonial-create => Create
+  - testimonial-delete => Delete
+  - testimonial-edit => Edit
+  - testimonial-view => View
+
+[Transaction Mapping]
+  - transaction-mapping-manage => Manage Individual Mappings
+  - transaction-mapping-remap => Remap Transactions
+
+[Transfer In]
+  - student-transfer-in-create => Transfer
+  - student-transfer-in-edit => Edit
+  - student-transfer-in-view => View
+
+[Transfer Out]
+  - student-transfer-out-create => Transfer
+  - student-transfer-out-edit => Edit
+  - student-transfer-out-view => View
+
+[Translation]
+  - translations-create => Create
+  - translations-delete => Delete
+  - translations-view => View
+
+[Transport Member]
+  - transport-member-create => Manage
+  - transport-member-view => View
+
+[Transport Route]
+  - transport-route-create => Create
+  - transport-route-delete => Delete
+  - transport-route-edit => Edit
+  - transport-route-view => View
+
+[Transport Vehicle]
+  - transport-vehicle-create => Create
+  - transport-vehicle-delete => Delete
+  - transport-vehicle-edit => Edit
+  - transport-vehicle-view => View
+
+[Visit Purpose]
+  - visit-purpose-create => Create
+  - visit-purpose-delete => Delete
+  - visit-purpose-edit => Edit
+  - visit-purpose-view => View
+
+[Visitor]
+  - visitor-create => Create
+  - visitor-delete => Delete
+  - visitor-edit => Edit
+  - visitor-print => Token Print
+  - visitor-view => View
+
+[Visitor Token]
+  - visitor-token-setting-view => Setting
+
+[Web]
+  - admissions-page-edit => Edit Admissions Page
+  - admissions-page-view => View Admissions Page
+  - announcement-create => Create Announcement
+  - announcement-view => View Announcement
+  - campus-life-create => Create Campus Life
+  - campus-life-delete => Delete Campus Life
+  - campus-life-edit => Edit Campus Life
+  - campus-life-view => View Campus Life
+  - welcome-message-create => Create Welcome Message
+  - welcome-message-view => View Welcome Message
+
+[Web Event]
+  - web-event-create => Create
+  - web-event-delete => Delete
+  - web-event-edit => Edit
+  - web-event-view => View
+
+[Work Shift Type]
+  - work-shift-type-create => Create
+  - work-shift-type-delete => Delete
+  - work-shift-type-edit => Edit
+  - work-shift-type-view => View
+
+</pre>

@@ -1,0 +1,151 @@
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # ========== SECURITY: HTTPS ENFORCEMENT (Uncomment in production) ==========
+    # RewriteCond %{HTTPS} off
+    # RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    # RewriteCond %{HTTP_HOST} !^localhost
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+    
+    # Serve uploads from public folder for XAMPP subdirectory setup
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^uploads/(.*)$ public/uploads/$1 [L,NC]
+    
+    # Serve dashboard assets from public folder for XAMPP subdirectory setup
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^dashboard/(.*)$ public/dashboard/$1 [L,NC]
+
+    # Serve Vite build assets from public folder for XAMPP subdirectory setup
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^build/(.*)$ public/build/$1 [L,NC]
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Handle Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# ========== SECURITY HEADERS ==========
+<IfModule mod_headers.c>
+    # Prevent clickjacking attacks
+    Header always set X-Frame-Options "SAMEORIGIN"
+    
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+    
+    # Enable XSS protection
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Permissions Policy (disable unnecessary features)
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    
+    # HSTS - Force HTTPS (Uncomment in production with valid SSL)
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    
+    # Remove server information
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+</IfModule>
+
+# ========== FILE PROTECTION ==========
+# Protect .env and other sensitive files
+<FilesMatch "^\.env|^\.git|composer\.(json|lock)|package(-lock)?\.json|\.md$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Prevent access to PHP files in specific directories
+<FilesMatch "\.php$">
+    <If "%{REQUEST_URI} =~ m#^/(storage|database|tests|bootstrap/cache)/#">
+        <IfModule mod_authz_core.c>
+            Require all denied
+        </IfModule>
+        <IfModule !mod_authz_core.c>
+            Order allow,deny
+            Deny from all
+        </IfModule>
+    </If>
+</FilesMatch>
+
+# ========== DISABLE DIRECTORY BROWSING ==========
+Options -Indexes
+
+# ========== PROTECT AGAINST COMMON ATTACKS ==========
+# Block suspicious request patterns
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Block requests with suspicious query strings
+    RewriteCond %{QUERY_STRING} (<|%3C).*script.*(>|%3E) [NC,OR]
+    RewriteCond %{QUERY_STRING} GLOBALS(=|\[|\%[0-9A-Z]{0,2}) [OR]
+    RewriteCond %{QUERY_STRING} _REQUEST(=|\[|\%[0-9A-Z]{0,2}) [OR]
+    RewriteCond %{QUERY_STRING} (base64_encode|localhost|mosConfig) [NC,OR]
+    RewriteCond %{QUERY_STRING} (boot\.ini|etc/passwd|self/environ) [NC,OR]
+    RewriteCond %{QUERY_STRING} (thumbs?(_editor|open)?|tim(thumb)?)\.php [NC,OR]
+    RewriteCond %{QUERY_STRING} (\'|\")(.*)(drop|insert|md5|select|union) [NC]
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# ========== MIME TYPE SECURITY ==========
+<IfModule mod_mime.c>
+    # Force download for potentially dangerous files
+    AddType application/octet-stream .iso .dmg .zip .rar
+    
+    # Prevent execution of PHP in upload directories
+    <FilesMatch "\.ph(p[2-6]?|tml)$">
+        <If "%{REQUEST_URI} =~ m#^/(uploads|storage)/#">
+            SetHandler None
+            ForceType text/plain
+        </If>
+    </FilesMatch>
+</IfModule>
+
+# ========== LIMIT REQUEST SIZE (Prevent DoS) ==========
+<IfModule mod_limitipconn.c>
+    # Limit connections per IP
+    MaxConnPerIP 20
+</IfModule>
+
+# ========== COMPRESSION (Improve Performance) ==========
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# ========== BROWSER CACHING (Improve Performance) ==========
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/pdf "access plus 1 month"
+    ExpiresByType application/x-shockwave-flash "access plus 1 month"
+</IfModule>

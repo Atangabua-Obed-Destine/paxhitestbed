@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /admin
+Disallow: /student
+Disallow: /staff
+Disallow: /login
+Disallow: /register
+
+Sitemap: http://localhost/paxhitest/sitemap.xml

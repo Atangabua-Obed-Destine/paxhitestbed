@@ -1,0 +1,31 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "dev:legacy": "npm run development:legacy",
+        "development:legacy": "cross-env NODE_ENV=development node_modules/webpack/bin/webpack.js --progress --hide-modules --config=node_modules/laravel-mix/setup/webpack.config.js",
+        "prod:legacy": "npm run production:legacy",
+        "production:legacy": "cross-env NODE_ENV=production node_modules/webpack/bin/webpack.js --no-progress --hide-modules --config=node_modules/laravel-mix/setup/webpack.config.js"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0",
+        "autoprefixer": "^10.4",
+        "axios": "^1.7",
+        "laravel-vite-plugin": "^1.2",
+        "tailwindcss": "^4.0",
+        "vite": "^6.0",
+        "cross-env": "^5.1",
+        "laravel-mix": "^4.0.7",
+        "resolve-url-loader": "^2.3.1",
+        "sass": "^1.15.2",
+        "sass-loader": "^7.1.0"
+    },
+    "dependencies": {
+        "alpinejs": "^3.14",
+        "aos": "^2.3.4",
+        "swiper": "^11.0"
+    }
+}

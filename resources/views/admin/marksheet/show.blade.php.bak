@@ -1,0 +1,674 @@
+@extends('admin.layouts.master')
+@section('title', $title)
+@section('content')
+
+<!-- Start Content-->
+<div class="main-body">
+    <div class="page-wrapper">
+        <!-- [ Main Content ] start -->
+        
+        @php
+            // Get all enrollments for this student
+            $tempEnrollments = \App\Models\StudentEnroll::where('student_id', $row->id)
+                ->with(['program.degreeType', 'program.faculty', 'semester', 'session'])
+                ->orderBy('id', 'desc')
+                ->get();
+            
+            // Group by unique matricule and keep only the latest enrollment for each
+            $allEnrollments = $tempEnrollments->groupBy('matricule')->map(function($group) {
+                return $group->first(); // Latest enrollment for this matricule
+            })->values();
+            
+            // Get selected enrollment from URL parameter or use latest
+            $selectedEnrollmentId = request()->get('enrollment_id');
+            if ($selectedEnrollmentId) {
+                $currentEnroll = $allEnrollments->firstWhere('id', $selectedEnrollmentId);
+            }
+            if (!isset($currentEnroll) || !$currentEnroll) {
+                $currentEnroll = $allEnrollments->first();
+            }
+        @endphp
+        
+        <!-- Program Switcher for Multi-Enrollment Students -->
+        @if($allEnrollments->count() > 1)
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="alert alert-info d-flex align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white;">
+                    <i class="fas fa-exchange-alt me-3" style="font-size: 24px;"></i>
+                    <div style="flex: 1;">
+                        <h6 class="mb-1 text-white"><strong>Multi-Enrollment Student</strong></h6>
+                        <p class="mb-0" style="font-size: 13px; opacity: 0.95;">
+                            This student has {{ $allEnrollments->count() }} enrollments. Select an enrollment to view its transcript.
+                        </p>
+                    </div>
+                    <div class="dropdown" style="margin-left: 15px;">
+                        <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown" style="min-width: 200px; font-weight: 500;">
+                            <i class="fas fa-graduation-cap me-2"></i>{{ $currentEnroll->matricule }}
+                        </button>
+                        <ul class="dropdown-menu" style="min-width: 350px;">
+                            @foreach($allEnrollments as $enrollment)
+                            <li>
+                                <a class="dropdown-item @if($enrollment->id == $currentEnroll->id) active @endif" 
+                                   href="{{ route($route.'.show', $row->id) }}?enrollment_id={{ $enrollment->id }}"
+                                   style="padding: 12px 15px;">
+                                    <div class="d-flex align-items-start">
+                                        <div style="width: 40px; height: 40px; border-radius: 8px; 
+                                            background: linear-gradient(135deg, {{ $enrollment->program->academic_level == 'M' ? '#f093fb 0%, #f5576c 100%' : ($enrollment->program->academic_level == 'D' ? '#4facfe 0%, #00f2fe 100%' : '#43e97b 0%, #38f9d7 100%') }}); 
+                                            display: flex; align-items: center; justify-content: center; margin-right: 12px;">
+                                            <i class="fas fa-graduation-cap text-white"></i>
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: 600; font-size: 14px; color: #333;">{{ $enrollment->matricule }}</div>
+                                            <div style="font-size: 12px; color: #666; margin-top: 2px;">
+                                                {{ $enrollment->program->title ?? 'N/A' }}
+                                                <span class="badge" style="background: {{ $enrollment->program->academic_level == 'M' ? '#f5576c' : ($enrollment->program->academic_level == 'D' ? '#00f2fe' : '#38f9d7') }}; font-size: 9px; margin-left: 5px;">
+                                                    {{ $enrollment->program->academic_level == 'A' ? 'UG' : ($enrollment->program->academic_level == 'M' ? 'MS' : 'PhD') }}
+                                                </span>
+                                            </div>
+                                            <div style="font-size: 11px; color: #999; margin-top: 3px;">
+                                                {{ $enrollment->session->title ?? '' }} - {{ $enrollment->semester->title ?? '' }}
+                                            </div>
+                                        </div>
+                                        @if($enrollment->id == $currentEnroll->id)
+                                        <i class="fas fa-check-circle text-success" style="font-size: 18px; margin-left: 8px;"></i>
+                                        @endif
+                                    </div>
+                                </a>
+                            </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                  <div class="card-header">
+                    <h5>{{ $title }}</h5>
+                  </div>
+
+                  <ul class="list-group list-group-flush">
+                    @if($currentEnroll)
+                    <li class="list-group-item">
+                        <mark class="text-primary">{{ __('field_matricule') }} :</mark> 
+                        <strong style="font-size: 15px; color: #667eea;">#{{ $currentEnroll->matricule }}</strong>
+                        @if($currentEnroll->program)
+                            <span class="badge" style="background: {{ $currentEnroll->program->academic_level == 'M' ? '#f5576c' : ($currentEnroll->program->academic_level == 'D' ? '#00f2fe' : '#38f9d7') }}; color: white; font-size: 9px; margin-left: 5px;">
+                                {{ $currentEnroll->program->academic_level == 'A' ? 'UG' : ($currentEnroll->program->academic_level == 'M' ? 'MS' : 'PhD') }}
+                            </span>
+                        @endif
+                    </li>
+                    @endif
+                    <li class="list-group-item"><mark class="text-primary">{{ __('field_name') }} :</mark> {{ $row->first_name }} {{ $row->last_name }}</li>
+
+                    <li class="list-group-item"><mark class="text-primary">{{ __('field_batch') }} :</mark> {{ $row->batch->title ?? '' }}</li>
+                    <li class="list-group-item"><mark class="text-primary">{{ __('field_program') }} :</mark> {{ $currentEnroll->program->title ?? $row->program->title ?? '' }} ({{ $currentEnroll->program->shortcode ?? $row->program->shortcode ?? '' }})</li>
+
+                    @php
+                        $total_credits = 0;
+                        $total_cgpa = 0;
+                        
+                        // Use selected enrollment's program for filtering
+                        $selectedProgramId = $currentEnroll ? $currentEnroll->program_id : $row->program_id;
+                    @endphp
+                    @foreach( $row->studentEnrolls as $key => $item )
+                        @if($item->program_id == $selectedProgramId)
+                        @if(isset($item->subjectMarks))
+                        @foreach($item->subjectMarks as $mark)
+                        @if($mark->workflow_state === 'published' && ((date('Y-m-d', strtotime($mark->publish_date)) == date('Y-m-d') && date('H:i:s', strtotime($mark->publish_time)) <= date('H:i:s')) || date('Y-m-d', strtotime($mark->publish_date)) < date('Y-m-d')))
+
+                            @php
+                            $marks_per = round($mark->total_marks);
+                            @endphp
+
+                            @foreach($grades as $grade)
+                            @if($marks_per >= $grade->min_mark && $marks_per <= $grade->max_mark)
+                            @php
+                            // Always count all courses towards CGPA calculation, including F grades
+                            $total_cgpa = $total_cgpa + ($grade->point * $mark->subject->credit_hour);
+                            $total_credits = $total_credits + $mark->subject->credit_hour;
+                            @endphp
+                            @break
+                            @endif
+                            @endforeach
+
+                        @endif
+                        @endforeach
+                        @endif
+                        @endif
+
+                    @endforeach
+
+                    <li class="list-group-item"><mark class="text-primary">{{ __('field_total_credit_hour') }} :</mark> {{ round($total_credits, 2) }}</li>
+
+                    <li class="list-group-item"><mark class="text-primary">{{ __('field_cumulative_gpa') }} :</mark> 
+                        @php
+                        if($total_credits <= 0){
+                            $total_credits = 1;
+                        }
+                        $com_gpa = $total_cgpa / $total_credits;
+                        echo number_format((float)$com_gpa, 2, '.', '');
+                        @endphp
+                    </li>
+                  </ul>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                  <div class="card-block">
+                      <table class="display table table-striped">
+                          <thead>
+                              <tr>
+                                <th>{{ __('field_grade') }}</th>
+                                <th>{{ __('field_point') }}</th>
+                                <th>{{ __('field_min_mark') }}</th>
+                                <th>{{ __('field_max_mark') }}</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                            @foreach($grades as $grade)
+                              <tr>
+                                <td>{{ $grade->title }}</td>
+                                <td>{{ number_format((float)$grade->point, 2, '.', '') }}</td>
+                                <td>{{ number_format((float)$grade->min_mark, 2, '.', '') }} %</td>
+                                <td>{{ number_format((float)$grade->max_mark, 2, '.', '') }} %</td>
+                              </tr>
+                            @endforeach
+                          </tbody>
+                      </table>
+                  </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPA Trend Visualization -->
+        @if(isset($gpa_trend))
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-line text-primary"></i> {{ __('GPA Trend Analysis') }}</h5>
+                    </div>
+                    <div class="card-body">
+                        @if(count($gpa_trend) > 0)
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-primary active" onclick="updateChartType('line')" id="btn-line">
+                                        <i class="fas fa-chart-line"></i> Line Chart
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary" onclick="updateChartType('bar')" id="btn-bar">
+                                        <i class="fas fa-chart-bar"></i> Bar Chart
+                                    </button>
+                                </div>
+                                <div class="float-end">
+                                    <span class="badge bg-primary"><i class="fas fa-square"></i> Semester GPA</span>
+                                    <span class="badge bg-success"><i class="fas fa-square"></i> Cumulative GPA</span>
+                                </div>
+                            </div>
+                        </div>
+                        <canvas id="gpaChart" height="80"></canvas>
+                        
+                        <!-- Performance Summary -->
+                        <div class="row mt-4">
+                            @php
+                                $total_semesters = count($gpa_trend);
+                                $highest_semester_gpa = $total_semesters > 0 ? max(array_column($gpa_trend, 'semester_gpa')) : 0;
+                                $lowest_semester_gpa = $total_semesters > 0 ? min(array_column($gpa_trend, 'semester_gpa')) : 0;
+                                $current_cgpa = $total_semesters > 0 ? end($gpa_trend)['cumulative_gpa'] : 0;
+                                $total_credits_earned = $total_semesters > 0 ? end($gpa_trend)['cumulative_credits'] : 0;
+                                
+                                // Calculate trend (improving/declining)
+                                $trend_direction = 'stable';
+                                $trend_icon = 'fa-minus';
+                                $trend_color = 'secondary';
+                                if ($total_semesters >= 2) {
+                                    $recent_gpa = $gpa_trend[$total_semesters - 1]['semester_gpa'];
+                                    $previous_gpa = $gpa_trend[$total_semesters - 2]['semester_gpa'];
+                                    if ($recent_gpa > $previous_gpa) {
+                                        $trend_direction = 'improving';
+                                        $trend_icon = 'fa-arrow-up';
+                                        $trend_color = 'success';
+                                    } elseif ($recent_gpa < $previous_gpa) {
+                                        $trend_direction = 'declining';
+                                        $trend_icon = 'fa-arrow-down';
+                                        $trend_color = 'danger';
+                                    }
+                                }
+                            @endphp
+                            
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted mb-2">Current CGPA</h6>
+                                        <h3 class="mb-0 text-primary">{{ number_format($current_cgpa, 2) }}</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted mb-2">Highest Semester GPA</h6>
+                                        <h3 class="mb-0 text-success">{{ number_format($highest_semester_gpa, 2) }}</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted mb-2">Performance Trend</h6>
+                                        <h3 class="mb-0 text-{{ $trend_color }}">
+                                            <i class="fas {{ $trend_icon }}"></i> {{ ucfirst($trend_direction) }}
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted mb-2">Credits Earned</h6>
+                                        <h3 class="mb-0 text-info">{{ number_format($total_credits_earned, 1) }}</h3>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Performance Insights -->
+                        <div class="alert alert-info mt-3" role="alert">
+                            <strong><i class="fas fa-lightbulb"></i> Performance Insights:</strong>
+                            <ul class="mb-0 mt-2">
+                                @if($trend_direction == 'improving')
+                                    <li>Great progress! Student's academic performance is improving. Keep up the excellent work!</li>
+                                @elseif($trend_direction == 'declining')
+                                    <li>Recent semester performance shows a decline. Consider providing academic support or counseling.</li>
+                                @else
+                                    <li>Performance has been consistent. Encourage the student to reach new heights!</li>
+                                @endif
+                                
+                                @if($current_cgpa >= 3.5)
+                                    <li>Outstanding achievement! Student is maintaining an excellent CGPA ({{ number_format($current_cgpa, 2) }}).</li>
+                                @elseif($current_cgpa >= 3.0)
+                                    <li>Good performance! Student is maintaining a strong CGPA ({{ number_format($current_cgpa, 2) }}).</li>
+                                @elseif($current_cgpa >= 2.5)
+                                    <li>Student is on track with a satisfactory CGPA ({{ number_format($current_cgpa, 2) }}). Consider ways to improve further.</li>
+                                @else
+                                    <li>Student's CGPA is {{ number_format($current_cgpa, 2) }}. Academic advising is recommended to improve performance.</li>
+                                @endif
+                                
+                                <li>Student has completed {{ number_format($total_credits_earned, 1) }} credits across {{ $total_semesters }} semester(s).</li>
+                            </ul>
+                        </div>
+                    </div>
+                        @else
+                        <div class="alert alert-warning text-center py-5">
+                            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                            <h5>No GPA Data Available</h5>
+                            <p>GPA trend visualization will appear here once the student has completed semesters with published grades.</p>
+                        </div>
+                        @endif
+                </div>
+            </div>
+        </div>
+        @endif
+
+        <div class="row">
+            <div class="col-md-12">
+
+                @php
+                    $semester_items = array();
+                    $semester_keys = array();
+                    
+                    // Use the same program filter (already set above)
+                @endphp
+
+                @foreach( $row->studentEnrolls as $key => $enroll )
+                @if(isset($enroll->session) && isset($enroll->semester) && isset($enroll->section) && $enroll->program_id == $selectedProgramId)
+                @php
+                    // Create unique key for session + semester combination
+                    $semester_key = $enroll->session->title . '|' . $enroll->semester->title;
+                    if(!in_array($semester_key, $semester_keys)){
+                        array_push($semester_items, array($enroll->session->title, $enroll->semester->title, $enroll->section->title));
+                        array_push($semester_keys, $semester_key);
+                    }
+                @endphp
+                @endif
+                @endforeach
+
+                @foreach($semester_items as $key => $semester_item)
+                <div class="clearfix"></div>
+                <div class="card">
+                    <div class="card-header">
+                        <h5>{{ $semester_item[0] }} | {{ $semester_item[1] }} | {{ $semester_item[2] }}</h5>
+                    </div>
+                    <div class="card-block">
+                        <!-- [ Data table ] start -->
+                        <div class="table-responsive">
+                            <table class="display table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>{{ __('field_code') }}</th>
+                                        <th>{{ __('field_subject') }}</th>
+                                        <th>{{ __('field_credit_hour') }}</th>
+                                        <th>{{ __('field_subject_type') }}</th>
+                                        <th>{{ __('field_credits_attempted') }}</th>
+                                        <th>{{ __('field_credits_earned') }}</th>
+                                        <th>{{ __('field_grade_point') }}</th>
+                                        <th>{{ __('field_grade') }}</th>
+                                        <th>{{ __('field_point') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @php
+                                        $semester_credits = 0;
+                                        $semester_cgpa = 0;
+                                        $semester_credits_earned = 0;
+                                    @endphp
+                                    @foreach( $row->studentEnrolls as $key => $item )
+                                    @if(isset($item->semester) && isset($item->session) && $semester_item[1] == $item->semester->title && $semester_item[0] == $item->session->title && $item->program_id == $selectedProgramId)
+
+                                    @foreach( $item->subjects as $subject )
+                                    @php
+                                        $creditsAttempted = (float) $subject->credit_hour;
+                                        $semester_credits += $creditsAttempted;
+                                        $subject_grade = null;
+                                        $subjectGradePoint = null;
+                                        $subjectQualityPoints = null;
+                                        $creditsEarned = 0;
+                                        $subjectTypeKey = $subject->subject_type == 0 ? 'subject_type_optional' : ($subject->subject_type == 2 ? 'subject_type_university_requirement' : 'subject_type_compulsory');
+                                    @endphp
+                                    
+                                    @php
+                                        if(isset($item->subjectMarks)){
+                                            foreach($item->subjectMarks as $mark){
+                                                if($mark->subject_id == $subject->id){
+                                                    // Handle Carbon objects properly for publish date/time check
+                                                    $publishDate = $mark->publish_date instanceof \Carbon\Carbon ? $mark->publish_date->format('Y-m-d') : date('Y-m-d', strtotime($mark->publish_date));
+                                                    $publishTime = $mark->publish_time instanceof \Carbon\Carbon ? $mark->publish_time->format('H:i:s') : date('H:i:s', strtotime($mark->publish_time));
+                                                    $currentDate = date('Y-m-d');
+                                                    $currentTime = date('H:i:s');
+                                                    
+                                                    $isVisible = $mark->is_visible_to_student && (($publishDate == $currentDate && $publishTime <= $currentTime) || $publishDate < $currentDate);
+                                                    
+                                                    if($isVisible){
+                                                        $marks_per = round($mark->total_marks);
+                                                        foreach($grades as $grade){
+                                                            if($marks_per >= $grade->min_mark && $marks_per <= $grade->max_mark){
+                                                                $subjectGradePoint = (float) $grade->point;
+                                                                $subjectQualityPoints = $subjectGradePoint * $creditsAttempted;
+                                                                $semester_cgpa += $subjectQualityPoints;
+                                                                if($subjectGradePoint > 0){
+                                                                    $semester_credits_earned += $creditsAttempted;
+                                                                    $creditsEarned = $creditsAttempted;
+                                                                }
+                                                                $subject_grade = $grade->title;
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    @endphp
+                                    <tr>
+                                        <td>{{ $subject->code }}</td>
+                                        <td>{{ $subject->title }}</td>
+                                        <td>{{ number_format($creditsAttempted, 2, '.', '') }}</td>
+                                        <td>{{ __($subjectTypeKey) }}</td>
+                                        <td>{{ number_format($creditsAttempted, 2, '.', '') }}</td>
+                                        <td>
+                                            @if(!is_null($subjectGradePoint))
+                                                {{ number_format($creditsEarned, 2, '.', '') }}
+                                            @else
+                                                <span class="text-muted">{{ __('field_not_available') }}</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if(!is_null($subjectGradePoint))
+                                                {{ number_format($subjectGradePoint, 2, '.', '') }}
+                                            @else
+                                                <span class="text-muted">{{ __('field_not_available') }}</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if($subject_grade)
+                                                {{ $subject_grade }}
+                                            @else
+                                                <span class="text-muted">{{ __('field_not_available') }}</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if(!is_null($subjectQualityPoints))
+                                                {{ number_format($subjectQualityPoints, 2, '.', '') }}
+                                            @else
+                                                <span class="text-muted">{{ __('field_not_available') }}</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    @endforeach
+
+                                    @endif
+                                    @endforeach
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th colspan="2">{{ __('field_term_total') }}</th>
+                                        <th>{{ number_format((float)$semester_credits, 2, '.', '') }}</th>
+                                        <th></th>
+                                        <th>{{ number_format((float)$semester_credits, 2, '.', '') }}</th>
+                                        <th>{{ number_format((float)$semester_credits_earned, 2, '.', '') }}</th>
+                                        <th></th>
+                                        <th></th>
+                                        <th>{{ number_format((float)$semester_cgpa, 2, '.', '') }}</th>
+                                    </tr>
+                                    @php
+                                        $semesterGpa = $semester_credits > 0 ? $semester_cgpa / $semester_credits : 0;
+                                    @endphp
+                                    <tr>
+                                        <th colspan="4">{{ __('field_semester_gpa') }}</th>
+                                        <th colspan="2">{{ number_format((float)$semesterGpa, 2, '.', '') }}</th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        <!-- [ Data table ] end -->
+                    </div>
+                </div>
+                @endforeach
+
+            </div>
+        </div>
+        <!-- [ Main Content ] end -->
+    </div>
+</div>
+<!-- End Content-->
+
+@endsection
+
+@section('page_js')
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+<script type="text/javascript">
+'use strict';
+
+@if(isset($gpa_trend) && count($gpa_trend) > 0)
+// Prepare data from backend
+var gpaData = {!! json_encode($gpa_trend) !!};
+
+// Extract data for charts
+var labels = gpaData.map(function(item) {
+    return item.label;
+});
+
+var semesterGPA = gpaData.map(function(item) {
+    return item.semester_gpa;
+});
+
+var cumulativeGPA = gpaData.map(function(item) {
+    return item.cumulative_gpa;
+});
+
+// Chart configuration
+var chartConfig = {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Semester GPA',
+            data: semesterGPA,
+            borderColor: '#04a9f5',
+            backgroundColor: 'rgba(4, 169, 245, 0.1)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            pointBackgroundColor: '#04a9f5',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        }, {
+            label: 'Cumulative GPA',
+            data: cumulativeGPA,
+            borderColor: '#1de9b6',
+            backgroundColor: 'rgba(29, 233, 182, 0.1)',
+            borderWidth: 3,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            pointBackgroundColor: '#1de9b6',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                    font: {
+                        size: 13,
+                        weight: 'bold'
+                    },
+                    padding: 15,
+                    usePointStyle: true,
+                    pointStyle: 'circle'
+                }
+            },
+            tooltip: {
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                titleFont: {
+                    size: 14,
+                    weight: 'bold'
+                },
+                bodyFont: {
+                    size: 13
+                },
+                padding: 12,
+                displayColors: true,
+                callbacks: {
+                    label: function(context) {
+                        var label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        label += context.parsed.y.toFixed(2);
+                        return label;
+                    },
+                    afterLabel: function(context) {
+                        var index = context.dataIndex;
+                        var credits = gpaData[index].credits;
+                        return 'Credits: ' + credits;
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 4.0,
+                ticks: {
+                    stepSize: 0.5,
+                    font: {
+                        size: 12
+                    },
+                    callback: function(value) {
+                        return value.toFixed(1);
+                    }
+                },
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)',
+                    drawBorder: false
+                },
+                title: {
+                    display: true,
+                    text: 'GPA (0.0 - 4.0)',
+                    font: {
+                        size: 13,
+                        weight: 'bold'
+                    }
+                }
+            },
+            x: {
+                ticks: {
+                    font: {
+                        size: 11
+                    },
+                    maxRotation: 45,
+                    minRotation: 45
+                },
+                grid: {
+                    display: false
+                }
+            }
+        }
+    }
+};
+
+// Initialize chart
+var ctx = document.getElementById('gpaChart').getContext('2d');
+var gpaChart = new Chart(ctx, chartConfig);
+
+// Function to update chart type
+window.updateChartType = function(type) {
+    gpaChart.destroy();
+    chartConfig.type = type;
+    
+    // Adjust styling based on chart type
+    if (type === 'bar') {
+        chartConfig.data.datasets[0].backgroundColor = 'rgba(4, 169, 245, 0.7)';
+        chartConfig.data.datasets[1].backgroundColor = 'rgba(29, 233, 182, 0.7)';
+        chartConfig.data.datasets[0].borderWidth = 2;
+        chartConfig.data.datasets[1].borderWidth = 2;
+    } else {
+        chartConfig.data.datasets[0].backgroundColor = 'rgba(4, 169, 245, 0.1)';
+        chartConfig.data.datasets[1].backgroundColor = 'rgba(29, 233, 182, 0.1)';
+        chartConfig.data.datasets[0].borderWidth = 3;
+        chartConfig.data.datasets[1].borderWidth = 3;
+    }
+    
+    gpaChart = new Chart(ctx, chartConfig);
+    
+    // Update button states
+    document.getElementById('btn-line').classList.remove('active');
+    document.getElementById('btn-bar').classList.remove('active');
+    document.getElementById('btn-' + type).classList.add('active');
+};
+@endif
+</script>
+@endsection
