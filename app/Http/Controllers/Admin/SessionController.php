@@ -29,7 +29,7 @@ class SessionController extends Controller
 
         $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-create|'.$this->access.'-edit|'.$this->access.'-delete', ['only' => ['index','show']]);
         $this->middleware('permission:'.$this->access.'-create', ['only' => ['create','store','current']]);
-        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['edit','update','current']]);
+        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['edit','update','current','toggleApplications']]);
         $this->middleware('permission:'.$this->access.'-delete', ['only' => ['destroy']]);
     }
 
@@ -86,6 +86,7 @@ class SessionController extends Controller
         $session->start_date = $request->start_date;
         $session->end_date = $request->end_date;
         $session->current = 1;
+        $session->applications_open = $request->boolean('applications_open');
         $session->save();
 
         // Unset current
@@ -145,6 +146,7 @@ class SessionController extends Controller
         $session->start_date = $request->start_date;
         $session->end_date = $request->end_date;
         $session->status = $request->status;
+        $session->applications_open = $request->boolean('applications_open');
         $session->save();
 
         $session->programs()->sync($request->programs);
@@ -193,6 +195,25 @@ class SessionController extends Controller
 
 
         Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
+
+        return redirect()->back();
+    }
+
+    /**
+     * One-click open/close of online applications for a session (intake).
+     */
+    public function toggleApplications($id)
+    {
+        $session = Session::findOrFail($id);
+        $session->applications_open = !$session->applications_open;
+        $session->save();
+
+        Flasher::addSuccess(
+            $session->applications_open
+                ? __('Applications are now OPEN for this intake.')
+                : __('Applications are now CLOSED for this intake.'),
+            __('msg_success')
+        );
 
         return redirect()->back();
     }

@@ -16,6 +16,24 @@
                         <form class="needs-validation" novalidate method="get" action="{{ route($route.'.index') }}">
                             <div class="row gx-2">
                                 <div class="form-group col-md-2">
+                                    <label for="degree_type">{{ __('Degree Type') }}</label>
+                                    <select class="form-control" name="degree_type" id="degree_type">
+                                        <option value="0">{{ __('all') }}</option>
+                                        @foreach( ($degreeTypes ?? []) as $dt )
+                                        <option value="{{ $dt->id }}" @if( ($selected_degree_type ?? '0') == $dt->id) selected @endif>{{ $dt->title }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-2">
+                                    <label for="session">{{ __('Intake') }}</label>
+                                    <select class="form-control" name="session" id="session">
+                                        <option value="0">{{ __('all') }}</option>
+                                        @foreach( ($sessions ?? []) as $s )
+                                        <option value="{{ $s->id }}" @if( ($selected_session ?? '0') == $s->id) selected @endif>{{ $s->title }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-2">
                                     <label for="program">{{ __('field_program') }}</label>
                                     <select class="form-control" name="program" id="program">
                                         <option value="0">{{ __('all') }}</option>
@@ -88,6 +106,8 @@
                                         <th>{{ __('field_name') }}</th>
                                         <th>{{ __('field_gender') }}</th>
                                         <th>{{ __('field_program') }}</th>
+                                        <th>{{ __('Degree Type') }}</th>
+                                        <th>{{ __('Intake') }}</th>
                                         <th>{{ __('field_apply_date') }}</th>
                                         <th>{{ __('Stage') }}</th>
                                         <th>{{ __('Admission Fee') }}</th>
@@ -115,6 +135,8 @@
                                             @endif
                                         </td>
                                         <td>{{ $row->program->title ?? '' }}</td>
+                                        <td>{{ optional($row->degreeType)->title ?? '' }}</td>
+                                        <td>{{ optional($row->session)->title ?? $row->academic_year ?? '' }}</td>
                                         <td>
                                             @if(isset($setting->date_format))
                                             {{ date($setting->date_format, strtotime($row->apply_date)) }}

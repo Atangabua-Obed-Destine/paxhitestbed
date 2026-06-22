@@ -14,7 +14,11 @@ class Session extends Model
      * @var array
      */
     protected $fillable = [
-        'title', 'start_date', 'end_date', 'current', 'status',
+        'title', 'start_date', 'end_date', 'current', 'status', 'applications_open',
+    ];
+
+    protected $casts = [
+        'applications_open' => 'boolean',
     ];
 
     public function programs()

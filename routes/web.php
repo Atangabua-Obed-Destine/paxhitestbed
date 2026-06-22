@@ -85,14 +85,20 @@ Route::middleware(['XSS'])->namespace('Web')->group(function () {
     });
 
     Route::middleware('auth:applicant')->group(function () {
-        Route::get('application', 'ApplicationController@index')->name('application.index');
-        Route::post('application', 'ApplicationController@store')->name('application.store');
-        Route::post('application/save-draft', 'ApplicationController@saveDraft')->name('application.save-draft');
-        Route::post('application/resubmit-documents', 'ApplicationController@resubmitDocuments')->name('application.resubmit-documents');
+        // Hub + intake
         Route::get('application/dashboard', 'ApplicationController@dashboard')->name('application.dashboard');
-        Route::get('application/timeline', 'ApplicationController@timeline')->name('application.timeline');
-        Route::post('application/admission-fee/payment/upload', 'ApplicationController@uploadAdmissionFeeReceipt')->name('application.admission-fee.upload');
+        Route::get('application', 'ApplicationController@index')->name('application.index'); // legacy → dashboard
+        Route::get('application/create', 'ApplicationController@create')->name('application.create');
+        Route::post('application', 'ApplicationController@store')->name('application.store');
         Route::post('application/logout', 'ApplicationController@logout')->name('application.logout');
+
+        // Per-application (owned)
+        Route::get('application/{application}/edit', 'ApplicationController@edit')->name('application.edit');
+        Route::post('application/{application}', 'ApplicationController@update')->name('application.update');
+        Route::post('application/{application}/save-draft', 'ApplicationController@saveDraft')->name('application.save-draft');
+        Route::post('application/{application}/resubmit-documents', 'ApplicationController@resubmitDocuments')->name('application.resubmit-documents');
+        Route::get('application/{application}/timeline', 'ApplicationController@timeline')->name('application.timeline');
+        Route::post('application/{application}/admission-fee/payment/upload', 'ApplicationController@uploadAdmissionFeeReceipt')->name('application.admission-fee.upload');
     });
 
 
@@ -220,6 +226,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('admission/application/{application}/preview', 'ApplicationController@preview')->name('application.preview');
     Route::resource('admission/application', 'ApplicationController');
     Route::post('admission/application/{application}/status-update', 'ApplicationController@storeStatusUpdate')->name('application.status-update');
+    Route::get('admission/application/{application}/acceptance-letter/download', 'ApplicationController@downloadAcceptanceLetter')->name('application.acceptance-letter.download');
+    Route::post('admission/application/{application}/acceptance-letter/resend', 'ApplicationController@resendAcceptanceLetter')->name('application.acceptance-letter.resend');
     
     // Admission Fee Configuration
     Route::get('admission/fee-config', 'AdmissionFeeConfigController@index')->name('admission-fee-config.index');
@@ -339,11 +347,15 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('academic/faculty', 'FacultyController');
     Route::resource('academic/sector', 'SectorController');
     Route::resource('academic/academic-department', 'AcademicDepartmentController');
+    Route::get('academic/degree-type/{degree_type}/form-config', 'DegreeTypeController@formConfig')->name('degree-type.form-config');
+    Route::post('academic/degree-type/{degree_type}/form-config', 'DegreeTypeController@saveFormConfig')->name('degree-type.form-config.save');
+    Route::get('academic/degree-type/{degree_type}/acceptance-letter/preview', 'DegreeTypeController@previewAcceptanceLetter')->name('degree-type.acceptance-letter.preview');
     Route::resource('academic/degree-type', 'DegreeTypeController');
     Route::resource('academic/program', 'ProgramController');
     Route::resource('academic/batch', 'BatchController');
     Route::resource('academic/session', 'SessionController');
     Route::get('academic/session-current/{id}', 'SessionController@current')->name('session.current');
+    Route::get('academic/session-toggle-applications/{id}', 'SessionController@toggleApplications')->name('session.toggle-applications');
     Route::resource('academic/semester', 'SemesterController');
     Route::resource('academic/section', 'SectionController');
     Route::resource('academic/room', 'ClassRoomController');

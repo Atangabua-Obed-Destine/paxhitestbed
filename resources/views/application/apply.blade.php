@@ -59,6 +59,8 @@
             color: #6c757d;
         }
     </style>
+    <!-- Institutional portal theme (loads last so it overrides the admin skin) -->
+    <link rel="stylesheet" href="{{ asset('dashboard/css/application-portal.css') }}?v={{ filemtime(public_path('dashboard/css/application-portal.css')) }}">
 </head>
 <body>
 
@@ -100,12 +102,23 @@
                     </div>
                 </div>
 
+                @php $feeCfg = $settings ?? null; @endphp
                 <div class="alert alert-info" role="alert">
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
                         <strong>{{ __('Important: Complete every section and have digital copies of required documents ready before you begin.') }}</strong>
-                        <span class="mt-2 mt-md-0">{{ __('Application Fee: 15,000 FCA (non-refundable). Upload the payment receipt in Step 7.') }}</span>
+                        @if($feeCfg && !empty($feeCfg['fee_enabled']))
+                        <span class="mt-2 mt-md-0">{{ __('Application Fee:') }} {{ number_format($feeCfg['fee_amount']) }} {{ __('FCFA (non-refundable). Upload the payment receipt after submitting.') }}</span>
+                        @endif
                     </div>
                 </div>
+                @if(isset($degreeType) && $degreeType)
+                <div class="alert alert-light border" role="alert">
+                    <span class="badge badge-pill badge-primary">{{ $degreeType->title }}</span>
+                    @if(!empty($settings['intro_html']))
+                        <span class="ms-2">{!! strip_tags($settings['intro_html'], '<br><b><i><strong><u><a><span>') !!}</span>
+                    @endif
+                </div>
+                @endif
 
                 @if(session('success'))
                     <div class="alert alert-success alert-dismissible fade show text-center" role="alert">
@@ -127,7 +140,14 @@
 
                 <div class="wizard-sec-bg">
                     @php
+                        // Degree-type-aware field resolver: when an application's degree type is
+                        // bound (applicant portal), the per-degree-type override decides the toggle;
+                        // otherwise it falls back to the global Field setting.
                         function field($slug) {
+                            $dt = app()->bound('applicant.degree_type') ? app('applicant.degree_type') : null;
+                            if ($dt) {
+                                return (object) ['status' => \App\Services\DegreeTypeFormConfig::fieldEnabled($dt, $slug) ? 1 : 0];
+                            }
                             return \App\Models\Field::field($slug);
                         }
 
@@ -256,73 +276,66 @@
                         </div>
                     </div>
 
-                    <form id="hnd-application-form" class="needs-validation" novalidate action="{{ route($route.'.store') }}" method="post" enctype="multipart/form-data" style="display: none;">
+                    <form id="hnd-application-form" class="needs-validation" novalidate action="{{ route('application.update', $application) }}" method="post" enctype="multipart/form-data" style="display: none;">
                         @csrf
 
                         <h3>{{ __('Programme Selection') }}</h3>
                         <section class="form-step">
-                            <p class="step-caption">{{ __('Select your preferred HND programme and confirm the intended academic year.') }}</p>
+                            <p class="step-caption">{{ __('These were chosen when you started this application and cannot be changed here. To apply for a different programme or intake, start a new application from My Account.') }}</p>
+                            @php
+                                $facultyTitle = optional($faculties->firstWhere('id', optional($application->program)->faculty_id))->title;
+                                $secondProgTitle = $application->second_program_choice_id ? optional($programs->firstWhere('id', $application->second_program_choice_id))->title : null;
+                                $thirdProgTitle = $application->third_program_choice_id ? optional($programs->firstWhere('id', $application->third_program_choice_id))->title : null;
+                            @endphp
                             <fieldset class="scheduler-border">
-                                <legend>{{ __('Programme Choices') }}</legend>
+                                <legend>{{ __('Programme & Intake') }}</legend>
                                 <div class="row">
                                     <div class="form-group col-md-6">
-                                        <label for="faculty">{{ __('field_faculty') }} <span>*</span></label>
-                                        <select class="form-control faculty" name="faculty" id="faculty" data-selected="{{ $facultyId }}" required>
-                                            <option value="">{{ __('select') }}</option>
-                                            @foreach($faculties as $faculty)
-                                                <option value="{{ $faculty->id }}" {{ $facultyId == $faculty->id ? 'selected' : '' }}>{{ $faculty->title }}</option>
-                                            @endforeach
-                                        </select>
-                                        <div class="invalid-feedback">{{ __('Select your faculty.') }}</div>
+                                        <label>{{ __('Degree Type') }}</label>
+                                        <input type="text" class="form-control is-mirrored" value="{{ optional($degreeType)->title }}" readonly>
                                     </div>
                                     <div class="form-group col-md-6">
-                                        <label for="program">{{ __('First Choice Programme') }} <span>*</span></label>
-                                        <select class="form-control program" name="program" id="program" data-selected="{{ $programId }}" required>
-                                            <option value="">{{ __('select') }}</option>
-                                            @foreach($programs as $program)
-                                                <option value="{{ $program->id }}" {{ $programId == $program->id ? 'selected' : '' }}>{{ $program->title }}</option>
-                                            @endforeach
-                                        </select>
-                                        <div class="invalid-feedback">{{ __('Select your primary programme choice.') }}</div>
+                                        <label>{{ __('field_faculty') }}</label>
+                                        <input type="text" class="form-control is-mirrored" value="{{ $facultyTitle }}" readonly>
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label>{{ __('First Choice Programme') }}</label>
+                                        <input type="text" class="form-control is-mirrored" value="{{ optional($application->program)->title }}" readonly>
                                     </div>
 
                                     @if(optional(field('application_program_choice_second'))->status == 1)
                                         <div class="form-group col-md-6">
-                                            <label for="second_program_choice_id">{{ __('Second Choice Programme') }}</label>
-                                            <select class="form-control program" name="second_program_choice_id" id="second_program_choice_id" data-selected="{{ $getValue('second_program_choice_id') }}">
-                                                <option value="">{{ __('select') }}</option>
-                                                @foreach($programs as $program)
-                                                    <option value="{{ $program->id }}" {{ $getValue('second_program_choice_id') == $program->id ? 'selected' : '' }}>{{ $program->title }}</option>
-                                                @endforeach
-                                            </select>
+                                            <label>{{ __('Second Choice Programme') }}</label>
+                                            <input type="text" class="form-control is-mirrored" value="{{ $secondProgTitle ?? '—' }}" readonly>
                                         </div>
                                     @endif
 
                                     @if(optional(field('application_program_choice_third'))->status == 1)
                                         <div class="form-group col-md-6">
-                                            <label for="third_program_choice_id">{{ __('Third Choice Programme') }}</label>
-                                            <select class="form-control program" name="third_program_choice_id" id="third_program_choice_id" data-selected="{{ $getValue('third_program_choice_id') }}">
-                                                <option value="">{{ __('select') }}</option>
-                                                @foreach($programs as $program)
-                                                    <option value="{{ $program->id }}" {{ $getValue('third_program_choice_id') == $program->id ? 'selected' : '' }}>{{ $program->title }}</option>
-                                                @endforeach
-                                            </select>
+                                            <label>{{ __('Third Choice Programme') }}</label>
+                                            <input type="text" class="form-control is-mirrored" value="{{ $thirdProgTitle ?? '—' }}" readonly>
                                         </div>
                                     @endif
 
                                     @if(optional(field('application_academic_year'))->status == 1)
                                         <div class="form-group col-md-6">
-                                            <label for="academic_year">{{ __('Academic Year Applied For') }} <span>*</span></label>
-                                            <select class="form-control" name="academic_year" id="academic_year" required>
-                                                <option value="">{{ __('select') }}</option>
-                                                @foreach($sessions as $session)
-                                                    <option value="{{ $session->title }}" {{ $getValue('academic_year') == $session->title ? 'selected' : '' }}>{{ $session->title }}</option>
-                                                @endforeach
-                                            </select>
-                                            <div class="invalid-feedback">{{ __('Select the academic year you are applying for.') }}</div>
+                                            <label>{{ __('Academic Year Applied For') }}</label>
+                                            <input type="text" class="form-control is-mirrored" value="{{ $application->academic_year }}" readonly>
                                         </div>
                                     @endif
                                 </div>
+
+                                {{-- Hidden inputs carry the intake choices so the submission stays valid --}}
+                                <input type="hidden" name="program" value="{{ $application->program_id }}">
+                                @if(optional(field('application_program_choice_second'))->status == 1)
+                                    <input type="hidden" name="second_program_choice_id" value="{{ $application->second_program_choice_id }}">
+                                @endif
+                                @if(optional(field('application_program_choice_third'))->status == 1)
+                                    <input type="hidden" name="third_program_choice_id" value="{{ $application->third_program_choice_id }}">
+                                @endif
+                                @if(optional(field('application_academic_year'))->status == 1)
+                                    <input type="hidden" name="academic_year" value="{{ $application->academic_year }}">
+                                @endif
                             </fieldset>
                         </section>
 
@@ -342,23 +355,21 @@
                                         <input type="text" class="form-control" name="last_name" id="last_name" value="{{ $getValue('last_name') }}" required>
                                         <div class="invalid-feedback">{{ __('Enter your last name.') }}</div>
                                     </div>
-                                    @if(optional(field('application_other_names'))->status == 1)
-                                        <div class="form-group col-md-4">
-                                            <label for="other_names">{{ __('Other Names (if any)') }}</label>
-                                            <input type="text" class="form-control" name="other_names" id="other_names" value="{{ $getValue('other_names') }}">
-                                        </div>
-                                    @endif
                                 </div>
 
                                 <div class="row">
                                     <div class="form-group col-md-4">
-                                        <label for="gender">{{ __('field_gender') }} <span>*</span></label>
-                                        <select class="form-control" name="gender" id="gender" required>
-                                            <option value="">{{ __('select') }}</option>
-                                            <option value="1" {{ $getValue('gender') == 1 ? 'selected' : '' }}>{{ __('gender_male') }}</option>
-                                            <option value="2" {{ $getValue('gender') == 2 ? 'selected' : '' }}>{{ __('gender_female') }}</option>
-                                            <!-- <option value="3" {{ $getValue('gender') == 3 ? 'selected' : '' }}>{{ __('gender_other') }}</option> -->
-                                        </select>
+                                        <label class="d-block">{{ __('field_gender') }} <span>*</span></label>
+                                        <div class="radio-pills">
+                                            <label class="radio-pill">
+                                                <input type="radio" name="gender" value="1" {{ $getValue('gender') == 1 ? 'checked' : '' }} required>
+                                                <span>{{ __('gender_male') }}</span>
+                                            </label>
+                                            <label class="radio-pill">
+                                                <input type="radio" name="gender" value="2" {{ $getValue('gender') == 2 ? 'checked' : '' }} required>
+                                                <span>{{ __('gender_female') }}</span>
+                                            </label>
+                                        </div>
                                         <div class="invalid-feedback">{{ __('Select your gender.') }}</div>
                                     </div>
                                     <div class="form-group col-md-4">
@@ -532,14 +543,18 @@
                                         <input type="text" class="form-control" name="present_village" id="present_village" value="{{ $getValue('present_village') }}">
                                     </div>
                                     <div class="form-group col-md-8">
-                                        <label for="present_address">{{ __('House / Street Address') }} <span>*</span></label>
-                                        <input type="text" class="form-control" name="present_address" id="present_address" value="{{ $getValue('present_address') }}" required>
+                                        <label for="present_address">{{ __('House / Street Address') }}</label>
+                                        <input type="text" class="form-control" name="present_address" id="present_address" value="{{ $getValue('present_address') }}">
                                     </div>
                                 </div>
                             </fieldset>
 
                             <fieldset class="scheduler-border">
                                 <legend>{{ __('Permanent Address & Postal Details') }}</legend>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" value="1" id="same_as_residence">
+                                    <label class="form-check-label" for="same_as_residence">{{ __('Same as Current Residence') }}</label>
+                                </div>
                                 <div class="row">
                                     <div class="form-group col-md-4">
                                         <label for="permanent_province">{{ __('field_province') }}</label>
@@ -574,7 +589,8 @@
                                 <div class="row">
                                     <div class="form-group col-md-4">
                                         <label for="phone">{{ __('Primary Phone Number') }} <span>*</span></label>
-                                        <input type="text" class="form-control" name="phone" id="phone" value="{{ $getValue('phone') }}" required>
+                                        <input type="text" class="form-control" name="phone" id="phone" value="{{ $getValue('phone') }}" placeholder="+237 6XX XXX XXX" required>
+                                        <small class="form-text text-muted">{{ __('Include the country code, e.g. +237.') }}</small>
                                         <div class="invalid-feedback">{{ __('Provide a reachable phone number.') }}</div>
                                     </div>
                                     @if(optional(field('application_alternate_phone'))->status == 1)
@@ -712,12 +728,12 @@
                                                     <input type="text" class="form-control" name="academic_history[{{ $index }}][institution_name]" value="{{ $history['institution_name'] ?? '' }}" required>
                                                 </div>
                                                 <div class="form-group col-md-3">
-                                                    <label>{{ __('City') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][city]" value="{{ $history['city'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
                                                     <label>{{ __('Country') }}</label>
                                                     <input type="text" class="form-control" name="academic_history[{{ $index }}][country]" value="{{ $history['country'] ?? '' }}">
+                                                </div>
+                                                <div class="form-group col-md-3">
+                                                    <label>{{ __('City') }}</label>
+                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][city]" value="{{ $history['city'] ?? '' }}">
                                                 </div>
                                             </div>
                                             <div class="row">
@@ -1241,12 +1257,12 @@
                             <input type="text" class="form-control" name="academic_history[${index}][institution_name]" required>
                         </div>
                         <div class="form-group col-md-3">
-                            <label>{{ __('City') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][city]">
-                        </div>
-                        <div class="form-group col-md-3">
                             <label>{{ __('Country') }}</label>
                             <input type="text" class="form-control" name="academic_history[${index}][country]">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label>{{ __('City') }}</label>
+                            <input type="text" class="form-control" name="academic_history[${index}][city]">
                         </div>
                     </div>
                     <div class="row">
@@ -1533,6 +1549,43 @@
             });
         };
 
+        // Copy Current Residence into Permanent Address when "Same as Current Residence" is ticked.
+        function initSameAsResidence() {
+            var $toggle = $('#same_as_residence');
+            if (!$toggle.length) return;
+
+            var pairs = [
+                ['present_province', 'permanent_province'],
+                ['present_district', 'permanent_district'],
+                ['present_village', 'permanent_village'],
+                ['present_address', 'permanent_address'],
+            ];
+
+            function sync() {
+                var on = $toggle.is(':checked');
+                pairs.forEach(function (p) {
+                    var $src = $('#' + p[0]);
+                    var $dst = $('#' + p[1]);
+                    if (!$dst.length) return;
+                    if (on) {
+                        $dst.val($src.val()).prop('readonly', true).addClass('is-mirrored');
+                    } else {
+                        $dst.prop('readonly', false).removeClass('is-mirrored');
+                    }
+                });
+            }
+
+            $toggle.on('change', sync);
+            // Keep permanent fields in step with current residence while the box stays ticked.
+            pairs.forEach(function (p) {
+                $('#' + p[0]).on('input', function () {
+                    if ($toggle.is(':checked')) {
+                        $('#' + p[1]).val($(this).val());
+                    }
+                });
+            });
+        }
+
         $(function() {
             initWizard();
             initGuardianRepeater();
@@ -1540,6 +1593,7 @@
             initLanguageRepeater();
             // initDistrictSelects();
             initDocumentSummary();
+            initSameAsResidence();
         });
     })(jQuery);
 </script>
@@ -1671,7 +1725,7 @@
 <script type="text/javascript">
     "use strict";
     (function($) {
-        const saveDraftUrl = "{{ route('application.save-draft') }}";
+        const saveDraftUrl = "{{ route('application.save-draft', $application) }}";
         const csrfToken = $('meta[name="csrf-token"]').attr('content') || $('input[name=_token]').val();
         const autoSaveInterval = 60000; // 60 seconds
         let autoSaveTimer = null;

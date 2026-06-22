@@ -40,6 +40,24 @@ class DegreeType extends Model
     }
 
     /**
+     * Per-degree-type application form configuration.
+     */
+    public function fieldSettings()
+    {
+        return $this->hasMany(DegreeTypeFieldSetting::class, 'degree_type_id');
+    }
+
+    public function applicationDocuments()
+    {
+        return $this->hasMany(DegreeTypeDocument::class, 'degree_type_id')->orderBy('sort_order');
+    }
+
+    public function applicationSetting()
+    {
+        return $this->hasOne(DegreeTypeApplicationSetting::class, 'degree_type_id');
+    }
+
+    /**
      * Boot method to auto-generate slug
      */
     protected static function boot()

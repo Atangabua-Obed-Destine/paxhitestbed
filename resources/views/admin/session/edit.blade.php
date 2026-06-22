@@ -68,6 +68,15 @@
                             <option value="0" @if( $row->status == 0 ) selected @endif>{{ __('status_inactive') }}</option>
                         </select>
                     </div>
+
+                    <div class="form-group">
+                        <label class="form-label d-block">{{ __('Online Applications') }}</label>
+                        <div class="switch d-inline">
+                            <input type="checkbox" id="applications_open-{{ $row->id }}" name="applications_open" value="1" {{ $row->applications_open ? 'checked' : '' }}>
+                            <label for="applications_open-{{ $row->id }}" class="cr"></label>
+                        </div>
+                        <span class="ms-2 text-muted">{{ __('Open this intake for online applications') }}</span>
+                    </div>
                     <!-- Form End -->
                 </div>
                 <div class="modal-footer">

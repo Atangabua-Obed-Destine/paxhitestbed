@@ -45,6 +45,15 @@
                             </div>
                             
                             <div class="form-group">
+                                <label class="form-label d-block">{{ __('Online Applications') }}</label>
+                                <div class="switch d-inline">
+                                    <input type="checkbox" id="applications_open" name="applications_open" value="1" {{ old('applications_open') ? 'checked' : '' }}>
+                                    <label for="applications_open" class="cr"></label>
+                                </div>
+                                <span class="ms-2 text-muted">{{ __('Open this intake for online applications') }}</span>
+                            </div>
+
+                            <div class="form-group">
                                 <label for="program">{{ __('field_assign') }} {{ __('field_program') }} <span>*</span></label>
 
                                 <div class="checkbox">
@@ -89,6 +98,7 @@
                                         <th>{{ __('field_date') }}</th>
                                         <th>{{ __('field_program') }}</th>
                                         <th>{{ __('field_status') }}</th>
+                                        <th>{{ __('Applications') }}</th>
                                         <th>{{ __('field_action') }}</th>
                                     </tr>
                                 </thead>
@@ -121,6 +131,25 @@
                                             @else
                                             <span class="badge badge-pill badge-danger">{{ __('status_inactive') }}</span>
                                             @endif
+                                        </td>
+                                        <td>
+                                            @can($access.'-edit')
+                                                @if( $row->applications_open )
+                                                <a href="{{ route($route.'.toggle-applications', $row->id) }}" class="btn btn-success btn-sm" title="{{ __('Click to close applications') }}">
+                                                    <i class="fas fa-lock-open"></i> {{ __('Open') }}
+                                                </a>
+                                                @else
+                                                <a href="{{ route($route.'.toggle-applications', $row->id) }}" class="btn btn-secondary btn-sm" title="{{ __('Click to open applications') }}">
+                                                    <i class="fas fa-lock"></i> {{ __('Closed') }}
+                                                </a>
+                                                @endif
+                                            @else
+                                                @if( $row->applications_open )
+                                                <span class="badge badge-pill badge-success">{{ __('Open') }}</span>
+                                                @else
+                                                <span class="badge badge-pill badge-secondary">{{ __('Closed') }}</span>
+                                                @endif
+                                            @endcan
                                         </td>
                                         <td>
                                             @if( $row->current == 1 )

@@ -48,7 +48,7 @@ return [
 
         'applicant' => [
             'driver' => 'session',
-            'provider' => 'applications',
+            'provider' => 'applicants',
         ],
 
         'api' => [
@@ -86,9 +86,9 @@ return [
             'model' => App\Models\Student::class,
         ],
 
-        'applications' => [
+        'applicants' => [
             'driver' => 'eloquent',
-            'model' => App\Models\Application::class,
+            'model' => App\Models\Applicant::class,
         ],
 
         // 'users' => [
@@ -125,8 +125,8 @@ return [
             'expire' => 60,
         ],
 
-        'applications' => [
-            'provider' => 'applications',
+        'applicants' => [
+            'provider' => 'applicants',
             'table' => 'password_resets',
             'expire' => 60,
         ],

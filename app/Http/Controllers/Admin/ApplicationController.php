@@ -87,6 +87,20 @@ class ApplicationController extends Controller
             $data['selected_program'] = '0';
         }
 
+        if(!empty($request->degree_type) || $request->degree_type != null){
+            $data['selected_degree_type'] = $degreeType = $request->degree_type;
+        }
+        else{
+            $data['selected_degree_type'] = '0';
+        }
+
+        if(!empty($request->session) || $request->session != null){
+            $data['selected_session'] = $sessionId = $request->session;
+        }
+        else{
+            $data['selected_session'] = '0';
+        }
+
         if(!empty($request->status) || $request->status != null){
             $data['selected_status'] = $status = $request->status;
         }
@@ -119,11 +133,13 @@ class ApplicationController extends Controller
         // Search Filter
         $data['batches'] = Batch::where('status', '1')->orderBy('id', 'desc')->get();
         $data['programs'] = Program::where('status', '1')->orderBy('title', 'asc')->get();
+        $data['degreeTypes'] = \App\Models\DegreeType::where('status', 1)->orderBy('title', 'asc')->get();
+        $data['sessions'] = \App\Models\Session::orderBy('title', 'desc')->get();
 
 
-        if(isset($request->program) || isset($request->status) || isset($request->registration_no)){
+        if(isset($request->program) || isset($request->status) || isset($request->registration_no) || isset($request->degree_type) || isset($request->session)){
             // Application Filter
-            $applications = Application::with(['admissionFee.paymentReceipts'])
+            $applications = Application::with(['admissionFee.paymentReceipts', 'degreeType', 'session', 'applicant'])
                         ->whereDate('apply_date', '>=', $start_date)
                         ->whereDate('apply_date', '<=', $end_date);
                         if(!empty($request->batch)){
@@ -131,6 +147,12 @@ class ApplicationController extends Controller
                         }
                         if(!empty($request->program)){
                             $applications->where('program_id', $program);
+                        }
+                        if(!empty($request->degree_type)){
+                            $applications->where('degree_type_id', $degreeType);
+                        }
+                        if(!empty($request->session)){
+                            $applications->where('session_id', $sessionId);
                         }
                         if(!empty($request->registration_no)){
                             $applications->where('registration_no', 'LIKE', '%'.$registration_no.'%');
@@ -452,6 +474,14 @@ class ApplicationController extends Controller
 
             DB::commit();
 
+            // Email the acceptance letter (PDF) configured for this degree type, if enabled.
+            // Sent after commit so the student + enrollment are fully persisted; never breaks the flow.
+            try {
+                app(\App\Services\AcceptanceLetterService::class)->sendTo($application);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Acceptance letter send failed: ' . $e->getMessage());
+            }
+
 
             Flasher::addSuccess(__('msg_created_successfully'), __('msg_success'));
 
@@ -463,6 +493,54 @@ class ApplicationController extends Controller
 
             return redirect()->back();
         }
+    }
+
+    /**
+     * Find the Student created from this application (linked by registration_no).
+     */
+    private function convertedStudent(Application $application)
+    {
+        return \App\Models\Student::where('registration_no', $application->registration_no)->first();
+    }
+
+    /**
+     * Download the acceptance-letter PDF for the student created from this application.
+     */
+    public function downloadAcceptanceLetter(Application $application, \App\Services\AcceptanceLetterService $service)
+    {
+        $student = $this->convertedStudent($application);
+        if (!$student) {
+            Flasher::addError(__('Convert this application to a student first.'), __('msg_error'));
+            return redirect()->back();
+        }
+
+        $pdf = $service->pdf($student);
+        if (!$pdf) {
+            Flasher::addError(__('No acceptance letter is configured for this degree type. Enable it under the degree type\'s Form Configuration.'), __('msg_error'));
+            return redirect()->back();
+        }
+
+        return $pdf->download('Acceptance-Letter-' . $student->student_id . '.pdf');
+    }
+
+    /**
+     * Re-send the acceptance-letter email (with PDF) to the student created from this application.
+     */
+    public function resendAcceptanceLetter(Application $application, \App\Services\AcceptanceLetterService $service)
+    {
+        $student = $this->convertedStudent($application);
+        if (!$student) {
+            Flasher::addError(__('Convert this application to a student first.'), __('msg_error'));
+            return redirect()->back();
+        }
+
+        if ($service->sendTo($student)) {
+            Flasher::addSuccess(__('Acceptance letter sent to') . ' ' . $student->email, __('msg_success'));
+        } else {
+            Flasher::addError(__('Could not send the acceptance letter. Check the degree type template is enabled and mail is configured.'), __('msg_error'));
+        }
+
+        return redirect()->back();
     }
 
     /**
@@ -667,7 +745,6 @@ class ApplicationController extends Controller
             'program' => ['required', 'exists:programs,id'],
             'first_name' => ['required', 'string', 'max:191'],
             'last_name' => ['required', 'string', 'max:191'],
-            'other_names' => ['nullable', 'string', 'max:191'],
             'gender' => ['required', Rule::in([1, 2, 3])],
             'dob' => ['required', 'date', 'before:tomorrow'],
             'religion' => ['nullable', 'string', 'max:191'],
@@ -685,7 +762,7 @@ class ApplicationController extends Controller
             'present_province' => ['required', 'string', 'max:191'],
             'present_district' => ['required', 'string', 'max:191'],
             'present_village' => ['nullable', 'string', 'max:191'],
-            'present_address' => ['required', 'string', 'max:255'],
+            'present_address' => ['nullable', 'string', 'max:255'],
             'permanent_province' => ['nullable', 'string', 'max:191'],
             'permanent_district' => ['nullable', 'string', 'max:191'],
             'permanent_village' => ['nullable', 'string', 'max:191'],
@@ -813,7 +890,6 @@ class ApplicationController extends Controller
 
             $application->first_name = $validated['first_name'];
             $application->last_name = $validated['last_name'];
-            $application->other_names = $validated['other_names'] ?? null;
             $application->gender = (int) $validated['gender'];
             $application->dob = $validated['dob'];
 

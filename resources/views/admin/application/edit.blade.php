@@ -136,20 +136,16 @@
                   <label for="last_name">{{ __('field_last_name') }} <span>*</span></label>
                   <input type="text" class="form-control" id="last_name" name="last_name" value="{{ old('last_name', $row->last_name) }}" required>
                 </div>
-                @if($fieldEnabled('application_other_names'))
-                <div class="form-group col-md-6">
-                  <label for="other_names">{{ __('Other names (if any)') }}</label>
-                  <input type="text" class="form-control" id="other_names" name="other_names" value="{{ old('other_names', $row->other_names) }}">
-                </div>
-                @endif
                 <div class="form-group col-md-3">
-                  <label for="gender">{{ __('field_gender') }} <span>*</span></label>
-                  <select id="gender" name="gender" class="form-control" required>
-                    <option value="">{{ __('select') }}</option>
-                    <option value="1" {{ old('gender', $row->gender) == 1 ? 'selected' : '' }}>{{ __('gender_male') }}</option>
-                    <option value="2" {{ old('gender', $row->gender) == 2 ? 'selected' : '' }}>{{ __('gender_female') }}</option>
-                    <!-- <option value="3" {{ old('gender', $row->gender) == 3 ? 'selected' : '' }}>{{ __('gender_other') }}</option> -->
-                  </select>
+                  <label class="d-block">{{ __('field_gender') }} <span>*</span></label>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="gender" id="gender_male" value="1" {{ old('gender', $row->gender) == 1 ? 'checked' : '' }} required>
+                    <label class="form-check-label" for="gender_male">{{ __('gender_male') }}</label>
+                  </div>
+                  <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="gender" id="gender_female" value="2" {{ old('gender', $row->gender) == 2 ? 'checked' : '' }} required>
+                    <label class="form-check-label" for="gender_female">{{ __('gender_female') }}</label>
+                  </div>
                 </div>
                 <div class="form-group col-md-3">
                   <label for="dob">{{ __('field_dob') }} <span>*</span></label>
@@ -161,7 +157,8 @@
                 </div>
                 <div class="form-group col-md-6">
                   <label for="phone">{{ __('field_phone') }} <span>*</span></label>
-                  <input type="text" class="form-control" id="phone" name="phone" value="{{ old('phone', $row->phone) }}" required>
+                  <input type="text" class="form-control" id="phone" name="phone" value="{{ old('phone', $row->phone) }}" placeholder="+237 6XX XXX XXX" required>
+                  <small class="form-text text-muted">{{ __('Include the country code, e.g. +237.') }}</small>
                 </div>
                 @if($fieldEnabled('application_alternate_phone'))
                 <div class="form-group col-md-6">
@@ -351,6 +348,12 @@
                   <input type="text" class="form-control" id="present_address" name="present_address" value="{{ old('present_address', $row->present_address) }}">
                 </div>
                 @endif
+                <div class="col-12">
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" value="1" id="same_as_residence_edit">
+                    <label class="form-check-label" for="same_as_residence_edit">{{ __('Same as Current Residence') }}</label>
+                  </div>
+                </div>
                 <div class="form-group col-md-6">
                   <label for="permanent_province_edit">{{ __('Permanent province') }}</label>
                   <input type="text" class="form-control" id="permanent_province_edit" name="permanent_province" value="{{ old('permanent_province', $row->permanent_province) }}">
@@ -473,8 +476,8 @@
                           <input type="text" class="form-control" name="academic_history[{{ $index }}][certificate_obtained]" placeholder="{{ __('Certificate obtained') }}" value="{{ $history['certificate_obtained'] ?? '' }}">
                         </td>
                         <td>
-                          <input type="text" class="form-control mb-1" name="academic_history[{{ $index }}][city]" placeholder="{{ __('City') }}" value="{{ $history['city'] ?? '' }}">
-                          <input type="text" class="form-control" name="academic_history[{{ $index }}][country]" placeholder="{{ __('Country') }}" value="{{ $history['country'] ?? '' }}">
+                          <input type="text" class="form-control mb-1" name="academic_history[{{ $index }}][country]" placeholder="{{ __('Country') }}" value="{{ $history['country'] ?? '' }}">
+                          <input type="text" class="form-control" name="academic_history[{{ $index }}][city]" placeholder="{{ __('City') }}" value="{{ $history['city'] ?? '' }}">
                         </td>
                         <td>
                           <input type="text" class="form-control" name="academic_history[{{ $index }}][instruction_language]" value="{{ $history['instruction_language'] ?? '' }}">
@@ -770,6 +773,24 @@
                         <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#convertApplicationModal">
               <i class="fas fa-user-check"></i> {{ __('Create student record') }}
             </button>
+
+            @php
+                $convertedStudent = \App\Models\Student::where('registration_no', $row->registration_no)->first();
+            @endphp
+            @if($convertedStudent)
+            <div class="mt-3">
+              <p class="text-muted mb-2"><i class="fas fa-check-circle text-success"></i> {{ __('Student record exists') }} (#{{ $convertedStudent->student_id }}).</p>
+              <a href="{{ route('admin.application.acceptance-letter.download', $row->id) }}" class="btn btn-outline-primary btn-sm" target="_blank">
+                <i class="fas fa-file-pdf"></i> {{ __('Download letter') }}
+              </a>
+              <form action="{{ route('admin.application.acceptance-letter.resend', $row->id) }}" method="post" class="d-inline">
+                @csrf
+                <button type="submit" class="btn btn-outline-secondary btn-sm">
+                  <i class="fas fa-paper-plane"></i> {{ __('Resend letter') }}
+                </button>
+              </form>
+            </div>
+            @endif
             <hr>
             <div class="small text-muted">
               <div class="mb-2"><strong>{{ __('Registration no.') }}:</strong> #{{ $row->registration_no }}</div>
@@ -1064,7 +1085,7 @@
             </div>
             <div class="form-group col-md-6">
               <label for="convert_session">{{ __('field_session') }} <span>*</span></label>
-              <select class="form-control session @error('session') is-invalid @enderror" id="convert_session" name="session" data-selected="{{ old('session') }}" required>
+              <select class="form-control session @error('session') is-invalid @enderror" id="convert_session" name="session" data-selected="{{ old('session', $row->session_id) }}" required>
                 <option value="">{{ __('select') }}</option>
               </select>
               @error('session')
@@ -1161,7 +1182,7 @@
       var index = historyIndex++;
       var row = '<tr data-index="' + index + '">' +
         '<td><input type="hidden" name="academic_history[' + index + '][id]" value=""><input type="text" class="form-control mb-1" name="academic_history[' + index + '][institution_name]" placeholder="{{ __('Institution name') }}"><input type="text" class="form-control" name="academic_history[' + index + '][certificate_obtained]" placeholder="{{ __('Certificate obtained') }}"></td>' +
-        '<td><input type="text" class="form-control mb-1" name="academic_history[' + index + '][city]" placeholder="{{ __('City') }}"><input type="text" class="form-control" name="academic_history[' + index + '][country]" placeholder="{{ __('Country') }}"></td>' +
+        '<td><input type="text" class="form-control mb-1" name="academic_history[' + index + '][country]" placeholder="{{ __('Country') }}"><input type="text" class="form-control" name="academic_history[' + index + '][city]" placeholder="{{ __('City') }}"></td>' +
         '<td><input type="text" class="form-control" name="academic_history[' + index + '][instruction_language]"></td>' +
         '<td><input type="date" class="form-control mb-1" name="academic_history[' + index + '][date_from]"><input type="date" class="form-control" name="academic_history[' + index + '][date_to]"></td>' +
         '<td>' +
@@ -1347,6 +1368,33 @@
         $reasonContainer.find('input').val('');
       }
     });
+
+    // "Same as Current Residence" → mirror present address into permanent address.
+    (function () {
+      var $toggle = $('#same_as_residence_edit');
+      if (!$toggle.length) return;
+      var pairs = [
+        ['present_province_edit', 'permanent_province_edit'],
+        ['present_district_edit', 'permanent_district_edit'],
+        ['present_village', 'permanent_village'],
+        ['present_address', 'permanent_address'],
+      ];
+      function sync() {
+        var on = $toggle.is(':checked');
+        pairs.forEach(function (p) {
+          var $src = $('#' + p[0]); var $dst = $('#' + p[1]);
+          if (!$dst.length) return;
+          if (on) { $dst.val($src.val()).prop('readonly', true); }
+          else { $dst.prop('readonly', false); }
+        });
+      }
+      $toggle.on('change', sync);
+      pairs.forEach(function (p) {
+        $('#' + p[0]).on('input', function () {
+          if ($toggle.is(':checked')) { $('#' + p[1]).val($(this).val()); }
+        });
+      });
+    })();
 
   })(jQuery);
 </script>

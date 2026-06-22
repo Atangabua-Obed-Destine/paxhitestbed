@@ -74,24 +74,29 @@
             display: none;
         }
     </style>
+    <!-- Institutional portal theme (loads last so it overrides defaults) -->
+    <link rel="stylesheet" href="{{ asset('dashboard/css/application-portal.css') }}?v={{ filemtime(public_path('dashboard/css/application-portal.css')) }}">
     @stack('styles')
 </head>
 <body class="application-portal">
     <header class="portal-nav d-flex align-items-center justify-content-between">
-        <div>
-            <span class="h5 mb-0">{{ config('app.name') }} — {{ __('Application Portal') }}</span>
+        <div class="brand-mark">
+            <i class="fas fa-graduation-cap fa-lg"></i>
+            <span class="h6 mb-0 d-none d-sm-inline">{{ config('app.name') }}</span>
+            <span class="h6 mb-0 d-sm-none">{{ __('Admissions') }}</span>
         </div>
-        <nav>
+        <nav class="d-flex align-items-center">
             @auth('applicant')
-                <a href="{{ route('application.dashboard') }}">{{ __('Dashboard') }}</a>
-                <a href="{{ route('application.timeline') }}">{{ __('Timeline') }}</a>
+                <a href="{{ route('application.dashboard') }}">{{ __('My Account') }}</a>
+                <a href="{{ route('application.create') }}">{{ __('Apply Online') }}</a>
+                <span class="me-3 d-none d-md-inline"><i class="far fa-user-circle me-1"></i>{{ strtoupper(trim(auth('applicant')->user()->first_name.' '.auth('applicant')->user()->last_name)) }}</span>
                 <form action="{{ route('application.logout') }}" method="post" class="d-inline">
                     @csrf
                     <button type="submit" class="btn btn-sm btn-light text-primary">{{ __('Logout') }}</button>
                 </form>
             @else
-                <a href="{{ route('application.index') }}">{{ __('Start Application') }}</a>
                 <a href="{{ route('application.login') }}">{{ __('Sign In') }}</a>
+                <a href="{{ route('application.register') }}">{{ __('Create Account') }}</a>
             @endauth
         </nav>
     </header>

@@ -1,0 +1,231 @@
+/* ============================================================
+   PAX Higher Institute — Applicant Portal theme
+   Clean, mobile-first, professional/institutional skin layered
+   over the existing markup + jQuery-Steps wizard (no JS changes).
+   ============================================================ */
+
+:root {
+    --pax-navy: #16294a;
+    --pax-navy-600: #1f3a66;
+    --pax-navy-100: #e9eef6;
+    --pax-accent: #b8893b;       /* restrained institutional gold */
+    --pax-accent-600: #9c7330;
+    --pax-ink: #1f2733;
+    --pax-muted: #6b7686;
+    --pax-line: #dfe4ec;
+    --pax-bg: #eef1f6;
+    --pax-card: #ffffff;
+    --pax-radius: 12px;
+    --pax-shadow: 0 10px 30px rgba(22, 41, 74, .08);
+    --pax-font: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body,
+body.application-portal {
+    background: var(--pax-bg) !important;
+    color: var(--pax-ink);
+    font-family: var(--pax-font);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* ---------- Top navigation ---------- */
+.portal-nav {
+    background: linear-gradient(100deg, var(--pax-navy) 0%, var(--pax-navy-600) 100%) !important;
+    color: #fff;
+    padding: .9rem 1.5rem !important;
+    box-shadow: 0 2px 14px rgba(22, 41, 74, .18);
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+}
+.portal-nav .brand-mark {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    font-weight: 700;
+    letter-spacing: .2px;
+}
+.portal-nav .brand-mark img { height: 38px; width: auto; border-radius: 4px; background:#fff; padding:2px; }
+.portal-nav a {
+    color: rgba(255, 255, 255, .88) !important;
+    margin-right: 1.25rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color .15s ease;
+}
+.portal-nav a:hover { color: #fff !important; }
+.portal-nav .btn-light { font-weight: 600; }
+
+.portal-wrapper {
+    max-width: 1080px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+/* ---------- Cards ---------- */
+.portal-card,
+.application-card {
+    background: var(--pax-card);
+    border: 1px solid var(--pax-line) !important;
+    border-radius: var(--pax-radius) !important;
+    box-shadow: var(--pax-shadow);
+}
+.portal-card .card-header { border-bottom: 1px solid var(--pax-line); background: transparent; }
+
+h3, h5, .h5 { color: var(--pax-navy); }
+
+/* ---------- Form controls ---------- */
+.application-portal .form-control,
+.application-portal .form-select,
+body .wizard .form-control,
+body .wizard .form-select {
+    border: 1px solid var(--pax-line);
+    border-radius: 9px;
+    padding: .6rem .8rem;
+    min-height: 44px;
+    box-shadow: none !important;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.application-portal .form-control:focus,
+body .wizard .form-control:focus,
+body .wizard .form-select:focus {
+    border-color: var(--pax-navy-600);
+    box-shadow: 0 0 0 3px rgba(31, 58, 102, .14) !important;
+}
+label { font-weight: 600; color: #33404f; margin-bottom: .3rem; }
+label span { color: #d6453d; }
+.form-text { font-size: .8rem; }
+
+/* ---------- Section fieldsets (was dashed scheduler-border) ---------- */
+fieldset.scheduler-border {
+    border: 1px solid var(--pax-line) !important;
+    border-radius: var(--pax-radius) !important;
+    padding: 1.25rem 1.25rem .5rem !important;
+    margin-bottom: 1.4rem !important;
+    background: #fcfdff;
+}
+fieldset.scheduler-border legend {
+    font-size: .8rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--pax-accent-600);
+    width: auto !important;
+    padding: 0 .5rem !important;
+    margin-bottom: 0;
+    border-bottom: 0;
+}
+.step-caption { color: var(--pax-muted); margin-bottom: 1.25rem; }
+
+/* ---------- Radio pills (gender etc.) ---------- */
+.radio-pills { display: flex; gap: .6rem; flex-wrap: wrap; }
+.radio-pill {
+    position: relative;
+    border: 1px solid var(--pax-line);
+    border-radius: 999px;
+    padding: .5rem 1.1rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: #44505f;
+    margin: 0;
+    background: #fff;
+    transition: all .15s ease;
+    min-width: 96px;
+    text-align: center;
+}
+.radio-pill input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.radio-pill:hover { border-color: var(--pax-navy-600); }
+.radio-pill:has(input:checked) {
+    background: var(--pax-navy);
+    border-color: var(--pax-navy);
+    color: #fff;
+}
+
+/* mirrored (read-only "same as residence") fields */
+.is-mirrored { background: #f4f6fa !important; }
+
+/* ---------- Repeater cards ---------- */
+.repeater-item {
+    border: 1px solid var(--pax-line) !important;
+    border-radius: var(--pax-radius) !important;
+    padding: 1.1rem !important;
+    margin-bottom: 1rem !important;
+    background: #fff;
+}
+.repeater-actions button { color: #d6453d; }
+
+/* ---------- Buttons ---------- */
+.btn-primary {
+    background: var(--pax-navy) !important;
+    border-color: var(--pax-navy) !important;
+    font-weight: 600;
+}
+.btn-primary:hover { background: var(--pax-navy-600) !important; border-color: var(--pax-navy-600) !important; }
+.btn-outline-primary { color: var(--pax-navy) !important; border-color: var(--pax-navy) !important; font-weight: 600; }
+.btn-outline-primary:hover { background: var(--pax-navy) !important; color: #fff !important; }
+.btn-danger { background: #c23b34 !important; border-color: #c23b34 !important; }
+
+/* ---------- jQuery-Steps wizard skin (markup unchanged) ---------- */
+.wizard { box-shadow: none; }
+.wizard > .steps { padding: .25rem 0 1rem; }
+.wizard > .steps ul { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: .25rem; -webkit-overflow-scrolling: touch; }
+.wizard > .steps > ul > li { float: none; width: auto; flex: 1 1 0; min-width: 120px; }
+.wizard > .steps a,
+.wizard > .steps a:hover,
+.wizard > .steps a:active {
+    margin: 0 .15rem;
+    padding: .7rem .6rem;
+    border-radius: 9px;
+    background: var(--pax-navy-100);
+    color: var(--pax-navy);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.25;
+    font-size: .82rem;
+}
+.wizard > .steps .current a,
+.wizard > .steps .current a:hover,
+.wizard > .steps .current a:active {
+    background: var(--pax-navy) !important;
+    color: #fff !important;
+    box-shadow: 0 6px 16px rgba(22, 41, 74, .25);
+}
+.wizard > .steps .done a,
+.wizard > .steps .done a:hover {
+    background: #cdd9ec !important;
+    color: var(--pax-navy) !important;
+}
+.wizard > .steps .number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(255,255,255,.35); margin-right: .35rem; font-size: .78rem;
+}
+.wizard > .steps .current .number { background: var(--pax-accent); color: #fff; }
+.wizard > .content { background: transparent; border: 0; margin: .5rem 0; min-height: auto; padding: 0; }
+.wizard > .actions { padding-top: .5rem; }
+.wizard > .actions a,
+.wizard > .actions a:hover {
+    background: var(--pax-navy);
+    border-radius: 9px;
+    padding: .6rem 1.4rem;
+    font-weight: 600;
+}
+.wizard > .actions .disabled a { background: #b6c0cf; }
+
+/* ---------- Progress / alerts ---------- */
+.progress { height: 10px; border-radius: 999px; background: var(--pax-navy-100); }
+.progress-bar { background: var(--pax-accent); }
+.alert-info { background: #eaf1fb; border-color: #d4e2f7; color: #244b7a; }
+.badge.badge-primary { background: var(--pax-navy); }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 768px) {
+    .portal-wrapper { margin: 1rem auto; }
+    .portal-nav { padding: .75rem 1rem !important; }
+    .portal-nav a { margin-right: .8rem; font-size: .9rem; }
+    fieldset.scheduler-border { padding: 1rem .9rem .25rem !important; }
+    .wizard > .steps > ul > li { min-width: 46%; }
+    .wizard > .steps a { font-size: .78rem; }
+    .radio-pill { flex: 1 1 40%; }
+}

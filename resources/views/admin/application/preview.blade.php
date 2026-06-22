@@ -208,12 +208,6 @@
                     <span class="info-label">{{ __('field_last_name') }}:</span>
                     <span class="info-value">{{ $row->last_name }}</span>
                 </div>
-                @if($fieldEnabled('application_other_names'))
-                <div class="info-row">
-                    <span class="info-label">{{ __('Other Names (if any)') }}:</span>
-                    <span class="info-value">{{ $row->other_names }}</span>
-                </div>
-                @endif
                 <div class="info-row">
                     <span class="info-label">{{ __('field_gender') }}:</span>
                     <span class="info-value">

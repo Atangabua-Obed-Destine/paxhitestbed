@@ -88,6 +88,9 @@
                                         </td>
                                         <td>
                                             @can($access.'-edit')
+                                            <a href="{{ route('admin.degree-type.form-config', $row) }}" class="btn btn-icon btn-sm btn-info" title="{{ __('Application Form Configuration') }}">
+                                                <i class="fas fa-sliders-h"></i>
+                                            </a>
                                             <button type="button" class="btn btn-icon btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal-{{ $row->id }}" title="{{ __('btn_edit') }}">
                                                 <i class="fas fa-edit"></i>
                                             </button>

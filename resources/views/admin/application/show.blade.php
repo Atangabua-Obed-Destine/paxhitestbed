@@ -324,12 +324,6 @@
                         <div class="table-responsive">
                             <table class="table table-borderless table-sm mb-0 detail-table">
                                 <tbody>
-                                    @if($fieldEnabled('application_other_names'))
-                                    <tr>
-                                        <th>{{ __('Other names') }}</th>
-                                        <td>{{ $valueOrNA($row->other_names) }}</td>
-                                    </tr>
-                                    @endif
                                     <tr>
                                         <th>{{ __('Gender') }}</th>
                                         <td>

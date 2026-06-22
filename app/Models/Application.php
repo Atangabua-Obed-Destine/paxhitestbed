@@ -16,6 +16,9 @@ class Application extends Authenticatable
      */
     protected $fillable = [
         'registration_no',
+        'applicant_id',
+        'degree_type_id',
+        'session_id',
         'batch_id',
         'program_id',
         'apply_date',
@@ -125,6 +128,21 @@ class Application extends Authenticatable
         'has_first_communion' => 'boolean',
         'studied_in_english' => 'boolean',
     ];
+
+    public function applicant()
+    {
+        return $this->belongsTo(Applicant::class, 'applicant_id');
+    }
+
+    public function degreeType()
+    {
+        return $this->belongsTo(DegreeType::class, 'degree_type_id');
+    }
+
+    public function session()
+    {
+        return $this->belongsTo(Session::class, 'session_id');
+    }
 
     public function preferredProgramFirst()
     {
