@@ -14,7 +14,12 @@ class Exam extends Model
      * @var array
      */
     protected $fillable = [
-        'student_enroll_id', 'subject_id', 'exam_type_id', 'date', 'time', 'attendance', 'attendance_locked', 'bypass_course_attendance', 'bypassed_by', 'bypassed_at', 'marks', 'achieve_marks', 'marks_locked', 'contribution', 'note', 'status', 'created_by', 'updated_by',
+        'student_enroll_id', 'subject_id', 'exam_type_id', 'date', 'time', 'attendance', 'sign_in', 'sign_out', 'attendance_locked', 'bypass_course_attendance', 'bypassed_by', 'bypassed_at', 'marks', 'achieve_marks', 'marks_locked', 'contribution', 'note', 'status', 'created_by', 'updated_by',
+    ];
+
+    protected $casts = [
+        'sign_in' => 'boolean',
+        'sign_out' => 'boolean',
     ];
 
     public function studentEnroll()

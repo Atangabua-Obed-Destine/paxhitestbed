@@ -43,7 +43,7 @@ class ExamAttendanceController extends Controller
         $this->access = 'exam';
 
 
-        $this->middleware('permission:'.$this->access.'-attendance', ['only' => ['index','store']]);
+        $this->middleware('permission:'.$this->access.'-attendance', ['only' => ['index','store','printSheet']]);
         $this->middleware('permission:'.$this->access.'-import', ['only' => ['index','import','importStore']]);
     }
 
@@ -403,48 +403,33 @@ class ExamAttendanceController extends Controller
         // Calculate course attendance percentage for each student (only for final exams)
         if(!empty($data['rows']) && !empty($request->subject) && !empty($data['selected_exam_type']) && $data['selected_exam_type']->is_final == 1){
             $data['student_attendance_percentages'] = [];
-            
+
             foreach($data['rows'] as $row){
-                $student_enroll_id = $row->id;
-                
-                // Get all attendances for this student in this subject
-                $courseAttendances = StudentAttendance::where('student_enroll_id', $student_enroll_id)
-                    ->where('subject_id', $request->subject)
+                $data['student_attendance_percentages'][$row->id] = $this->courseAttendanceStats($row->id, $request->subject);
+            }
+        }
+
+        // CA marks reference (final-exam attendance only): one read-only column per
+        // non-final exam type configured for this subject, showing the achieved marks.
+        $data['ca_types'] = collect();
+        $data['ca_marks'] = [];
+        if(!empty($data['rows']) && !empty($request->subject) && !empty($data['selected_exam_type']) && $data['selected_exam_type']->is_final == 1){
+            $data['ca_types'] = ExamType::where('is_final', 0)->where('status', 1)
+                ->whereHas('exams', function($q) use ($subject){ $q->where('subject_id', $subject); })
+                ->orderBy('id')->get();
+
+            $enrollIds = collect($data['rows'])->pluck('id')->all();
+            if($data['ca_types']->isNotEmpty() && !empty($enrollIds)){
+                $caRows = Exam::where('subject_id', $subject)
+                    ->whereIn('exam_type_id', $data['ca_types']->pluck('id')->all())
+                    ->whereIn('student_enroll_id', $enrollIds)
                     ->get();
-                
-                $total_present = 0;
-                $total_absent = 0;
-                $total_leave = 0;
-                $total_holiday = 0;
-                
-                foreach($courseAttendances as $attendance){
-                    if($attendance->attendance == 1) { // Present
-                        $total_present++;
-                    } elseif($attendance->attendance == 2) { // Absent
-                        $total_absent++;
-                    } elseif($attendance->attendance == 3) { // Leave
-                        $total_leave++;
-                    } elseif($attendance->attendance == 4) { // Holiday
-                        $total_holiday++;
-                    }
+                foreach($caRows as $ex){
+                    $data['ca_marks'][$ex->student_enroll_id][$ex->exam_type_id] = [
+                        'achieve' => $ex->achieve_marks,
+                        'marks'   => $ex->marks,
+                    ];
                 }
-                
-                // Calculate percentage (Present / Working days * 100)
-                $total_working_days = $total_present + $total_absent + $total_leave;
-                if($total_working_days == 0){
-                    $total_working_days = 1; // Avoid division by zero
-                }
-                
-                $percentage = round((($total_present / $total_working_days) * 100), 2);
-                
-                $data['student_attendance_percentages'][$student_enroll_id] = [
-                    'percentage' => $percentage,
-                    'present' => $total_present,
-                    'absent' => $total_absent,
-                    'leave' => $total_leave,
-                    'holiday' => $total_holiday,
-                    'total_working_days' => $total_working_days,
-                ];
             }
         }
 
@@ -481,6 +466,12 @@ class ExamAttendanceController extends Controller
         // ── Hoist repeated queries out of the loop ──
         $examType = ExamType::where('id', $request->type)->firstOrFail();
 
+        // Final-exam invigilation: Sign In / Sign Out drive the attendance.
+        // present (attendance = 1) is derived as sign_in AND sign_out.
+        $isFinal = (bool) ($examType->is_final ?? false);
+        $signins  = $isFinal && $request->filled('signins')  ? explode(",", $request->signins)  : [];
+        $signouts = $isFinal && $request->filled('signouts') ? explode(",", $request->signouts) : [];
+
         $contribution = \App\Services\ResultContributionService::getExamTypeContribution(
             $request->subject,
             $request->type
@@ -498,14 +489,19 @@ class ExamAttendanceController extends Controller
         $savedCount  = 0;
         $lockedCount = 0;
 
+        // Eligibility enforcement (final exam): a bypass is only honoured if the
+        // current user actually holds the bypass permission.
+        $attendanceSetting = ExamAttendanceSetting::first();
+        $canBypass = Auth::user() ? Auth::user()->can('exam-attendance-bypass') : false;
+
         // ── Wrap in a DB transaction for atomicity ──
         \Illuminate\Support\Facades\DB::beginTransaction();
         try {
             // Insert Data
             foreach($request->students as $key => $student_id){
 
-                // Check if bypass is enabled for this student (using student_enroll_id instead of array key)
-                $bypass_enabled = in_array($student_id, $bypasses);
+                // Bypass only takes effect when the user is permitted to bypass.
+                $bypass_enabled = $canBypass && in_array($student_id, $bypasses);
 
                 // Check lock status using pre-loaded records
                 $existingExam = $existingExams->get($student_id);
@@ -515,26 +511,50 @@ class ExamAttendanceController extends Controller
                     continue; // Skip locked records
                 }
 
-                // Insert Or Update Data
-                $exam = Exam::updateOrCreate(
-                [
-                    'student_enroll_id' => $student_id,
-                    'subject_id' => $request->subject,
-                    'exam_type_id' => $request->type
-                ],[
+                // For the final exam, attendance is DERIVED from the two sign verifications:
+                // present (1) only when signed in AND signed out; sign-out requires sign-in.
+                $attendanceValue = $attendances[$key] ?? 2;
+                $values = [
                     'student_enroll_id' => $student_id,
                     'subject_id' => $request->subject,
                     'exam_type_id' => $request->type,
                     'date' => $request->date,
                     'marks' => $examType->marks,
                     'contribution' => $contribution,
-                    'attendance' => $attendances[$key],
                     'attendance_locked' => 1, // Lock upon saving
                     'bypass_course_attendance' => $bypass_enabled,
                     'bypassed_by' => $bypass_enabled ? $currentUserId : null,
                     'bypassed_at' => $bypass_enabled ? now() : null,
                     'created_by' => $currentUserId
-                ]);
+                ];
+
+                if ($isFinal) {
+                    $si = !empty($signins[$key]);
+                    $so = $si && !empty($signouts[$key]); // sign-out only counts if signed in
+
+                    // Enforce eligibility server-side: an ineligible, non-bypassed student
+                    // is forced Absent regardless of what was submitted.
+                    $eligible = $this->isCourseAttendanceEligible($student_id, $request->subject, $attendanceSetting);
+                    if (!$eligible && !$bypass_enabled) {
+                        $si = false;
+                        $so = false;
+                    }
+
+                    $attendanceValue = ($si && $so) ? 1 : 2;
+                    $values['sign_in'] = $si;
+                    $values['sign_out'] = $so;
+                }
+
+                $values['attendance'] = $attendanceValue;
+                $attendances[$key] = $attendanceValue; // keep the success-modal counts accurate
+
+                // Insert Or Update Data
+                $exam = Exam::updateOrCreate(
+                [
+                    'student_enroll_id' => $student_id,
+                    'subject_id' => $request->subject,
+                    'exam_type_id' => $request->type
+                ], $values);
 
                 $savedCount++;
             }
@@ -567,6 +587,172 @@ class ExamAttendanceController extends Controller
         ]);
 
         return redirect()->back();
+    }
+
+    /**
+     * Print a blank manual invigilation sheet (Sign In / Sign Out columns left
+     * blank for handwriting). Mirrors the screen's student gathering + eligibility
+     * (respecting All Programmes Mode), and pre-fills Course Attendance + Eligibility.
+     */
+    public function printSheet(Request $request)
+    {
+        $subject = $request->subject;
+        $type    = $request->type;
+        $program = $request->program;
+        $session = $request->session;
+        $semester = $request->semester;
+        $section = $request->section;
+        $crossProgram = $request->boolean('cross_program', false);
+
+        if (empty($subject) || empty($type)) {
+            Flasher::addError('Select a subject and exam type before printing the sheet.', 'Error');
+            return redirect()->back();
+        }
+
+        $subjectModel = Subject::find($subject);
+        $sharingPrograms = $subjectModel
+            ? $subjectModel->programs()->where('programs.status', '1')->orderBy('programs.title')->get()
+            : collect();
+
+        // Gather enrolls (same rules as index()).
+        $enrolls = StudentEnroll::query();
+        if ($crossProgram) {
+            if (!empty($session) && $session != '0') { $enrolls->where('session_id', $session); }
+            if (!empty($semester) && $semester != '0') { $enrolls->where('semester_id', $semester); }
+            $ids = $sharingPrograms->pluck('id')->toArray();
+            if (!empty($ids)) { $enrolls->whereIn('program_id', $ids); }
+        } else {
+            if (!empty($program) && $program != '0') { $enrolls->where('program_id', $program); }
+            if (!empty($session) && $session != '0') { $enrolls->where('session_id', $session); }
+            if (!empty($semester) && $semester != '0') { $enrolls->where('semester_id', $semester); }
+            if (!empty($section) && $section != '0') { $enrolls->where('section_id', $section); }
+        }
+        $enrolls->whereHas('subjects', function ($q) use ($subject) { $q->where('subject_id', $subject); })
+            ->with(['student', 'program'])
+            ->whereHas('student', function ($q) { $q->where('status', '1'); });
+        $rows = $enrolls->get();
+
+        if ($crossProgram) {
+            $rows = $rows->groupBy(function ($r) { return $r->program_id . '-' . $r->matricule; })
+                ->map(function ($g) { return $g->sortByDesc('id')->first(); })
+                ->sortBy(function ($r) { return (optional($r->program)->title ?? '') . '_' . $r->matricule; })
+                ->values();
+        } else {
+            $rows = $rows->groupBy('matricule')
+                ->map(function ($g) { return $g->sortByDesc('id')->first(); })
+                ->sortBy(function ($r) { return $r->matricule; })
+                ->values();
+        }
+
+        $attendanceSetting = ExamAttendanceSetting::first();
+
+        // Saved bypass state, to flag bypassed students on the sheet.
+        $bypassMap = Exam::where('subject_id', $subject)->where('exam_type_id', $type)
+            ->whereIn('student_enroll_id', $rows->pluck('id')->all())
+            ->pluck('bypass_course_attendance', 'student_enroll_id');
+
+        $sheet = [];
+        foreach ($rows as $r) {
+            $stats = $this->courseAttendanceStats($r->id, $subject);
+            $sheet[] = [
+                'matricule'  => $r->matricule,
+                'name'       => trim((optional($r->student)->first_name ?? '') . ' ' . (optional($r->student)->last_name ?? '')),
+                'program'    => optional($r->program)->shortcode ?: optional($r->program)->title,
+                'percentage' => $stats['percentage'],
+                'attendance_mark' => $stats['attendance_mark'],
+                'attendance_contribution' => $stats['attendance_contribution'],
+                'eligible'   => $this->isCourseAttendanceEligible($r->id, $subject, $attendanceSetting),
+                'bypassed'   => (bool) ($bypassMap[$r->id] ?? false),
+            ];
+        }
+
+        $data = [
+            'title' => 'Examination Sign-In / Sign-Out Sheet',
+            'setting' => \App\Models\Setting::first(),
+            'sheet' => $sheet,
+            'examType' => ExamType::find($type),
+            'attendanceSetting' => $attendanceSetting,
+            'crossProgram' => $crossProgram,
+            'sharingPrograms' => $sharingPrograms,
+            'date' => $request->date,
+            'facultyName' => optional(\App\Models\Faculty::find($request->faculty))->title,
+            'programName' => $crossProgram ? __('All sharing programmes') : optional(\App\Models\Program::find($program))->title,
+            'sessionName' => optional(\App\Models\Session::find($session))->title,
+            'semesterName' => optional(\App\Models\Semester::find($semester))->title,
+            'sectionName' => optional(\App\Models\Section::find($section))->title,
+            'subjectModel' => $subjectModel,
+        ];
+
+        return view('admin.exam.attendance-sheet', $data);
+    }
+
+    /**
+     * Course-attendance stats for a student in a subject.
+     * - 'percentage' (used for eligibility) = present / (present + absent) * 100,
+     *   EXCLUDING leave/holiday; null when there are no present/absent records.
+     * - 'attendance_mark' = the contributed attendance score out of
+     *   'attendance_contribution' (the mark distribution from result-contribution),
+     *   computed the same way as ExamMarksSyncService (leave counts as present).
+     */
+    private function courseAttendanceStats($studentEnrollId, $subjectId, $attendanceContribution = null): array
+    {
+        static $contribCache = [];
+
+        if ($attendanceContribution === null) {
+            if (!array_key_exists($subjectId, $contribCache)) {
+                $contribCache[$subjectId] = (float) (\App\Services\ResultContributionService::getSubjectContributions($subjectId)['attendance'] ?? 0);
+            }
+            $attendanceContribution = $contribCache[$subjectId];
+        }
+
+        $rows = StudentAttendance::where('student_enroll_id', $studentEnrollId)
+            ->where('subject_id', $subjectId)
+            ->get();
+
+        $present = $absent = $leave = $holiday = 0;
+        foreach ($rows as $r) {
+            if ($r->attendance == 1) { $present++; }
+            elseif ($r->attendance == 2) { $absent++; }
+            elseif ($r->attendance == 3) { $leave++; }
+            elseif ($r->attendance == 4) { $holiday++; }
+        }
+
+        $working = $present + $absent; // leave + holiday excluded (eligibility %)
+        $percentage = $working > 0 ? round(($present / $working) * 100, 2) : null;
+
+        // Attendance MARK — matches ExamMarksSyncService (leave counts as present).
+        $markPresent = $present + $leave;
+        $markSessions = $markPresent + $absent;
+        $attendanceMark = ($markSessions > 0 && $attendanceContribution > 0)
+            ? round(($attendanceContribution / $markSessions) * $markPresent, 2)
+            : 0;
+
+        return [
+            'percentage' => $percentage,        // null = no class attendance recorded
+            'present' => $present,
+            'absent' => $absent,
+            'leave' => $leave,
+            'holiday' => $holiday,
+            'total_working_days' => $working,
+            'attendance_mark' => $attendanceMark,
+            'attendance_contribution' => $attendanceContribution,
+        ];
+    }
+
+    /**
+     * Whether a student is eligible to sit the final exam for a subject, given the
+     * global ExamAttendanceSetting. No records (null %) ⇒ eligible.
+     */
+    private function isCourseAttendanceEligible($studentEnrollId, $subjectId, $setting): bool
+    {
+        if (!$setting || !$setting->is_enabled) {
+            return true;
+        }
+        $pct = $this->courseAttendanceStats($studentEnrollId, $subjectId)['percentage'];
+        if ($pct === null) {
+            return true; // no class attendance recorded → do not block
+        }
+        return $pct >= ($setting->minimum_attendance_percentage ?? 70);
     }
 
     /**

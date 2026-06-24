@@ -385,6 +385,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
     // Exam Routes
     Route::get('exam/exam-attendance/check-status', 'ExamAttendanceController@checkStatus')->name('exam-attendance.check-status');
+    Route::get('exam/exam-attendance-print', 'ExamAttendanceController@printSheet')->name('exam-attendance.print');
     Route::resource('exam/exam-attendance', 'ExamAttendanceController');
     Route::post('exam/exam-attendance/unlock', 'ExamAttendanceController@unlock')->name('exam-attendance.unlock');
     Route::get('exam/exam-attendance-import', 'ExamAttendanceController@import')->name('exam-attendance.import');

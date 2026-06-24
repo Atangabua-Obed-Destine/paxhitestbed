@@ -263,14 +263,14 @@
                                         <td class="text-center">{{ number_format($record['assignment_marks'] + $record['activity_marks'] + ($record['ca_exam_marks'] ?? 0), 1) }}</td>
                                         <td class="text-center"><strong>{{ number_format($record['total_ca'], 1) }}</strong></td>
                                         <td class="text-center">
-                                            @if($record['exam_attendance'])
+                                            @if($record['sign_in'] ?? $record['exam_attendance'])
                                                 <i class="fas fa-check text-success"></i>
                                             @else
                                                 <i class="fas fa-times text-danger"></i>
                                             @endif
                                         </td>
                                         <td class="text-center">
-                                            @if($record['exam_attendance'])
+                                            @if($record['sign_out'] ?? $record['exam_attendance'])
                                                 <i class="fas fa-check text-success"></i>
                                             @else
                                                 <i class="fas fa-times text-danger"></i>

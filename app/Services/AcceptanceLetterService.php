@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\Setting;
 use App\Models\Student;
+use App\Models\Semester;
 use App\Models\MailSetting;
+use App\Models\ProgramSemesterFee;
 use App\Mail\AcceptanceLetter as AcceptanceLetterMail;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
@@ -49,7 +51,123 @@ class AcceptanceLetterService
             return null;
         }
 
-        return strtr($setting->acceptance_letter_html, $this->tokens($student, $dt));
+        // Normalise the user's template first (strip Word junk/fixed widths), THEN substitute,
+        // so our generated [fee_breakdown] table is injected clean and untouched.
+        $tokens = $this->tokens($student, $dt);
+        $tokens['[fee_breakdown]'] = $this->feeBreakdownHtml($student);
+
+        return strtr($this->normalizeLetterHtml($setting->acceptance_letter_html), $tokens);
+    }
+
+    /**
+     * Build the Year-1 first-installment fee breakdown table from the programme's
+     * published fee configuration. Returns '' when no fees are configured.
+     */
+    public function feeBreakdownHtml(Student $student): string
+    {
+        $student->loadMissing('studentEnrolls.semester');
+        $enroll = $student->studentEnrolls->first();
+        if (!$enroll || !$student->program_id) {
+            return '';
+        }
+
+        // The student's first (Year-1) regular semester for this programme.
+        $year = optional($enroll->semester)->year;
+        $firstSemester = Semester::where('semester_type', 1)
+            ->where('is_resit', 0)
+            ->when($year, fn ($q) => $q->where('year', $year))
+            ->whereHas('programs', fn ($q) => $q->where('program_id', $student->program_id))
+            ->orderBy('id')
+            ->first() ?? $enroll->semester;
+
+        if (!$firstSemester) {
+            return '';
+        }
+
+        $setting = Setting::where('status', '1')->first();
+        $currency = $setting->currency_symbol ?? 'FCFA';
+        $dp = $setting->decimal_place ?? 0;
+        $money = fn ($n) => number_format((float) $n, $dp, '.', ',');
+
+        // First-installment fee (with its itemised breakdown) for programme + first semester.
+        $firstInstallment = ProgramSemesterFee::with(['breakdowns', 'feesCategory'])
+            ->where('program_id', $student->program_id)
+            ->where('semester_id', $firstSemester->id)
+            ->where('status', 1)
+            ->whereHas('feesCategory', fn ($q) => $q->where('is_first_installment', 1))
+            ->first();
+
+        $rows = [];
+        $total = 0;
+
+        if ($firstInstallment && $firstInstallment->breakdowns->count()) {
+            foreach ($firstInstallment->breakdowns as $b) {
+                $rows[] = [$b->title, $b->amount];
+            }
+            $total = $firstInstallment->amount;
+        } else {
+            // Fallback: list the configured fee categories for that semester.
+            $fees = ProgramSemesterFee::with('feesCategory')
+                ->where('program_id', $student->program_id)
+                ->where('semester_id', $firstSemester->id)
+                ->where('status', 1)
+                ->get();
+            foreach ($fees as $f) {
+                $rows[] = [optional($f->feesCategory)->title ?? '—', $f->amount];
+                $total += (float) $f->amount;
+            }
+        }
+
+        if (empty($rows)) {
+            return '';
+        }
+
+        $html = '<table class="fee-breakdown"><thead><tr>'
+              . '<th>' . e(__('Fee Breakdown')) . '</th>'
+              . '<th class="amt">' . e(__('Amount') . ' (' . $currency . ')') . '</th>'
+              . '</tr></thead><tbody>';
+        foreach ($rows as [$label, $amount]) {
+            $html .= '<tr><td>' . e($label) . '</td><td class="amt">' . $money($amount) . '</td></tr>';
+        }
+        $html .= '</tbody><tfoot><tr>'
+               . '<th>' . e(__('Total')) . '</th>'
+               . '<th class="amt">' . $money($total) . '</th>'
+               . '</tr></tfoot></table>';
+
+        return $html;
+    }
+
+    /**
+     * Strip Word-specific noise and fixed widths/heights that otherwise shrink the
+     * letter into a narrow column on the A4 page. Colours, fonts, sizes, bold/italic,
+     * alignment and lists are preserved — only sizing/junk that breaks page width is
+     * removed so the content flows to the full A4 text area.
+     */
+    public function normalizeLetterHtml(?string $html): ?string
+    {
+        if ($html === null || $html === '') {
+            return $html;
+        }
+
+        // Drop Word's empty <o:p> tags and mso-* style properties.
+        $html = preg_replace('/<\/?o:p[^>]*>/i', '', $html);
+        $html = preg_replace('/mso-[^:;"\']+:[^;"\']*;?/i', '', $html);
+
+        // Remove fixed width/height/min-/max- in inline styles (keep line-height & font-size).
+        $html = preg_replace('/(?<![a-z-])(?:min-|max-)?width\s*:\s*[^;"\']*;?/i', '', $html);
+        $html = preg_replace('/(?<!font-)(?<!line-)(?<![a-z])(?:min-|max-)?height\s*:\s*[^;"\']*;?/i', '', $html);
+
+        // Remove text-indent (Word lists use a negative indent that makes the bullet
+        // overlap the text in DomPDF).
+        $html = preg_replace('/text-indent\s*:\s*[^;"\']*;?/i', '', $html);
+
+        // Remove width/height HTML attributes (Word adds these to tables/cells/images),
+        // covering quoted ("451") and unquoted (=451) forms.
+        $html = preg_replace('/\s(?:width|height)\s*=\s*"[^"]*"/i', '', $html);
+        $html = preg_replace("/\s(?:width|height)\s*=\s*'[^']*'/i", '', $html);
+        $html = preg_replace('/\s(?:width|height)\s*=\s*[0-9.]+%?/i', '', $html);
+
+        return $html;
     }
 
     /**
@@ -132,8 +250,19 @@ class AcceptanceLetterService
             '[email]' => 'jane.doe@example.com', '[phone]' => '+237 6XX XXX XXX',
         ];
 
+        // Sample fee-breakdown table so the admin sees how [fee_breakdown] renders.
+        $currency = $setting->currency_symbol ?? 'FCFA';
+        $sample['[fee_breakdown]'] = '<table class="fee-breakdown"><thead><tr>'
+            . '<th>' . e(__('Fee Breakdown')) . '</th><th class="amt">' . e(__('Amount') . ' (' . $currency . ')') . '</th>'
+            . '</tr></thead><tbody>'
+            . '<tr><td>First Installment Tuition Fees</td><td class="amt">120,500</td></tr>'
+            . '<tr><td>Health &amp; Accident Insurance</td><td class="amt">15,000</td></tr>'
+            . '<tr><td>Student Identity Card</td><td class="amt">3,000</td></tr>'
+            . '</tbody><tfoot><tr><th>' . e(__('Total')) . '</th><th class="amt">138,500</th></tr></tfoot></table>';
+
+        // Normalise the template first, then substitute (keeps the sample table intact).
         $pdf = Pdf::loadView('admin.acceptance-letter.pdf', [
-            'body' => strtr($html, $sample),
+            'body' => strtr($this->normalizeLetterHtml($html), $sample),
             'student' => null,
             'setting' => $setting,
         ]);

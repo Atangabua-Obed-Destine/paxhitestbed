@@ -580,6 +580,12 @@
                         <button type="button" class="btn btn-dark btn-print">
                             <i class="fas fa-print"></i> {{ __('btn_print') }}
                         </button>
+                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
+                        <a href="#" id="btn-print-sheet" class="btn btn-outline-dark"
+                           data-url="{{ route('admin.exam-attendance.print', ['faculty'=>$selected_faculty,'program'=>$selected_program,'session'=>$selected_session,'semester'=>$selected_semester,'section'=>$selected_section,'subject'=>$selected_subject,'type'=>$selected_type]) }}">
+                            <i class="fas fa-file-signature"></i> {{ __('Print Blank Sign-In/Out Sheet') }}
+                        </a>
+                        @endif
                         @endif
                         <div class="clearfix"></div>
                     </div>
@@ -614,6 +620,10 @@
                     <input type="hidden" name="type" value="{{ $selected_type }}">
                     <input type="hidden" name="attendances" class="attendances" value="">
                     <input type="hidden" name="bypasses" class="bypasses" value="">
+                    @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
+                    <input type="hidden" name="signins" class="signins" value="">
+                    <input type="hidden" name="signouts" class="signouts" value="">
+                    @endif
 
                     <div class="card-block">
                         @if(isset($attendance_setting) && $attendance_setting && $attendance_setting->is_enabled && isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
@@ -634,8 +644,13 @@
                                         <th>{{ __('field_name') }}</th>
                                         <th>{{ trans_choice('module_program', 1) }}</th>
                                         @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
-                                        <th>Course Attendance %</th>
+                                        <th>{{ __('Attendance Mark') }}</th>
                                         <th>Eligibility</th>
+                                        @foreach(($ca_types ?? collect()) as $ct)
+                                        <th title="{{ __('CA') }} / {{ rtrim(rtrim(number_format($ct->marks,2),'0'),'.') }}">{{ $ct->title }}</th>
+                                        @endforeach
+                                        <th>{{ __('Sign In') }}</th>
+                                        <th>{{ __('Sign Out') }}</th>
                                         @endif
                                         <th>{{ __('field_attendance') }}</th>
                                         <th>{{ __('Status') }}</th>
@@ -671,19 +686,26 @@
                                         
                                         // Get attendance data for this student (only for final exams)
                                         $attendance_data = null;
-                                        $attendance_percentage = 0;
-                                        
+                                        $attendance_percentage = null;   // null = no class attendance recorded (N/A)
+                                        $attendance_mark = null;
+                                        $attendance_contribution = 0;
+                                        $no_attendance_records = false;
+
                                         if($is_final_exam){
                                             $attendance_data = $student_attendance_percentages[$row->id] ?? null;
-                                            $attendance_percentage = $attendance_data['percentage'] ?? 0;
+                                            $attendance_percentage = $attendance_data['percentage'] ?? null;
+                                            $attendance_mark = $attendance_data['attendance_mark'] ?? null;
+                                            $attendance_contribution = $attendance_data['attendance_contribution'] ?? 0;
+                                            $no_attendance_records = $is_final_exam && is_null($attendance_percentage);
                                         }
-                                        
-                                        // Check if student is eligible (only for final exams)
+
+                                        // Check if student is eligible (only for final exams).
+                                        // No class attendance recorded (null %) ⇒ eligible (do not block).
                                         $is_eligible = true;
                                         $minimum_percentage = $attendance_setting->minimum_attendance_percentage ?? 70;
-                                        
+
                                         if($is_final_exam && $attendance_setting && $attendance_setting->is_enabled){
-                                            $is_eligible = $attendance_percentage >= $minimum_percentage;
+                                            $is_eligible = is_null($attendance_percentage) ? true : ($attendance_percentage >= $minimum_percentage);
                                         }
                                         
                                         // Check if bypass is already set for this student
@@ -773,12 +795,15 @@
                                         </td>
                                         @if($is_final_exam)
                                         <td>
-                                            @if($attendance_data)
+                                            @if($no_attendance_records)
+                                                <span class="badge badge-secondary">N/A</span>
+                                                <small class="d-block text-muted">{{ __('No class attendance recorded') }}</small>
+                                            @elseif($attendance_data)
                                                 <span class="badge badge-{{ $attendance_percentage >= $minimum_percentage ? 'success' : 'danger' }}">
-                                                    {{ $attendance_percentage }}%
+                                                    {{ rtrim(rtrim(number_format($attendance_mark,2),'0'),'.') }} / {{ rtrim(rtrim(number_format($attendance_contribution,2),'0'),'.') }}
                                                 </span>
                                                 <small class="d-block text-muted">
-                                                    P:{{ $attendance_data['present'] }} A:{{ $attendance_data['absent'] }} L:{{ $attendance_data['leave'] }}
+                                                    {{ $attendance_percentage }}% · P:{{ $attendance_data['present'] }} A:{{ $attendance_data['absent'] }} L:{{ $attendance_data['leave'] }}
                                                 </small>
                                             @else
                                                 <span class="badge badge-secondary">N/A</span>
@@ -794,6 +819,48 @@
                                             @endif
                                         </td>
                                         @endif
+
+                                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
+                                        @foreach(($ca_types ?? collect()) as $ct)
+                                            @php $cm = $ca_marks[$row->id][$ct->id] ?? null; @endphp
+                                            <td class="text-center">
+                                                @if($cm && !is_null($cm['achieve']))
+                                                    {{ rtrim(rtrim(number_format($cm['achieve'],2),'0'),'.') }} / {{ rtrim(rtrim(number_format($cm['marks'],2),'0'),'.') }}
+                                                @else
+                                                    <span class="text-muted">&mdash;</span>
+                                                @endif
+                                            </td>
+                                        @endforeach
+                                        @endif
+
+                                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
+                                        @php
+                                            $rowSignIn = false; $rowSignOut = false;
+                                            if(isset($attendances)){
+                                                foreach($attendances as $att){
+                                                    if($att->student_enroll_id == $row->id){
+                                                        $rowSignIn = (bool) $att->sign_in;
+                                                        $rowSignOut = (bool) $att->sign_out;
+                                                    }
+                                                }
+                                            }
+                                        @endphp
+                                        <td>
+                                            <div class="checkbox checkbox-primary d-inline">
+                                                <input class="c-signin" type="checkbox" data_signin_id="{{ $row->id }}" id="signin-{{ $key }}" value="1"
+                                                    {{ (!$can_attend || $is_locked) ? 'disabled' : '' }} {{ $rowSignIn ? 'checked' : '' }}>
+                                                <label for="signin-{{ $key }}" class="cr">{{ __('Sign In') }}</label>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="checkbox checkbox-success d-inline">
+                                                <input class="c-signout" type="checkbox" data_signout_id="{{ $row->id }}" id="signout-{{ $key }}" value="1"
+                                                    {{ (!$can_attend || $is_locked || !$rowSignIn) ? 'disabled' : '' }} {{ $rowSignOut ? 'checked' : '' }}>
+                                                <label for="signout-{{ $key }}" class="cr">{{ __('Sign Out') }}</label>
+                                            </div>
+                                        </td>
+                                        @endif
+
                                         <td>
                                         <input type="text" name="students[]" value="{{ $row->id }}" hidden>
 
@@ -1199,6 +1266,16 @@
             window.location.href = url.toString();
         });
 
+        // Print blank manual Sign-In/Out sheet (carries the live date + All-Programmes toggle).
+        $('#btn-print-sheet').on('click', function(e){
+            e.preventDefault();
+            var url = new URL($(this).data('url'), window.location.origin);
+            var d = $('#date').val();
+            if(d){ url.searchParams.set('date', d); }
+            if($('#crossProgramToggle').is(':checked')){ url.searchParams.set('cross_program', '1'); }
+            window.open(url.toString(), '_blank');
+        });
+
         // Handle bypass checkbox change
         $(".c-bypass").on('change', function(){
             var key = $(this).val();
@@ -1210,6 +1287,9 @@
                 $("input[name='attendances-"+key+"']").prop('disabled', false);
                 // Uncheck absent if it was auto-selected
                 $("input[name='attendances-"+key+"'][value='2']").prop('checked', false);
+                // Final exam: attendance is derived from the signs, so the bypass must
+                // also enable Sign In (Sign Out follows once Sign In is ticked).
+                $('#signin-'+key).prop('disabled', false);
                 // Update visual state
                 row.css('background-color', '#fff3cd');
                 label.text('Active');
@@ -1230,6 +1310,9 @@
                     // Re-disable if not eligible
                     $("input[name='attendances-"+key+"']").prop('disabled', true);
                     $("input[name='attendances-"+key+"'][value='2']").prop('checked', true).prop('disabled', true);
+                    // Clear + disable the signs so it reverts to Absent on a final exam.
+                    $('#signin-'+key).prop('checked', false).prop('disabled', true);
+                    $('#signout-'+key).prop('checked', false).prop('disabled', true);
                 }
                 // Update warning badge
                 var warning = row.find('small.d-block');
@@ -1335,8 +1418,20 @@
                 bypasses.push($(this).attr('data_bypass_id'));
             });
 
+            // Sign In / Sign Out (final exam) — aligned to students[] order.
+            var signins = [], signouts = [];
+            $("input[name='students[]']").each(function(){
+                var sid = $(this).val();
+                var $si = $(".c-signin[data_signin_id='" + sid + "']");
+                var $so = $(".c-signout[data_signout_id='" + sid + "']");
+                signins.push(($si.length && $si.is(':checked')) ? '1' : '0');
+                signouts.push(($so.length && $so.is(':checked')) ? '1' : '0');
+            });
+
             $(".attendances").val(attendances.join(','));
             $(".bypasses").val(bypasses.join(','));
+            $(".signins").val(signins.join(','));
+            $(".signouts").val(signouts.join(','));
             
             // Close modal and submit form
             $("#confirmAttendanceModal").modal('hide');
@@ -1349,11 +1444,57 @@
     });
 
 
+    // ── Sign In / Sign Out interlink (final exam) ─────────────────────────────
+    // Rule: present = sign_in AND sign_out; sign-out requires sign-in;
+    // sign-in only (no sign-out) = absent; absent = neither verified.
+    function syncSignRow(idx){
+        var $si = $('#signin-'+idx), $so = $('#signout-'+idx);
+        var $p = $('#attendance-p-'+idx), $a = $('#attendance-a-'+idx);
+        if(!$si.length || !$p.length) return;            // not a final-exam row
+        if($p.prop('disabled')) return;                  // locked record
+        var si = $si.is(':checked');
+        if(!si){ $so.prop('checked', false).prop('disabled', true); }
+        else { $so.prop('disabled', false); }
+        var present = si && $so.is(':checked');
+        $p.prop('checked', present);
+        $a.prop('checked', !present);
+    }
+
+    $(document).on('change', '.c-signin', function(){
+        syncSignRow($(this).attr('id').replace('signin-',''));
+    });
+    $(document).on('change', '.c-signout', function(){
+        syncSignRow($(this).attr('id').replace('signout-',''));
+    });
+    // Present/Absent radios drive the signs (bidirectional).
+    $(document).on('change', '.c-present', function(){
+        if(!$(this).is(':checked')) return;
+        var idx = $(this).attr('id').replace('attendance-p-','');
+        var $si = $('#signin-'+idx), $so = $('#signout-'+idx);
+        if($si.length && !$si.prop('disabled')){
+            $si.prop('checked', true);
+            $so.prop('disabled', false).prop('checked', true);
+        }
+    });
+    $(document).on('change', '.c-absent', function(){
+        if(!$(this).is(':checked')) return;
+        var idx = $(this).attr('id').replace('attendance-a-','');
+        var $si = $('#signin-'+idx), $so = $('#signout-'+idx);
+        if($si.length && !$si.prop('disabled')){
+            $si.prop('checked', false);
+            $so.prop('checked', false).prop('disabled', true);
+        }
+    });
+
     // checkbox all-check-button selector
     $(".all_present").on('click',function(e){
         if($(this).is(":checked")){
             // check all checkbox that are not disabled
             $(".c-present:not(:disabled)").prop('checked', true);
+            $(".c-signin:not(:disabled)").prop('checked', true).each(function(){
+                var idx = $(this).attr('id').replace('signin-','');
+                $('#signout-'+idx).prop('disabled', false).prop('checked', true);
+            });
         }
         else if($(this).is(":not(:checked)")){
             // uncheck all checkbox
@@ -1364,6 +1505,10 @@
         if($(this).is(":checked")){
             // check all checkbox that are not disabled
             $(".c-absent:not(:disabled)").prop('checked', true);
+            $(".c-signin:not(:disabled)").prop('checked', false).each(function(){
+                var idx = $(this).attr('id').replace('signin-','');
+                $('#signout-'+idx).prop('checked', false).prop('disabled', true);
+            });
         }
         else if($(this).is(":not(:checked)")){
             // uncheck all checkbox

@@ -195,6 +195,7 @@ class PermissionSeeder extends Seeder
 
             //*** Exam Manage Modules ***//
             ['name' => 'exam-attendance', 'group' => 'Exam', 'title' => 'Attendance'],
+            ['name' => 'exam-attendance-bypass', 'group' => 'Exam', 'title' => 'Attendance Bypass'],
             ['name' => 'exam-marking', 'group' => 'Exam', 'title' => 'Mark Ledger'],
             ['name' => 'exam-result', 'group' => 'Exam', 'title' => 'Result'],
             ['name' => 'exam-import', 'group' => 'Exam', 'title' => 'Import'],

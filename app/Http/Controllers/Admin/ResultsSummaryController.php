@@ -1162,6 +1162,8 @@ class ResultsSummaryController extends Controller
                 'ca_exam_marks' => $caExamMarks,
                 'total_ca' => $totalCA,
                 'exam_attendance' => $examAttendance,
+                'sign_in' => $finalExam ? (bool) $finalExam->sign_in : false,
+                'sign_out' => $finalExam ? (bool) $finalExam->sign_out : false,
                 'exam_marks' => $examMarks,
                 'total_marks' => $totalMarks,
                 'grade' => $letterGrade,
@@ -1353,8 +1355,8 @@ class ResultsSummaryController extends Controller
             $sheet->setCellValue('E' . $row, $record['attendance_marks']);
             $sheet->setCellValue('F' . $row, $record['ca_marks'] + $record['assignment_marks'] + $record['activity_marks']);
             $sheet->setCellValue('G' . $row, $record['total_ca']);
-            $sheet->setCellValue('H' . $row, $record['exam_attendance'] ? ($record['exam_time'] ?? '✓') : '');
-            $sheet->setCellValue('I' . $row, $record['exam_attendance'] ? '✓' : '');
+            $sheet->setCellValue('H' . $row, ($record['sign_in'] ?? $record['exam_attendance']) ? '✓' : '');
+            $sheet->setCellValue('I' . $row, ($record['sign_out'] ?? $record['exam_attendance']) ? '✓' : '');
             $sheet->setCellValue('J' . $row, $record['exam_marks']);
             $sheet->setCellValue('K' . $row, $record['total_marks']);
             $sheet->setCellValue('L' . $row, $record['grade']);
