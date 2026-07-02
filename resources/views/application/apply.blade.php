@@ -828,12 +828,12 @@
                                 <div class="row">
                                     <div class="form-group col-md-6">
                                         <label for="photo">{{ __('Recent Passport Photograph (max 5MB)') }} <span>*</span></label>
-                                        <input type="file" class="form-control" name="photo" id="photo" accept="image/*" required>
+                                        <input type="file" class="form-control size-guard" data-max-size-mb="5" name="photo" id="photo" accept="image/jpeg,image/png,image/*" required>
                                         <div class="invalid-feedback">{{ __('Upload a recent passport style photograph.') }}</div>
                                     </div>
                                     <div class="form-group col-md-6">
                                         <label for="signature">{{ __('Signature Sample (max 2MB)') }}</label>
-                                        <input type="file" class="form-control" name="signature" id="signature" accept="image/*">
+                                        <input type="file" class="form-control size-guard" data-max-size-mb="2" name="signature" id="signature" accept="image/jpeg,image/png,image/*">
                                     </div>
                                 </div>
                             </fieldset>
@@ -864,7 +864,7 @@
                                                             <small class="d-block text-muted mt-1">{{ __('Upload a new file below to replace') }}</small>
                                                         </div>
                                                     @endif
-                                                    <input type="file" class="form-control document-input" data-document-key="{{ $key }}" data-has-existing="{{ $hasExistingFile ? '1' : '0' }}" name="documents[{{ $key }}][file]" id="document_{{ $key }}" @if($document['required'] && !$hasExistingFile) required @endif>
+                                                    <input type="file" class="form-control document-input" data-document-key="{{ $key }}" data-has-existing="{{ $hasExistingFile ? '1' : '0' }}" data-max-size-mb="10" name="documents[{{ $key }}][file]" id="document_{{ $key }}" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" @if($document['required'] && !$hasExistingFile) required @endif>
                                                     @if(!empty($document['description']))
                                                         <small class="document-help">{{ $document['description'] }}</small>
                                                     @endif
@@ -1544,6 +1544,14 @@
             $inputs.on('change', function() {
                 const key = $(this).data('document-key');
                 const hasExisting = $(this).data('has-existing') === 1 || $(this).data('has-existing') === '1';
+                const maxMb = parseFloat($(this).data('max-size-mb')) || 10;
+                const file = this.files && this.files[0];
+                if (file && file.size > maxMb * 1024 * 1024) {
+                    alert('"' + file.name + '" is ' + (file.size / 1024 / 1024).toFixed(1) + ' MB. Maximum allowed is ' + maxMb + ' MB.');
+                    this.value = '';
+                    updateDocumentStatus(key, hasExisting, hasExisting, false);
+                    return;
+                }
                 const hasNewFile = this.files && this.files.length > 0;
                 updateDocumentStatus(key, hasExisting || hasNewFile, hasExisting, hasNewFile);
             });
@@ -1594,6 +1602,15 @@
             // initDistrictSelects();
             initDocumentSummary();
             initSameAsResidence();
+            // Client-side size guard for standalone file inputs (photo, signature).
+            $('.size-guard').on('change', function () {
+                const maxMb = parseFloat($(this).data('max-size-mb')) || 5;
+                const file = this.files && this.files[0];
+                if (file && file.size > maxMb * 1024 * 1024) {
+                    alert('"' + file.name + '" is ' + (file.size / 1024 / 1024).toFixed(1) + ' MB. Maximum allowed is ' + maxMb + ' MB.');
+                    this.value = '';
+                }
+            });
         });
     })(jQuery);
 </script>

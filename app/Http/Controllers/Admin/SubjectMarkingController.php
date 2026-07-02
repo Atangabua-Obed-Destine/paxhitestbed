@@ -103,6 +103,8 @@ class SubjectMarkingController extends Controller
         $data['selected_type'] = $type;
         $data['selected_subject'] = $subject;
 
+        $data['cross_program'] = $request->boolean('cross_program', false);
+
         // Filter Search
         $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
         $data['faculties'] = StaffAssignmentService::filterFaculties($facultyQuery)->get();
@@ -187,6 +189,13 @@ class SubjectMarkingController extends Controller
             $data['subjects'] = $subjects->orderBy('code', 'asc')->get();
         }
 
+        $crossProgram = $data['cross_program'];
+        $sharingProgramIds = [];
+        if (!empty($request->subject)) {
+            $subjectModel = Subject::find($subject);
+            $data['sharing_programs'] = $subjectModel ? $subjectModel->programs()->with('faculty')->where('programs.status', '1')->orderBy('programs.title')->get() : collect();
+            $sharingProgramIds = $crossProgram ? $data['sharing_programs']->pluck('id')->toArray() : [];
+        }
 
         if (!empty($request->program) && !empty($request->session) && !empty($request->subject)) {
             $authUser = Auth::guard('web')->user();
@@ -212,14 +221,23 @@ class SubjectMarkingController extends Controller
             if (!empty($request->session) && $request->session != '0') {
                 $enrolls->where('session_id', $session);
             }
-            if (!empty($request->program) && $request->program != '0') {
-                $enrolls->where('program_id', $program);
+            if (!empty($request->session) && $request->session != '0') {
+                $enrolls->where('session_id', $session);
             }
-            if (!empty($request->semester) && $request->semester != '0') {
-                $enrolls->where('semester_id', $semester);
-            }
-            if (!empty($request->section) && $request->section != '0') {
-                $enrolls->where('section_id', $section);
+            if ($crossProgram) {
+                if (!empty($sharingProgramIds)) {
+                    $enrolls->whereIn('program_id', $sharingProgramIds);
+                }
+            } else {
+                if (!empty($request->program) && $request->program != '0') {
+                    $enrolls->where('program_id', $program);
+                }
+                if (!empty($request->semester) && $request->semester != '0') {
+                    $enrolls->where('semester_id', $semester);
+                }
+                if (!empty($request->section) && $request->section != '0') {
+                    $enrolls->where('section_id', $section);
+                }
             }
             if (!empty($request->subject) && $request->subject != '0') {
                 $enrolls->with('exams')->whereHas('exams', function ($query) use ($subject) {
@@ -237,26 +255,39 @@ class SubjectMarkingController extends Controller
                 return $group->sortByDesc('id')->first();
             })->values();
 
-            $data['rows'] = $uniqueMatricules->sortBy(function ($query) {
-                return $query->matricule;
-            })->all();
+            if ($crossProgram) {
+                $data['rows'] = $uniqueMatricules->sortBy(function ($query) {
+                    $programTitle = $query->program->title ?? '';
+                    return $programTitle . '-' . $query->matricule;
+                })->all();
+            } else {
+                $data['rows'] = $uniqueMatricules->sortBy(function ($query) {
+                    return $query->matricule;
+                })->all();
+            }
         }
 
 
         if (!empty($request->program) && !empty($request->session) && !empty($request->subject)) {
             $attendances = StudentAttendance::query();
-            $attendances->with('studentEnroll')->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section) {
-                if ($program != '0') {
-                    $query->where('program_id', $program);
-                }
+            $attendances->with('studentEnroll')->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section, $crossProgram, $sharingProgramIds) {
                 if ($session != '0') {
                     $query->where('session_id', $session);
                 }
-                if ($semester != '0') {
-                    $query->where('semester_id', $semester);
-                }
-                if ($section != '0') {
-                    $query->where('section_id', $section);
+                if ($crossProgram) {
+                    if (!empty($sharingProgramIds)) {
+                        $query->whereIn('program_id', $sharingProgramIds);
+                    }
+                } else {
+                    if ($program != '0') {
+                        $query->where('program_id', $program);
+                    }
+                    if ($semester != '0') {
+                        $query->where('semester_id', $semester);
+                    }
+                    if ($section != '0') {
+                        $query->where('section_id', $section);
+                    }
                 }
             });
 
@@ -278,18 +309,24 @@ class SubjectMarkingController extends Controller
 
             $markings = SubjectMarking::where('subject_id', $selectedSubjectId);
 
-            $markings->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section) {
-                if ($program != '0') {
-                    $query->where('program_id', $program);
-                }
+            $markings->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section, $crossProgram, $sharingProgramIds) {
                 if ($session != '0') {
                     $query->where('session_id', $session);
                 }
-                if ($semester != '0') {
-                    $query->where('semester_id', $semester);
-                }
-                if ($section != '0') {
-                    $query->where('section_id', $section);
+                if ($crossProgram) {
+                    if (!empty($sharingProgramIds)) {
+                        $query->whereIn('program_id', $sharingProgramIds);
+                    }
+                } else {
+                    if ($program != '0') {
+                        $query->where('program_id', $program);
+                    }
+                    if ($semester != '0') {
+                        $query->where('semester_id', $semester);
+                    }
+                    if ($section != '0') {
+                        $query->where('section_id', $section);
+                    }
                 }
             });
 
@@ -1193,6 +1230,69 @@ class SubjectMarkingController extends Controller
                 'subject_marking_id' => $subjectMarking->id,
                 'trace' => $e->getTraceAsString()
             ]);
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * Bulk unpublish students' results.
+     */
+    public function bulkUnpublishStudent(Request $request)
+    {
+        $request->validate([
+            'subject_marking_ids' => 'required|array',
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+
+        if (!$this->canManagePublishOverride()) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
+        $markings = SubjectMarking::whereIn('id', $request->subject_marking_ids)->get();
+        $unpublishCount = 0;
+        $skippedCount = 0;
+
+        foreach ($markings as $subjectMarking) {
+            if ($subjectMarking->workflow_state !== SubjectMarking::STATE_PUBLISHED) {
+                $skippedCount++;
+                continue;
+            }
+
+            if ($subjectMarking->is_published_override === false) {
+                $skippedCount++;
+                continue;
+            }
+
+            $previousState = $subjectMarking->is_published_override === true ? 'force_published' : 'following_workflow';
+
+            $subjectMarking->update([
+                'is_published_override' => false,
+                'unpublish_reason' => $request->reason,
+                'unpublished_by' => Auth::id(),
+                'unpublished_at' => now(),
+            ]);
+
+            \App\Models\SubjectMarkingPublishLog::create([
+                'subject_marking_id' => $subjectMarking->id,
+                'action' => 'unpublish',
+                'reason' => $request->reason,
+                'performed_by' => Auth::id(),
+                'previous_state' => $previousState,
+                'new_state' => 'unpublished',
+            ]);
+
+            $unpublishCount++;
+        }
+
+        if ($unpublishCount > 0) {
+            $message = "$unpublishCount records unpublished successfully.";
+            if ($skippedCount > 0) {
+                $message .= " $skippedCount records were skipped.";
+            }
+            Flasher::addSuccess($message, __('Success'));
+        } else {
+            Flasher::addError('No records were unpublished. They may not be in published state or already unpublished.', __('Error'));
         }
 
         return redirect()->back();

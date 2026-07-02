@@ -18,11 +18,19 @@
             background: #182b49;
             color: #fff;
             padding: 1.25rem 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
+            z-index: 10;
         }
         .portal-nav a {
-            color: #fff;
+            color: rgba(255, 255, 255, 0.85);
             margin-right: 1.5rem;
-            font-weight: 600;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            text-decoration: none;
+        }
+        .portal-nav a:hover {
+            color: #fff;
         }
         .portal-wrapper {
             max-width: 1100px;
@@ -31,12 +39,15 @@
         }
         .portal-card {
             background: #fff;
-            border-radius: 0.5rem;
-            box-shadow: 0 15px 35px rgba(50, 50, 93, .05);
-            border: 1px solid rgba(50, 50, 93, .08);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+            border: none;
+            overflow: hidden;
         }
         .portal-card .card-header {
-            border-bottom: 1px solid rgba(50, 50, 93, .1);
+            background: #fff;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            padding: 1.25rem 1.5rem;
         }
         .progress {
             height: 12px;
@@ -73,37 +84,74 @@
         .timeline-item:last-child::after {
             display: none;
         }
+        
+        /* Auth Split Layout Styles */
+        body.application-portal { background-color: #f5f7fb; }
+        .portal-auth-fullscreen { background-color: #fff; }
+        .auth-split-layout { display: flex; min-height: 100vh; width: 100%; margin: 0; padding: 0; }
+        .auth-left { flex: 1; position: relative; background-color: #182b49; background-image: url('https://images.unsplash.com/photo-1541339907198-e08756dedf3f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: center; padding: 4rem; overflow: hidden; }
+        .auth-bg-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, rgba(24, 43, 73, 0.9) 0%, rgba(102, 126, 234, 0.8) 100%); z-index: 1; }
+        .auth-left-content { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; }
+        .brand-header { margin-bottom: auto; }
+        .auth-hero-text { margin-bottom: auto; max-width: 600px; }
+        .auth-footer { margin-top: auto; }
+        .auth-right { flex: 0 0 550px; background-color: #ffffff; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 3rem 2rem; box-shadow: -10px 0 30px rgba(0,0,0,0.05); z-index: 5; overflow-y: auto; overflow-x: hidden; }
+        .auth-form-container { width: 100%; max-width: 420px; margin: auto; }
+        .form-floating > .form-control { border-radius: 0.5rem; border: 1px solid #e2e8f0; box-shadow: none; padding-left: 1.25rem; }
+        .form-floating > .form-control:focus { border-color: #667eea; box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.15); }
+        .form-floating > label { padding-left: 1.25rem; }
+        .custom-checkbox .form-check-input { border-radius: 0.25rem; border-color: #cbd5e1; }
+        .custom-checkbox .form-check-input:checked { background-color: #667eea; border-color: #667eea; }
+        .modern-btn { background-color: #182b49; border: none; border-radius: 0.5rem; padding: 0.8rem; font-weight: 600; transition: all 0.3s ease; }
+        .modern-btn:hover { background-color: #2c4a7c; transform: translateY(-2px); box-shadow: 0 8px 15px rgba(24, 43, 73, 0.2); }
+        .modern-alert { border-radius: 0.5rem; border: none; background-color: #d1e7dd; color: #0f5132; }
+        
+        @media (max-width: 991px) {
+            .auth-right { flex: 1; padding: 2rem 1.5rem; justify-content: flex-start; }
+            .auth-left { display: none; }
+            .auth-form-container { margin-top: 2rem; }
+        }
     </style>
     <!-- Institutional portal theme (loads last so it overrides defaults) -->
     <link rel="stylesheet" href="{{ asset('dashboard/css/application-portal.css') }}?v={{ filemtime(public_path('dashboard/css/application-portal.css')) }}">
     @stack('styles')
 </head>
 <body class="application-portal">
-    <header class="portal-nav d-flex align-items-center justify-content-between">
-        <div class="brand-mark">
-            <i class="fas fa-graduation-cap fa-lg"></i>
-            <span class="h6 mb-0 d-none d-sm-inline">{{ config('app.name') }}</span>
-            <span class="h6 mb-0 d-sm-none">{{ __('Admissions') }}</span>
-        </div>
-        <nav class="d-flex align-items-center">
-            @auth('applicant')
-                <a href="{{ route('application.dashboard') }}">{{ __('My Account') }}</a>
-                <a href="{{ route('application.create') }}">{{ __('Apply Online') }}</a>
-                <span class="me-3 d-none d-md-inline"><i class="far fa-user-circle me-1"></i>{{ strtoupper(trim(auth('applicant')->user()->first_name.' '.auth('applicant')->user()->last_name)) }}</span>
-                <form action="{{ route('application.logout') }}" method="post" class="d-inline">
-                    @csrf
-                    <button type="submit" class="btn btn-sm btn-light text-primary">{{ __('Logout') }}</button>
-                </form>
-            @else
-                <a href="{{ route('application.login') }}">{{ __('Sign In') }}</a>
-                <a href="{{ route('application.register') }}">{{ __('Create Account') }}</a>
-            @endauth
-        </nav>
-    </header>
+    @php
+        $isAuthPage = in_array(Route::currentRouteName(), ['application.login', 'application.register', 'application.password.request', 'application.password.reset']);
+    @endphp
 
-    <main class="portal-wrapper">
-        @yield('content')
-    </main>
+    @if($isAuthPage)
+        <main class="portal-auth-fullscreen m-0 p-0" style="min-height: 100vh; display: flex; flex-direction: column;">
+            @yield('content')
+        </main>
+    @else
+        <header class="portal-nav d-flex align-items-center justify-content-between">
+            <div class="brand-mark">
+                <i class="fas fa-graduation-cap fa-lg"></i>
+                <span class="h6 mb-0 d-none d-sm-inline">{{ config('app.name') }}</span>
+                <span class="h6 mb-0 d-sm-none">{{ __('Admissions') }}</span>
+            </div>
+            <nav class="d-flex align-items-center">
+                @auth('applicant')
+                    <a href="{{ route('application.dashboard') }}">{{ __('My Account') }}</a>
+                    <a href="{{ route('application.create') }}">{{ __('Apply Online') }}</a>
+                    <span class="me-3 d-none d-md-inline"><i class="far fa-user-circle me-1"></i>{{ strtoupper(trim(auth('applicant')->user()->first_name.' '.auth('applicant')->user()->last_name)) }}</span>
+                    <form action="{{ route('application.logout') }}" method="post" class="d-inline">
+                        @csrf
+                        <button type="submit" class="btn btn-sm btn-light text-primary">{{ __('Logout') }}</button>
+                    </form>
+                @else
+                    <a href="{{ route('application.login') }}">{{ __('Sign In') }}</a>
+                    <a href="{{ route('application.register') }}">{{ __('Create Account') }}</a>
+                @endauth
+            </nav>
+        </header>
+
+        <main class="portal-wrapper">
+            @yield('content')
+        </main>
+    @endif
 
     <script src="{{ asset('dashboard/js/vendor-all.min.js') }}"></script>
     <script src="{{ asset('dashboard/plugins/bootstrap/js/bootstrap.min.js') }}"></script>

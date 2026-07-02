@@ -213,6 +213,13 @@ class ApplicationController extends Controller
 
         $degreeType = $application->degreeType;
 
+        // Warn (but don't block) if the intake has been closed since the draft was created.
+        $intake = $application->session;
+        $intakeClosed = !$intake || !$intake->applications_open;
+        if ($intakeClosed) {
+            Flasher::addWarning(__('This intake is currently closed. You may keep editing your draft, but submission will be rejected until the intake reopens.'), __('msg_warning'));
+        }
+
         // Make the apply form's field() helper resolve per this degree type.
         app()->instance('applicant.degree_type', $degreeType);
 
@@ -275,6 +282,13 @@ class ApplicationController extends Controller
 
         if ($application->stage !== 'draft') {
             return redirect()->route('application.dashboard');
+        }
+
+        // Intake window must still be open at submission time (not only at create).
+        $intake = $application->session;
+        if (!$intake || !$intake->applications_open) {
+            Flasher::addError(__('This intake is no longer open for applications. Please contact the admissions office.'), __('msg_error'));
+            return redirect()->route('application.edit', $application);
         }
 
         $degreeType = $application->degreeType;
@@ -561,7 +575,7 @@ class ApplicationController extends Controller
                     $admissionFee->assign_date = now();
                     $admissionFee->due_date = now()->addDays($feeSettings['fee_due_days']);
                     $admissionFee->status = 0;
-                    $admissionFee->note = 'Admission fee - Auto-assigned';
+                    $admissionFee->note = 'Admission fee - Auto-assigned (application #' . $application->registration_no . ')';
                     $admissionFee->save();
 
                     $application->admission_fee_id = $admissionFee->id;

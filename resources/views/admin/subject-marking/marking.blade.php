@@ -64,12 +64,68 @@
                                     <button type="submit" class="btn btn-info btn-filter"><i class="fas fa-search"></i> {{ __('btn_search') }}</button>
                                 </div>
                             </div>
+                            @if(isset($cross_program) && $cross_program)
+                                <input type="hidden" name="cross_program" value="1">
+                            @endif
                         </form>
 
 
                     </div>
                 </div>
             </div>
+
+            {{-- ================================================================
+                 CROSS-PROGRAMME TOGGLE
+                 ================================================================ --}}
+            @if(isset($rows) && isset($sharing_programs) && $sharing_programs->count() > 1)
+            <div class="col-sm-12">
+                <div class="card border-info shadow-sm mb-3">
+                    <div class="card-block py-3 px-4">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <div class="custom-control custom-switch mr-3">
+                                    <input type="checkbox" class="custom-control-input" id="crossProgramToggle"
+                                           {{ $cross_program ? 'checked' : '' }}>
+                                    <label class="custom-control-label font-weight-bold" for="crossProgramToggle" style="font-size: 14px; cursor: pointer;">
+                                        <i class="fas fa-project-diagram text-info"></i>
+                                        {{ __('Cross-Programme Marking') }}
+                                    </label>
+                                </div>
+                                <span class="text-muted small">
+                                    @if($cross_program)
+                                        Marking students from <strong class="text-info">{{ $sharing_programs->count() }} programmes</strong> taking this course
+                                    @else
+                                        This course is shared by <strong>{{ $sharing_programs->count() }} programmes</strong> &mdash; toggle to mark all
+                                    @endif
+                                </span>
+                            </div>
+
+                            {{-- Sharing Programmes List --}}
+                            <div>
+                                <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#sharingProgramsListMarking">
+                                    <i class="fas fa-eye"></i> {{ __('View Programmes') }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="collapse {{ $cross_program ? 'show' : '' }} mt-2" id="sharingProgramsListMarking">
+                            <div class="pt-2 border-top mt-2">
+                                <div class="row">
+                                    @foreach($sharing_programs as $sp)
+                                    <div class="col-md-4 col-sm-6 mb-2">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-graduation-cap text-info mr-2"></i>
+                                            <small>{{ $sp->title }}</small>
+                                        </div>
+                                    </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
 
             <div class="col-sm-12">
                 <div class="card">
@@ -197,12 +253,23 @@
 
 
                     @if(isset($rows))
+                    <div class="card-header border-bottom-0 pb-0">
+                        <button type="button" class="btn btn-warning btn-sm" id="btn-bulk-unpublish" style="display: none;" onclick="openBulkUnpublishModal()">
+                            <i class="fas fa-lock"></i> Bulk Unpublish
+                        </button>
+                    </div>
                     <div class="card-block">
                         <!-- [ Data table ] start -->
                         <div class="table-responsive">
                             <table class="display table nowrap table-striped table-hover">
                                 <thead>
                                     <tr>
+                                        <th class="text-center" style="width: 40px;">
+                                            <div class="checkbox checkbox-warning d-inline">
+                                                <input type="checkbox" id="checkAllUnpublish" class="check-all-unpublish">
+                                                <label for="checkAllUnpublish" class="cr"></label>
+                                            </div>
+                                        </th>
                                         <th>{{ __('field_matricule') }}</th>
                                         <th>{{ __('field_name') }}</th>
                                         <th>{{ __('field_exam') }} ({{ round($exam_contribution ?? '', 2) }})</th>
@@ -222,10 +289,28 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                  @php $currentProgramId = null; @endphp
                                   @foreach( $rows as $key => $row )
+                                    @if(isset($cross_program) && $cross_program && $row->program_id != $currentProgramId)
+                                        @php $currentProgramId = $row->program_id; @endphp
+                                        <tr class="table-info font-weight-bold">
+                                            <td colspan="12"><i class="fas fa-graduation-cap"></i> {{ $row->program->title ?? '' }}</td>
+                                        </tr>
+                                    @endif
                                     <input type="hidden" name="students[]" value="{{ $row->id }}">
                                     <input type="hidden" name="subjects[]" value="{{ $subject->id }}">
                                     <tr>
+                                        <td class="text-center">
+                                            @php
+                                                $_mRecord = $row->subjectMarks->firstWhere('subject_id', $selected_subject);
+                                            @endphp
+                                            @if($_mRecord && $_mRecord->workflow_state === 'published' && $_mRecord->is_published_override !== false)
+                                            <div class="checkbox checkbox-warning d-inline">
+                                                <input type="checkbox" class="bulk-unpublish-checkbox" id="unpublish-{{ $_mRecord->id }}" value="{{ $_mRecord->id }}">
+                                                <label for="unpublish-{{ $_mRecord->id }}" class="cr"></label>
+                                            </div>
+                                            @endif
+                                        </td>
                                         <td>
                                             @isset($row->student->student_id)
                                             <a href="{{ route('admin.student.show', $row->student->id) }}">
@@ -825,7 +910,99 @@
             
             $('#republishModal').modal('show');
         }
+
+        // Bulk Unpublish Logic
+        $('.check-all-unpublish').on('change', function() {
+            var isChecked = $(this).prop('checked');
+            $('.bulk-unpublish-checkbox').prop('checked', isChecked);
+            toggleBulkUnpublishBtn();
+        });
+
+        $('.bulk-unpublish-checkbox').on('change', function() {
+            toggleBulkUnpublishBtn();
+            var allChecked = $('.bulk-unpublish-checkbox:not(:checked)').length === 0 && $('.bulk-unpublish-checkbox').length > 0;
+            $('.check-all-unpublish').prop('checked', allChecked);
+        });
+
+        function toggleBulkUnpublishBtn() {
+            if ($('.bulk-unpublish-checkbox:checked').length > 0) {
+                $('#btn-bulk-unpublish').show();
+            } else {
+                $('#btn-bulk-unpublish').hide();
+            }
+        }
+
+        function openBulkUnpublishModal() {
+            var selectedCount = $('.bulk-unpublish-checkbox:checked').length;
+            if (selectedCount === 0) return;
+            
+            $('#bulk-unpublish-count').text(selectedCount);
+            $('#bulk-unpublish-reason').val('');
+            
+            $('#bulkUnpublishModal').modal('show');
+        }
+
+        $('#bulkUnpublishForm').on('submit', function() {
+            var container = $('#bulk-unpublish-ids-container');
+            container.empty();
+            $('.bulk-unpublish-checkbox:checked').each(function() {
+                container.append('<input type="hidden" name="subject_marking_ids[]" value="'+$(this).val()+'">');
+            });
+            // Let the form submit natively
+        });
+
+        $('#crossProgramToggle').on('change', function() {
+            var isChecked = $(this).is(':checked') ? 1 : 0;
+            var currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('cross_program', isChecked);
+            window.location.href = currentUrl.toString();
+        });
     </script>
+
+    <!-- Bulk Unpublish Modal -->
+    <div class="modal fade" id="bulkUnpublishModal" tabindex="-1" role="dialog" aria-labelledby="bulkUnpublishModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <form id="bulkUnpublishForm" method="POST" action="{{ route('admin.subject-marking.bulk-unpublish') }}">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="bulkUnpublishModalLabel">
+                            <i class="fas fa-lock text-warning"></i> Bulk Unpublish Student Results
+                        </h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Warning:</strong> This will hide the results for <strong id="bulk-unpublish-count"></strong> student(s) from the student portal.
+                        </div>
+
+                        <div id="bulk-unpublish-ids-container"></div>
+
+                        <div class="form-group">
+                            <label for="bulk-unpublish-reason">Reason for Unpublishing <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="bulk-unpublish-reason" name="reason" rows="4" 
+                                placeholder="E.g., Pending fee payments, disciplinary actions..." 
+                                required minlength="10" maxlength="500"></textarea>
+                            <small class="form-text text-muted">
+                                Please provide a reason (minimum 10 characters). This will be logged for audit purposes.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-lock"></i> Bulk Unpublish Results
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Unpublish Modal -->
     <div class="modal fade" id="unpublishModal" tabindex="-1" role="dialog" aria-labelledby="unpublishModalLabel" aria-hidden="true">

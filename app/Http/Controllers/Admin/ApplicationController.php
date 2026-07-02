@@ -129,6 +129,15 @@ class ApplicationController extends Controller
             $data['selected_registration_no'] = Null;
         }
 
+        // Free-text search across applicant name, email and phone.
+        if(!empty($request->applicant)){
+            $data['selected_applicant'] = $applicantQuery = trim($request->applicant);
+        }
+        else{
+            $data['selected_applicant'] = null;
+            $applicantQuery = null;
+        }
+
 
         // Search Filter
         $data['batches'] = Batch::where('status', '1')->orderBy('id', 'desc')->get();
@@ -137,9 +146,9 @@ class ApplicationController extends Controller
         $data['sessions'] = \App\Models\Session::orderBy('title', 'desc')->get();
 
 
-        if(isset($request->program) || isset($request->status) || isset($request->registration_no) || isset($request->degree_type) || isset($request->session)){
+        if(isset($request->program) || isset($request->status) || isset($request->registration_no) || isset($request->degree_type) || isset($request->session) || !empty($applicantQuery)){
             // Application Filter
-            $applications = Application::with(['admissionFee.paymentReceipts', 'degreeType', 'session', 'applicant'])
+            $applications = Application::with(['admissionFee.paymentReceipts', 'degreeType', 'session', 'applicant', 'program'])
                         ->whereDate('apply_date', '>=', $start_date)
                         ->whereDate('apply_date', '<=', $end_date);
                         if(!empty($request->batch)){
@@ -156,6 +165,22 @@ class ApplicationController extends Controller
                         }
                         if(!empty($request->registration_no)){
                             $applications->where('registration_no', 'LIKE', '%'.$registration_no.'%');
+                        }
+                        if(!empty($applicantQuery)){
+                            $like = '%'.$applicantQuery.'%';
+                            $applications->where(function ($q) use ($like) {
+                                $q->where('first_name', 'LIKE', $like)
+                                  ->orWhere('last_name', 'LIKE', $like)
+                                  ->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", [$like])
+                                  ->orWhere('email', 'LIKE', $like)
+                                  ->orWhere('phone', 'LIKE', $like)
+                                  ->orWhereHas('applicant', function ($sub) use ($like) {
+                                      $sub->where('first_name', 'LIKE', $like)
+                                          ->orWhere('last_name', 'LIKE', $like)
+                                          ->orWhere('email', 'LIKE', $like)
+                                          ->orWhere('phone', 'LIKE', $like);
+                                  });
+                            });
                         }
                         if(!empty($request->status) || $request->status != null){
                             $applications->where('status', $status);
@@ -444,6 +469,31 @@ class ApplicationController extends Controller
             $enroll->created_by = Auth::guard('web')->user()->id;
             $enroll->save();
 
+            // Adopt the admission fee (originally created against a stub StudentEnroll
+            // during online submission) onto this real enrollment, then drop the stub.
+            if ($data->admission_fee_id) {
+                $admissionFee = \App\Models\Fee::find($data->admission_fee_id);
+                if ($admissionFee && (int) $admissionFee->student_enroll_id !== (int) $enroll->id) {
+                    $stubEnrollId = $admissionFee->student_enroll_id;
+                    $admissionFee->student_enroll_id = $enroll->id;
+                    $admissionFee->save();
+
+                    if ($stubEnrollId) {
+                        $stub = StudentEnroll::find($stubEnrollId);
+                        // Only delete if it really is the placeholder we created
+                        // (status = 0 with null session/semester/section).
+                        if ($stub
+                            && (int) $stub->status === 0
+                            && is_null($stub->session_id)
+                            && is_null($stub->semester_id)
+                            && is_null($stub->section_id)) {
+                            $stub->subjects()->detach();
+                            $stub->delete();
+                        }
+                    }
+                }
+            }
+
 
             // Assign Subjects
             $enrollSubject = EnrollSubject::where('program_id', $request->program)->where('semester_id', $request->semester)->where('section_id', $request->section)->first();
@@ -476,12 +526,23 @@ class ApplicationController extends Controller
 
             // Email the acceptance letter (PDF) configured for this degree type, if enabled.
             // Sent after commit so the student + enrollment are fully persisted; never breaks the flow.
+            $letterSent = false;
+            $letterError = null;
             try {
-                app(\App\Services\AcceptanceLetterService::class)->sendTo($application);
+                $letterSent = (bool) app(\App\Services\AcceptanceLetterService::class)->sendTo($application);
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('Acceptance letter send failed: ' . $e->getMessage());
+                $letterError = $e->getMessage();
+                \Illuminate\Support\Facades\Log::error('Acceptance letter send failed: ' . $letterError);
             }
 
+            if ($letterSent) {
+                Flasher::addSuccess(__('Acceptance letter emailed to') . ' ' . $application->email, __('msg_success'));
+            } elseif ($letterError) {
+                Flasher::addWarning(__('Student created, but the acceptance letter email failed to send. You can resend it from the application page.'), __('msg_warning'));
+            } else {
+                // Not sent because template disabled, mail not configured, or student has no email.
+                Flasher::addInfo(__('Student created. Acceptance letter was not emailed (template disabled, mail not configured, or missing email).'), __('msg_info'));
+            }
 
             Flasher::addSuccess(__('msg_created_successfully'), __('msg_success'));
 
@@ -501,6 +562,39 @@ class ApplicationController extends Controller
     private function convertedStudent(Application $application)
     {
         return \App\Models\Student::where('registration_no', $application->registration_no)->first();
+    }
+
+    /**
+     * Notify the applicant that one or more of their documents need resubmission.
+     * Silent on failure — the status-update record on the timeline is the source of truth.
+     */
+    private function sendDocumentsResubmissionMail(Application $application, array $documents): void
+    {
+        $recipient = $application->applicant->email ?? $application->email;
+        if (!$recipient) {
+            return;
+        }
+
+        $mail = MailSetting::where('status', '1')->first();
+        if (!$mail || !$mail->sender_email || !$mail->sender_name) {
+            return;
+        }
+
+        try {
+            $data = [
+                'from' => $mail->sender_email,
+                'sender' => $mail->sender_name,
+                'subject' => __('Action required on your application') . ' #' . $application->registration_no,
+                'first_name' => $application->applicant->first_name ?? $application->first_name,
+                'registration_no' => $application->registration_no,
+                'documents' => $documents,
+                'portal_url' => route('application.dashboard'),
+            ];
+
+            Mail::to($recipient)->send(new \App\Mail\ApplicantDocumentsResubmission($data));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Applicant documents-resubmission mail failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -659,6 +753,7 @@ class ApplicationController extends Controller
     public function update(Request $request, Application $application)
     {
         $documentRequirements = ApplicationDocumentRequirements::all();
+        $newResubmissionRequests = [];
 
         $fieldStatusCache = [];
         $fieldEnabled = function (string $slug) use (&$fieldStatusCache): bool {
@@ -1076,6 +1171,7 @@ class ApplicationController extends Controller
 
             if ($documentChecklistEnabled) {
                 $documentsNeedingResubmission = [];
+                $newResubmissionRequests = [];
                 
                 foreach ($documentRequirements as $key => $documentConfig) {
                     $documentInput = $validated['documents'][$key] ?? [];
@@ -1111,6 +1207,10 @@ class ApplicationController extends Controller
                         $documentModel->rejected_by = auth()->id();
                         $documentModel->resubmitted_at = null;
                         $documentsNeedingResubmission[] = $documentConfig['label'];
+                        $newResubmissionRequests[] = [
+                            'label' => $documentConfig['label'],
+                            'reason' => $documentInput['rejection_reason'] ?? null,
+                        ];
                     } elseif ($requestResubmission && $wasAlreadyRequestingResubmission) {
                         // Update existing resubmission request reason
                         $documentModel->rejection_reason = $documentInput['rejection_reason'] ?? $documentModel->rejection_reason;
@@ -1172,6 +1272,11 @@ class ApplicationController extends Controller
             }
 
             DB::commit();
+
+            // Notify applicant if new document resubmissions were requested.
+            if (!empty($newResubmissionRequests)) {
+                $this->sendDocumentsResubmissionMail($application, $newResubmissionRequests);
+            }
 
             Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
 

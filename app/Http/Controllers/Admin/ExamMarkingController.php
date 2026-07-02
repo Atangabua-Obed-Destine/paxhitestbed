@@ -306,6 +306,24 @@ class ExamMarkingController extends Controller
                         return $query->studentEnroll->matricule;
                     })->values()->all();
                 }
+                
+                // Fetch Submission Logs for the selected exams
+                $examIdsForLog = $uniqueMatricules->pluck('id')->toArray();
+                if (!empty($examIdsForLog)) {
+                    $logs = \App\Models\AuditLog::with(['user', 'auditable.studentEnroll.student'])
+                        ->where('auditable_type', 'App\Models\Exam')
+                        ->whereIn('auditable_id', $examIdsForLog)
+                        ->where('event', 'updated')
+                        ->orderBy('created_at', 'desc')
+                        ->get();
+
+                    // Group logs by user and time (minute) to form "Submission Sessions"
+                    $data['submissionLogs'] = $logs->groupBy(function($log) {
+                        return $log->user_id . '_' . $log->created_at->format('Y-m-d H:i');
+                    });
+                } else {
+                    $data['submissionLogs'] = collect();
+                }
         }
 
         // Attendance weight (from result-contribution) for the inline attendance-migration panel.
@@ -600,6 +618,55 @@ class ExamMarkingController extends Controller
         }
 
         return response()->json(['message' => 'Record not found'], 404);
+    }
+
+    /**
+     * Bulk unlock marks for student exams.
+     */
+    public function bulkUnlock(Request $request)
+    {
+        $request->validate([
+            'exam_ids' => 'required|array',
+        ]);
+
+        if (!Auth::user()->can('subject-marking-unlock')) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
+        $exams = Exam::whereIn('id', $request->exam_ids)->get();
+        $unlockedCount = 0;
+        $skippedCount = 0;
+
+        foreach ($exams as $exam) {
+            $subjectMarking = \App\Models\SubjectMarking::where('student_enroll_id', $exam->student_enroll_id)
+                ->where('subject_id', $exam->subject_id)
+                ->first();
+
+            if ($subjectMarking && 
+                $subjectMarking->workflow_state === \App\Models\SubjectMarking::STATE_PUBLISHED && 
+                $subjectMarking->is_published_override !== false) {
+                $skippedCount++;
+                continue;
+            }
+
+            $exam->marks_locked = 0;
+            $exam->save();
+            $unlockedCount++;
+        }
+
+        if ($unlockedCount > 0) {
+            $message = "$unlockedCount records unlocked successfully.";
+            if ($skippedCount > 0) {
+                $message .= " $skippedCount records were skipped because their results are published.";
+            }
+            return response()->json(['message' => $message, 'status' => 'success']);
+        }
+
+        if ($skippedCount > 0) {
+            return response()->json(['message' => 'Cannot unlock marks for published results. Please unpublish first.'], 403);
+        }
+
+        return response()->json(['message' => 'Records not found or already unlocked'], 404);
     }
 
     /**

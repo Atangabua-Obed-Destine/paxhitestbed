@@ -651,10 +651,34 @@ class ExamAttendanceController extends Controller
             ->whereIn('student_enroll_id', $rows->pluck('id')->all())
             ->pluck('bypass_course_attendance', 'student_enroll_id');
 
+        $examTypeModel = ExamType::find($type);
+        $ca_types = collect();
+        $ca_marks = [];
+        if($examTypeModel && $examTypeModel->is_final == 1){
+            $ca_types = ExamType::where('is_final', 0)->where('status', 1)
+                ->whereHas('exams', function($q) use ($subject){ $q->where('subject_id', $subject); })
+                ->orderBy('id')->get();
+
+            $enrollIds = $rows->pluck('id')->all();
+            if($ca_types->isNotEmpty() && !empty($enrollIds)){
+                $caRows = Exam::where('subject_id', $subject)
+                    ->whereIn('exam_type_id', $ca_types->pluck('id')->all())
+                    ->whereIn('student_enroll_id', $enrollIds)
+                    ->get();
+                foreach($caRows as $ex){
+                    $ca_marks[$ex->student_enroll_id][$ex->exam_type_id] = [
+                        'achieve' => $ex->achieve_marks,
+                        'marks'   => $ex->marks,
+                    ];
+                }
+            }
+        }
+
         $sheet = [];
         foreach ($rows as $r) {
             $stats = $this->courseAttendanceStats($r->id, $subject);
             $sheet[] = [
+                'id'         => $r->id,
                 'matricule'  => $r->matricule,
                 'name'       => trim((optional($r->student)->first_name ?? '') . ' ' . (optional($r->student)->last_name ?? '')),
                 'program'    => optional($r->program)->shortcode ?: optional($r->program)->title,
@@ -670,7 +694,9 @@ class ExamAttendanceController extends Controller
             'title' => 'Examination Sign-In / Sign-Out Sheet',
             'setting' => \App\Models\Setting::first(),
             'sheet' => $sheet,
-            'examType' => ExamType::find($type),
+            'examType' => $examTypeModel,
+            'ca_types' => $ca_types,
+            'ca_marks' => $ca_marks,
             'attendanceSetting' => $attendanceSetting,
             'crossProgram' => $crossProgram,
             'sharingPrograms' => $sharingPrograms,
@@ -782,6 +808,33 @@ class ExamAttendanceController extends Controller
         }
 
         return response()->json(['message' => 'Record not found'], 404);
+    }
+
+    /**
+     * Bulk unlock attendance for students.
+     */
+    public function bulkUnlock(Request $request)
+    {
+        $request->validate([
+            'student_enroll_ids' => 'required|array',
+            'subject_id' => 'required|integer',
+            'exam_type_id' => 'required|integer',
+        ]);
+
+        if (!Auth::user()->can('subject-marking-unlock')) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
+        $count = Exam::whereIn('student_enroll_id', $request->student_enroll_ids)
+            ->where('subject_id', $request->subject_id)
+            ->where('exam_type_id', $request->exam_type_id)
+            ->update(['attendance_locked' => 0]);
+
+        if ($count > 0) {
+            return response()->json(['message' => "$count records unlocked successfully", 'status' => 'success']);
+        }
+
+        return response()->json(['message' => 'Records not found or already unlocked'], 404);
     }
 
     /**

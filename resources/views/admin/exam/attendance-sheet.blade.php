@@ -83,12 +83,17 @@
     <table class="grid">
         <thead>
             <tr>
-                <th class="narrow c">{{ __('field_serial') }}</th>
+                <th class="narrow c">S/N</th>
                 <th>{{ __('field_matricule') }}</th>
                 <th>{{ __('field_name') }}</th>
                 <th class="prog-col">{{ trans_choice('module_program', 1) }}</th>
                 <th class="pct-col c">{{ __('Att. Mark') }}</th>
                 <th class="elig-col c">{{ __('Eligibility') }}</th>
+                @if(isset($examType) && $examType->is_final == 1 && isset($ca_types))
+                    @foreach($ca_types as $ct)
+                    <th class="c" title="{{ __('CA') }} / {{ rtrim(rtrim(number_format($ct->marks,2),'0'),'.') }}">{{ $ct->title }}</th>
+                    @endforeach
+                @endif
                 <th class="sign-col c">{{ __('Sign In') }}</th>
                 <th class="sign-col c">{{ __('Sign Out') }}</th>
             </tr>
@@ -107,6 +112,16 @@
                         @else {{ __('Not Eligible') }}
                         @endif
                     </td>
+                    @if(isset($examType) && $examType->is_final == 1 && isset($ca_types))
+                        @foreach($ca_types as $ct)
+                        <td class="c">
+                            @php
+                                $caAch = $ca_marks[$r['id']][$ct->id]['achieve'] ?? null;
+                            @endphp
+                            {{ $caAch !== null ? rtrim(rtrim(number_format($caAch,2),'0'),'.') : '-' }}
+                        </td>
+                        @endforeach
+                    @endif
                     <td class="sign-col"></td>
                     <td class="sign-col"></td>
                 </tr>

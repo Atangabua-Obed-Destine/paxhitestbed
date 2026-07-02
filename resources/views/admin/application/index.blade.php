@@ -83,6 +83,10 @@
                                       {{ __('required_field') }} {{ __('field_registration_no') }}
                                     </div>
                                 </div>
+                                <div class="form-group col-md-3">
+                                    <label for="applicant">{{ __('Applicant (name, email, phone)') }}</label>
+                                    <input type="text" class="form-control" name="applicant" id="applicant" value="{{ $selected_applicant ?? '' }}" placeholder="{{ __('Search by name, email or phone') }}">
+                                </div>
                                 <div class="form-group col-md-2">
                                     <button type="submit" class="btn btn-info btn-filter"><i class="fas fa-search"></i> {{ __('btn_search') }}</button>
                                 </div>

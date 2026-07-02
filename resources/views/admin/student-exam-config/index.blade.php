@@ -61,7 +61,8 @@
                                         <th class="text-center" style="width:8%">Total</th>
                                         <th class="text-center" style="width:8%"><i class="fas fa-check text-success"></i></th>
                                         <th class="text-center" style="width:8%"><i class="fas fa-times text-danger"></i></th>
-                                        <th class="text-center" style="width:8%">Progress</th>
+                                        <th class="text-center" style="width:10%">Progress</th>
+                                        <th class="text-center" style="width:8%">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -100,6 +101,18 @@
                                                 </div>
                                                 <small class="text-muted">{{ $rowPercent }}%</small>
                                             </td>
+                                            <td class="text-center">
+                                                <a href="{{ route($route.'.index', [
+                                                    'faculty' => $row->faculty_id,
+                                                    'program' => $row->program_id,
+                                                    'session' => $row->session_id,
+                                                    'subject' => $row->subject_id,
+                                                    'type' => $row->exam_type_id,
+                                                    'cross_program' => 1
+                                                ]) }}" class="btn btn-sm btn-primary py-0 px-2" style="font-size:11px;" title="Configure pending IDs">
+                                                    Configure <i class="fas fa-arrow-right ml-1"></i>
+                                                </a>
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
@@ -110,6 +123,7 @@
                                         <td class="text-center text-success">{{ number_format($overview_total_configured) }}</td>
                                         <td class="text-center text-danger">{{ number_format($overview_total_pending) }}</td>
                                         <td class="text-center">{{ $overviewPercent }}%</td>
+                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -404,7 +418,7 @@
                                 {{ __('No matching exam records found. Please adjust your filters and ensure attendance has been captured for the selected exam.') }}
                             </div>
                         @else
-                            <form method="post" action="{{ route($route.'.store') }}" class="needs-validation" novalidate>
+                            <form method="post" action="{{ route($route.'.store') }}" class="needs-validation" id="examConfigForm" novalidate>
                                 @csrf
 
                                 <input type="hidden" name="faculty" value="{{ $selected_faculty }}">
@@ -480,7 +494,35 @@
                                                         </td>
                                                     @endif
                                                     <td style="min-width: 180px;">
-                                                        <input type="text" class="form-control {{ $isUnconfigured ? 'border-danger' : 'border-success' }}" name="student_exam_ids[{{ $exam->id }}]" value="{{ $currentCode }}" maxlength="50" placeholder="{{ $isUnconfigured ? '⚠ Enter Exam ID' : __('Enter code') }}">
+                                                        @php
+                                                            $subjCode = $context_subject->code ?? '';
+                                                            $isResit = $exam->studentEnroll->semester->is_resit ?? false;
+                                                            $prefix = $subjCode . '-';
+                                                            $suffix = $isResit ? 'R' : '';
+                                                            
+                                                            $currentSerial = '';
+                                                            if (!$isUnconfigured) {
+                                                                $currentSerial = $currentCode;
+                                                                if (Str::startsWith($currentSerial, $prefix)) {
+                                                                    $currentSerial = substr($currentSerial, strlen($prefix));
+                                                                }
+                                                                if ($suffix && Str::endsWith($currentSerial, $suffix)) {
+                                                                    $currentSerial = substr($currentSerial, 0, -strlen($suffix));
+                                                                }
+                                                            }
+                                                        @endphp
+                                                        <div class="input-group input-group-sm">
+                                                            <div class="input-group-prepend">
+                                                                <span class="input-group-text">{{ $prefix }}</span>
+                                                            </div>
+                                                            <input type="text" class="form-control {{ $isUnconfigured ? 'border-danger' : 'border-success' }} exam-serial-input" data-prefix="{{ $prefix }}" data-suffix="{{ $suffix }}" data-exam-id="{{ $exam->id }}" value="{{ $currentSerial }}" placeholder="S/N" maxlength="10">
+                                                            @if($isResit)
+                                                                <div class="input-group-append">
+                                                                    <span class="input-group-text">{{ $suffix }}</span>
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                        <input type="hidden" name="student_exam_ids[{{ $exam->id }}]" id="hidden_exam_id_{{ $exam->id }}" value="{{ $currentCode }}" data-original="{{ $currentCode }}">
                                                     </td>
                                                     <td>{{ $exam->studentEnroll->semester->title ?? '' }}</td>
                                                     <td>{{ $exam->studentEnroll->section->title ?? '' }}</td>
@@ -497,13 +539,62 @@
                                 @endif
 
                                 <div class="mt-3">
-                                    <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> {{ __('btn_update') }}</button>
+                                    <button type="button" class="btn btn-success" id="btn-preview-update"><i class="fas fa-save"></i> {{ __('btn_update') }}</button>
                                 </div>
                             </form>
                         @endif
                     </div>
                 </div>
             </div>
+            
+            {{-- Preview Modal --}}
+            @if(!empty($rows))
+            <div class="modal fade" id="previewModal" tabindex="-1" role="dialog" aria-labelledby="previewModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header bg-light">
+                            <h5 class="modal-title" id="previewModalLabel">
+                                <i class="fas fa-info-circle text-primary"></i> Review Exam ID Assignments
+                            </h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                You are about to apply the following changes to the Student Exam IDs for <strong>{{ $context_subject->title ?? $context_subject->code ?? 'this subject' }}</strong>.
+                            </div>
+                            
+                            <ul class="list-group mb-3">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-plus-circle text-success me-2"></i> New IDs Assigned</span>
+                                    <span class="badge bg-success rounded-pill" id="preview-new-count" style="font-size: 14px;">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-edit text-warning me-2"></i> Existing IDs Modified</span>
+                                    <span class="badge bg-warning text-dark rounded-pill" id="preview-modified-count" style="font-size: 14px;">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-eraser text-danger me-2"></i> IDs Cleared / Removed</span>
+                                    <span class="badge bg-danger rounded-pill" id="preview-cleared-count" style="font-size: 14px;">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                                    <span class="text-muted"><i class="fas fa-minus text-secondary me-2"></i> Unchanged</span>
+                                    <span class="badge bg-secondary rounded-pill" id="preview-unchanged-count" style="font-size: 14px;">0</span>
+                                </li>
+                            </ul>
+                            
+                            <p class="text-muted small mb-0"><i class="fas fa-exclamation-triangle text-warning"></i> Please verify the counts above. This action cannot be easily undone without manual re-entry.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fas fa-times"></i> Cancel</button>
+                            <button type="button" class="btn btn-primary" id="btn-confirm-update"><i class="fas fa-check"></i> Confirm Update</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
+            
         </div>
     </div>
 </div>
@@ -523,6 +614,76 @@ $(document).ready(function() {
         // Show loading indicator
         $(this).closest('.card').find('.card-block, .card-body').css('opacity', '0.5');
         window.location.href = url.toString();
+    });
+
+    // Handle concatenation of pre-formatted exam IDs before submit
+    function syncHiddenExamIds() {
+        $('.exam-serial-input').each(function() {
+            var serial = $(this).val().trim();
+            var examId = $(this).data('exam-id');
+            var hiddenInput = $('#hidden_exam_id_' + examId);
+            
+            if (serial !== '') {
+                var prefix = $(this).data('prefix') || '';
+                var suffix = $(this).data('suffix') || '';
+                hiddenInput.val(prefix + serial + suffix);
+            } else {
+                hiddenInput.val('');
+            }
+        });
+    }
+
+    // Intercept form submit button to show preview modal
+    $('#btn-preview-update').on('click', function(e) {
+        e.preventDefault();
+        
+        // First sync all pre-formatted inputs to hidden fields
+        syncHiddenExamIds();
+        
+        var newCount = 0;
+        var modifiedCount = 0;
+        var clearedCount = 0;
+        var unchangedCount = 0;
+
+        // Iterate through all exam ID inputs (both standard inputs and hidden inputs for pre-formatted ones)
+        // Iterate through all exam ID inputs (now all are hidden inputs for pre-formatted strings)
+        $('input[name^="student_exam_ids["]').each(function() {
+            var input = $(this);
+            var newValue = input.val().trim();
+            
+            // We use hidden inputs for ALL rows now.
+            // Use data-original to guarantee we have the immutable initial value,
+            // as jQuery .val() changes on hidden inputs may overwrite attributes in some browsers.
+            var originalValue = input.attr('data-original') || '';
+
+            if (newValue !== originalValue) {
+                if (newValue !== '' && originalValue === '') {
+                    newCount++;
+                } else if (newValue !== '' && originalValue !== '') {
+                    modifiedCount++;
+                } else if (newValue === '' && originalValue !== '') {
+                    clearedCount++;
+                }
+            } else {
+                unchangedCount++;
+            }
+        });
+
+        // Update modal counts
+        $('#preview-new-count').text(newCount);
+        $('#preview-modified-count').text(modifiedCount);
+        $('#preview-cleared-count').text(clearedCount);
+        $('#preview-unchanged-count').text(unchangedCount);
+
+        // Show modal
+        $('#previewModal').modal('show');
+    });
+
+    // Handle actual form submission from modal
+    $('#btn-confirm-update').on('click', function() {
+        var btn = $(this);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
+        $('#examConfigForm').submit();
     });
 });
 </script>

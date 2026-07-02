@@ -7,9 +7,16 @@
 
 <div class="row g-4">
     <div class="col-12">
-        <div class="portal-card p-4 mb-1">
-            <h3 class="mb-1">{{ __('Create a New Application') }}</h3>
-            <p class="mb-0 text-muted">{{ __('Tell us what you would like to apply for. Choose a degree type, the intake you are applying for, and your preferred programme. The application form will then be tailored to your selection.') }}</p>
+        <div class="portal-card position-relative mb-2" style="background: linear-gradient(135deg, #182b49 0%, #667eea 100%);">
+            <!-- Decorative background elements -->
+            <div style="position: absolute; top: -50%; right: -10%; width: 50%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%); transform: rotate(-30deg); pointer-events: none;"></div>
+            
+            <div class="p-5 position-relative z-index-1">
+                <h3 class="mb-2 text-white fw-bold">{{ __('Start a New Application') }}</h3>
+                <p class="mb-0 text-white-50" style="max-width: 600px; font-size: 1.05rem;">
+                    {{ __('Tell us what you would like to apply for. Choose a degree type, academic year, and preferred programme to generate your tailored application form.') }}
+                </p>
+            </div>
         </div>
     </div>
 
@@ -25,29 +32,37 @@
                 @csrf
 
                 {{-- Degree type --}}
-                <div class="mb-4">
-                    <label class="form-label fw-bold">{{ __('What type of programme are you applying for?') }} <span class="text-danger">*</span></label>
-                    <div class="row g-2" id="degreeTypeCards">
+                <div class="mb-5">
+                    <label class="form-label fw-bold text-dark mb-3">{{ __('1. What type of programme are you applying for?') }} <span class="text-danger">*</span></label>
+                    <div class="row g-3" id="degreeTypeCards">
                         @foreach($degreeTypes as $dt)
                             <div class="col-md-6">
-                                <label class="degree-card d-block p-3 border rounded h-100" style="cursor:pointer;">
-                                    <input class="form-check-input me-2 degree-type-radio" type="radio" name="degree_type_id"
-                                           value="{{ $dt->id }}" {{ old('degree_type_id') == $dt->id ? 'checked' : '' }} required>
-                                    <strong>{{ $dt->title }}</strong>
-                                    @if($dt->shortcode)<span class="badge badge-light ms-1">{{ $dt->shortcode }}</span>@endif
-                                    @if($dt->level)<div class="small text-muted mt-1">{{ $dt->level }}</div>@endif
+                                <label class="degree-card d-block p-4 border rounded-3 h-100 position-relative transition-all" style="cursor:pointer; background-color: #f8fafc;">
+                                    <input class="form-check-input me-2 degree-type-radio position-absolute top-50 start-0 translate-middle-y ms-3" type="radio" name="degree_type_id"
+                                           value="{{ $dt->id }}" {{ old('degree_type_id') == $dt->id ? 'checked' : '' }} required style="opacity: 0;">
+                                    
+                                    <div class="d-flex align-items-center">
+                                        <div class="radio-custom me-3 rounded-circle border border-2 d-flex align-items-center justify-content-center" style="width: 24px; height: 24px; border-color: #cbd5e1;">
+                                            <div class="radio-custom-inner rounded-circle" style="width: 12px; height: 12px; background-color: transparent; transition: background-color 0.2s;"></div>
+                                        </div>
+                                        <div>
+                                            <strong class="d-block text-dark fs-5 mb-1">{{ $dt->title }}</strong>
+                                            @if($dt->shortcode)<span class="badge bg-light text-secondary border me-2">{{ $dt->shortcode }}</span>@endif
+                                            @if($dt->level)<span class="small text-muted">{{ $dt->level }}</span>@endif
+                                        </div>
+                                    </div>
                                 </label>
                             </div>
                         @endforeach
                     </div>
-                    <div class="invalid-feedback d-block" id="degreeTypeError" style="display:none!important;">{{ __('Please select a degree type.') }}</div>
+                    <div class="invalid-feedback d-block mt-2" id="degreeTypeError" style="display:none!important;">{{ __('Please select a degree type.') }}</div>
                 </div>
 
                 {{-- Intake session --}}
                 <div class="mb-4">
-                    <label for="session_id" class="form-label fw-bold">{{ __('Which intake are you applying for?') }} <span class="text-danger">*</span></label>
-                    <select name="session_id" id="session_id" class="form-control" required>
-                        <option value="">{{ __('Select an intake') }}</option>
+                    <label for="session_id" class="form-label fw-bold text-dark">{{ __('2. Which academic year are you applying for?') }} <span class="text-danger">*</span></label>
+                    <select name="session_id" id="session_id" class="form-select form-select-lg bg-light border-0" required>
+                        <option value="">{{ __('Select an academic year') }}</option>
                         @foreach($sessions as $s)
                             <option value="{{ $s->id }}" {{ old('session_id') == $s->id ? 'selected' : '' }}>{{ $s->title }}</option>
                         @endforeach
@@ -55,29 +70,36 @@
                 </div>
 
                 {{-- Programme choices --}}
-                <div class="mb-3">
-                    <label for="program" class="form-label fw-bold">{{ __('Preferred Programme (1st choice)') }} <span class="text-danger">*</span></label>
-                    <select name="program" id="program" class="form-control" required disabled>
-                        <option value="">{{ __('Select a degree type first') }}</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="second_program_choice_id" class="form-label">{{ __('2nd choice (optional)') }}</label>
-                    <select name="second_program_choice_id" id="second_program_choice_id" class="form-control" disabled>
-                        <option value="">{{ __('None') }}</option>
-                    </select>
-                </div>
                 <div class="mb-4">
-                    <label for="third_program_choice_id" class="form-label">{{ __('3rd choice (optional)') }}</label>
-                    <select name="third_program_choice_id" id="third_program_choice_id" class="form-control" disabled>
-                        <option value="">{{ __('None') }}</option>
-                    </select>
+                    <label class="form-label fw-bold text-dark">{{ __('3. Select your preferred programmes') }}</label>
+                    <div class="bg-light p-4 rounded-3">
+                        <div class="mb-3">
+                            <label for="program" class="form-label text-muted fw-semibold">{{ __('1st Choice (Primary)') }} <span class="text-danger">*</span></label>
+                            <select name="program" id="program" class="form-select border-0 shadow-sm" required disabled>
+                                <option value="">{{ __('Select a degree type first') }}</option>
+                            </select>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="second_program_choice_id" class="form-label text-muted">{{ __('2nd Choice (Optional)') }}</label>
+                                <select name="second_program_choice_id" id="second_program_choice_id" class="form-select border-0 shadow-sm" disabled>
+                                    <option value="">{{ __('None') }}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="third_program_choice_id" class="form-label text-muted">{{ __('3rd Choice (Optional)') }}</label>
+                                <select name="third_program_choice_id" id="third_program_choice_id" class="form-select border-0 shadow-sm" disabled>
+                                    <option value="">{{ __('None') }}</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="d-flex justify-content-between">
-                    <a href="{{ route('application.dashboard') }}" class="btn btn-light">{{ __('Cancel') }}</a>
-                    <button type="submit" class="btn btn-primary">
-                        {{ __('Start Application') }} <i class="fas fa-arrow-right ms-1"></i>
+                <div class="d-flex justify-content-between align-items-center mt-5 pt-3 border-top">
+                    <a href="{{ route('application.dashboard') }}" class="btn btn-light rounded-pill px-4">{{ __('Cancel') }}</a>
+                    <button type="submit" class="btn btn-primary rounded-pill px-5 py-2 fw-bold">
+                        {{ __('Start Application') }} <i class="fas fa-arrow-right ms-2"></i>
                     </button>
                 </div>
             </form>
@@ -99,6 +121,32 @@
         </div>
     </div>
 </div>
+
+@push('styles')
+<style>
+    .degree-card {
+        transition: all 0.3s ease;
+        border: 2px solid transparent !important;
+    }
+    .degree-card:hover {
+        background-color: #fff !important;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        transform: translateY(-2px);
+    }
+    /* When the hidden radio inside is checked */
+    .degree-card:has(input:checked) {
+        background-color: #f0f4ff !important;
+        border-color: #667eea !important;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.15);
+    }
+    .degree-card:has(input:checked) .radio-custom {
+        border-color: #667eea !important;
+    }
+    .degree-card:has(input:checked) .radio-custom-inner {
+        background-color: #667eea !important;
+    }
+</style>
+@endpush
 
 @push('scripts')
 <script>

@@ -577,6 +577,11 @@
                         <a href="{{ route($route.'.index') }}" class="btn btn-info"><i class="fas fa-sync-alt"></i> {{ __('btn_refresh') }}</a>
 
                         @if(isset($rows))
+                        @can('subject-marking-unlock')
+                        <button type="button" class="btn btn-warning" id="btn-bulk-unlock" style="display: none;">
+                            <i class="fas fa-unlock"></i> Bulk Unlock
+                        </button>
+                        @endcan
                         <button type="button" class="btn btn-dark btn-print">
                             <i class="fas fa-print"></i> {{ __('btn_print') }}
                         </button>
@@ -639,7 +644,15 @@
                             <table class="display table nowrap table-striped table-hover printable">
                                 <thead>
                                     <tr>
-                                        <th>{{ __('field_serial') }}</th>
+                                        @can('subject-marking-unlock')
+                                        <th class="text-center" style="width: 40px;">
+                                            <div class="checkbox checkbox-warning d-inline">
+                                                <input type="checkbox" id="checkAllUnlock" class="check-all-unlock">
+                                                <label for="checkAllUnlock" class="cr"></label>
+                                            </div>
+                                        </th>
+                                        @endcan
+                                        <th>S/N</th>
                                         <th>{{ __('field_matricule') }}</th>
                                         <th>{{ __('field_name') }}</th>
                                         <th>{{ trans_choice('module_program', 1) }}</th>
@@ -746,7 +759,7 @@
                                     @php
                                         // Count students in this programme group
                                         $programGroupCount = collect($rows)->where('program_id', $currentProgramId)->count();
-                                        $colSpan = 8 + ($is_final_exam ? 2 : 0) + ($is_final_exam && auth()->user()->can('exam-attendance-bypass') ? 1 : 0);
+                                        $colSpan = 8 + ($is_final_exam ? 2 : 0) + ($is_final_exam && auth()->user()->can('exam-attendance-bypass') ? 1 : 0) + (auth()->user()->can('subject-marking-unlock') ? 1 : 0);
                                     @endphp
                                     <tr class="cross-program-separator" style="background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-top: 2px solid #17a2b8;">
                                         <td colspan="{{ $colSpan }}" class="py-2 px-3">
@@ -766,6 +779,16 @@
                                     @php $prevProgramId = $currentProgramId; @endphp
 
                                     <tr class="{{ $show_warning ? 'table-danger' : '' }}" style="{{ $is_bypassed ? 'background-color: #fff3cd !important;' : '' }}">
+                                        @can('subject-marking-unlock')
+                                        <td class="text-center">
+                                            @if($is_locked)
+                                            <div class="checkbox checkbox-warning d-inline">
+                                                <input type="checkbox" class="bulk-unlock-checkbox" id="unlock-{{ $key }}" value="{{ $row->id }}">
+                                                <label for="unlock-{{ $key }}" class="cr"></label>
+                                            </div>
+                                            @endif
+                                        </td>
+                                        @endcan
                                         <td>{{ $loop->iteration }}</td>
                                         <td>
                                             @isset($row->matricule)
@@ -1536,6 +1559,62 @@
                 success: function(response){
                     if(response.status == 'success'){
                         // alert(response.message);
+                        location.reload();
+                    } else {
+                        alert(response.message);
+                    }
+                },
+                error: function(xhr){
+                    alert('Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown error'));
+                }
+            });
+        }
+    });
+    
+    // Bulk Unlock Logic
+    $('.check-all-unlock').on('change', function() {
+        var isChecked = $(this).prop('checked');
+        $('.bulk-unlock-checkbox').prop('checked', isChecked);
+        toggleBulkUnlockBtn();
+    });
+
+    $('.bulk-unlock-checkbox').on('change', function() {
+        toggleBulkUnlockBtn();
+        var allChecked = $('.bulk-unlock-checkbox:not(:checked)').length === 0 && $('.bulk-unlock-checkbox').length > 0;
+        $('.check-all-unlock').prop('checked', allChecked);
+    });
+
+    function toggleBulkUnlockBtn() {
+        if ($('.bulk-unlock-checkbox:checked').length > 0) {
+            $('#btn-bulk-unlock').show();
+        } else {
+            $('#btn-bulk-unlock').hide();
+        }
+    }
+
+    $('#btn-bulk-unlock').on('click', function() {
+        var selectedIds = [];
+        $('.bulk-unlock-checkbox:checked').each(function() {
+            selectedIds.push($(this).val());
+        });
+
+        if (selectedIds.length === 0) return;
+        
+        var subjectId = '{{ $selected_subject ?? '' }}';
+        var typeId = '{{ $selected_type ?? '' }}';
+
+        if(confirm('Are you sure you want to unlock attendance for ' + selectedIds.length + ' student(s)?')){
+            $.ajax({
+                url: '{{ route("admin.exam-attendance.bulk-unlock") }}',
+                type: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    student_enroll_ids: selectedIds,
+                    subject_id: subjectId,
+                    exam_type_id: typeId
+                },
+                success: function(response){
+                    if(response.status == 'success'){
                         location.reload();
                     } else {
                         alert(response.message);

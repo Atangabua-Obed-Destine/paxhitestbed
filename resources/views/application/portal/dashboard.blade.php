@@ -17,38 +17,47 @@
 
 <div class="row g-4">
     <div class="col-12">
-        <div class="portal-card p-4 mb-1">
-            <h3 class="mb-1">{{ __('My Account') }}</h3>
-            <p class="mb-1 text-muted">{{ __('Welcome,') }} <strong>{{ strtoupper($applicant->full_name) }}</strong>.</p>
-            <p class="mb-0 text-muted">{{ __('From here you can start a new application, continue a draft, and track the status of each application you submit.') }}</p>
+        <div class="portal-card position-relative mb-2" style="background: linear-gradient(135deg, #182b49 0%, #667eea 100%);">
+            <!-- Decorative background elements -->
+            <div style="position: absolute; top: -50%; left: -10%; width: 50%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%); transform: rotate(30deg); pointer-events: none;"></div>
+            
+            <div class="p-5 position-relative z-index-1">
+                <h3 class="mb-2 text-white fw-bold">{{ __('Welcome back,') }} {{ mb_convert_case($applicant->full_name, MB_CASE_TITLE) }}!</h3>
+                <p class="mb-0 text-white-50" style="max-width: 600px; font-size: 1.05rem;">
+                    {{ __('Manage your applications, track your admission status, and upload any required documents right from your personal dashboard.') }}
+                </p>
+            </div>
         </div>
     </div>
 
     <div class="col-lg-8">
         <div class="portal-card">
-            <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center p-3">
-                <h5 class="mb-2 mb-md-0">{{ __('My Applications') }}</h5>
-                <a href="{{ route('application.create') }}" class="btn btn-primary btn-sm">
-                    <i class="fas fa-plus me-1"></i> {{ __('Create a New Application') }}
+            <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center p-4">
+                <h5 class="mb-2 mb-md-0 fw-bold text-dark">{{ __('My Applications') }}</h5>
+                <a href="{{ route('application.create') }}" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm">
+                    <i class="fas fa-plus me-1"></i> {{ __('New Application') }}
                 </a>
             </div>
             <div class="card-body p-0">
                 @if($applications->isEmpty())
-                    <div class="text-center p-5">
-                        <i class="fas fa-folder-open fa-2x text-muted mb-3"></i>
-                        <p class="text-muted mb-3">{{ __('You have not started any applications yet.') }}</p>
-                        <a href="{{ route('application.create') }}" class="btn btn-primary">
-                            <i class="fas fa-plus me-1"></i> {{ __('Start your first application') }}
+                    <div class="text-center py-5">
+                        <div class="mb-3 d-inline-block p-4 rounded-circle bg-light">
+                            <i class="fas fa-folder-open fa-3x text-muted opacity-50"></i>
+                        </div>
+                        <h5 class="text-dark fw-bold">{{ __('No applications yet') }}</h5>
+                        <p class="text-muted mb-4">{{ __('You haven\'t started any applications. Ready to begin?') }}</p>
+                        <a href="{{ route('application.create') }}" class="btn btn-primary rounded-pill px-4">
+                            {{ __('Start your first application') }} <i class="fas fa-arrow-right ms-2"></i>
                         </a>
                     </div>
                 @else
                     <div class="table-responsive">
-                        <table class="table align-middle mb-0">
-                            <thead>
+                        <table class="table align-middle table-hover mb-0" style="border-collapse: separate; border-spacing: 0;">
+                            <thead class="bg-light">
                                 <tr>
                                     <th class="ps-3">{{ __('Programme') }}</th>
                                     <th>{{ __('Degree Type') }}</th>
-                                    <th>{{ __('Intake') }}</th>
+                                    <th>{{ __('Academic Year') }}</th>
                                     <th>{{ __('Reference') }}</th>
                                     <th>{{ __('Status') }}</th>
                                     <th class="text-end pe-3">{{ __('Action') }}</th>
@@ -57,30 +66,30 @@
                             <tbody>
                                 @foreach($applications as $app)
                                     <tr>
-                                        <td class="ps-3">
-                                            <strong>{{ optional($app->program)->title ?? __('Programme not set') }}</strong>
+                                        <td class="ps-4 py-3">
+                                            <strong class="text-dark d-block mb-1">{{ optional($app->program)->title ?? __('Programme not set') }}</strong>
+                                            <span class="text-muted small">#{{ $app->registration_no }}</span>
                                         </td>
-                                        <td>{{ optional($app->degreeType)->title ?? '—' }}</td>
-                                        <td>{{ optional($app->session)->title ?? $app->academic_year ?? '—' }}</td>
-                                        <td><span class="text-muted">#{{ $app->registration_no }}</span></td>
-                                        <td>
-                                            <span class="badge badge-pill badge-{{ $stageBadge[$app->stage] ?? 'secondary' }}">
-                                                {{ $app->progress_label }}
+                                        <td class="py-3 text-muted">{{ optional($app->degreeType)->title ?? '—' }}</td>
+                                        <td class="py-3 text-muted">{{ optional($app->session)->title ?? $app->academic_year ?? '—' }}</td>
+                                        <td class="py-3">
+                                            <span class="badge rounded-pill bg-{{ $stageBadge[$app->stage] ?? 'secondary' }} bg-opacity-10 text-{{ $stageBadge[$app->stage] ?? 'secondary' }} px-3 py-2 border border-{{ $stageBadge[$app->stage] ?? 'secondary' }} border-opacity-25" style="font-weight: 600;">
+                                                <i class="fas fa-circle me-1" style="font-size: 8px; vertical-align: middle;"></i> {{ $app->progress_label }}
                                             </span>
                                             @if($app->stage === 'draft')
-                                                <div class="progress mt-2" style="height:6px;width:120px;">
+                                                <div class="progress mt-2 bg-light" style="height:4px;width:120px;">
                                                     <div class="progress-bar bg-primary" style="width: {{ $app->draft_progress ?? 0 }}%"></div>
                                                 </div>
                                             @endif
                                         </td>
-                                        <td class="text-end pe-3">
+                                        <td class="text-end pe-4 py-3">
                                             @if($app->stage === 'draft')
-                                                <a href="{{ route('application.edit', $app) }}" class="btn btn-sm btn-outline-primary">
-                                                    <i class="fas fa-pen me-1"></i>{{ __('Continue') }}
+                                                <a href="{{ route('application.edit', $app) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                                    {{ __('Continue') }} <i class="fas fa-arrow-right ms-1"></i>
                                                 </a>
                                             @else
-                                                <a href="{{ route('application.timeline', $app) }}" class="btn btn-sm btn-outline-secondary">
-                                                    <i class="far fa-eye me-1"></i>{{ __('View') }}
+                                                <a href="{{ route('application.timeline', $app) }}" class="btn btn-sm btn-light rounded-pill px-3 text-primary fw-semibold">
+                                                    {{ __('Track Status') }}
                                                 </a>
                                             @endif
                                         </td>
@@ -186,18 +195,36 @@
     </div>
 
     <div class="col-lg-4">
-        <div class="portal-card p-4 mb-4">
-            <div class="border-top border-3 border-danger mb-3"></div>
-            <h5>{{ __('Need Help?') }}</h5>
-            <p class="mb-2 text-muted">{{ __('Contact the Admissions Office') }}</p>
-            @if(!empty($setting->email))
-                <p class="mb-1"><i class="far fa-envelope me-2 text-muted"></i>{{ $setting->email }}</p>
-            @endif
-            @if(!empty($setting->phone))
-                <p class="mb-1"><i class="fas fa-phone me-2 text-muted"></i>{{ $setting->phone }}</p>
-            @endif
-            <a href="{{ route('application.create') }}" class="btn btn-danger w-100 mt-3">
-                <i class="fas fa-plus me-1"></i>{{ __('Start a New Application') }}
+        <div class="portal-card p-4 mb-4 position-relative overflow-hidden">
+            <!-- Top accent bar -->
+            <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #667eea, #764ba2);"></div>
+            
+            <div class="d-flex align-items-center mb-3 mt-2">
+                <div class="bg-light rounded-circle p-3 me-3 text-primary">
+                    <i class="fas fa-headset fa-lg"></i>
+                </div>
+                <h5 class="mb-0 fw-bold text-dark">{{ __('Need Help?') }}</h5>
+            </div>
+            
+            <p class="mb-4 text-muted">{{ __('Our Admissions Office is here to support you through your application process.') }}</p>
+            
+            <div class="bg-light p-3 rounded mb-4">
+                @if(!empty($setting->email))
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="far fa-envelope text-primary me-3 w-15px text-center"></i>
+                        <span class="text-dark fw-medium">{{ $setting->email }}</span>
+                    </div>
+                @endif
+                @if(!empty($setting->phone))
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-phone text-primary me-3 w-15px text-center"></i>
+                        <span class="text-dark fw-medium">{{ $setting->phone }}</span>
+                    </div>
+                @endif
+            </div>
+            
+            <a href="{{ route('application.create') }}" class="btn btn-outline-primary w-100 rounded-pill">
+                <i class="fas fa-plus me-2"></i>{{ __('Start a New Application') }}
             </a>
         </div>
     </div>

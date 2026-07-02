@@ -388,6 +388,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('exam/exam-attendance-print', 'ExamAttendanceController@printSheet')->name('exam-attendance.print');
     Route::resource('exam/exam-attendance', 'ExamAttendanceController');
     Route::post('exam/exam-attendance/unlock', 'ExamAttendanceController@unlock')->name('exam-attendance.unlock');
+    Route::post('exam/exam-attendance/bulk-unlock', 'ExamAttendanceController@bulkUnlock')->name('exam-attendance.bulk-unlock');
     Route::get('exam/exam-attendance-import', 'ExamAttendanceController@import')->name('exam-attendance.import');
     Route::post('exam/exam-attendance-import-store', 'ExamAttendanceController@importStore')->name('exam-attendance.import.store');
     Route::get('exam/attendance-eligibility', 'ExamAttendanceSettingController@index')->name('exam-attendance-settings.index');
@@ -398,12 +399,14 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('exam/exam-marking/attendance-migration', 'ExamMarkingController@attendanceMigration')->name('exam-marking.attendance-migration');
     Route::resource('exam/exam-marking', 'ExamMarkingController');
     Route::post('exam/exam-marking/unlock', 'ExamMarkingController@unlock')->name('exam-marking.unlock');
+    Route::post('exam/exam-marking/bulk-unlock', 'ExamMarkingController@bulkUnlock')->name('exam-marking.bulk-unlock');
     Route::get('exam/exam-result', 'ExamMarkingController@result')->name('exam-result');
     Route::post('exam/subject-marking/autosave', 'SubjectMarkingController@autosave')->name('subject-marking.autosave');
     Route::get('exam/subject-marking/{subject_marking}/history', 'SubjectMarkingController@history')->name('subject-marking.history');
     Route::resource('exam/subject-marking', 'SubjectMarkingController');
     Route::post('exam/subject-marking/{subject_marking}/transition', 'SubjectMarkingController@transition')->name('subject-marking.transition');
     Route::post('exam/subject-marking-bulk-transition', 'SubjectMarkingController@bulkTransition')->name('subject-marking.bulk-transition');
+    Route::post('exam/subject-marking-bulk-unpublish', 'SubjectMarkingController@bulkUnpublishStudent')->name('subject-marking.bulk-unpublish');
     Route::post('exam/subject-marking/{subject_marking}/unpublish', 'SubjectMarkingController@unpublishStudent')->name('subject-marking.unpublish');
     Route::post('exam/subject-marking/{subject_marking}/republish', 'SubjectMarkingController@republishStudent')->name('subject-marking.republish');
     Route::get('exam/subject-result', 'SubjectMarkingController@result')->name('subject-result');

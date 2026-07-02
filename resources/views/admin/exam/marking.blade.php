@@ -648,12 +648,27 @@
                     @endphp
 
                     @if($hasRows)
+                    @can('subject-marking-unlock')
+                    <div class="card-header border-bottom-0 pb-0">
+                        <button type="button" class="btn btn-warning btn-sm" id="btn-bulk-unlock" style="display: none;">
+                            <i class="fas fa-unlock"></i> Bulk Unlock
+                        </button>
+                    </div>
+                    @endcan
                     <div class="card-block">
                         <!-- [ Data table ] start -->
                         <div class="table-responsive">
                             <table class="display table nowrap table-striped table-hover printable">
                                 <thead>
                                     <tr>
+                                        @can('subject-marking-unlock')
+                                        <th class="text-center" style="width: 40px;">
+                                            <div class="checkbox checkbox-warning d-inline">
+                                                <input type="checkbox" id="checkAllUnlock" class="check-all-unlock">
+                                                <label for="checkAllUnlock" class="cr"></label>
+                                            </div>
+                                        </th>
+                                        @endcan
                                         <th>S/N</th>
                                         <th>{{ $isFinalExam ? __('Student Exam ID') : __('field_matricule') }}</th>
                                         @if(!$isFinalExam)
@@ -687,7 +702,7 @@
                                         $canMark = !$isFinalExam || !empty($anonymousCode);
                                         $is_locked = $row->marks_locked;
                                         $rowProgram = $row->studentEnroll->program ?? null;
-                                        $colSpan = 6 + (!$isFinalExam ? 4 : 0) + ($cross_program ? 1 : 0);
+                                        $colSpan = 6 + (!$isFinalExam ? 4 : 0) + ($cross_program ? 1 : 0) + (auth()->user()->can('subject-marking-unlock') ? 1 : 0);
                                     @endphp
 
                                     {{-- Programme group separator --}}
@@ -707,6 +722,16 @@
                                     @endif
 
                                     <tr>
+                                        @can('subject-marking-unlock')
+                                        <td class="text-center">
+                                            @if($is_locked)
+                                            <div class="checkbox checkbox-warning d-inline">
+                                                <input type="checkbox" class="bulk-unlock-checkbox" id="unlock-{{ $row->id }}" value="{{ $row->id }}">
+                                                <label for="unlock-{{ $row->id }}" class="cr"></label>
+                                            </div>
+                                            @endif
+                                        </td>
+                                        @endcan
                                         <td>{{ $loop->iteration }}</td>
                                         <td>
                                             @if($isFinalExam)
@@ -803,6 +828,109 @@
                     </form>
                 </div>
             </div>
+            
+            {{-- Submission Logs Section --}}
+            @if(isset($submissionLogs) && $submissionLogs->count() > 0)
+            <div class="col-sm-12 mt-4">
+                <div class="card border-primary shadow-sm">
+                    <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 text-white">
+                            <i class="fas fa-history"></i> {{ __('Submission Logs') }}
+                        </h5>
+                        <span class="badge badge-light text-primary">{{ $submissionLogs->count() }} {{ __('Sessions') }}</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="accordion" id="submissionLogsAccordion">
+                            @foreach($submissionLogs as $sessionKey => $logs)
+                            @php 
+                                $firstLog = $logs->first(); 
+                                $sessionTime = $firstLog->created_at->format('d M Y, h:i A');
+                                $userName = $firstLog->user_name;
+                                $logCount = $logs->count();
+                            @endphp
+                            <div class="card mb-0 border-0 border-bottom">
+                                <div class="card-header bg-light p-3" id="heading-{{ $loop->index }}" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#collapse-{{ $loop->index }}" aria-expanded="false" aria-controls="collapse-{{ $loop->index }}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="d-flex align-items-center">
+                                            <div class="mr-3 bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                <i class="fas fa-user"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1 text-dark font-weight-bold">{{ $userName }}</h6>
+                                                <small class="text-muted"><i class="far fa-clock"></i> {{ $sessionTime }}</small>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span class="badge badge-success px-3 py-2 mr-2">{{ $logCount }} {{ __('marks updated') }}</span>
+                                            <i class="fas fa-chevron-down text-muted"></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="collapse-{{ $loop->index }}" class="collapse" aria-labelledby="heading-{{ $loop->index }}" data-bs-parent="#submissionLogsAccordion" data-parent="#submissionLogsAccordion">
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-striped table-hover mb-0">
+                                                <thead class="thead-dark">
+                                                    <tr>
+                                                        <th style="width: 5%;">#</th>
+                                                        <th style="width: 25%;">{{ __('Student') }}</th>
+                                                        <th style="width: 15%;">{{ __('Matricule') }}</th>
+                                                        <th style="width: 20%;" class="text-center">{{ __('Old Mark') }}</th>
+                                                        <th style="width: 20%;" class="text-center">{{ __('New Mark') }}</th>
+                                                        <th style="width: 15%;">{{ __('Action') }}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($logs as $index => $log)
+                                                    @php
+                                                        $changes = $log->changes;
+                                                        $oldMark = $changes['achieve_marks']['old'] ?? '-';
+                                                        $newMark = $changes['achieve_marks']['new'] ?? '-';
+                                                        $student = $log->auditable->studentEnroll->student ?? null;
+                                                        $studentName = $student ? $student->first_name . ' ' . $student->last_name : 'Unknown';
+                                                        $matricule = $log->auditable->studentEnroll->matricule ?? 'N/A';
+                                                        
+                                                        $actionBadge = 'badge-primary';
+                                                        $actionText = 'Updated';
+                                                        if ($oldMark === null || $oldMark === '-') {
+                                                            $actionBadge = 'badge-success';
+                                                            $actionText = 'Added';
+                                                        } elseif ($newMark > $oldMark) {
+                                                            $actionBadge = 'badge-info';
+                                                            $actionText = 'Increased';
+                                                        } elseif ($newMark < $oldMark) {
+                                                            $actionBadge = 'badge-warning';
+                                                            $actionText = 'Decreased';
+                                                        }
+                                                    @endphp
+                                                    <tr>
+                                                        <td class="align-middle">{{ $index + 1 }}</td>
+                                                        <td class="align-middle">{{ $studentName }}</td>
+                                                        <td class="align-middle"><span class="badge badge-light border">{{ $matricule }}</span></td>
+                                                        <td class="text-center align-middle">
+                                                            <span class="badge badge-secondary" style="font-size: 13px;">{{ $oldMark }}</span>
+                                                        </td>
+                                                        <td class="text-center align-middle">
+                                                            <i class="fas fa-arrow-right text-muted mx-2" style="font-size: 10px;"></i>
+                                                            <span class="badge {{ $actionBadge }}" style="font-size: 13px;">{{ $newMark }}</span>
+                                                        </td>
+                                                        <td class="align-middle"><span class="badge {{ $actionBadge }}">{{ $actionText }}</span></td>
+                                                    </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
+
         </div>
         <!-- [ Main Content ] end -->
     </div>
@@ -1651,6 +1779,57 @@
             // Ensure that it is a number or decimal point
             if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
                 e.preventDefault();
+            }
+        });
+
+        // Bulk Unlock Logic
+        $('.check-all-unlock').on('change', function() {
+            var isChecked = $(this).prop('checked');
+            $('.bulk-unlock-checkbox').prop('checked', isChecked);
+            toggleBulkUnlockBtn();
+        });
+
+        $('.bulk-unlock-checkbox').on('change', function() {
+            toggleBulkUnlockBtn();
+            var allChecked = $('.bulk-unlock-checkbox:not(:checked)').length === 0 && $('.bulk-unlock-checkbox').length > 0;
+            $('.check-all-unlock').prop('checked', allChecked);
+        });
+
+        function toggleBulkUnlockBtn() {
+            if ($('.bulk-unlock-checkbox:checked').length > 0) {
+                $('#btn-bulk-unlock').show();
+            } else {
+                $('#btn-bulk-unlock').hide();
+            }
+        }
+
+        $('#btn-bulk-unlock').on('click', function() {
+            var selectedIds = [];
+            $('.bulk-unlock-checkbox:checked').each(function() {
+                selectedIds.push($(this).val());
+            });
+
+            if (selectedIds.length === 0) return;
+
+            if(confirm('Are you sure you want to unlock marks for ' + selectedIds.length + ' student(s)?')){
+                $.ajax({
+                    url: '{{ route("admin.exam-marking.bulk-unlock") }}',
+                    type: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}',
+                        exam_ids: selectedIds
+                    },
+                    success: function(response){
+                        if(response.status == 'success'){
+                            location.reload();
+                        } else {
+                            alert(response.message);
+                        }
+                    },
+                    error: function(xhr){
+                        alert('Error: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Unknown error'));
+                    }
+                });
             }
         });
 

@@ -15,8 +15,6 @@ class PermissionSeeder extends Seeder
      */
     public function run()
     {
-        DB::table('permissions')->delete();
-
         $permissions = [
             //*** Application Modules ***//
             ['name' => 'application-view', 'group' => 'Application', 'title' => 'View'],
@@ -939,7 +937,12 @@ class PermissionSeeder extends Seeder
             ['name' => 'payment-receipt-verify', 'group' => 'Payment Verification', 'title' => 'Verify'],
             //*** Payment Verification Modules ***//
         ];
-
-        DB::table('permissions')->insert($permissions);
+        foreach ($permissions as $permission) {
+            $permission['guard_name'] = $permission['guard_name'] ?? 'web';
+            Permission::updateOrCreate(
+                ['name' => $permission['name'], 'guard_name' => $permission['guard_name']],
+                $permission
+            );
+        }
     }
 }

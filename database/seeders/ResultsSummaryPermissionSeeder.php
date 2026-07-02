@@ -8,39 +8,41 @@ use Spatie\Permission\Models\Role;
 
 class ResultsSummaryPermissionSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
     public function run()
     {
-        // Clear cache
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
-
-        // Define permissions
         $permissions = [
-            'results-summary-view',
-            'results-summary-export',
-        ];
+        'results-summary-view',
+        'results-summary-export',
+    ];
 
-        // Create permissions
-        foreach ($permissions as $permission) {
-            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+        $permNames = [];
+        foreach ($permissions as $perm) {
+            if (is_array($perm)) {
+                $name = $perm['name'];
+                $guard = $perm['guard_name'] ?? 'web';
+                $title = $perm['title'] ?? null;
+                $group = $perm['group'] ?? null;
+                
+                $updateData = [];
+                if ($title) $updateData['title'] = $title;
+                if ($group) $updateData['group'] = $group;
+
+                Permission::updateOrCreate(
+                    ['name' => $name, 'guard_name' => $guard],
+                    $updateData
+                );
+                $permNames[] = $name;
+            } else {
+                Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
+                $permNames[] = $perm;
+            }
         }
 
-        // Assign to super-admin role
-        $superAdminRole = Role::where('slug', 'super-admin')->first();
-        if ($superAdminRole) {
-            $superAdminRole->givePermissionTo($permissions);
-        }
-
-        // Optionally assign to admin role as well
-        $adminRole = Role::where('slug', 'admin')->first();
-        if ($adminRole) {
-            $adminRole->givePermissionTo('results-summary-view');
-        }
-
-        $this->command->info('Results Summary permissions created successfully!');
+        // Try to assign to sensible roles
+        $adminRole = Role::where('name', 'Admin')->first();
+        if ($adminRole) $adminRole->givePermissionTo($permNames);
+        
+        $superAdminRole = Role::where('name', 'Super Admin')->first();
+        if ($superAdminRole) $superAdminRole->givePermissionTo($permNames);
     }
 }
