@@ -60,9 +60,14 @@ class PaymentVerificationController extends Controller
         if ($paymentType === 'all' || $paymentType === 'fee') {
             $feeQuery = PaymentReceipt::with([
                 'student',
+                'applicant.program',
+                'applicant.session',
+                'applicant.degreeType',
                 'fee.category',
                 'fee.studentEnroll.session',
                 'fee.studentEnroll.semester',
+                'fee.applicant.program',
+                'fee.applicant.session',
                 'verifier'
             ])->orderBy('created_at', 'desc');
 
@@ -82,7 +87,7 @@ class PaymentVerificationController extends Controller
                 $feeQuery->whereDate('created_at', '<=', $request->date_to);
             }
 
-            // Search by student name or reference
+            // Search by student name, applicant name/reg, or payment reference.
             if ($request->filled('search')) {
                 $search = $request->search;
                 $feeQuery->where(function ($q) use ($search) {
@@ -90,6 +95,12 @@ class PaymentVerificationController extends Controller
                         ->orWhereHas('student', function ($sq) use ($search) {
                             $sq->where('first_name', 'like', '%' . $search . '%')
                                 ->orWhere('last_name', 'like', '%' . $search . '%');
+                        })
+                        ->orWhereHas('applicant', function ($aq) use ($search) {
+                            $aq->where('first_name', 'like', '%' . $search . '%')
+                                ->orWhere('last_name', 'like', '%' . $search . '%')
+                                ->orWhere('registration_no', 'like', '%' . $search . '%')
+                                ->orWhere('email', 'like', '%' . $search . '%');
                         });
                 });
             }
@@ -240,11 +251,17 @@ class PaymentVerificationController extends Controller
         if ($type === 'fee') {
             $data['row'] = PaymentReceipt::with([
                 'student',
+                'applicant.program',
+                'applicant.session',
+                'applicant.degreeType',
                 'fee.category',
                 'fee.studentEnroll.session',
                 'fee.studentEnroll.semester',
                 'fee.studentEnroll.program',
                 'fee.studentEnroll.section',
+                'fee.applicant.program',
+                'fee.applicant.session',
+                'fee.applicant.degreeType',
                 'verifier'
             ])->findOrFail($id);
             $data['payment_type'] = 'fee';

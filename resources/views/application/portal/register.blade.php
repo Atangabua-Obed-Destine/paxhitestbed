@@ -88,6 +88,21 @@
                     @enderror
                 </div>
 
+                <div class="form-floating mb-3">
+                    <input type="email"
+                           class="form-control @error('email_confirmation') is-invalid @enderror"
+                           id="email_confirmation"
+                           name="email_confirmation"
+                           value="{{ old('email_confirmation') }}"
+                           placeholder="name@example.com"
+                           onpaste="return false;"
+                           required>
+                    <label for="email_confirmation"><i class="fas fa-envelope text-muted me-2"></i>{{ __('Confirm Email Address') }}</label>
+                    @error('email_confirmation')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
                 <div class="form-floating mb-3 position-relative">
                     <input type="password" 
                            class="form-control @error('password') is-invalid @enderror" 

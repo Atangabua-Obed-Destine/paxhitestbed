@@ -17,6 +17,7 @@ class PaymentReceipt extends Model
     protected $fillable = [
         'fee_id',
         'student_id',
+        'applicant_id',
         'receipt_file',
         'payment_reference',
         'payment_date',
@@ -55,6 +56,24 @@ class PaymentReceipt extends Model
     public function student()
     {
         return $this->belongsTo(Student::class);
+    }
+
+    /**
+     * Get the applicant (application) that this receipt belongs to when the
+     * payer is an applicant rather than an enrolled student.
+     */
+    public function applicant()
+    {
+        return $this->belongsTo(\App\Models\Application::class, 'applicant_id');
+    }
+
+    /**
+     * Deterministic, human-friendly receipt number based on the DB id.
+     * Format: PAXHI-R-000123
+     */
+    public function getReceiptNumberAttribute(): string
+    {
+        return 'PAXHI-R-' . str_pad((string) $this->id, 6, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -127,7 +146,9 @@ class PaymentReceipt extends Model
             3 => __('payment_method_cheque'),
             4 => __('payment_method_bank'),
             5 => __('payment_method_e_wallet'),
-            6 => __('payment_method_manual'),
+            6 => __('payment_method_mtn_momo'),
+            7 => __('payment_method_orange_money'),
+            8 => __('payment_method_other'),
         ];
 
         return $methods[$this->payment_method] ?? 'Unknown';

@@ -173,6 +173,7 @@ Route::middleware(['XSS'])->group(function () {
     Route::get('verify-receipt/{receipt_number}', 'Admin\FeesStudentController@verify')->name('verify-receipt');
     Route::get('verify-staff/{staff_identifier}', 'Admin\StaffIdCardController@verify')->name('verify-staff');
     Route::get('verify-form-a3/{code}', 'Admin\StudentFormA3Controller@verify')->name('verify-form-a3');
+    Route::get('verify-admission-fee/{receipt}', 'Admin\AdmissionFeesReportController@publicVerify')->name('verify-admission-fee');
 });
 
 
@@ -208,6 +209,18 @@ Route::middleware(['XSS'])->name('payment.')->namespace('Payment')->prefix('paym
     Route::get('skrill/process', 'SkrillController@makePayment')->name('skrill.process');
     Route::get('skrill/completed', 'SkrillController@paymentCompleted')->name('skrill.completed');
     Route::get('skrill/cancelled', 'SkrillController@paymentCancelled')->name('skrill.cancelled');
+
+    // MTN Mobile Money (Cameroon) Routes
+    Route::post('momo/mtn/initiate', 'MtnMomoController@initiate')->name('momo.mtn.initiate');
+    Route::get('momo/mtn/status/{reference}', 'MtnMomoController@status')->name('momo.mtn.status');
+    Route::post('momo/mtn/webhook', 'MtnMomoController@webhook')->name('momo.mtn.webhook')->withoutMiddleware(['XSS']);
+    Route::post('momo/mtn/sandbox-mark-paid', 'MtnMomoController@sandboxMarkPaid')->name('momo.mtn.sandbox-mark-paid');
+
+    // Orange Money (Cameroon) Routes
+    Route::post('momo/orange/initiate', 'OrangeMomoController@initiate')->name('momo.orange.initiate');
+    Route::get('momo/orange/status/{reference}', 'OrangeMomoController@status')->name('momo.orange.status');
+    Route::get('momo/orange/return/{reference}', 'OrangeMomoController@return')->name('momo.orange.return');
+    Route::post('momo/orange/webhook', 'OrangeMomoController@webhook')->name('momo.orange.webhook')->withoutMiddleware(['XSS']);
 
 });
 
@@ -482,6 +495,13 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('fees-student-cancel/{id}', 'FeesStudentController@cancel')->name('fees-student.cancel');
     Route::get('fees-student-report', 'FeesStudentController@report')->name('fees-student.report');
     Route::get('fees-student-print/{id}', 'FeesStudentController@print')->name('fees-student.print');
+
+    // Admission Fees Report (applicant-scoped; separate from student fees report)
+    Route::prefix('admission-fees-report')->name('admission-fees-report.')->group(function () {
+        Route::get('/', 'AdmissionFeesReportController@index')->name('index');
+        Route::post('{fee}/walk-in', 'AdmissionFeesReportController@recordWalkIn')->name('walk-in');
+        Route::get('receipt/{receipt}', 'AdmissionFeesReportController@receipt')->name('receipt');
+    });
     Route::get('fees-student-multiprint', 'FeesStudentController@multiPrint')->name('fees-student.multiprint');
 
     // Quick Collection Student
@@ -984,6 +1004,12 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('setting/mail-setting','MailSettingController');
     Route::resource('setting/sms-setting','SMSSettingController');
     Route::resource('setting/payment-setting','PaymentSettingController');
+
+    // Mobile Money (MTN + Orange) configuration
+    Route::get('mobile-money-config',  'MobileMoneyConfigController@index')->name('mobile-money-config.index');
+    Route::post('mobile-money-config', 'MobileMoneyConfigController@update')->name('mobile-money-config.update');
+    Route::post('mobile-money-config/test/{provider}', 'MobileMoneyConfigController@testConnection')->name('mobile-money-config.test');
+    Route::post('mobile-money-config/provision-mtn-sandbox', 'MobileMoneyConfigController@provisionMtnSandbox')->name('mobile-money-config.provision-mtn');
 
     // Sechedule Setting
     Route::resource('setting/schedule-setting', 'ScheduleSettingController');

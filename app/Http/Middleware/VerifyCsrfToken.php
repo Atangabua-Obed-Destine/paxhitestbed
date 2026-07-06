@@ -22,5 +22,7 @@ class VerifyCsrfToken extends Middleware
         //
         'student/login',
         'student/logout',
+        'payment/momo/mtn/webhook',
+        'payment/momo/orange/webhook',
     ];
 }

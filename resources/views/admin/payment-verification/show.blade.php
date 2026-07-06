@@ -67,41 +67,70 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <!-- Student Information -->
+                            <!-- Student / Applicant Information -->
                             <div class="col-md-6">
-                                <h6 class="mb-3"><strong>{{ __('student_information') }}</strong></h6>
+                                @php
+                                    $applicant = $row->applicant ?? optional($row->fee ?? null)->applicant;
+                                    $isApplicantOnly = $payment_type === 'fee' && empty($row->student) && !empty($applicant);
+                                @endphp
+                                <h6 class="mb-3">
+                                    <strong>{{ $isApplicantOnly ? __('Applicant Information') : __('student_information') }}</strong>
+                                    @if($isApplicantOnly)
+                                        <span class="badge badge-warning ml-2">{{ __('Not yet enrolled') }}</span>
+                                    @endif
+                                </h6>
                                 <table class="table table-borderless">
                                     <tr>
                                         <td width="40%"><strong>{{ __('field_name') }}:</strong></td>
-                                        <td>{{ $row->student ? $row->student->first_name . ' ' . $row->student->last_name : 'N/A' }}</td>
+                                        <td>
+                                            @if($row->student)
+                                                {{ $row->student->first_name.' '.$row->student->last_name }}
+                                            @elseif($applicant)
+                                                {{ trim(($applicant->first_name ?? '').' '.($applicant->last_name ?? '')) ?: 'N/A' }}
+                                            @else
+                                                N/A
+                                            @endif
+                                        </td>
                                     </tr>
                                     <tr>
-                                        <td><strong>{{ __('field_student_id') }}:</strong></td>
-                                        <td>{{ $row->student->student_id ?? 'N/A' }}</td>
+                                        <td><strong>{{ $isApplicantOnly ? __('Registration No.') : __('field_student_id') }}:</strong></td>
+                                        <td>
+                                            @if($row->student)
+                                                {{ $row->student->student_id ?? 'N/A' }}
+                                            @elseif($applicant)
+                                                {{ $applicant->registration_no ?? 'N/A' }}
+                                            @else
+                                                N/A
+                                            @endif
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td><strong>{{ __('field_email') }}:</strong></td>
-                                        <td>{{ $row->student->email ?? 'N/A' }}</td>
+                                        <td>{{ $row->student->email ?? $applicant->email ?? 'N/A' }}</td>
                                     </tr>
                                     <tr>
                                         <td><strong>{{ __('field_phone') }}:</strong></td>
-                                        <td>{{ $row->student->phone ?? 'N/A' }}</td>
+                                        <td>{{ $row->student->phone ?? $applicant->phone ?? 'N/A' }}</td>
                                     </tr>
                                     <tr>
                                         <td><strong>{{ __('field_program') }}:</strong></td>
                                         <td>
                                             @if($payment_type == 'fee')
-                                                {{ $row->fee->studentEnroll->program->title ?? 'N/A' }}
+                                                {{ $row->fee->studentEnroll->program->title ?? optional($applicant)->program->title ?? 'N/A' }}
                                             @else
                                                 {{ $row->installment->paymentPlan->fee->studentEnroll->program->title ?? 'N/A' }}
                                             @endif
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><strong>{{ __('field_section') }}:</strong></td>
+                                        <td><strong>{{ $isApplicantOnly ? __('Level') : __('field_section') }}:</strong></td>
                                         <td>
                                             @if($payment_type == 'fee')
-                                                {{ $row->fee->studentEnroll->section->title ?? 'N/A' }}
+                                                @if($isApplicantOnly)
+                                                    {{ optional($applicant)->degreeType->title ?? 'N/A' }}
+                                                @else
+                                                    {{ $row->fee->studentEnroll->section->title ?? 'N/A' }}
+                                                @endif
                                             @else
                                                 {{ $row->installment->paymentPlan->fee->studentEnroll->section->title ?? 'N/A' }}
                                             @endif
@@ -161,7 +190,7 @@
                                         <td><strong>{{ __('field_session') }}:</strong></td>
                                         <td>
                                             @if($payment_type == 'fee')
-                                                {{ $row->fee->studentEnroll->session->title ?? '' }}
+                                                {{ $row->fee->studentEnroll->session->title ?? optional($applicant)->session->title ?? '' }}
                                             @else
                                                 {{ $row->installment->paymentPlan->fee->studentEnroll->session->title ?? '' }}
                                             @endif

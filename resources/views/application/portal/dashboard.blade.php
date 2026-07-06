@@ -126,61 +126,124 @@
                                                     </div>
                                                     @if($balance > 0)
                                                         <button type="button" class="btn btn-sm btn-primary mt-2 mt-md-0" data-bs-toggle="modal" data-bs-target="#feeModal{{ $app->id }}">
-                                                            <i class="fas fa-upload me-1"></i>{{ __('Upload Payment Receipt') }}
+                                                            <i class="fas fa-mobile-alt me-1"></i>{{ __('Pay Admission Fee') }}
                                                         </button>
                                                     @endif
                                                 </div>
                                             </td>
                                         </tr>
 
-                                        {{-- Receipt upload modal --}}
-                                        <div class="modal fade" id="feeModal{{ $app->id }}" tabindex="-1" aria-hidden="true">
-                                            <div class="modal-dialog">
+                                        {{-- Admission fee payment modal --}}
+                                        @php
+                                            $mtnMomoEnabled = (bool) config('momo.providers.mtn.enabled');
+                                            $orangeMomoEnabled = (bool) config('momo.providers.orange.enabled');
+                                            $anyMomoEnabled = $mtnMomoEnabled || $orangeMomoEnabled;
+                                        @endphp
+                                        <div class="modal fade momo-fee-modal" id="feeModal{{ $app->id }}" tabindex="-1" aria-hidden="true"
+                                             data-fee-id="{{ $fee->id }}" data-application-id="{{ $app->id }}" data-balance="{{ $balance }}">
+                                            <div class="modal-dialog modal-lg">
                                                 <div class="modal-content">
-                                                    <form action="{{ route('application.admission-fee.upload', $app) }}" method="post" enctype="multipart/form-data">
-                                                        @csrf
-                                                        <div class="modal-header">
-                                                            <h5 class="modal-title">{{ __('Upload Payment Receipt') }}</h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">
+                                                            <i class="fas fa-receipt me-2"></i>{{ __('Pay Admission Fee') }}
+                                                            <span class="badge bg-light text-dark ms-2">{{ number_format($balance) }} {{ $currency }}</span>
+                                                        </h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                    </div>
+
+                                                    <ul class="nav nav-tabs px-3 pt-3" role="tablist">
+                                                        @if($mtnMomoEnabled)
+                                                        <li class="nav-item">
+                                                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#momoMtn{{ $app->id }}" type="button">
+                                                                <i class="fas fa-mobile-alt text-warning me-1"></i>{{ __('MTN MoMo') }}
+                                                            </button>
+                                                        </li>
+                                                        @endif
+                                                        @if($orangeMomoEnabled)
+                                                        <li class="nav-item">
+                                                            <button class="nav-link {{ !$mtnMomoEnabled ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#momoOrange{{ $app->id }}" type="button">
+                                                                <i class="fas fa-mobile-alt text-danger me-1"></i>{{ __('Orange Money') }}
+                                                            </button>
+                                                        </li>
+                                                        @endif
+                                                        <li class="nav-item">
+                                                            <button class="nav-link {{ !$anyMomoEnabled ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#momoManual{{ $app->id }}" type="button">
+                                                                <i class="fas fa-upload me-1"></i>{{ __('Upload Receipt') }}
+                                                            </button>
+                                                        </li>
+                                                    </ul>
+
+                                                    <div class="tab-content p-3">
+                                                        @if($mtnMomoEnabled)
+                                                        <div class="tab-pane fade show active" id="momoMtn{{ $app->id }}">
+                                                            <p class="text-muted small mb-3">{{ __('Enter the MTN phone number to charge. You will receive a prompt on the phone to enter your MoMo PIN.') }}</p>
+                                                            <div class="mb-2">
+                                                                <label class="form-label">{{ __('MTN Phone Number') }} <span class="text-danger">*</span></label>
+                                                                <input type="tel" class="form-control momo-msisdn" placeholder="670000000" required>
+                                                                <small class="text-muted">{{ __('Cameroon number without country code, or full international format.') }}</small>
+                                                            </div>
+                                                            <div class="momo-status alert alert-info d-none mt-3" role="alert"></div>
+                                                            <button type="button" class="btn btn-warning w-100 momo-pay-btn" data-provider="mtn">
+                                                                <i class="fas fa-bolt me-1"></i>{{ __('Pay') }} {{ number_format($balance) }} {{ $currency }} {{ __('with MTN MoMo') }}
+                                                            </button>
+                                                            @if(app()->environment('local') && config('momo.providers.mtn.environment') === 'sandbox')
+                                                            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2 momo-devtest-btn" data-provider="mtn">
+                                                                <i class="fas fa-flask me-1"></i>{{ __('DEV: Mark as Paid (bypass MTN sandbox)') }}
+                                                            </button>
+                                                            @endif
                                                         </div>
-                                                        <div class="modal-body">
-                                                            <div class="mb-2">
-                                                                <label class="form-label">{{ __('Payment Date') }} <span class="text-danger">*</span></label>
-                                                                <input type="date" name="payment_date" class="form-control" max="{{ date('Y-m-d') }}" required>
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">{{ __('Amount') }} <span class="text-danger">*</span></label>
-                                                                <input type="number" step="0.01" name="amount" class="form-control" value="{{ $balance }}" required>
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">{{ __('Payment Reference') }} <span class="text-danger">*</span></label>
-                                                                <input type="text" name="payment_reference" class="form-control" required>
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">{{ __('Payment Method') }} <span class="text-danger">*</span></label>
-                                                                <select name="payment_method" class="form-control" required>
-                                                                    <option value="4">{{ __('Bank Transfer') }}</option>
-                                                                    <option value="2">{{ __('Cash') }}</option>
-                                                                    <option value="3">{{ __('Cheque') }}</option>
-                                                                    <option value="1">{{ __('Card') }}</option>
-                                                                    <option value="5">{{ __('E-wallet') }}</option>
-                                                                    <option value="6">{{ __('Other') }}</option>
-                                                                </select>
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">{{ __('Receipt File') }} (PDF/JPG/PNG) <span class="text-danger">*</span></label>
-                                                                <input type="file" name="receipt_file" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
-                                                            </div>
-                                                            <div class="mb-0">
-                                                                <label class="form-label">{{ __('Note (optional)') }}</label>
-                                                                <textarea name="student_note" class="form-control" rows="2"></textarea>
-                                                            </div>
+                                                        @endif
+
+                                                        @if($orangeMomoEnabled)
+                                                        <div class="tab-pane fade {{ !$mtnMomoEnabled ? 'show active' : '' }}" id="momoOrange{{ $app->id }}">
+                                                            <p class="text-muted small mb-3">{{ __('You will be redirected to Orange Money to complete the payment.') }}</p>
+                                                            <div class="momo-status alert alert-info d-none mt-3" role="alert"></div>
+                                                            <button type="button" class="btn btn-danger w-100 momo-pay-btn" data-provider="orange">
+                                                                <i class="fas fa-external-link-alt me-1"></i>{{ __('Pay') }} {{ number_format($balance) }} {{ $currency }} {{ __('with Orange Money') }}
+                                                            </button>
                                                         </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
-                                                            <button type="submit" class="btn btn-primary">{{ __('Submit Receipt') }}</button>
+                                                        @endif
+
+                                                        <div class="tab-pane fade {{ !$anyMomoEnabled ? 'show active' : '' }}" id="momoManual{{ $app->id }}">
+                                                            <form action="{{ route('application.admission-fee.upload', $app) }}" method="post" enctype="multipart/form-data">
+                                                                @csrf
+                                                                <div class="mb-2">
+                                                                    <label class="form-label">{{ __('Payment Date') }} <span class="text-danger">*</span></label>
+                                                                    <input type="date" name="payment_date" class="form-control" max="{{ date('Y-m-d') }}" required>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <label class="form-label">{{ __('Amount') }} <span class="text-danger">*</span></label>
+                                                                    <input type="number" step="0.01" name="amount" class="form-control" value="{{ $balance }}" required>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <label class="form-label">{{ __('Payment Reference') }} <span class="text-danger">*</span></label>
+                                                                    <input type="text" name="payment_reference" class="form-control" required>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <label class="form-label">{{ __('Payment Method') }} <span class="text-danger">*</span></label>
+                                                                    <select name="payment_method" class="form-control" required>
+                                                                        <option value="4">{{ __('Bank Transfer') }}</option>
+                                                                        <option value="2">{{ __('Cash') }}</option>
+                                                                        <option value="3">{{ __('Cheque') }}</option>
+                                                                        <option value="1">{{ __('Card') }}</option>
+                                                                        <option value="5">{{ __('E-wallet') }}</option>
+                                                                        <option value="6">{{ __('MTN MoMo') }}</option>
+                                                                        <option value="7">{{ __('Orange Money') }}</option>
+                                                                        <option value="8">{{ __('Other') }}</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <label class="form-label">{{ __('Receipt File') }} (PDF/JPG/PNG) <span class="text-danger">*</span></label>
+                                                                    <input type="file" name="receipt_file" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
+                                                                </div>
+                                                                <div class="mb-2">
+                                                                    <label class="form-label">{{ __('Note (optional)') }}</label>
+                                                                    <textarea name="student_note" class="form-control" rows="2"></textarea>
+                                                                </div>
+                                                                <button type="submit" class="btn btn-primary w-100">{{ __('Submit Receipt for Verification') }}</button>
+                                                            </form>
                                                         </div>
-                                                    </form>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -230,3 +293,152 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+    const MOMO_BASE = '{{ url('payment/momo') }}';
+
+    // Auto-open a fee modal when arriving with a URL hash like #feeModal123
+    function openModalFromHash() {
+        const hash = window.location.hash;
+        if (!hash || hash.indexOf('#feeModal') !== 0) return;
+        const target = document.querySelector(hash);
+        if (!target || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+        bootstrap.Modal.getOrCreateInstance(target).show();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', openModalFromHash);
+    } else {
+        openModalFromHash();
+    }
+    window.addEventListener('hashchange', openModalFromHash);
+
+    document.querySelectorAll('.momo-fee-modal').forEach(function (modal) {
+        const feeId = modal.dataset.feeId;
+        const applicationId = modal.dataset.applicationId;
+
+        modal.querySelectorAll('.momo-devtest-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                if (!confirm('DEV ONLY: mark this fee as paid without contacting MTN?')) return;
+                const tabPane = btn.closest('.tab-pane');
+                const statusBox = tabPane.querySelector('.momo-status');
+                btn.disabled = true;
+                showStatus(statusBox, 'info', 'Marking as paid...');
+                fetch('{{ url('payment/momo/mtn/sandbox-mark-paid') }}', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':CSRF},
+                    body: JSON.stringify({fee_id: feeId, application_id: applicationId}),
+                }).then(r => r.json()).then(function (data) {
+                    if (data.ok) {
+                        showStatus(statusBox, 'success', 'Marked as paid. Reloading...');
+                        setTimeout(() => window.location.reload(), 1200);
+                    } else {
+                        btn.disabled = false;
+                        showStatus(statusBox, 'danger', data.error || 'Failed.');
+                    }
+                }).catch(function () {
+                    btn.disabled = false;
+                    showStatus(statusBox, 'danger', 'Request failed.');
+                });
+            });
+        });
+
+        modal.querySelectorAll('.momo-pay-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const provider = btn.dataset.provider;
+                const tabPane = btn.closest('.tab-pane');
+                const statusBox = tabPane.querySelector('.momo-status');
+                const msisdnInput = tabPane.querySelector('.momo-msisdn');
+
+                const payload = { fee_id: feeId, application_id: applicationId };
+                if (provider === 'mtn') {
+                    const msisdn = (msisdnInput?.value || '').trim();
+                    if (!msisdn) {
+                        showStatus(statusBox, 'warning', '{{ __("Please enter the phone number.") }}');
+                        return;
+                    }
+                    payload.msisdn = msisdn;
+                }
+
+                btn.disabled = true;
+                showStatus(statusBox, 'info', '{{ __("Contacting payment provider...") }}');
+
+                fetch(MOMO_BASE + '/' + provider + '/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                    },
+                    body: JSON.stringify(payload),
+                }).then(async function (r) {
+                    const text = await r.text();
+                    let data;
+                    try { data = JSON.parse(text); }
+                    catch (_) {
+                        console.error('MoMo initiate non-JSON response', r.status, text);
+                        throw new Error('HTTP ' + r.status + ' — ' + (text.substring(0, 200) || 'empty response'));
+                    }
+                    return data;
+                }).then(function (data) {
+                    if (!data.ok) {
+                        btn.disabled = false;
+                        showStatus(statusBox, 'danger', data.error || '{{ __("Unable to start payment.") }}');
+                        return;
+                    }
+                    if (provider === 'orange' && data.payment_url) {
+                        showStatus(statusBox, 'info', '{{ __("Redirecting to Orange Money...") }}');
+                        window.location.href = data.payment_url;
+                        return;
+                    }
+                    showStatus(statusBox, 'info', '{{ __("Approve the request on your phone. Waiting for confirmation...") }}');
+                    pollStatus(provider, data.reference, statusBox, btn, data.poll_interval || 3, data.poll_timeout || 90);
+                }).catch(function (err) {
+                    btn.disabled = false;
+                    console.error('MoMo initiate failed', err);
+                    showStatus(statusBox, 'danger', (err && err.message) ? err.message : '{{ __("Network error. Please try again.") }}');
+                });
+            });
+        });
+    });
+
+    function pollStatus(provider, reference, statusBox, btn, intervalSec, timeoutSec) {
+        const started = Date.now();
+        const tick = function () {
+            fetch(MOMO_BASE + '/' + provider + '/status/' + encodeURIComponent(reference))
+                .then(r => r.json()).then(function (data) {
+                    if (!data.ok) { retryOrGiveUp(); return; }
+                    if (data.status === 'successful') {
+                        showStatus(statusBox, 'success', '{{ __("Payment successful! Reloading...") }}');
+                        setTimeout(() => window.location.reload(), 1500);
+                        return;
+                    }
+                    if (data.status === 'failed' || data.status === 'timeout') {
+                        btn.disabled = false;
+                        showStatus(statusBox, 'danger', (data.reason || '{{ __("Payment did not complete.") }}'));
+                        return;
+                    }
+                    retryOrGiveUp();
+                }).catch(retryOrGiveUp);
+        };
+        const retryOrGiveUp = function () {
+            if ((Date.now() - started) / 1000 >= timeoutSec) {
+                btn.disabled = false;
+                showStatus(statusBox, 'warning', '{{ __("Still waiting for the provider. You can refresh this page in a moment to check again.") }}');
+                return;
+            }
+            setTimeout(tick, intervalSec * 1000);
+        };
+        tick();
+    }
+
+    function showStatus(el, level, message) {
+        if (!el) return;
+        el.className = 'momo-status alert alert-' + level + ' mt-3';
+        el.textContent = message;
+    }
+})();
+</script>
+@endpush

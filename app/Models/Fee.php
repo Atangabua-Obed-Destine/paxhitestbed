@@ -15,12 +15,20 @@ class Fee extends Model
      * @var array
      */
     protected $fillable = [
-        'student_enroll_id', 'category_id', 'fee_amount', 'fine_amount', 'discount_amount', 'paid_amount', 'assign_date', 'due_date', 'pay_date', 'payment_method', 'payment_account_id', 'note', 'status', 'payment_plan_id', 'created_by', 'updated_by',
+        'student_enroll_id', 'applicant_id', 'category_id', 'fee_amount', 'fine_amount', 'discount_amount', 'paid_amount', 'assign_date', 'due_date', 'pay_date', 'payment_method', 'payment_account_id', 'note', 'status', 'payment_plan_id', 'created_by', 'updated_by',
     ];
   
     public function studentEnroll()
     {
         return $this->belongsTo(StudentEnroll::class, 'student_enroll_id');
+    }
+
+    // Set when the fee originates from an applicant (admission fee) rather than
+    // an enrolled student. Kept even after the applicant becomes a student
+    // (provenance), so we can always tell where the fee came from.
+    public function applicant()
+    {
+        return $this->belongsTo(Application::class, 'applicant_id');
     }
   
     public function category()

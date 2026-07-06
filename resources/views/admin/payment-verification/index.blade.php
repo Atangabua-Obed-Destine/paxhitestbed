@@ -167,14 +167,29 @@
                                         <td>{{ $rows->firstItem() + $key }}</td>
                                         <td>
                                             @if($row->payment_type == 'fee')
-                                                <span class="badge badge-primary">{{ __('fee_payment') }}</span>
+                                                @if(!empty($row->applicant_id) || !empty($row->fee?->applicant_id))
+                                                    <span class="badge badge-warning">{{ __('Admission Fee') }}</span>
+                                                @else
+                                                    <span class="badge badge-primary">{{ __('fee_payment') }}</span>
+                                                @endif
                                             @else
                                                 <span class="badge badge-secondary">{{ __('installment_payment') }}</span>
                                             @endif
                                         </td>
                                         <td>
-                                            <strong>{{ $row->student ? $row->student->first_name . ' ' . $row->student->last_name : 'N/A' }}</strong><br>
-                                            <small class="text-muted">{{ $row->student->student_id ?? '' }}</small>
+                                            @php
+                                                $applicant = $row->applicant ?? optional($row->fee)->applicant;
+                                            @endphp
+                                            @if($row->student)
+                                                <strong>{{ $row->student->first_name.' '.$row->student->last_name }}</strong><br>
+                                                <small class="text-muted">{{ $row->student->student_id ?? '' }}</small>
+                                            @elseif($applicant)
+                                                <strong>{{ trim(($applicant->first_name ?? '').' '.($applicant->last_name ?? '')) ?: 'N/A' }}</strong>
+                                                <span class="badge badge-light" title="{{ __('Applicant — not yet enrolled') }}">{{ __('Applicant') }}</span><br>
+                                                <small class="text-muted">{{ $applicant->registration_no ?? '' }}</small>
+                                            @else
+                                                <strong>N/A</strong>
+                                            @endif
                                         </td>
                                         <td>
                                             @if($row->payment_type == 'fee')
@@ -186,7 +201,7 @@
                                         </td>
                                         <td>
                                             @if($row->payment_type == 'fee')
-                                                {{ $row->fee->studentEnroll->session->title ?? '' }}
+                                                {{ $row->fee->studentEnroll->session->title ?? optional(optional($row->fee)->applicant)->session->title ?? optional($row->applicant)->session->title ?? '' }}
                                             @else
                                                 {{ $row->installment->paymentPlan->fee->studentEnroll->session->title ?? '' }}
                                             @endif

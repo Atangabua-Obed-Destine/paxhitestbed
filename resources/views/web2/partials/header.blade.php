@@ -189,7 +189,7 @@
 
                 {{-- Apply Now CTA --}}
                 @if($applicationOpen)
-                <a href="{{ url('/application') }}" class="hidden md:inline-flex btn-accent text-[13px] !py-2.5 !px-5">
+                <a href="{{ url('/admissions') }}" class="hidden md:inline-flex btn-accent text-[13px] !py-2.5 !px-5">
                     Apply Now
                     <svg class="w-4 h-4 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -346,7 +346,7 @@
             {{-- Mobile CTA --}}
             <div class="pt-4 px-4 space-y-3 border-t border-surface-100 mt-4">
                 @if($applicationOpen)
-                <a href="{{ url('/application') }}" class="btn-accent w-full justify-center text-sm">
+                <a href="{{ url('/admissions') }}" class="btn-accent w-full justify-center text-sm">
                     Apply Now <i class="fas fa-arrow-right ml-2"></i>
                 </a>
                 @endif

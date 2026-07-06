@@ -68,6 +68,101 @@ class ApplicationController extends Controller
         return DegreeTypeFormConfig::documents($degreeType);
     }
 
+    /**
+     * Ensure a Fee row exists for this application's admission fee (when enabled
+     * for its degree type). Idempotent — safe to call multiple times.
+     * Returns the Fee or null if the degree type charges no fee.
+     */
+    protected function ensureAdmissionFee(Application $application): ?\App\Models\Fee
+    {
+        $degreeType = $application->degreeType;
+        $feeSettings = DegreeTypeFormConfig::settings($degreeType);
+        if (empty($feeSettings['fee_enabled'])) {
+            return null;
+        }
+
+        // If a Fee already exists, keep it — but sync the amount / due date to the
+        // latest per-degree-type configuration while the fee is still unpaid.
+        // Once anything has been paid against it, we leave the amount alone to
+        // preserve the payment history.
+        if ($application->admission_fee_id) {
+            $existing = $application->admissionFee()->first();
+            if ($existing) {
+                // Ensure the applicant link is set even on rows created before
+                // fees.applicant_id existed.
+                if (is_null($existing->applicant_id)) {
+                    $existing->applicant_id = $application->id;
+                    $existing->save();
+                }
+                if ((float) $existing->paid_amount <= 0) {
+                    $newAmount = (float) $feeSettings['fee_amount'];
+                    if ((float) $existing->fee_amount !== $newAmount) {
+                        $existing->fee_amount = $newAmount;
+                        $existing->due_date = now()->addDays($feeSettings['fee_due_days']);
+                        $existing->save();
+                    }
+                }
+            }
+            return $existing;
+        }
+
+        $admissionFeeCategory = \App\Models\FeesCategory::where('is_admission', 1)->where('status', 1)->first();
+        if (!$admissionFeeCategory) {
+            return null;
+        }
+
+        // A placeholder StudentEnroll so the Fee row is well-formed. When the
+        // admin converts the application to a Student, Admin\ApplicationController@store
+        // adopts this Fee onto the real enrollment and cleans up the stub.
+        // student_id is intentionally null — no Student row exists yet.
+        $tempEnroll = new \App\Models\StudentEnroll();
+        $tempEnroll->student_id = null;
+        $tempEnroll->program_id = $application->program_id;
+        $tempEnroll->session_id = null;
+        $tempEnroll->semester_id = null;
+        $tempEnroll->section_id = null;
+        $tempEnroll->status = 0;
+        $tempEnroll->save();
+
+        $fee = new \App\Models\Fee();
+        $fee->student_enroll_id = $tempEnroll->id;
+        $fee->applicant_id = $application->id;
+        $fee->category_id = $admissionFeeCategory->id;
+        $fee->fee_amount = $feeSettings['fee_amount'];
+        $fee->discount_amount = 0;
+        $fee->fine_amount = 0;
+        $fee->paid_amount = 0;
+        $fee->assign_date = now();
+        $fee->due_date = now()->addDays($feeSettings['fee_due_days']);
+        $fee->status = 0;
+        $fee->note = 'Admission fee - Auto-assigned (application #' . $application->registration_no . ')';
+        $fee->save();
+
+        $application->admission_fee_id = $fee->id;
+        $application->save();
+
+        return $fee;
+    }
+
+    /**
+     * Whether the applicant has fully paid the admission fee for this application.
+     * Returns true when no fee is required at all, or when the fee is settled (status=1).
+     */
+    protected function admissionFeeIsSettled(Application $application): bool
+    {
+        $degreeType = $application->degreeType;
+        $feeSettings = DegreeTypeFormConfig::settings($degreeType);
+        if (empty($feeSettings['fee_enabled'])) {
+            return true;
+        }
+
+        $fee = $application->admissionFee()->first();
+        if (!$fee) {
+            return false;
+        }
+        return (int) $fee->status === 1;
+    }
+
     /* ===================================================================
      |  Hub & intake
      |===================================================================*/
@@ -187,6 +282,10 @@ class ApplicationController extends Controller
             $application->registration_no = intval(10000000) + $application->id;
             $application->save();
 
+            // Provision the admission fee now, at intake, so the applicant can
+            // pay before submitting the form (via MoMo or manual receipt upload).
+            $this->ensureAdmissionFee($application);
+
             DB::commit();
 
             return redirect()->route('application.edit', $application);
@@ -212,6 +311,9 @@ class ApplicationController extends Controller
         }
 
         $degreeType = $application->degreeType;
+
+        // Safety net: make sure the admission fee exists for this draft.
+        $this->ensureAdmissionFee($application);
 
         // Warn (but don't block) if the intake has been closed since the draft was created.
         $intake = $application->session;
@@ -257,6 +359,7 @@ class ApplicationController extends Controller
             'documentRequirements' => $this->documentRequirements($degreeType),
             'guardianTypes' => ['Parent', 'Sponsor', 'Guardian'],
             'fluencyOptions' => ['excellent', 'good', 'fair', 'minimal'],
+            'admissionFeeRequired' => !$this->admissionFeeIsSettled($application),
         ];
 
         $data['districtOptions'] = $provinces
@@ -289,6 +392,14 @@ class ApplicationController extends Controller
         if (!$intake || !$intake->applications_open) {
             Flasher::addError(__('This intake is no longer open for applications. Please contact the admissions office.'), __('msg_error'));
             return redirect()->route('application.edit', $application);
+        }
+
+        // Hard block: the admission fee must be fully paid before submission.
+        // (For degree types where no fee is required, admissionFeeIsSettled() returns true.)
+        $this->ensureAdmissionFee($application);
+        if (!$this->admissionFeeIsSettled($application)) {
+            Flasher::addError(__('Please complete your admission fee payment before submitting the application.'), __('msg_error'));
+            return redirect()->route('application.dashboard');
         }
 
         $degreeType = $application->degreeType;
@@ -551,37 +662,9 @@ class ApplicationController extends Controller
 
             $application->save();
 
-            // Admission fee — from this degree type's settings (fallback to env).
-            $feeSettings = DegreeTypeFormConfig::settings($degreeType);
-            if ($feeSettings['fee_enabled'] && !$application->admission_fee_id) {
-                $admissionFeeCategory = \App\Models\FeesCategory::where('is_admission', 1)->where('status', 1)->first();
-                if ($admissionFeeCategory) {
-                    $tempEnroll = new \App\Models\StudentEnroll();
-                    $tempEnroll->student_id = $application->id;
-                    $tempEnroll->program_id = $application->program_id;
-                    $tempEnroll->session_id = null;
-                    $tempEnroll->semester_id = null;
-                    $tempEnroll->section_id = null;
-                    $tempEnroll->status = 0;
-                    $tempEnroll->save();
-
-                    $admissionFee = new \App\Models\Fee();
-                    $admissionFee->student_enroll_id = $tempEnroll->id;
-                    $admissionFee->category_id = $admissionFeeCategory->id;
-                    $admissionFee->fee_amount = $feeSettings['fee_amount'];
-                    $admissionFee->discount_amount = 0;
-                    $admissionFee->fine_amount = 0;
-                    $admissionFee->paid_amount = 0;
-                    $admissionFee->assign_date = now();
-                    $admissionFee->due_date = now()->addDays($feeSettings['fee_due_days']);
-                    $admissionFee->status = 0;
-                    $admissionFee->note = 'Admission fee - Auto-assigned (application #' . $application->registration_no . ')';
-                    $admissionFee->save();
-
-                    $application->admission_fee_id = $admissionFee->id;
-                    $application->save();
-                }
-            }
+            // Safety net: if the applicant reached here without a Fee row
+            // (e.g. legacy drafts created before fee-at-intake), create it now.
+            $this->ensureAdmissionFee($application);
 
             if ($guardiansEnabled) {
                 $application->guardians()->delete();
@@ -1133,7 +1216,10 @@ class ApplicationController extends Controller
 
         $paymentReceipt = new \App\Models\PaymentReceipt();
         $paymentReceipt->fee_id = $application->admissionFee->id;
-        $paymentReceipt->student_id = $application->id;
+        // Applicants have no Student row yet — track them via applicant_id.
+        // student_id stays NULL until an admin converts them into a Student.
+        $paymentReceipt->applicant_id = $application->id;
+        $paymentReceipt->student_id = null;
         $paymentReceipt->receipt_file = $receiptPath;
         $paymentReceipt->payment_reference = $request->payment_reference;
         $paymentReceipt->payment_date = $request->payment_date;
@@ -1202,7 +1288,8 @@ class ApplicationController extends Controller
         $request->validate([
             'first_name' => ['required', 'string', 'max:191'],
             'last_name' => ['required', 'string', 'max:191'],
-            'email' => ['required', 'string', 'email', 'max:191', 'unique:applicants,email'],
+            'email' => ['required', 'string', 'email', 'max:191', 'unique:applicants,email', 'confirmed'],
+            'email_confirmation' => ['required', 'string', 'email', 'max:191'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'agree_terms' => ['accepted'],
         ]);

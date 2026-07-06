@@ -32,7 +32,7 @@
                 <a href="{{ url('/admissions') }}" class="bg-accent-500 text-white hover:bg-accent-600 rounded-xl px-6 py-3 text-sm font-semibold transition-colors inline-flex items-center gap-2">
                     <i class="fas fa-book-open"></i>Admissions Info
                 </a>
-                <a href="{{ url('/application') }}" class="bg-white/15 backdrop-blur border border-white/30 text-white hover:bg-white/25 rounded-xl px-6 py-3 text-sm font-semibold transition-colors inline-flex items-center gap-2">
+                <a href="{{ url('/admissions') }}" class="bg-white/15 backdrop-blur border border-white/30 text-white hover:bg-white/25 rounded-xl px-6 py-3 text-sm font-semibold transition-colors inline-flex items-center gap-2">
                     <i class="fas fa-paper-plane"></i>Apply Now
                 </a>
             </div>

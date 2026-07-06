@@ -374,7 +374,7 @@
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label for="dob">{{ __('field_dob') }} <span>*</span></label>
-                                        <input type="date" class="form-control" name="dob" id="dob" value="{{ $getValue('dob') ? (is_string($getValue('dob')) ? $getValue('dob') : $getValue('dob')->format('Y-m-d')) : '' }}" required>
+                                        <input type="date" class="form-control" name="dob" id="dob" value="{{ $getValue('dob') ? (is_string($getValue('dob')) ? $getValue('dob') : $getValue('dob')->format('Y-m-d')) : '' }}" required style="cursor: pointer;" onfocus="this.showPicker && this.showPicker()" onclick="this.showPicker && this.showPicker()">
                                         <div class="invalid-feedback">{{ __('Specify your date of birth.') }}</div>
                                     </div>
                                     <div class="form-group col-md-4">
@@ -945,7 +945,17 @@
                             @endif
                             <div class="mt-4 text-end">
                                 <button type="button" class="btn btn-outline-secondary me-2" id="saveDraftFinalBtn"><i class="fas fa-save me-1"></i> {{ __('Save Draft') }}</button>
-                                <button type="button" class="btn btn-primary d-none" id="wizardSubmitButton">{{ __('Submit Application') }}</button>
+                                @if(!empty($admissionFeeRequired))
+                                    <div class="alert alert-warning text-start mt-3 mb-2">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        {{ __('You must pay your admission fee before you can submit this application.') }}
+                                    </div>
+                                    <a href="{{ route('application.dashboard') }}#feeModal{{ $application->id }}" class="btn btn-warning">
+                                        <i class="fas fa-mobile-alt me-1"></i>{{ __('Proceed to pay application fee') }}
+                                    </a>
+                                @else
+                                    <button type="button" class="btn btn-primary d-none" id="wizardSubmitButton">{{ __('Submit Application') }}</button>
+                                @endif
                             </div>
                         </section>
                     </form>
@@ -1131,6 +1141,11 @@
                     return $form.valid();
                 },
                 onFinished: function() {
+                    @if(!empty($admissionFeeRequired))
+                        alert("{{ __('Please pay your admission fee before submitting your application.') }}");
+                        window.location.href = "{{ route('application.dashboard') }}#feeModal{{ $application->id }}";
+                        return;
+                    @endif
                     $form.trigger('submit');
                 }
             });
@@ -1143,6 +1158,19 @@
                 }
             }
             toggleFinishButton(Number.isInteger(initialIndex) ? initialIndex : 0);
+
+            @if(!empty($admissionFeeRequired))
+                // Disable the wizard's built-in Submit/Finish button while the admission fee is unpaid.
+                const $finishLink = $form.find('.actions a[href="#finish"]');
+                if ($finishLink.length) {
+                    const disabledLabel = "{{ __('Submit Application — Awaiting Fee Payment') }}";
+                    $finishLink.text(disabledLabel)
+                        .attr('aria-disabled', 'true')
+                        .attr('title', "{{ __('Please pay your admission fee before submitting your application.') }}")
+                        .css({ 'pointer-events': 'none', 'opacity': '0.55', 'cursor': 'not-allowed' })
+                        .closest('li').addClass('disabled');
+                }
+            @endif
 
             $form.data('steps-initialized', true);
         };

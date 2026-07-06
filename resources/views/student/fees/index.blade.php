@@ -618,6 +618,19 @@
                                                         </form>
                                                         @endif
                                                     @endif
+
+                                                @if(config('momo.providers.mtn.enabled'))
+                                                <button type="button" class="btn btn-warning btn-sm momo-open" data-bs-toggle="modal" data-bs-target="#studentMomoModal"
+                                                        data-provider="mtn" data-fee-id="{{ $row->id }}" data-amount="{{ $remaining_balance }}">
+                                                    <i class="fas fa-mobile-alt"></i> {{ __('MTN MoMo') }}
+                                                </button>
+                                                @endif
+                                                @if(config('momo.providers.orange.enabled'))
+                                                <button type="button" class="btn btn-danger btn-sm momo-open" data-bs-toggle="modal" data-bs-target="#studentMomoModal"
+                                                        data-provider="orange" data-fee-id="{{ $row->id }}" data-amount="{{ $remaining_balance }}">
+                                                    <i class="fas fa-mobile-alt"></i> {{ __('Orange Money') }}
+                                                </button>
+                                                @endif
                                                 
                                                 @if(!$hasPendingMultiPayment)
                                                 <a href="{{ route('student.manual-payment.create', $row->id) }}" class="btn btn-success btn-sm" title="{{ __('upload_receipt') }}">
@@ -774,6 +787,34 @@
         </div>
     </div>
 </div>
+
+@if(config('momo.providers.mtn.enabled') || config('momo.providers.orange.enabled'))
+<div class="modal fade" id="studentMomoModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-mobile-alt me-2"></i>{{ __('Mobile Money Payment') }}</h5>
+                <button type="button" class="close" data-dismiss="modal" data-bs-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2"><strong>{{ __('Provider') }}:</strong> <span id="momoProviderLabel"></span></div>
+                <div class="mb-2"><strong>{{ __('Amount') }}:</strong> <span id="momoAmountLabel"></span></div>
+                <div class="mb-2 momo-msisdn-row">
+                    <label class="form-label">{{ __('Phone Number') }} <span class="text-danger">*</span></label>
+                    <input type="tel" id="studentMomoMsisdn" class="form-control" placeholder="670000000">
+                </div>
+                <div id="studentMomoStatus" class="alert alert-info d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-dismiss="modal" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                <button type="button" class="btn btn-primary" id="studentMomoPayBtn">
+                    <i class="fas fa-bolt me-1"></i>{{ __('Pay') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
 
 @endsection
 
@@ -1503,4 +1544,87 @@
         updateCart();
     });
 </script>
+
+@if(config('momo.providers.mtn.enabled') || config('momo.providers.orange.enabled'))
+<script>
+(function () {
+    const modal = document.getElementById('studentMomoModal');
+    if (!modal) return;
+    const CSRF = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+    const MOMO_BASE = '{{ url('payment/momo') }}';
+    let currentProvider = null, currentFeeId = null, currentAmount = null;
+
+    document.querySelectorAll('.momo-open').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            currentProvider = btn.dataset.provider;
+            currentFeeId = btn.dataset.feeId;
+            currentAmount = btn.dataset.amount;
+            document.getElementById('momoProviderLabel').textContent = currentProvider === 'mtn' ? 'MTN MoMo' : 'Orange Money';
+            document.getElementById('momoAmountLabel').textContent = currentAmount;
+            modal.querySelector('.momo-msisdn-row').style.display = (currentProvider === 'mtn') ? 'block' : 'none';
+            document.getElementById('studentMomoStatus').classList.add('d-none');
+            document.getElementById('studentMomoPayBtn').disabled = false;
+        });
+    });
+
+    document.getElementById('studentMomoPayBtn').addEventListener('click', function () {
+        const btn = this;
+        const statusBox = document.getElementById('studentMomoStatus');
+        const payload = { fee_id: currentFeeId };
+        if (currentProvider === 'mtn') {
+            const m = document.getElementById('studentMomoMsisdn').value.trim();
+            if (!m) { show(statusBox, 'warning', '{{ __("Please enter the phone number.") }}'); return; }
+            payload.msisdn = m;
+        }
+        btn.disabled = true;
+        show(statusBox, 'info', '{{ __("Contacting payment provider...") }}');
+
+        fetch(MOMO_BASE + '/' + currentProvider + '/initiate', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':CSRF},
+            body: JSON.stringify(payload),
+        }).then(r => r.json()).then(function (data) {
+            if (!data.ok) { btn.disabled = false; show(statusBox, 'danger', data.error || 'Error'); return; }
+            if (currentProvider === 'orange' && data.payment_url) {
+                window.location.href = data.payment_url; return;
+            }
+            show(statusBox, 'info', '{{ __("Approve the request on your phone. Waiting...") }}');
+            poll(currentProvider, data.reference, statusBox, btn, data.poll_interval || 3, data.poll_timeout || 90);
+        }).catch(function () {
+            btn.disabled = false;
+            show(statusBox, 'danger', '{{ __("Network error. Please try again.") }}');
+        });
+    });
+
+    function poll(provider, reference, statusBox, btn, intervalSec, timeoutSec) {
+        const started = Date.now();
+        const tick = function () {
+            fetch(MOMO_BASE + '/' + provider + '/status/' + encodeURIComponent(reference))
+                .then(r => r.json()).then(function (data) {
+                    if (!data.ok) return retryOrGiveUp();
+                    if (data.status === 'successful') {
+                        show(statusBox, 'success', '{{ __("Payment successful! Reloading...") }}');
+                        setTimeout(() => window.location.reload(), 1500); return;
+                    }
+                    if (data.status === 'failed' || data.status === 'timeout') {
+                        btn.disabled = false;
+                        show(statusBox, 'danger', data.reason || '{{ __("Payment did not complete.") }}'); return;
+                    }
+                    retryOrGiveUp();
+                }).catch(retryOrGiveUp);
+        };
+        const retryOrGiveUp = function () {
+            if ((Date.now() - started) / 1000 >= timeoutSec) {
+                btn.disabled = false;
+                show(statusBox, 'warning', '{{ __("Still waiting. Refresh in a moment to check.") }}'); return;
+            }
+            setTimeout(tick, intervalSec * 1000);
+        };
+        tick();
+    }
+
+    function show(el, level, msg) { el.className = 'alert alert-' + level; el.textContent = msg; }
+})();
+</script>
+@endif
 @endpush

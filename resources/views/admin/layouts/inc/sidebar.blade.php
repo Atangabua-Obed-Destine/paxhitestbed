@@ -548,6 +548,7 @@
 
                 @can('payment-receipt-verify')
                 <li class="{{ Request::is('admin/payment-verification*') ? 'active' : '' }}"><a href="{{ route('admin.payment-verification.index') }}" class="">{{ trans_choice('module_payment_verification', 2) }}</a></li>
+                <li class="{{ Request::is('admin/admission-fees-report*') ? 'active' : '' }}"><a href="{{ route('admin.admission-fees-report.index') }}" class="">{{ __('Admission Fees') }}</a></li>
                 @endcan
 
                 @canany(['fees-fine-view', 'fees-fine-create', 'fees-receipt-view'])
@@ -1565,6 +1566,10 @@
 
                 @can('setting-payment')
                 <li class="{{ Request::is('admin/setting/payment-setting*') ? 'active' : '' }}"><a href="{{ route('admin.payment-setting.index') }}" class="">{{ trans_choice('module_payment_setting', 2) }}</a></li>
+                @endcan
+
+                @can('payment-gateway-manage')
+                <li class="{{ Request::is('admin/mobile-money-config*') ? 'active' : '' }}"><a href="{{ route('admin.mobile-money-config.index') }}" class="">{{ __('Mobile Money (MTN / Orange)') }}</a></li>
                 @endcan
 
                 @can('application-setting-view')
