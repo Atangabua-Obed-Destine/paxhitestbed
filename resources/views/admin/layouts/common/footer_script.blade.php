@@ -468,7 +468,8 @@
             function updateActivity() {
                 lastActivity = Date.now();
                 warningShown = false;
-                $('#session-timeout-modal').modal('hide');
+                var $m = $('#session-timeout-modal');
+                if ($m.length && typeof $m.modal === 'function') { $m.modal('hide'); }
             }
             
             // Monitor user activity
@@ -485,7 +486,8 @@
                     warningShown = true;
                     const minutesLeft = Math.ceil(timeUntilTimeout / 60000);
                     $('#session-minutes-left').text(minutesLeft);
-                    $('#session-timeout-modal').modal('show');
+                    var $m2 = $('#session-timeout-modal');
+                    if ($m2.length && typeof $m2.modal === 'function') { $m2.modal('show'); }
                 }
                 
                 // Session expired - redirect to login

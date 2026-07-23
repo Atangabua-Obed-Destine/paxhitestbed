@@ -861,6 +861,7 @@ class ResultsSummaryController extends Controller
         $data['selected_semester'] = $semester = $request->semester ?? '0';
         $data['selected_section'] = $section = $request->section ?? '0';
         $data['selected_subject'] = $subject = $request->subject ?? '0';
+        $data['selected_all_programs'] = $allPrograms = $request->has('all_programs') ? filter_var($request->all_programs, FILTER_VALIDATE_BOOLEAN) : false;
 
         // Get filter options
         $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
@@ -911,7 +912,7 @@ class ResultsSummaryController extends Controller
 
         // Generate mark sheet if all required filters are selected
         if ($faculty != '0' && $program != '0' && $session != '0' && $semester != '0' && $subject != '0') {
-            $markSheetData = $this->generateCourseMarkSheet($faculty, $program, $session, $semester, $section, $subject);
+            $markSheetData = $this->generateCourseMarkSheet($faculty, $program, $session, $semester, $section, $subject, $allPrograms);
             $data = array_merge($data, $markSheetData);
         }
 
@@ -921,7 +922,7 @@ class ResultsSummaryController extends Controller
     /**
      * Generate the course mark sheet data - mirrors Subject Marking page exactly
      */
-    private function generateCourseMarkSheet($faculty, $program, $session, $semester, $section, $subjectId)
+    private function generateCourseMarkSheet($faculty, $program, $session, $semester, $section, $subjectId, $allPrograms = false)
     {
         $subjectModel = Subject::find($subjectId);
         if (!$subjectModel) {
@@ -967,8 +968,10 @@ class ResultsSummaryController extends Controller
         // Get student attendance for the subject (same as Subject Marking)
         $studentAttendance = \App\Models\StudentAttendance::query()
             ->with('studentEnroll')
-            ->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section) {
-                $query->where('program_id', $program);
+            ->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section, $allPrograms) {
+                if (!$allPrograms) {
+                    $query->where('program_id', $program);
+                }
                 $query->where('session_id', $session);
                 if ($semester != '0') {
                     $query->where('semester_id', $semester);
@@ -983,7 +986,9 @@ class ResultsSummaryController extends Controller
         // Get enrolled students - like Subject Marking controller
         $enrollQuery = StudentEnroll::query();
         $enrollQuery->where('session_id', $session);
-        $enrollQuery->where('program_id', $program);
+        if (!$allPrograms) {
+            $enrollQuery->where('program_id', $program);
+        }
         $enrollQuery->whereIn('status', [1, 2]);
         
         if ($semester != '0') {
@@ -1207,10 +1212,10 @@ class ResultsSummaryController extends Controller
             ],
             'course_meta' => [
                 'institution_name' => config('app.name', 'University'),
-                'faculty_name' => $facultyModel->title ?? 'N/A',
+                'faculty_name' => $allPrograms ? 'All Faculties/Schools' : ($facultyModel->title ?? 'N/A'),
                 'faculty_shortcode' => $facultyModel->shortcode ?? 'N/A',
                 'department_name' => $programModel->academicDepartment->title ?? 'N/A',
-                'program_name' => $programModel->title ?? 'N/A',
+                'program_name' => $allPrograms ? 'All Programmes' : ($programModel->title ?? 'N/A'),
                 'program_shortcode' => $programModel->shortcode ?? 'N/A',
                 'degree_type' => $programModel->degreeType->title ?? 'N/A',
                 'session_title' => $sessionModel->title ?? 'N/A',
@@ -1263,8 +1268,9 @@ class ResultsSummaryController extends Controller
         $semester = $request->semester;
         $section = $request->section ?? '0';
         $subject = $request->subject;
+        $allPrograms = $request->has('all_programs') ? filter_var($request->all_programs, FILTER_VALIDATE_BOOLEAN) : false;
 
-        $markSheetData = $this->generateCourseMarkSheet($faculty, $program, $session, $semester, $section, $subject);
+        $markSheetData = $this->generateCourseMarkSheet($faculty, $program, $session, $semester, $section, $subject, $allPrograms);
         
         if (isset($markSheetData['error'])) {
             return back()->with('error', $markSheetData['error']);
@@ -1353,7 +1359,7 @@ class ResultsSummaryController extends Controller
             $sheet->setCellValue('C' . $row, $record['name']);
             $sheet->setCellValue('D' . $row, $record['exam_code']);
             $sheet->setCellValue('E' . $row, $record['attendance_marks']);
-            $sheet->setCellValue('F' . $row, $record['ca_marks'] + $record['assignment_marks'] + $record['activity_marks']);
+            $sheet->setCellValue('F' . $row, $record['ca_exam_marks'] + $record['assignment_marks'] + $record['activity_marks']);
             $sheet->setCellValue('G' . $row, $record['total_ca']);
             $sheet->setCellValue('H' . $row, ($record['sign_in'] ?? $record['exam_attendance']) ? '✓' : '');
             $sheet->setCellValue('I' . $row, ($record['sign_out'] ?? $record['exam_attendance']) ? '✓' : '');

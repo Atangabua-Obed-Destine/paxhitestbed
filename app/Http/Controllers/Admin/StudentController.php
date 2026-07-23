@@ -1390,4 +1390,29 @@ class StudentController extends Controller
             // Don't throw exception - fee assignment failure shouldn't block student creation
         }
     }
+
+    /**
+     * Impersonate a student
+     *
+     * @param int $id
+     * @return \Illuminate\Http\Response
+     */
+    public function impersonate($id)
+    {
+        // Require student-edit permission to impersonate, or custom permission if created later
+        if (!Auth::guard('web')->user()->can('student-edit')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $student = Student::findOrFail($id);
+
+        // Store the original admin ID in the session
+        session()->put('impersonate_admin_id', Auth::guard('web')->user()->id);
+
+        // Log the admin into the student guard
+        Auth::guard('student')->loginUsingId($student->id);
+
+        // Redirect to the student dashboard
+        return redirect()->route('student.dashboard.index');
+    }
 }

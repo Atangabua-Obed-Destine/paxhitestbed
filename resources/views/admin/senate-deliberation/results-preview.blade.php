@@ -326,8 +326,76 @@
     <div class="card" style="border-top:0; border-top-left-radius:0; border-top-right-radius:0;">
         <div class="card-block">
 
+            @if(isset($student_performance_summaries) && count($student_performance_summaries) > 0)
+            @php
+                $totCourses = 0; $totReg = 0; $totExam = 0; $totPass = 0; $totFail = 0; $totScripts = 0;
+                foreach($student_performance_summaries as $ss) {
+                    $totCourses += $ss['courses_examined'];
+                    $totReg += $ss['registered'];
+                    $totExam += $ss['examined'];
+                    $totPass += $ss['passed'];
+                    $totFail += $ss['failed'];
+                    $totScripts += $ss['scripts_marked'];
+                }
+                $totPassRate = $totExam > 0 ? round(($totPass / $totExam) * 100, 1) : 0;
+                $totFailRate = $totExam > 0 ? round(($totFail / $totExam) * 100, 1) : 0;
+                $uniqueCourses = collect($faculty_student_matrices ?? [])->flatMap(fn($f) => collect($f['programs'] ?? [])->flatMap(fn($p) => $p['subjects'] ?? []))->unique('id')->count();
+            @endphp
+            
+            <div class="mb-4">
+                <h5 class="text-center font-weight-bold text-uppercase mb-3" style="font-size: 1.1rem; line-height: 1.5; color: #333;">
+                    SUMMARY OF RESULTS FOR THE {{ strtoupper($semester_label ?? 'First Semester') }} EXAMINATION {{ $session_label ?? '2025/2026' }}
+                </h5>
+                <p class="text-justify mb-3" style="font-size: 1.05rem; color: #444;">
+                    For the four schools, a total of <strong>{{ $uniqueCourses }}</strong> courses were examined, with <strong>{{ number_format($totScripts) }}</strong> scripts marked, <strong>{{ number_format($totPass) }}</strong> passed and <strong>{{ number_format($totFail) }}</strong> failed giving a percentage of passed of <strong>{{ $totPassRate }}</strong> and percentage failed of <strong>{{ $totFailRate }}</strong>.
+                </p>
+                
+                <h6 class="mb-2 text-dark">Table 1: {{ $semester_label ?? 'First Semester' }} Statistics {{ $session_label ?? '2025/2026' }}</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm course-table" style="border: 1px solid #dee2e6;">
+                        <thead class="bg-light text-dark">
+                            <tr>
+                                <th>Faculties/Schools</th>
+                                <th class="text-center">No of courses examined</th>
+                                <th class="text-center">No Registered</th>
+                                <th class="text-center">No Examined</th>
+                                <th class="text-center">No Passed</th>
+                                <th class="text-center">No Failed</th>
+                                <th class="text-center">% Passed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($student_performance_summaries as $ss)
+                            <tr>
+                                <td class="font-weight-bold">{{ $ss['shortcode'] ?: $ss['name'] }}</td>
+                                <td class="text-center">{{ $ss['courses_examined'] }}</td>
+                                <td class="text-center">{{ $ss['registered'] }}</td>
+                                <td class="text-center">{{ $ss['examined'] }}</td>
+                                <td class="text-center">{{ $ss['passed'] }}</td>
+                                <td class="text-center">{{ $ss['failed'] }}</td>
+                                <td class="text-center">{{ $ss['pass_rate'] }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot class="bg-light font-weight-bold">
+                            <tr>
+                                <td>Total</td>
+                                <td class="text-center">{{ $totCourses }}</td>
+                                <td class="text-center">{{ $totReg }}</td>
+                                <td class="text-center">{{ $totExam }}</td>
+                                <td class="text-center">{{ $totPass }}</td>
+                                <td class="text-center">{{ $totFail }}</td>
+                                <td class="text-center"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <hr class="my-4" style="border-top: 2px dashed #ddd;">
+            @endif
+
             @if(count($faculty_summaries) > 0)
-            {{-- Faculty Summary Table --}}
+            {{-- Faculty Summary Table (Script-based) --}}
             <h6 class="mb-3"><i class="fas fa-university"></i> Faculty Performance Summary</h6>
             <div class="table-responsive">
                 <table class="table table-bordered table-striped table-sm course-table">

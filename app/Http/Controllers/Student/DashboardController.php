@@ -516,4 +516,23 @@ class DashboardController extends Controller
 
         return view($this->view.'.index', $data);
     }
+
+    /**
+     * Leave impersonation mode and return to admin session
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function leaveImpersonation()
+    {
+        if (session()->has('impersonate_admin_id')) {
+            session()->forget('impersonate_admin_id');
+            Auth::guard('student')->logout();
+            
+            // Redirect back to admin students list
+            return redirect()->route('admin.student.index');
+        }
+
+        // If for some reason they hit this route without impersonating
+        return redirect()->route('student.dashboard.index');
+    }
 }

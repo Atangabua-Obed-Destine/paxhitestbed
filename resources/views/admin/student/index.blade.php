@@ -177,6 +177,10 @@
                                             </a>
 
                                             @can($access.'-edit')
+                                            <a href="{{ route($route.'.impersonate', $student->id) }}" class="btn btn-icon btn-dark btn-sm" title="Impersonate Student" target="_blank">
+                                                <i class="fas fa-user-secret"></i>
+                                            </a>
+
                                             <a href="{{ route($route.'.edit', $student->id) }}" class="btn btn-icon btn-primary btn-sm">
                                                 <i class="far fa-edit"></i>
                                             </a>

@@ -253,6 +253,27 @@
                                             <!-- Include Delete modal -->
                                             @include('admin.layouts.inc.delete')
                                             @endcan
+
+                                            @if((int) $row->status === 2)
+                                                @can($access.'-edit')
+                                                    <a href="{{ route($route.'.acceptance-letter.download', $row->id) }}"
+                                                       target="_blank"
+                                                       class="btn btn-icon btn-outline-primary btn-sm"
+                                                       title="{{ __('Download acceptance letter') }}">
+                                                        <i class="fas fa-file-pdf"></i>
+                                                    </a>
+                                                    <form action="{{ route($route.'.acceptance-letter.resend', $row->id) }}"
+                                                          method="post" class="d-inline"
+                                                          onsubmit="return confirm('{{ __('Resend the acceptance letter to') }} {{ $row->email }}?');">
+                                                        @csrf
+                                                        <button type="submit"
+                                                                class="btn btn-icon btn-info btn-sm"
+                                                                title="{{ __('Resend acceptance letter') }}">
+                                                            <i class="fas fa-paper-plane"></i>
+                                                        </button>
+                                                    </form>
+                                                @endcan
+                                            @endif
                                         </td>
                                     </tr>
                                   @endforeach

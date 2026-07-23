@@ -28,9 +28,18 @@
                                 <i class="fas fa-th-list"></i> {{ __('Student Results') }}
                             </a>
                             @if(isset($student_records) && count($student_records) > 0)
-                            <button type="button" class="btn btn-success" onclick="window.print()">
-                                <i class="fas fa-print"></i> {{ __('Print') }}
-                            </button>
+                                @if(request('all_programs'))
+                                    <a href="{{ request()->fullUrlWithQuery(['all_programs' => 0]) }}" class="btn btn-warning">
+                                        <i class="fas fa-filter"></i> {{ __('Show Selected Program Only') }}
+                                    </a>
+                                @else
+                                    <a href="{{ request()->fullUrlWithQuery(['all_programs' => 1]) }}" class="btn btn-warning">
+                                        <i class="fas fa-globe"></i> {{ __('Show All Programs') }}
+                                    </a>
+                                @endif
+                                <button type="button" class="btn btn-success" onclick="window.print()">
+                                    <i class="fas fa-print"></i> {{ __('Print') }}
+                                </button>
                             @endif
                         </div>
                     </div>

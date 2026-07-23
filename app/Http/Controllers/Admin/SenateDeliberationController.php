@@ -1107,6 +1107,12 @@ class SenateDeliberationController extends Controller
                 $sessionId, $semesterId, $facultyId, $data['grades']
             );
 
+            // ── 10. Build student performance summary for screenshot table ──
+            $data['student_performance_summaries'] = $this->buildStudentPerformanceSummaries(
+                $data['faculty_student_matrices'],
+                $data['faculty_summaries']
+            );
+
             // Context labels
             $data['session_label']  = Session::find($sessionId)->title ?? '';
             $data['semester_label'] = Semester::find($semesterId)->title ?? '';
@@ -2181,7 +2187,7 @@ class SenateDeliberationController extends Controller
         $query = SubjectMarking::whereHas('studentEnroll', function ($q) use ($sessionId, $semesterId, $facultyId) {
             $q->where('session_id', $sessionId)
               ->where('semester_id', $semesterId)
-              ->where('status', 1);
+              ->whereIn('status', [1, 2]);
             if ($facultyId) {
                 $q->whereHas('program', fn($pq) => $pq->where('faculty_id', $facultyId));
             }
@@ -2208,6 +2214,51 @@ class SenateDeliberationController extends Controller
     }
 
     /**
+     * Build student performance summary mapping to the requested format.
+     */
+    private function buildStudentPerformanceSummaries(array $matrices, array $facultySummaries): array
+    {
+        $summaries = [];
+        $scriptsMap = [];
+        
+        foreach ($facultySummaries as $fs) {
+            $scriptsMap[$fs['id']] = $fs['scripts_written'] ?? 0;
+        }
+
+        foreach ($matrices as $fac) {
+            $facRegistered = 0;
+            $facPassed = 0;
+            $facFailed = 0;
+            $subjects = [];
+
+            foreach ($fac['programs'] as $prog) {
+                $facRegistered += $prog['overall']['total_students'] ?? 0;
+                $facPassed += $prog['overall']['total_passed'] ?? 0;
+                $facFailed += $prog['overall']['total_failed'] ?? 0;
+                foreach ($prog['subjects'] as $subj) {
+                    $subjects[$subj['id']] = true;
+                }
+            }
+
+            if ($facRegistered > 0 || !empty($subjects)) {
+                $summaries[] = [
+                    'id'               => $fac['id'] ?? 0,
+                    'name'             => $fac['name'] ?? '',
+                    'shortcode'        => $fac['shortcode'] ?? '',
+                    'courses_examined' => count($subjects),
+                    'scripts_marked'   => $scriptsMap[$fac['id']] ?? 0,
+                    'registered'       => $facRegistered,
+                    'examined'         => $facRegistered,
+                    'passed'           => $facPassed,
+                    'failed'           => $facFailed,
+                    'pass_rate'        => $facRegistered > 0 ? round(($facPassed / $facRegistered) * 100, 1) : 0,
+                ];
+            }
+        }
+        return $summaries;
+    }
+
+    /**
      * Build per-faculty summary with department breakdown.
      */
     private function buildFacultySummaries(int $sessionId, int $semesterId, ?int $facultyId): array
@@ -2231,7 +2282,7 @@ class SenateDeliberationController extends Controller
             // Check if any enrollments exist
             $enrollCount = StudentEnroll::where('session_id', $sessionId)
                 ->where('semester_id', $semesterId)
-                ->where('status', 1)
+                ->whereIn('status', [1, 2])
                 ->whereIn('program_id', $facProgramIds)
                 ->count();
 
@@ -2240,7 +2291,7 @@ class SenateDeliberationController extends Controller
             $markQuery = SubjectMarking::whereHas('studentEnroll', function ($q) use ($sessionId, $semesterId, $facProgramIds) {
                 $q->where('session_id', $sessionId)
                   ->where('semester_id', $semesterId)
-                  ->where('status', 1)
+                  ->whereIn('status', [1, 2])
                   ->whereIn('program_id', $facProgramIds);
             })->whereNotNull('total_marks');
 
@@ -2260,7 +2311,7 @@ class SenateDeliberationController extends Controller
                 $deptMarkQuery = SubjectMarking::whereHas('studentEnroll', function ($q) use ($sessionId, $semesterId, $deptProgramIds) {
                     $q->where('session_id', $sessionId)
                       ->where('semester_id', $semesterId)
-                      ->where('status', 1)
+                      ->whereIn('status', [1, 2])
                       ->whereIn('program_id', $deptProgramIds);
                 })->whereNotNull('total_marks');
 
@@ -2338,7 +2389,7 @@ class SenateDeliberationController extends Controller
                 $subjectIds = SubjectMarking::whereHas('studentEnroll', function ($q) use ($sessionId, $semesterId, $deptProgramIds) {
                     $q->where('session_id', $sessionId)
                       ->where('semester_id', $semesterId)
-                      ->where('status', 1)
+                      ->whereIn('status', [1, 2])
                       ->whereIn('program_id', $deptProgramIds);
                 })->whereNotNull('total_marks')
                   ->distinct('subject_id')
@@ -2354,7 +2405,7 @@ class SenateDeliberationController extends Controller
                         ->whereHas('studentEnroll', function ($q) use ($sessionId, $semesterId, $deptProgramIds) {
                             $q->where('session_id', $sessionId)
                               ->where('semester_id', $semesterId)
-                              ->where('status', 1)
+                              ->whereIn('status', [1, 2])
                               ->whereIn('program_id', $deptProgramIds);
                         })->whereNotNull('total_marks');
 
@@ -2367,7 +2418,7 @@ class SenateDeliberationController extends Controller
                     // Registered count (students with exams for this subject)
                     $registered = StudentEnroll::where('session_id', $sessionId)
                         ->where('semester_id', $semesterId)
-                        ->where('status', 1)
+                        ->whereIn('status', [1, 2])
                         ->whereIn('program_id', $deptProgramIds)
                         ->whereHas('exams', fn($q) => $q->where('subject_id', $subj->id))
                         ->count();
@@ -2502,7 +2553,7 @@ class SenateDeliberationController extends Controller
                 ->whereHas('studentEnroll', function ($q) use ($sessionId, $semesterId, $programIds) {
                     $q->where('session_id', $sessionId)
                       ->where('semester_id', $semesterId)
-                      ->where('status', 1)
+                      ->whereIn('status', [1, 2])
                       ->whereIn('program_id', $programIds);
                 })->whereNotNull('total_marks')
                 ->get();
@@ -2616,7 +2667,7 @@ class SenateDeliberationController extends Controller
             ->join('subjects', 'subject_markings.subject_id', '=', 'subjects.id')
             ->where('student_enrolls.session_id', $sessionId)
             ->where('student_enrolls.semester_id', $semesterId)
-            ->where('student_enrolls.status', 1)
+            ->whereIn('student_enrolls.status', [1, 2])
             ->whereNotNull('subject_markings.total_marks');
 
         if ($facultyId) {
@@ -2817,6 +2868,11 @@ class SenateDeliberationController extends Controller
             'grades'                  => $grades,
             'standingLabels'          => AcademicStanding::standingLabels(),
         ];
+        
+        $exportData['student_performance_summaries'] = $this->buildStudentPerformanceSummaries(
+            $exportData['faculty_student_matrices'],
+            $exportData['faculty_summaries']
+        );
 
         // Academic standing distribution
         $exportData['standings_computed'] = AcademicStanding::where('session_id', $sessionId)

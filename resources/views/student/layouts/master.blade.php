@@ -107,6 +107,19 @@
     </style>
     @endif
 
+    @if(session()->has('impersonate_admin_id'))
+    <div class="impersonate-banner" style="position:fixed;top:0;left:0;right:0;background:#343a40;color:#fff;text-align:center;padding:10px;z-index:99999;">
+        You are currently impersonating a student.
+        <a href="{{ route('student.leave-impersonation') }}" class="btn btn-sm btn-danger ml-3">Leave Impersonation Mode</a>
+    </div>
+    <style>
+        .site-announcement { top: 50px !important; }
+        /* Add some extra top padding when impersonating */
+        .pcoded-header { top: 50px !important; }
+        .pcoded-navbar { top: 50px !important; }
+    </style>
+    @endif
+
     <!-- [ Pre-loader ] start -->
     <div class="loader-bg">
         <div class="loader-track">

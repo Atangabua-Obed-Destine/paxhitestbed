@@ -42,6 +42,53 @@ class FacultySummarySheet implements FromArray, WithTitle, WithStyles, WithEvent
         ];
         $rows[] = [''];
 
+        // ── NEW: Student Performance Statistics Table (matching screenshot) ──
+        $studentSummaries = $this->data['student_performance_summaries'] ?? [];
+        if (!empty($studentSummaries)) {
+            $totCourses = 0; $totReg = 0; $totExam = 0; $totPass = 0; $totFail = 0; $totScripts = 0;
+            foreach ($studentSummaries as $ss) {
+                $totCourses += $ss['courses_examined'];
+                $totReg += $ss['registered'];
+                $totExam += $ss['examined'];
+                $totPass += $ss['passed'];
+                $totFail += $ss['failed'];
+                $totScripts += $ss['scripts_marked'];
+            }
+            $totPassRate = $totExam > 0 ? round(($totPass / $totExam) * 100, 1) : 0;
+            $totFailRate = $totExam > 0 ? round(($totFail / $totExam) * 100, 1) : 0;
+            
+            $facMatrices = $this->data['faculty_student_matrices'] ?? [];
+            $uniqueCourses = collect($facMatrices)->flatMap(fn($f) => collect($f['programs'] ?? [])->flatMap(fn($p) => $p['subjects'] ?? []))->unique('id')->count();
+
+            $rows[] = ['SUMMARY OF RESULTS FOR THE ' . strtoupper($this->data['semester_label'] ?? 'First Semester') . ' EXAMINATION ' . ($this->data['session_label'] ?? '')];
+            $rows[] = [
+                "For the four schools, a total of {$uniqueCourses} courses were examined, with {$totScripts} scripts marked, {$totPass} passed and {$totFail} failed giving a percentage of passed of {$totPassRate} and percentage failed of {$totFailRate}."
+            ];
+            $rows[] = ['Table 1: ' . ($this->data['semester_label'] ?? 'First Semester') . ' Statistics ' . ($this->data['session_label'] ?? '')];
+            
+            $rows[] = [
+                'Faculties/Schools', 'No of courses examined', 'No Registered',
+                'No Examined', 'No Passed', 'No Failed', '% Passed'
+            ];
+            
+            foreach ($studentSummaries as $ss) {
+                $rows[] = [
+                    $ss['shortcode'] ?: $ss['name'],
+                    $ss['courses_examined'],
+                    $ss['registered'],
+                    $ss['examined'],
+                    $ss['passed'],
+                    $ss['failed'],
+                    $ss['pass_rate']
+                ];
+            }
+            
+            $rows[] = [
+                'Total', $totCourses, $totReg, $totExam, $totPass, $totFail, $totPassRate
+            ];
+            $rows[] = [''];
+        }
+
         foreach ($faculties as $fac) {
             // Faculty title row
             $rows[] = [
@@ -144,9 +191,60 @@ class FacultySummarySheet implements FromArray, WithTitle, WithStyles, WithEvent
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
                 ]);
 
+                // Style the new Student Performance Summary block if present
+                $studentSummaries = $this->data['student_performance_summaries'] ?? [];
+                $row = 5;
+                if (!empty($studentSummaries)) {
+                    // Summary Title
+                    $sheet->mergeCells("A{$row}:G{$row}");
+                    $sheet->getStyle("A{$row}")->applyFromArray([
+                        'font' => ['bold' => true, 'size' => 12],
+                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                    ]);
+                    $row++;
+
+                    // Summary Text
+                    $sheet->mergeCells("A{$row}:G{$row}");
+                    $sheet->getStyle("A{$row}")->applyFromArray([
+                        'alignment' => ['wrapText' => true],
+                    ]);
+                    $sheet->getRowDimension($row)->setRowHeight(30);
+                    $row++;
+
+                    // Table Label
+                    $sheet->mergeCells("A{$row}:G{$row}");
+                    $sheet->getStyle("A{$row}")->applyFromArray([
+                        'font' => ['bold' => true, 'italic' => true],
+                    ]);
+                    $row++;
+
+                    // Table Header
+                    $sheet->getStyle("A{$row}:G{$row}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => '000000']],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'f8f9fa']],
+                        'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+                    ]);
+                    $row++;
+
+                    // Table Data
+                    $dataStartRow = $row;
+                    $dataEndRow = $row + count($studentSummaries) - 1;
+                    $sheet->getStyle("A{$dataStartRow}:G{$dataEndRow}")->applyFromArray([
+                        'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+                    ]);
+                    $row = $dataEndRow + 1;
+
+                    // Table Footer (Totals)
+                    $sheet->getStyle("A{$row}:G{$row}")->applyFromArray([
+                        'font' => ['bold' => true],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'e9ecef']],
+                        'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+                    ]);
+                    $row += 2; // skip blank row
+                }
+
                 // Now style each faculty block
                 $faculties = $this->data['faculty_summaries'] ?? [];
-                $row = 5;
                 foreach ($faculties as $fac) {
                     $deptCount = count($fac['departments'] ?? []);
 

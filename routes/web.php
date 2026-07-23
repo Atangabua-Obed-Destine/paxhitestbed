@@ -248,6 +248,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     
     Route::post('admission/student-generate-id', 'StudentController@generateId')->name('student.generate-id');
     Route::resource('admission/student', 'StudentController');
+    Route::get('admission/student/{id}/impersonate', 'StudentController@impersonate')->name('student.impersonate');
     Route::get('admission/student-card/{id}', 'StudentController@card')->name('student.card');
     // Route::get('admission/student-status/{id}', 'StudentController@status')->name('student.status');
     Route::post('admission/student-enroll-status/{enrollment}', 'StudentController@toggleEnrollStatus')->name('student.toggle-enroll-status');
@@ -1183,6 +1184,9 @@ Route::middleware(['auth:student', 'XSS'])->prefix('student')->name('student.')-
     Route::get('select-program', 'ProgramSelectorController@showSelectProgram')->name('select-program');
     Route::post('switch-program', 'ProgramSelectorController@switchProgram')->name('switch-program');
     Route::get('current-enrollment', 'ProgramSelectorController@getCurrentEnrollment')->name('current-enrollment');
+
+    // Leave Impersonation Route (EXCLUDED from middlewares so admins can always exit)
+    Route::get('leave-impersonation', 'DashboardController@leaveImpersonation')->name('leave-impersonation');
 
     // All other student routes (protected by platform fee middleware AND enrollment selection)
     Route::middleware(['select.enrollment', 'check.platform.fee', 'check.first.installment'])->group(function () {

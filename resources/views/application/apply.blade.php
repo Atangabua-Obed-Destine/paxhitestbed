@@ -1095,11 +1095,14 @@
 
             if ($finishButton.length) {
                 $finishButton.on('click', function() {
-                    validator.settings.ignore = ":disabled";
+                    validator.settings.ignore = ":hidden,:disabled";
 
                     if (!$form.valid()) {
                         if (typeof validator.focusInvalid === 'function') {
                             validator.focusInvalid();
+                        }
+                        if (window.console && validator.errorList) {
+                            console.warn('Application form invalid fields:', validator.errorList.map(function(e){ return { name: e.element.name, message: e.message }; }));
                         }
                         return;
                     }
@@ -1137,8 +1140,18 @@
                     return $form.valid();
                 },
                 onFinishing: function() {
-                    validator.settings.ignore = ":disabled";
-                    return $form.valid();
+                    validator.settings.ignore = ":hidden,:disabled";
+                    var ok = $form.valid();
+                    if (!ok && window.console && validator.errorList) {
+                        console.warn('Application form invalid fields (finish):');
+                        validator.errorList.forEach(function(e){
+                            console.warn(' - name="' + (e.element && e.element.name) + '" id="' + (e.element && e.element.id) + '" — ' + e.message);
+                        });
+                        if (typeof console.table === 'function') {
+                            console.table(validator.errorList.map(function(e){ return { name: e.element && e.element.name, id: e.element && e.element.id, message: e.message }; }));
+                        }
+                    }
+                    return ok;
                 },
                 onFinished: function() {
                     @if(!empty($admissionFeeRequired))
