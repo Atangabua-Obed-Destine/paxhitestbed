@@ -332,6 +332,14 @@
                                     <td class="text-right"><span class="badge badge-success badge-lg">{{ $statistics['passed'] }}</span></td>
                                 </tr>
                                 <tr>
+                                    <td><strong>% CA Pass</strong></td>
+                                    <td class="text-right"><span class="badge badge-info badge-lg">{{ $statistics['ca_pass_rate'] ?? 0 }}%</span></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>% Exam Pass</strong></td>
+                                    <td class="text-right"><span class="badge badge-primary badge-lg">{{ $statistics['exam_pass_rate'] ?? 0 }}%</span></td>
+                                </tr>
+                                <tr>
                                     <td><strong>% Pass</strong></td>
                                     <td class="text-right"><span class="badge badge-success badge-lg">{{ $statistics['pass_rate'] }}%</span></td>
                                 </tr>

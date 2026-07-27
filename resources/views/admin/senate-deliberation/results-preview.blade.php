@@ -219,20 +219,53 @@
                 {{-- Publishing Readiness --}}
                 <div class="col-md-4 mb-3">
                     <div class="card border h-100">
-                        <div class="card-header bg-white">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center pb-0 border-bottom-0">
                             <h6 class="mb-0"><i class="fas fa-broadcast-tower text-primary"></i> Publishing Readiness</h6>
                         </div>
-                        <div class="card-body text-center">
-                            <div style="position:relative; height:180px;">
-                                <canvas id="publishingDonutChart"></canvas>
+                        <div class="card-header bg-white pt-2 pb-0">
+                            <ul class="nav nav-tabs card-header-tabs" id="pubReadinessTypeTabs" role="tablist">
+                                <li class="nav-item">
+                                    <a class="nav-link active" id="tab-pub-ca" data-bs-toggle="tab" data-toggle="tab" href="#pane-pub-ca" role="tab">CA</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" id="tab-pub-final" data-bs-toggle="tab" data-toggle="tab" href="#pane-pub-final" role="tab">Final Exam</a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-body text-center tab-content p-2">
+                            <!-- CA Pane -->
+                            <div class="tab-pane fade show active" id="pane-pub-ca" role="tabpanel">
+                                <div style="position:relative; height:160px;">
+                                    <canvas id="caPublishingDonutChart"></canvas>
+                                </div>
+                                <div class="mt-2">
+                                    <span class="summary-pill" style="background:#d4edda;color:#155724;">Published: {{ $publishing_summary_ca['published'] }}</span>
+                                    <span class="summary-pill" style="background:#d1ecf1;color:#0c5460;">Approved: {{ $publishing_summary_ca['approved'] }}</span>
+                                    <span class="summary-pill" style="background:#fff3cd;color:#856404;">Checked: {{ $publishing_summary_ca['checked'] }}</span>
+                                    <span class="summary-pill" style="background:#f8d7da;color:#721c24;">Draft: {{ $publishing_summary_ca['draft'] }}</span>
+                                </div>
+                                <h4 class="mt-2 mb-0">{{ $publishing_summary_ca['readiness'] }}% Ready</h4>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-2" data-bs-toggle="modal" data-bs-target="#caPublishingDetailsModal">
+                                    View CA Details
+                                </button>
                             </div>
-                            <div class="mt-2">
-                                <span class="summary-pill" style="background:#d4edda;color:#155724;">Published: {{ $publishing_summary['published'] }}</span>
-                                <span class="summary-pill" style="background:#d1ecf1;color:#0c5460;">Approved: {{ $publishing_summary['approved'] }}</span>
-                                <span class="summary-pill" style="background:#fff3cd;color:#856404;">Checked: {{ $publishing_summary['checked'] }}</span>
-                                <span class="summary-pill" style="background:#f8d7da;color:#721c24;">Draft: {{ $publishing_summary['draft'] }}</span>
+
+                            <!-- Final Pane -->
+                            <div class="tab-pane fade" id="pane-pub-final" role="tabpanel">
+                                <div style="position:relative; height:160px;">
+                                    <canvas id="finalPublishingDonutChart"></canvas>
+                                </div>
+                                <div class="mt-2">
+                                    <span class="summary-pill" style="background:#d4edda;color:#155724;">Published: {{ $publishing_summary_final['published'] }}</span>
+                                    <span class="summary-pill" style="background:#d1ecf1;color:#0c5460;">Approved: {{ $publishing_summary_final['approved'] }}</span>
+                                    <span class="summary-pill" style="background:#fff3cd;color:#856404;">Checked: {{ $publishing_summary_final['checked'] }}</span>
+                                    <span class="summary-pill" style="background:#f8d7da;color:#721c24;">Draft: {{ $publishing_summary_final['draft'] }}</span>
+                                </div>
+                                <h4 class="mt-2 mb-0">{{ $publishing_summary_final['readiness'] }}% Ready</h4>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-2" data-bs-toggle="modal" data-bs-target="#finalPublishingDetailsModal">
+                                    View Final Details
+                                </button>
                             </div>
-                            <h4 class="mt-2 mb-0">{{ $publishing_summary['readiness'] }}% Ready</h4>
                         </div>
                     </div>
                 </div>
@@ -567,7 +600,7 @@
                                                     <th rowspan="2" class="text-center">%CC</th>
                                                     <th colspan="2" class="text-center">Number</th>
                                                     <th colspan="2" class="text-center">Results</th>
-                                                    <th colspan="2" class="text-center">Percentage</th>
+                                                    <th colspan="4" class="text-center">Percentage</th>
                                                     <th colspan="{{ count($gradeColTitles) }}" class="text-center">Grade Distribution</th>
                                                     <th rowspan="2" class="text-center">Avg</th>
                                                 </tr>
@@ -576,8 +609,10 @@
                                                     <th class="text-center">CE</th>
                                                     <th class="text-center">Pass</th>
                                                     <th class="text-center">Fail</th>
-                                                    <th class="text-center">%P</th>
-                                                    <th class="text-center">%F</th>
+                                                    <th class="text-center" title="CA Pass Rate">%CA</th>
+                                                    <th class="text-center" title="Exam Pass Rate">%Exam</th>
+                                                    <th class="text-center" title="Overall Pass Rate">%Tot</th>
+                                                    <th class="text-center" title="Fail Rate">%F</th>
                                                     @foreach($gradeColTitles as $gt)
                                                     <th class="grade-cell">{{ $gt }}</th>
                                                     @endforeach
@@ -604,6 +639,8 @@
                                                     <td class="text-center">{{ $crs['candidates_examined'] }}</td>
                                                     <td class="text-center text-success font-weight-bold">{{ $crs['passed'] }}</td>
                                                     <td class="text-center text-danger font-weight-bold">{{ $crs['failed'] }}</td>
+                                                    <td class="text-center text-muted">{{ $crs['ca_pass_rate'] ?? 0 }}%</td>
+                                                    <td class="text-center text-muted">{{ $crs['exam_pass_rate'] ?? 0 }}%</td>
                                                     <td class="text-center {{ $crs['pass_rate'] >= 70 ? 'pass-rate-high' : ($crs['pass_rate'] >= 50 ? 'pass-rate-mid' : 'pass-rate-low') }}">{{ $crs['pass_rate'] }}%</td>
                                                     <td class="text-center">{{ $crs['fail_rate'] }}%</td>
                                                     @foreach($gradeColTitles as $gt)
@@ -620,6 +657,8 @@
                                                     <td class="text-center">{{ $dtExam }}</td>
                                                     <td class="text-center text-success">{{ $dtPass }}</td>
                                                     <td class="text-center text-danger">{{ $dtFail }}</td>
+                                                    <td class="text-center">-</td>
+                                                    <td class="text-center">-</td>
                                                     <td class="text-center">{{ $dtExam > 0 ? round(($dtPass/$dtExam)*100,1) : 0 }}%</td>
                                                     <td class="text-center">{{ $dtExam > 0 ? round(($dtFail/$dtExam)*100,1) : 0 }}%</td>
                                                     <td colspan="{{ count($gradeColTitles) + 1 }}"></td>
@@ -1212,12 +1251,164 @@
 </div>
 @endif
 
+<!-- CA Publishing Readiness Details Modal -->
+<div class="modal fade" id="caPublishingDetailsModal" tabindex="-1" role="dialog" aria-labelledby="caPublishingDetailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title" id="caPublishingDetailsModalLabel">CA Publishing Readiness Details</h5>
+        <button type="button" class="close" data-bs-dismiss="modal" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        
+        <ul class="nav nav-tabs mb-3" id="caPubReadinessTabs" role="tablist">
+            @php 
+                $statesList = [
+                    'draft' => 'Draft', 
+                    'submitted' => 'Submitted', 
+                    'checked' => 'Checked', 
+                    'approved' => 'Approved', 
+                    'published' => 'Published'
+                ]; 
+            @endphp
+            @foreach($statesList as $stateKey => $stateLabel)
+            <li class="nav-item">
+                <a class="nav-link {{ $loop->first ? 'active' : '' }}" id="tab-pub-ca-{{ $stateKey }}" data-bs-toggle="tab" data-toggle="tab" href="#pane-pub-ca-{{ $stateKey }}" role="tab">
+                    {{ $stateLabel }} <span class="badge badge-secondary">{{ count($publishing_summary_ca['details'][$stateKey] ?? []) }}</span>
+                </a>
+            </li>
+            @endforeach
+        </ul>
+
+        <div class="tab-content" id="caPubReadinessTabsContent">
+            @foreach($statesList as $stateKey => $stateLabel)
+            <div class="tab-pane fade {{ $loop->first ? 'show active' : '' }}" id="pane-pub-ca-{{ $stateKey }}" role="tabpanel">
+                @if(count($publishing_summary_ca['details'][$stateKey] ?? []) > 0)
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm table-striped pub-details-table" style="width: 100%;">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Course Code</th>
+                                <th>Course Title</th>
+                                <th>Program</th>
+                                <th>Section</th>
+                                <th>Exam Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($publishing_summary_ca['details'][$stateKey] as $item)
+                            <tr>
+                                <td>{{ $item->subject->code ?? 'N/A' }}</td>
+                                <td>{{ $item->subject->title ?? 'N/A' }}</td>
+                                <td>{{ $item->program->title ?? 'N/A' }}</td>
+                                <td>{{ $item->section->title ?? 'All' }}</td>
+                                <td>{{ $item->examType->title ?? 'N/A' }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @else
+                <div class="alert alert-info text-center mt-3">No items currently in {{ $stateLabel }} state.</div>
+                @endif
+            </div>
+            @endforeach
+        </div>
+
+      </div>
+      <div class="modal-footer border-top-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Final Exam Publishing Readiness Details Modal -->
+<div class="modal fade" id="finalPublishingDetailsModal" tabindex="-1" role="dialog" aria-labelledby="finalPublishingDetailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title" id="finalPublishingDetailsModalLabel">Final Exam Publishing Readiness Details</h5>
+        <button type="button" class="close" data-bs-dismiss="modal" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        
+        <ul class="nav nav-tabs mb-3" id="finalPubReadinessTabs" role="tablist">
+            @foreach($statesList as $stateKey => $stateLabel)
+            <li class="nav-item">
+                <a class="nav-link {{ $loop->first ? 'active' : '' }}" id="tab-pub-final-{{ $stateKey }}" data-bs-toggle="tab" data-toggle="tab" href="#pane-pub-final-{{ $stateKey }}" role="tab">
+                    {{ $stateLabel }} <span class="badge badge-secondary">{{ count($publishing_summary_final['details'][$stateKey] ?? []) }}</span>
+                </a>
+            </li>
+            @endforeach
+        </ul>
+
+        <div class="tab-content" id="finalPubReadinessTabsContent">
+            @foreach($statesList as $stateKey => $stateLabel)
+            <div class="tab-pane fade {{ $loop->first ? 'show active' : '' }}" id="pane-pub-final-{{ $stateKey }}" role="tabpanel">
+                @if(count($publishing_summary_final['details'][$stateKey] ?? []) > 0)
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm table-striped pub-details-table" style="width: 100%;">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Course Code</th>
+                                <th>Course Title</th>
+                                <th>Program</th>
+                                <th>Section</th>
+                                <th>Exam Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($publishing_summary_final['details'][$stateKey] as $item)
+                            <tr>
+                                <td>{{ $item->subject->code ?? 'N/A' }}</td>
+                                <td>{{ $item->subject->title ?? 'N/A' }}</td>
+                                <td>{{ $item->program->title ?? 'N/A' }}</td>
+                                <td>{{ $item->section->title ?? 'All' }}</td>
+                                <td>{{ $item->examType->title ?? 'N/A' }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @else
+                <div class="alert alert-info text-center mt-3">No items currently in {{ $stateLabel }} state.</div>
+                @endif
+            </div>
+            @endforeach
+        </div>
+
+      </div>
+      <div class="modal-footer border-top-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 @endsection
 
 @section('page_js')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 $(document).ready(function() {
+
+    // Initialize datatable for publishing readiness details
+    if ($.fn.DataTable) {
+        var pubTables = $('.pub-details-table').DataTable({
+            "pageLength": 10,
+            "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]]
+        });
+        
+        // Fix column widths when a tab is shown
+        $('a[data-bs-toggle="tab"], a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+            $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
+        });
+    }
 
     // ── Lecturer row expand/collapse ────────────────────────────────────────
     $('.lecturer-row').css('cursor', 'pointer').on('click', function() {
@@ -1228,20 +1419,20 @@ $(document).ready(function() {
     @if(isset($kpis))
     // ── CHARTS ──────────────────────────────────────────────────────────────
 
-    // Publishing Donut
-    var pubCtx = document.getElementById('publishingDonutChart');
-    if (pubCtx) {
-        new Chart(pubCtx.getContext('2d'), {
+    // CA Publishing Donut
+    var pubCaCtx = document.getElementById('caPublishingDonutChart');
+    if (pubCaCtx) {
+        new Chart(pubCaCtx.getContext('2d'), {
             type: 'doughnut',
             data: {
                 labels: ['Published', 'Approved', 'Checked', 'Submitted', 'Draft'],
                 datasets: [{
                     data: [
-                        {{ $publishing_summary['published'] }},
-                        {{ $publishing_summary['approved'] }},
-                        {{ $publishing_summary['checked'] }},
-                        {{ $publishing_summary['submitted'] }},
-                        {{ $publishing_summary['draft'] }}
+                        {{ $publishing_summary_ca['published'] }},
+                        {{ $publishing_summary_ca['approved'] }},
+                        {{ $publishing_summary_ca['checked'] }},
+                        {{ $publishing_summary_ca['submitted'] }},
+                        {{ $publishing_summary_ca['draft'] }}
                     ],
                     backgroundColor: ['#28a745', '#17a2b8', '#ffc107', '#6c757d', '#dc3545'],
                 }]
@@ -1251,7 +1442,36 @@ $(document).ready(function() {
                 maintainAspectRatio: false,
                 cutout: '65%',
                 plugins: {
-                    legend: { position: 'bottom', labels: { font: { size: 10 } } }
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    // Final Exam Publishing Donut
+    var pubFinalCtx = document.getElementById('finalPublishingDonutChart');
+    if (pubFinalCtx) {
+        new Chart(pubFinalCtx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Published', 'Approved', 'Checked', 'Submitted', 'Draft'],
+                datasets: [{
+                    data: [
+                        {{ $publishing_summary_final['published'] }},
+                        {{ $publishing_summary_final['approved'] }},
+                        {{ $publishing_summary_final['checked'] }},
+                        {{ $publishing_summary_final['submitted'] }},
+                        {{ $publishing_summary_final['draft'] }}
+                    ],
+                    backgroundColor: ['#28a745', '#17a2b8', '#ffc107', '#6c757d', '#dc3545'],
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: { display: false }
                 }
             }
         });

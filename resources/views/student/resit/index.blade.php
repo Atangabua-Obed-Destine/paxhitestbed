@@ -83,30 +83,42 @@
         </div>
 
         @if($is_resit_semester)
-        <!-- RESIT SEMESTER NOTICE -->
+        <!-- RESIT SEMESTER SELECTED (BLOCKING) -->
         <div class="row">
             <div class="col-md-12">
-                <div class="alert alert-warning" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none; color: white;">
+                <div class="alert alert-danger" style="background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); border: none; color: white;">
                     <div class="d-flex align-items-center">
-                        <i class="fas fa-graduation-cap fa-3x me-3"></i>
+                        <i class="fas fa-exclamation-triangle fa-3x me-3"></i>
                         <div>
-                            <h5 class="mb-1 text-white"><strong>{{ __('You are Currently in a Resit Semester') }}</strong></h5>
+                            <h5 class="mb-1 text-white"><strong>{{ __('Invalid Selection') }}</strong></h5>
                             <p class="mb-0" style="font-size: 14px; opacity: 0.95;">
-                                {{ __('You cannot make new resit requests while in a resit semester. Focus on completing your scheduled resit exams. After completing this semester, you will be automatically progressed to the next regular semester following normal progression rules.') }}
+                                {{ __('Resits cannot be requested from a resit semester. Any courses failed during a resit semester must be carried over to the next regular semester. Please select a regular semester from the dropdown above to view your failed courses.') }}
                             </p>
-                            @if(isset($enrollment))
-                            <div class="mt-2">
-                                <strong>{{ __('Current Semester:') }}</strong> {{ $enrollment->semester->title ?? '' }}
-                                <span class="ms-2">|</span>
-                                <strong class="ms-2">{{ __('Session:') }}</strong> {{ $enrollment->session->title ?? '' }}
-                            </div>
-                            @endif
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        @elseif(isset($failed_courses) && count($failed_courses) > 0)
+        @elseif(isset($current_is_resit) && $current_is_resit)
+        <!-- CURRENTLY IN RESIT SEMESTER (INFORMATIONAL) -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="alert alert-info" style="border-left: 4px solid #17a2b8;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-info-circle fa-2x me-3 text-info"></i>
+                        <div>
+                            <h6 class="mb-1"><strong>{{ __('You are currently enrolled in a Resit Semester') }}</strong></h6>
+                            <p class="mb-0" style="font-size: 14px;">
+                                {{ __('You can continue to request resits for any remaining failed courses from your regular semesters. Approved resits will be automatically added to your current resit semester enrollment.') }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        @if(isset($failed_courses) && count($failed_courses) > 0 && !$is_resit_semester)
         <div class="row">
             <div class="col-md-12">
                 <div class="card">
@@ -360,6 +372,20 @@
                 <div class="alert alert-success">
                     <i class="fas fa-check-circle"></i> {{ __('Congratulations! You have no failed courses for the selected session and semester.') }}
                 </div>
+            </div>
+        </div>
+        @elseif(isset($failed_courses) && !$is_resit_semester)
+        <div class="row">
+            <div class="col-md-12">
+                @if(isset($existing_requests) && count($existing_requests) > 0)
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i> {{ __('You have no remaining failed courses to request resits for. All your failed courses have already been requested/scheduled. Please check your recent requests below.') }}
+                </div>
+                @else
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> {{ __('No failed courses found for this semester, or course marks are not published yet.') }}
+                </div>
+                @endif
             </div>
         </div>
         @endif

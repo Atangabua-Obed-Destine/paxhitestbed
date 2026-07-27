@@ -84,9 +84,26 @@ class ResitController extends Controller
             $data['selected_session'] = $request->session_id;
             $data['selected_semester'] = $request->semester_id;
         } elseif ($currentEnrollment) {
-            // Default to current enrollment's session/semester and auto-load data
-            $data['selected_session'] = $currentEnrollment->session_id;
-            $data['selected_semester'] = $currentEnrollment->semester_id;
+            // Check if current enrollment is a resit semester
+            if ($currentEnrollment->semester && $currentEnrollment->semester->is_resit && $currentEnrollment->semester->parent_semester_id) {
+                // Default to the parent semester's session and semester
+                $parentEnrollment = StudentEnroll::where('student_id', $student->id)
+                    ->where('program_id', $currentEnrollment->program_id)
+                    ->where('semester_id', $currentEnrollment->semester->parent_semester_id)
+                    ->orderBy('id', 'desc')
+                    ->first();
+                if ($parentEnrollment) {
+                    $data['selected_session'] = $parentEnrollment->session_id;
+                    $data['selected_semester'] = $parentEnrollment->semester_id;
+                } else {
+                    $data['selected_session'] = $currentEnrollment->session_id;
+                    $data['selected_semester'] = $currentEnrollment->semester_id;
+                }
+            } else {
+                // Default to current enrollment's session/semester and auto-load data
+                $data['selected_session'] = $currentEnrollment->session_id;
+                $data['selected_semester'] = $currentEnrollment->semester_id;
+            }
         } else {
             $data['selected_session'] = null;
             $data['selected_semester'] = null;
@@ -95,6 +112,7 @@ class ResitController extends Controller
         $data['failed_courses'] = [];
         $data['grades'] = Grade::where('status', '1')->orderBy('min_mark', 'desc')->get();
         $data['is_resit_semester'] = false;
+        $data['current_is_resit'] = $currentEnrollment && $currentEnrollment->semester && $currentEnrollment->semester->is_resit;
         $data['progression_info'] = null;
         $data['enrollment'] = null;
         
@@ -129,7 +147,8 @@ class ResitController extends Controller
                 // Check if selected semester is a resit semester
                 if ($enrollment->semester && $enrollment->semester->is_resit) {
                     $data['is_resit_semester'] = true;
-                    // Don't show failed courses or allow resit requests in resit semesters
+                    // Resits cannot be requested from a resit semester.
+                    // We purposefully leave $failed_courses as an empty array.
                 } else {
                     // Regular semester - show failed courses
                     $failed_courses = $this->getFailedCourses($enrollment, $data['grades']);
@@ -144,6 +163,8 @@ class ResitController extends Controller
                 }
             }
         }
+        
+        \Illuminate\Support\Facades\Log::info("ResitController@index for student {$student->id}: failed_courses count = " . count($data['failed_courses']));
 
         return view($this->view.'.index', $data);
     }

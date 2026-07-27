@@ -42,6 +42,15 @@ class SemesterProgressionService
                     'next_semester' => null,
                 ];
             }
+
+            // 1.5. Ensure they have no unresolved failed courses from their parent regular semester
+            if ($this->hasUnresolvedFailedCoursesFromParent($enrollment)) {
+                return [
+                    'eligible' => false,
+                    'reason' => 'You still have unresolved failed courses from your regular semester. You must request a resit or decline them before progressing to the next regular semester.',
+                    'next_semester' => null,
+                ];
+            }
             
             // 2. Find the next regular semester based on the resit semester's year and type
             $nextSemester = $this->findNextSemesterFromResit($enrollment);
@@ -721,6 +730,53 @@ class SemesterProgressionService
     }
     
     /**
+     * Check if student has unresolved failed courses from the parent regular semester
+     * 
+     * @param StudentEnroll $resitEnrollment
+     * @return bool
+     */
+    protected function hasUnresolvedFailedCoursesFromParent(StudentEnroll $resitEnrollment): bool
+    {
+        $resitSemester = $resitEnrollment->semester;
+        if (!$resitSemester || !$resitSemester->parent_semester_id) {
+            return false;
+        }
+
+        $parentEnrollment = StudentEnroll::where('student_id', $resitEnrollment->student_id)
+            ->where('program_id', $resitEnrollment->program_id)
+            ->where('semester_id', $resitSemester->parent_semester_id)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if (!$parentEnrollment) {
+            return false;
+        }
+
+        $failedCourses = $this->getFailedCourses($parentEnrollment);
+
+        foreach ($failedCourses as $course) {
+            $isRegisteredInResit = $resitEnrollment->subjects()->where('subjects.id', $course->id)->exists();
+            if ($isRegisteredInResit) {
+                continue;
+            }
+
+            $hasDeclined = \App\Models\ResitRequest::where('student_enroll_id', $parentEnrollment->id)
+                ->where('subject_id', $course->id)
+                ->where('workflow_state', \App\Models\ResitRequest::STATE_DECLINED)
+                ->exists();
+
+            if ($hasDeclined) {
+                continue;
+            }
+            
+            // Neither registered for resit nor declined -> Unresolved!
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Progress student to resit semester and register scheduled resit courses
      * 
      * @param StudentEnroll $currentEnrollment
@@ -811,7 +867,7 @@ class SemesterProgressionService
      * @param array $courseIds Array of subject IDs being retaken
      * @return void
      */
-    protected function inheritParentSemesterData(
+    public function inheritParentSemesterData(
         StudentEnroll $resitEnrollment,
         Semester $resitSemester,
         array $courseIds

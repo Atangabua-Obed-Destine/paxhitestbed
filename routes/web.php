@@ -435,6 +435,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('exam/exam-publishing/bulk-transition-multi', 'ExamPublishingController@bulkTransitionMulti')->name('exam-publishing.bulk-transition-multi');
     Route::get('exam/exam-publishing/{exam_publishing_state}/history', 'ExamPublishingController@history')->name('exam-publishing.history');
     Route::get('exam/resit-requests', 'ResitRequestController@index')->name('resit-requests.index');
+    Route::get('exam/resit-requests/sync-stuck', 'ResitRequestController@syncStuckPreview')->name('resit-requests.sync-stuck');
+    Route::post('exam/resit-requests/sync-stuck', 'ResitRequestController@syncStuckExecute')->name('resit-requests.sync-stuck.execute');
     Route::post('exam/resit-requests/{resit_request}/transition', 'ResitRequestController@transition')->name('resit-requests.transition');
     Route::post('exam/resit-requests/{resit_request}/i-grade', 'ResitRequestController@iGrade')->name('resit-requests.i-grade');
     Route::post('exam/resit-requests/{resit_request}/cancel-resit', 'ResitRequestController@cancelResit')->name('resit-requests.cancel-resit');

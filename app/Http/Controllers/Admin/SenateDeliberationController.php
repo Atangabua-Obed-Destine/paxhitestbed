@@ -1062,7 +1062,8 @@ class SenateDeliberationController extends Controller
             $data['lecturer_performance'] = $this->buildLecturerPerformance($sessionId, $semesterId, $facultyId);
 
             // ── 5. Publishing Readiness Summary ─────────────────────────────
-            $data['publishing_summary'] = $this->buildPublishingSummary($sessionId, $semesterId, $facultyId);
+            $data['publishing_summary_ca'] = $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 0);
+            $data['publishing_summary_final'] = $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 1);
 
             // ── 6. Academic Standing Distribution (if computed) ─────────────
             $data['standings_computed'] = AcademicStanding::where('session_id', $sessionId)
@@ -1362,6 +1363,9 @@ class SenateDeliberationController extends Controller
                     'registered'  => true,
                     'ca_marks'    => $caDisplay,
                     'exam_marks'  => $examDisplay,
+                    'total_ca'    => $totalCA,
+                    'ca_weight'   => $subjectMark->resolved_ca_weight ?? 0,
+                    'exam_weight' => $subjectMark->resolved_exam_weight ?? 0,
                     'total_marks' => $totalMarks,
                     'grade'       => $gradeTitle,
                     'status'      => $status,
@@ -1402,6 +1406,8 @@ class SenateDeliberationController extends Controller
         foreach ($subjects as $subject) {
             $cs = ['code' => $subject->code, 'title' => $subject->title, 'credit' => $subject->credit_hour,
                     'registered' => 0, 'examined' => 0, 'passed' => 0, 'failed' => 0,
+                    'ca_passed' => 0, 'ca_examined' => 0,
+                    'exam_passed' => 0, 'exam_examined' => 0,
                     'total_marks' => 0, 'grade_distribution' => []];
             foreach ($studentResults as $sr) {
                 $c = $sr['courses'][$subject->id] ?? null;
@@ -1414,10 +1420,29 @@ class SenateDeliberationController extends Controller
                     if ($c['status'] === 'F') $cs['failed']++;
                     $g = $c['grade'];
                     $cs['grade_distribution'][$g] = ($cs['grade_distribution'][$g] ?? 0) + 1;
+
+                    // CA and Exam Breakdowns
+                    if (is_numeric($c['ca_marks'])) {
+                        $cs['ca_examined']++;
+                        $caWeight = $c['ca_weight'] > 0 ? $c['ca_weight'] : 30;
+                        if (($c['total_ca'] ?? 0) >= ($caWeight / 2)) {
+                            $cs['ca_passed']++;
+                        }
+                    }
+                    if (is_numeric($c['exam_marks'])) {
+                        $cs['exam_examined']++;
+                        $examWeight = $c['exam_weight'] > 0 ? $c['exam_weight'] : 70;
+                        if ($c['exam_marks'] >= ($examWeight / 2)) {
+                            $cs['exam_passed']++;
+                        }
+                    }
                 }
             }
             $cs['average']   = $cs['examined'] > 0 ? round($cs['total_marks'] / $cs['examined'], 2) : 0;
             $cs['pass_rate'] = $cs['examined'] > 0 ? round(($cs['passed'] / $cs['examined']) * 100, 1) : 0;
+            $cs['ca_pass_rate'] = $cs['ca_examined'] > 0 ? round(($cs['ca_passed'] / $cs['ca_examined']) * 100, 1) : 0;
+            $cs['exam_pass_rate'] = $cs['exam_examined'] > 0 ? round(($cs['exam_passed'] / $cs['exam_examined']) * 100, 1) : 0;
+            $cs['fail_rate'] = 100 - (float) $cs['pass_rate'];
             $courseStats[$subject->id] = $cs;
         }
 
@@ -2402,6 +2427,9 @@ class SenateDeliberationController extends Controller
 
                 foreach ($subjects as $subj) {
                     $smQuery = SubjectMarking::where('subject_id', $subj->id)
+                        ->with(['studentEnroll.exams' => function ($q) use ($subj) {
+                            $q->where('subject_id', $subj->id)->with('type');
+                        }])
                         ->whereHas('studentEnroll', function ($q) use ($sessionId, $semesterId, $deptProgramIds) {
                             $q->where('session_id', $sessionId)
                               ->where('semester_id', $semesterId)
@@ -2414,6 +2442,40 @@ class SenateDeliberationController extends Controller
                     if ($examined === 0) continue;
 
                     $passed = $markings->where('total_marks', '>=', 50)->count();
+
+                    $ca_passed = 0;
+                    $exam_passed = 0;
+                    foreach ($markings as $m) {
+                        $caWeight = $m->resolved_ca_weight > 0 ? $m->resolved_ca_weight : 30;
+                        $examWeight = $m->resolved_exam_weight > 0 ? $m->resolved_exam_weight : 70;
+                        
+                        $caExamMarks = 0;
+                        $finalExamMarks = 0;
+                        if ($m->studentEnroll && $m->studentEnroll->exams) {
+                            foreach ($m->studentEnroll->exams as $exam) {
+                                if ($exam->attendance == 1 && $exam->contribution > 0 && $exam->marks > 0) {
+                                    $pct = ($exam->achieve_marks / $exam->marks) * 100;
+                                    $contributed = ($pct / 100) * $exam->contribution;
+                                    if ($exam->type && $exam->type->is_final) {
+                                        $finalExamMarks += $contributed;
+                                    } else {
+                                        $caExamMarks += $contributed;
+                                    }
+                                }
+                            }
+                        }
+
+                        $storedCA = ($m->assignments ?? 0) + ($m->activities ?? 0) + ($m->attendances ?? 0);
+                        $totalCA = round($storedCA + $caExamMarks, 2);
+                        $finalExamMarks = round($finalExamMarks, 2);
+
+                        if ($totalCA >= ($caWeight / 2)) {
+                            $ca_passed++;
+                        }
+                        if ($finalExamMarks >= ($examWeight / 2)) {
+                            $exam_passed++;
+                        }
+                    }
 
                     // Registered count (students with exams for this subject)
                     $registered = StudentEnroll::where('session_id', $sessionId)
@@ -2479,6 +2541,8 @@ class SenateDeliberationController extends Controller
                         'candidates_examined'    => $examined,
                         'passed'                 => $passed,
                         'failed'                 => $examined - $passed,
+                        'ca_pass_rate'           => round(($ca_passed / $examined) * 100, 1),
+                        'exam_pass_rate'         => round(($exam_passed / $examined) * 100, 1),
                         'pass_rate'              => round(($passed / $examined) * 100, 1),
                         'fail_rate'              => round((($examined - $passed) / $examined) * 100, 1),
                         'average_marks'          => round($markings->avg('total_marks'), 2),
@@ -2628,19 +2692,85 @@ class SenateDeliberationController extends Controller
     /**
      * Build publishing readiness summary.
      */
-    private function buildPublishingSummary(int $sessionId, int $semesterId, ?int $facultyId): array
+    private function buildPublishingSummary(int $sessionId, int $semesterId, ?int $facultyId, ?bool $isFinal = null): array
     {
         $query = ExamPublishingState::where('session_id', $sessionId)
-            ->where('semester_id', $semesterId);
+            ->where('semester_id', $semesterId)
+            ->whereNull('section_id');
 
         if ($facultyId) {
             $query->whereHas('program', fn($q) => $q->where('faculty_id', $facultyId));
         }
 
-        $states = (clone $query)->select('workflow_state', DB::raw('COUNT(*) as count'))
+        if ($isFinal !== null) {
+            $query->whereHas('examType', fn($q) => $q->where('is_final', $isFinal));
+        }
+
+        // 1. Program must have active enrollments for the session/semester
+        $query->whereExists(function ($q) use ($sessionId, $semesterId) {
+            $q->select(\DB::raw(1))
+              ->from('student_enrolls')
+              ->whereColumn('student_enrolls.program_id', 'exam_publishing_states.program_id')
+              ->where('student_enrolls.session_id', $sessionId)
+              ->where('student_enrolls.semester_id', $semesterId)
+              ->whereIn('student_enrolls.status', [1, 2]);
+        });
+
+        // 2. Subject must be actively enrolled (or fallback to program_subject if none exist)
+        $query->where(function ($q) use ($semesterId) {
+            // Either in active enroll_subjects
+            $q->whereExists(function ($sq) use ($semesterId) {
+                $sq->select(\DB::raw(1))
+                   ->from('enroll_subjects')
+                   ->join('enroll_subject_subject', 'enroll_subjects.id', '=', 'enroll_subject_subject.enroll_subject_id')
+                   ->whereColumn('enroll_subjects.program_id', 'exam_publishing_states.program_id')
+                   ->where('enroll_subjects.semester_id', $semesterId)
+                   ->where('enroll_subjects.status', 1)
+                   ->whereColumn('enroll_subject_subject.subject_id', 'exam_publishing_states.subject_id');
+            })
+            // Or fallback to program_subject if enroll_subjects is completely empty for this program
+            ->orWhere(function ($sq) use ($semesterId) {
+                $sq->whereNotExists(function ($nq) use ($semesterId) {
+                    $nq->select(\DB::raw(1))
+                       ->from('enroll_subjects')
+                       ->whereColumn('enroll_subjects.program_id', 'exam_publishing_states.program_id')
+                       ->where('enroll_subjects.semester_id', $semesterId)
+                       ->where('enroll_subjects.status', 1);
+                })
+                ->whereExists(function ($pq) {
+                    $pq->select(\DB::raw(1))
+                       ->from('program_subject')
+                       ->whereColumn('program_subject.program_id', 'exam_publishing_states.program_id')
+                       ->whereColumn('program_subject.subject_id', 'exam_publishing_states.subject_id');
+                });
+            });
+        });
+
+        $states = (clone $query)->select('workflow_state', \DB::raw('COUNT(*) as count'))
             ->groupBy('workflow_state')
             ->pluck('count', 'workflow_state')
             ->toArray();
+
+        // Fetch detailed records
+        $detailsQuery = (clone $query)->with(['subject', 'program', 'section', 'examType']);
+
+        $detailsRaw = $detailsQuery->get();
+        
+        $details = [
+            ExamPublishingState::STATE_PUBLISHED => [],
+            ExamPublishingState::STATE_APPROVED => [],
+            ExamPublishingState::STATE_CHECKED => [],
+            ExamPublishingState::STATE_SUBMITTED => [],
+            ExamPublishingState::STATE_DRAFT => [],
+        ];
+
+        foreach ($detailsRaw as $record) {
+            $state = $record->workflow_state ?? ExamPublishingState::STATE_DRAFT;
+            if (!isset($details[$state])) {
+                $details[$state] = [];
+            }
+            $details[$state][] = $record;
+        }
 
         $total = array_sum($states);
 
@@ -2654,6 +2784,7 @@ class SenateDeliberationController extends Controller
             'readiness' => $total > 0
                 ? round((($states[ExamPublishingState::STATE_PUBLISHED] ?? 0) / $total) * 100, 1)
                 : 0,
+            'details'   => $details,
         ];
     }
 
@@ -2861,7 +2992,8 @@ class SenateDeliberationController extends Controller
             'faculty_summaries'       => $this->buildFacultySummaries($sessionId, $semesterId, $facultyId),
             'faculty_course_data'     => $this->buildCourseResultsByFaculty($sessionId, $semesterId, $facultyId),
             'lecturer_performance'    => $this->buildLecturerPerformance($sessionId, $semesterId, $facultyId),
-            'publishing_summary'      => $this->buildPublishingSummary($sessionId, $semesterId, $facultyId),
+            'publishing_summary_ca'   => $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 0),
+            'publishing_summary_final'=> $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 1),
             'top_courses'             => $this->getPerformingCourses($sessionId, $semesterId, $facultyId, 'best', 10),
             'bottom_courses'          => $this->getPerformingCourses($sessionId, $semesterId, $facultyId, 'worst', 10),
             'faculty_student_matrices'=> $this->buildStudentMatrixByFaculty($sessionId, $semesterId, $facultyId, $grades),

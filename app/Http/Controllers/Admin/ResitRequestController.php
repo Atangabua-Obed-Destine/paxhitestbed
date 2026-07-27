@@ -255,4 +255,74 @@ class ResitRequestController extends Controller
             default => 'secondary',
         };
     }
+
+    public function syncStuckPreview()
+    {
+        // Find all requests in 'scheduled' state that aren't properly registered
+        $requests = ResitRequest::where('workflow_state', ResitRequest::STATE_SCHEDULED)
+            ->with(['studentEnroll.student', 'studentEnroll.program', 'studentEnroll.semester', 'subject'])
+            ->get();
+
+        $stuckRequests = [];
+
+        foreach ($requests as $request) {
+            $studentEnroll = $request->studentEnroll;
+            if (!$studentEnroll) continue;
+            
+            $student = $studentEnroll->student;
+            
+            $existingResitEnrollment = \App\Models\StudentEnroll::where('student_id', $student->id)
+                ->where('program_id', $studentEnroll->program_id)
+                ->where('semester_id', $request->resit_semester_id)
+                ->where('session_id', $request->resit_session_id)
+                ->first();
+
+            $alreadyRegistered = false;
+            if ($existingResitEnrollment) {
+                $alreadyRegistered = $existingResitEnrollment->subjects()->where('subjects.id', $request->subject_id)->exists();
+            }
+
+            if (!$alreadyRegistered) {
+                $stuckRequests[] = $request;
+            }
+        }
+
+        return view('admin.resit-requests.sync-stuck', compact('stuckRequests'));
+    }
+
+    public function syncStuckExecute(Request $request)
+    {
+        $requests = ResitRequest::where('workflow_state', ResitRequest::STATE_SCHEDULED)->get();
+        $migratedCount = 0;
+
+        $reflection = new \ReflectionClass(get_class($this->workflowService));
+        $method = $reflection->getMethod('autoProgressToResitSemester');
+        $method->setAccessible(true);
+
+        foreach ($requests as $resitRequest) {
+            $studentEnroll = $resitRequest->studentEnroll;
+            if (!$studentEnroll) continue;
+            
+            $student = $studentEnroll->student;
+            
+            $existingResitEnrollment = \App\Models\StudentEnroll::where('student_id', $student->id)
+                ->where('program_id', $studentEnroll->program_id)
+                ->where('semester_id', $resitRequest->resit_semester_id)
+                ->where('session_id', $resitRequest->resit_session_id)
+                ->first();
+
+            $alreadyRegistered = false;
+            if ($existingResitEnrollment) {
+                $alreadyRegistered = $existingResitEnrollment->subjects()->where('subjects.id', $resitRequest->subject_id)->exists();
+            }
+
+            if (!$alreadyRegistered) {
+                $method->invoke($this->workflowService, $resitRequest);
+                $migratedCount++;
+            }
+        }
+
+        Flasher::addSuccess(__("Successfully synced {$migratedCount} stuck students."));
+        return redirect()->route('admin.resit-requests.index');
+    }
 }

@@ -152,12 +152,6 @@ class ResitRequestWorkflowService
 
             $request->save();
 
-            // Auto-enrollment disabled - students now manually progress via header button
-            // When student clicks the progression button, enrollment will be created
-            // if ($toState === ResitRequest::STATE_SCHEDULED) {
-            //     $this->resitEnrollmentService->ensureEnrollment($request);
-            // }
-
             ResitRequestWorkflowLog::create([
                 'resit_request_id' => $request->id,
                 'from_state' => $fromState,
@@ -168,11 +162,10 @@ class ResitRequestWorkflowService
                 'meta' => $this->buildMetaPayload($context),
             ]);
             
-            // Auto-progression disabled - students now progress manually via header button
-            // After scheduling, check if student can progress to resit semester
-            // if ($toState === ResitRequest::STATE_SCHEDULED) {
-            //     $this->checkAndTriggerResitSemesterProgression($request);
-            // }
+            if ($toState === ResitRequest::STATE_SCHEDULED) {
+                // Auto-progress to resit semester and incrementally register courses
+                $this->autoProgressToResitSemester($request);
+            }
 
             return $request->refresh();
         });
@@ -379,60 +372,61 @@ class ResitRequestWorkflowService
     }
     
     /**
-     * Check if all failed courses are resolved (declined or scheduled)
-     * If yes, trigger auto-progression to resit semester
+     * Auto-progress to resit semester and incrementally register courses
      * 
      * @param ResitRequest $request
      * @return void
      */
-    protected function checkAndTriggerResitSemesterProgression(ResitRequest $request): void
+    protected function autoProgressToResitSemester(ResitRequest $request): void
     {
         try {
-            $originalEnrollment = $request->studentEnroll;
-            if (!$originalEnrollment) {
-                return;
-            }
+            $studentEnroll = $request->studentEnroll;
+            if (!$studentEnroll) return;
             
-            // Check if all failed courses are now resolved
-            $result = $this->progressionService->checkResitSemesterProgression($originalEnrollment);
-            
-            if ($result['can_progress'] && $result['resit_semester']) {
-                // Student can progress to resit semester - do it automatically
-                Log::info("Auto-progressing student {$originalEnrollment->student_id} to resit semester {$result['resit_semester']->id}");
-                
-                $resitEnrollment = $this->progressionService->progressToResitSemester(
-                    $originalEnrollment,
-                    $result['resit_semester'],
-                    $result['resit_session_id'],
-                    $result['scheduled_courses']
+            $student = $studentEnroll->student;
+            $resitSemester = Semester::find($request->resit_semester_id);
+            if (!$resitSemester) return;
+
+            // Check if student is ALREADY in the resit semester
+            $existingResitEnrollment = \App\Models\StudentEnroll::where('student_id', $student->id)
+                ->where('program_id', $studentEnroll->program_id)
+                ->where('semester_id', $request->resit_semester_id)
+                ->where('session_id', $request->resit_session_id)
+                ->first();
+
+            $scheduledCourse = [
+                'subject_id' => $request->subject_id,
+                'subject_code' => $request->subject->code ?? '',
+                'subject_title' => $request->subject->title ?? '',
+                'resit_session_id' => $request->resit_session_id,
+                'resit_semester_id' => $request->resit_semester_id,
+            ];
+
+            if ($existingResitEnrollment) {
+                // Student is already in the resit semester. Just attach the course incrementally.
+                $existingResitEnrollment->subjects()->syncWithoutDetaching([$request->subject_id]);
+
+                // Inherit CA marks
+                $this->progressionService->inheritParentSemesterData(
+                    $existingResitEnrollment,
+                    $resitSemester,
+                    [$request->subject_id]
                 );
+
+                Log::info("Incrementally added course {$request->subject_id} to existing resit enrollment {$existingResitEnrollment->id}");
+            } else {
+                // They are not in the resit semester. Progress them now.
+                Log::info("Auto-progressing student {$student->id} to resit semester {$resitSemester->id} with course {$request->subject_id}");
                 
-                if ($resitEnrollment) {
-                    // Store in session for modal display (if user is logged in as student)
-                    if (auth()->guard('student')->check()) {
-                        session()->put('progression_modal', [
-                            'old_semester' => $originalEnrollment->semester->title ?? '',
-                            'new_semester' => $resitEnrollment->semester->title ?? '',
-                            'session' => $resitEnrollment->session->title ?? '',
-                            'program' => $resitEnrollment->program->title ?? '',
-                            'year' => $resitEnrollment->semester->year ?? '',
-                            'semester_type' => $resitEnrollment->semester->semester_type ?? '',
-                            'matricule' => $resitEnrollment->matricule ?? '',
-                            'is_resit' => true,
-                            'courses_count' => count($result['scheduled_courses']),
-                            'scheduled_courses' => $result['scheduled_courses'],
-                        ]);
-                    }
-                    
-                    Log::info("Successfully progressed student to resit semester", [
-                        'old_enrollment' => $originalEnrollment->id,
-                        'resit_enrollment' => $resitEnrollment->id,
-                    ]);
-                }
+                $this->progressionService->progressToResitSemester(
+                    $studentEnroll,
+                    $resitSemester,
+                    $request->resit_session_id,
+                    [$scheduledCourse]
+                );
             }
-            
         } catch (\Exception $e) {
-            Log::error("Failed to check/trigger resit semester progression: " . $e->getMessage());
+            Log::error("Failed to auto-progress to resit semester: " . $e->getMessage());
         }
     }
 }

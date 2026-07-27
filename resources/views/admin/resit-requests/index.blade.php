@@ -8,8 +8,13 @@
             <div class="col-sm-12">
                 <div class="card">
                     <div class="card-header d-flex align-items-center justify-content-between">
-                        <h5 class="mb-0">{{ __('Resit Requests') }}</h5>
-                        <span class="badge bg-primary">{{ $requests->total() }}</span>
+                        <div class="d-flex align-items-center">
+                            <h5 class="mb-0 me-2">{{ __('Resit Requests') }}</h5>
+                            <span class="badge bg-primary">{{ $requests->total() }}</span>
+                        </div>
+                        <a href="{{ route('admin.resit-requests.sync-stuck') }}" class="btn btn-warning btn-sm">
+                            <i class="fas fa-sync me-1"></i> {{ __('Sync Stuck Students') }}
+                        </a>
                     </div>
                     <div class="card-block">
                         <!-- AUTOMATED WORKFLOW NOTICE -->

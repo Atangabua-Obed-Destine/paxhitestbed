@@ -1039,6 +1039,10 @@ class ResultsSummaryController extends Controller
             'absent' => 0,
             'passed' => 0,
             'failed' => 0,
+            'ca_examined' => 0,
+            'ca_passed' => 0,
+            'exam_examined' => 0,
+            'exam_passed' => 0,
             'total_marks' => 0,
             'grade_distribution' => [],
         ];
@@ -1154,6 +1158,22 @@ class ResultsSummaryController extends Controller
                 if (isset($statistics['grade_distribution'][$letterGrade])) {
                     $statistics['grade_distribution'][$letterGrade]++;
                 }
+
+                // CA Breakdown
+                $statistics['ca_examined']++;
+                $caWeight = $subjectMark ? ($subjectMark->resolved_ca_weight ?? 30) : 30;
+                if ($totalCA >= ($caWeight / 2)) {
+                    $statistics['ca_passed']++;
+                }
+
+                // Exam Breakdown
+                if ($finalExam) {
+                    $statistics['exam_examined']++;
+                    $examWeight = $subjectMark ? ($subjectMark->resolved_exam_weight ?? 70) : 70;
+                    if ($examMarks >= ($examWeight / 2)) {
+                        $statistics['exam_passed']++;
+                    }
+                }
             }
 
             $studentRecords[] = [
@@ -1186,6 +1206,12 @@ class ResultsSummaryController extends Controller
             : 0;
         $statistics['fail_rate'] = $statistics['examined'] > 0 
             ? round(($statistics['failed'] / $statistics['examined']) * 100, 2) 
+            : 0;
+        $statistics['ca_pass_rate'] = $statistics['ca_examined'] > 0
+            ? round(($statistics['ca_passed'] / $statistics['ca_examined']) * 100, 2)
+            : 0;
+        $statistics['exam_pass_rate'] = $statistics['exam_examined'] > 0
+            ? round(($statistics['exam_passed'] / $statistics['exam_examined']) * 100, 2)
             : 0;
         $statistics['course_average'] = $statistics['examined'] > 0 
             ? round($statistics['total_marks'] / $statistics['examined'], 2) 
@@ -1395,20 +1421,26 @@ class ResultsSummaryController extends Controller
         $sheet->setCellValue('J' . ($statsRow + 4), 'No. Passed:');
         $sheet->setCellValue('K' . ($statsRow + 4), $stats['passed']);
         
-        $sheet->setCellValue('J' . ($statsRow + 5), '% Pass:');
-        $sheet->setCellValue('K' . ($statsRow + 5), $stats['pass_rate'] . '%');
+        $sheet->setCellValue('J' . ($statsRow + 5), '% CA Pass:');
+        $sheet->setCellValue('K' . ($statsRow + 5), ($stats['ca_pass_rate'] ?? 0) . '%');
         
-        $sheet->setCellValue('J' . ($statsRow + 6), 'No. Failed:');
-        $sheet->setCellValue('K' . ($statsRow + 6), $stats['failed']);
+        $sheet->setCellValue('J' . ($statsRow + 6), '% Exam Pass:');
+        $sheet->setCellValue('K' . ($statsRow + 6), ($stats['exam_pass_rate'] ?? 0) . '%');
         
-        $sheet->setCellValue('J' . ($statsRow + 7), '% Failed:');
-        $sheet->setCellValue('K' . ($statsRow + 7), $stats['fail_rate'] . '%');
+        $sheet->setCellValue('J' . ($statsRow + 7), '% Pass:');
+        $sheet->setCellValue('K' . ($statsRow + 7), $stats['pass_rate'] . '%');
         
-        $sheet->setCellValue('J' . ($statsRow + 8), 'Course Average:');
-        $sheet->setCellValue('K' . ($statsRow + 8), $stats['course_average']);
+        $sheet->setCellValue('J' . ($statsRow + 8), 'No. Failed:');
+        $sheet->setCellValue('K' . ($statsRow + 8), $stats['failed']);
+        
+        $sheet->setCellValue('J' . ($statsRow + 9), '% Failed:');
+        $sheet->setCellValue('K' . ($statsRow + 9), $stats['fail_rate'] . '%');
+        
+        $sheet->setCellValue('J' . ($statsRow + 10), 'Course Average:');
+        $sheet->setCellValue('K' . ($statsRow + 10), $stats['course_average']);
 
         // Grade distribution
-        $gradeRow = $statsRow + 10;
+        $gradeRow = $statsRow + 12;
         $sheet->setCellValue('J' . $gradeRow, 'Grades');
         $sheet->getStyle('J' . $gradeRow)->getFont()->setBold(true);
         
@@ -1617,6 +1649,10 @@ class ResultsSummaryController extends Controller
                 'examined' => 0,
                 'passed' => 0,
                 'failed' => 0,
+                'ca_examined' => 0,
+                'ca_passed' => 0,
+                'exam_examined' => 0,
+                'exam_passed' => 0,
                 'total_marks' => 0,
                 'grade_distribution' => $gradeDistribution, // Track count per grade
             ];
@@ -1779,6 +1815,21 @@ class ResultsSummaryController extends Controller
                         $studentData['summary']['courses_failed']++;
                         $allCoursesPass = false;
                     }
+                    
+                    // CA and Exam Breakdowns
+                    $courseStats[$subjectId]['ca_examined']++;
+                    $caWeight = $subjectMark ? ($subjectMark->resolved_ca_weight ?? 30) : 30;
+                    if ($totalCA >= ($caWeight / 2)) {
+                        $courseStats[$subjectId]['ca_passed']++;
+                    }
+
+                    if ($wasExamined) {
+                        $courseStats[$subjectId]['exam_examined']++;
+                        $examWeight = $subjectMark ? ($subjectMark->resolved_exam_weight ?? 70) : 70;
+                        if ($examMarks >= ($examWeight / 2)) {
+                            $courseStats[$subjectId]['exam_passed']++;
+                        }
+                    }
 
                     $studentData['summary']['total_quality_points'] += ($gradePoint * (float)$subject->credit_hour);
                 } else {
@@ -1828,6 +1879,12 @@ class ResultsSummaryController extends Controller
                 : 0;
             $stats['pass_rate'] = $stats['examined'] > 0 
                 ? round(($stats['passed'] / $stats['examined']) * 100, 2) 
+                : 0;
+            $stats['ca_pass_rate'] = $stats['ca_examined'] > 0
+                ? round(($stats['ca_passed'] / $stats['ca_examined']) * 100, 2)
+                : 0;
+            $stats['exam_pass_rate'] = $stats['exam_examined'] > 0
+                ? round(($stats['exam_passed'] / $stats['exam_examined']) * 100, 2)
                 : 0;
         }
 
@@ -2152,13 +2209,18 @@ class ResultsSummaryController extends Controller
         }
         
         // Summary columns after grades
+        // Summary columns after grades
         $passCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex);
         $failCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex + 1);
-        $rateCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex + 2);
-        $avgCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex + 3);
+        $caRateCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex + 2);
+        $examRateCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex + 3);
+        $rateCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex + 4);
+        $avgCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($gradeColIndex + 5);
         
         $sheet->setCellValue($passCol . $csHeaderRow, 'Pass');
         $sheet->setCellValue($failCol . $csHeaderRow, 'Fail');
+        $sheet->setCellValue($caRateCol . $csHeaderRow, '%CA');
+        $sheet->setCellValue($examRateCol . $csHeaderRow, '%Exam');
         $sheet->setCellValue($rateCol . $csHeaderRow, 'Rate');
         $sheet->setCellValue($avgCol . $csHeaderRow, 'Avg');
         
@@ -2214,6 +2276,8 @@ class ResultsSummaryController extends Controller
             // Summary columns
             $sheet->setCellValue($passCol . $csDataRow, $stats['passed']);
             $sheet->setCellValue($failCol . $csDataRow, $stats['failed']);
+            $sheet->setCellValue($caRateCol . $csDataRow, ($stats['ca_pass_rate'] ?? 0) . '%');
+            $sheet->setCellValue($examRateCol . $csDataRow, ($stats['exam_pass_rate'] ?? 0) . '%');
             $sheet->setCellValue($rateCol . $csDataRow, $stats['pass_rate'] . '%');
             $sheet->setCellValue($avgCol . $csDataRow, $stats['average']);
             

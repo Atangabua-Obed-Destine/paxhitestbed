@@ -66,7 +66,7 @@ class CourseResultsSheet implements FromArray, WithTitle, WithStyles, WithEvents
                     '#', 'Course Code', 'Course Title', 'Credit Value', 'Type',
                     'Lecturer(s)', 'Coverage (%)',
                     'Registered', 'Examined', 'Passed', 'Failed',
-                    'Pass Rate (%)', 'Avg Mark',
+                    'CA Pass Rate (%)', 'Exam Pass Rate (%)', 'Total Pass Rate (%)', 'Avg Mark',
                 ];
                 foreach ($gradeNames as $g) {
                     $header[] = $g;
@@ -92,6 +92,8 @@ class CourseResultsSheet implements FromArray, WithTitle, WithStyles, WithEvents
                         $c['candidates_examined'],
                         $c['passed'],
                         $c['failed'],
+                        number_format($c['ca_pass_rate'] ?? 0, 1) . '%',
+                        number_format($c['exam_pass_rate'] ?? 0, 1) . '%',
                         number_format($c['pass_rate'], 1) . '%',
                         number_format($c['average_marks'], 1),
                     ];
@@ -118,6 +120,7 @@ class CourseResultsSheet implements FromArray, WithTitle, WithStyles, WithEvents
                 $totalRow = [
                     '', 'DEPT TOTAL (' . count($courses) . ' courses)', '', '', '', '', '',
                     $deptReg, $deptExam, $deptPass, $deptFail,
+                    '-', '-', // CA and Exam Pass Rate totals
                     number_format($deptPassRate, 1) . '%',
                     number_format($deptAvg, 1),
                 ];
