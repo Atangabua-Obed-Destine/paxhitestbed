@@ -576,12 +576,14 @@ class StudentTransferInController extends Controller
                         continue;
                     }
 
-                    // Calculate due date based on configured due_days or default
-                    if ($feeConfig->due_days) {
-                        $daysToAdd = $feeConfig->due_days;
+                    // Calculate due date based on configured due_month/due_day or default
+                    if ($feeConfig->due_month && $feeConfig->due_day) {
+                        $year = $semester->year ?? date('Y');
+                        $dueDate = \Carbon\Carbon::createFromDate($year, $feeConfig->due_month, $feeConfig->due_day)->format('Y-m-d');
                     } else {
                         // Default: Current semester: 30 days, Future semester: 60 days
                         $daysToAdd = ($yearSemester->semester_type == $currentSemesterType) ? 30 : 60;
+                        $dueDate = now()->addDays($daysToAdd)->format('Y-m-d');
                     }
 
                     // Calculate fine amount if configured
@@ -603,7 +605,7 @@ class StudentTransferInController extends Controller
                     $fee->fine_amount = $fineAmount;
                     $fee->paid_amount = 0;
                     $fee->status = 0; // Unpaid
-                    $fee->due_date = now()->addDays($daysToAdd)->format('Y-m-d');
+                    $fee->due_date = $dueDate;
                     $fee->note = "Auto-assigned for {$yearSemester->title} (Year {$academicYear}) - Transfer In";
                     $fee->created_by = Auth::guard('web')->user()->id;
                     $fee->save();

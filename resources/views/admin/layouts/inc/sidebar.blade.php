@@ -216,6 +216,7 @@
                 <span class="pcoded-mtext">{{ trans_choice('module_academic', 2) }}</span>
             </a>
             <ul class="pcoded-submenu">
+                <li class="{{ Request::is('admin/academic/health-status*') ? 'active' : '' }}"><a href="{{ route('admin.academic-health.index') }}" class=""><i class="fas fa-heartbeat mr-2"></i>{{ __('Health Status') }}</a></li>
                 @canany(['sector-create', 'sector-view'])
                 <li class="{{ Request::is('admin/academic/sector*') ? 'active' : '' }}"><a href="{{ route('admin.sector.index') }}" class="">{{ __('Sector') }}</a></li>
                 @endcanany

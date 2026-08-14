@@ -260,9 +260,26 @@ $(document).ready(function() {
                                 <input type="number" class="form-control amount-input" name="amount[]" placeholder="0.00" min="0" step="0.01" disabled data-category-index="${key}">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label small">Due Days <small class="text-muted">(optional)</small></label>
-                                <input type="number" class="form-control due-days-input" name="due_days[]" placeholder="e.g., 30" min="1" max="365" disabled>
-                                <small class="text-muted">Days from enrollment</small>
+                                <label class="form-label small">Due Date <small class="text-muted">(optional)</small></label>
+                                <div class="d-flex">
+                                    <select class="form-control due-month-input me-1" name="due_month[]" disabled style="width: 60%;">
+                                        <option value="">Month</option>
+                                        <option value="1">Jan</option>
+                                        <option value="2">Feb</option>
+                                        <option value="3">Mar</option>
+                                        <option value="4">Apr</option>
+                                        <option value="5">May</option>
+                                        <option value="6">Jun</option>
+                                        <option value="7">Jul</option>
+                                        <option value="8">Aug</option>
+                                        <option value="9">Sep</option>
+                                        <option value="10">Oct</option>
+                                        <option value="11">Nov</option>
+                                        <option value="12">Dec</option>
+                                    </select>
+                                    <input type="number" class="form-control due-day-input" name="due_day[]" placeholder="Day" min="1" max="31" disabled style="width: 40%;">
+                                </div>
+                                <small class="text-muted">Fixed due date</small>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label small">Fine Amount <small class="text-muted">(optional)</small></label>
@@ -306,18 +323,21 @@ $(document).ready(function() {
                 $('.category-checkbox').on('change', function() {
                     var categoryRow = $(this).closest('.category-row');
                     var amountInput = categoryRow.find('.amount-input');
-                    var dueDaysInput = categoryRow.find('.due-days-input');
+                    var dueMonthInput = categoryRow.find('.due-month-input');
+                    var dueDayInput = categoryRow.find('.due-day-input');
                     var fineAmountInput = categoryRow.find('.fine-amount-input');
                     var fineTypeInput = categoryRow.find('.fine-type-input');
                     
                     if($(this).is(':checked')) {
                         amountInput.prop('disabled', false).prop('required', true);
-                        dueDaysInput.prop('disabled', false);
+                        dueMonthInput.prop('disabled', false);
+                        dueDayInput.prop('disabled', false);
                         fineAmountInput.prop('disabled', false);
                         fineTypeInput.prop('disabled', false);
                     } else {
                         amountInput.prop('disabled', true).prop('required', false).val('');
-                        dueDaysInput.prop('disabled', true).val('');
+                        dueMonthInput.prop('disabled', true).val('');
+                        dueDayInput.prop('disabled', true).val('');
                         fineAmountInput.prop('disabled', true).val('');
                         fineTypeInput.prop('disabled', true).val('');
                         

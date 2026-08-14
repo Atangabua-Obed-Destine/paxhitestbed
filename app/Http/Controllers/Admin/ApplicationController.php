@@ -1513,15 +1513,15 @@ class ApplicationController extends Controller
                         continue;
                     }
 
-                    // Calculate due date based on configured due_days or default based on semester type
-                    if ($feeConfig->due_days) {
-                        // Use configured due days
-                        $daysToAdd = $feeConfig->due_days;
+                    // Calculate due date based on configured due_month/due_day or default based on semester type
+                    if ($feeConfig->due_month && $feeConfig->due_day) {
+                        $year = $semester->year ?? date('Y');
+                        $dueDate = \Carbon\Carbon::createFromDate($year, $feeConfig->due_month, $feeConfig->due_day)->format('Y-m-d');
                     } else {
                         // Default: First semester: 30 days, Second semester: 60 days (to give more time)
                         $daysToAdd = ($yearSemester->semester_type == 1) ? 30 : 60;
+                        $dueDate = now()->addDays($daysToAdd)->format('Y-m-d');
                     }
-                    $dueDate = now()->addDays($daysToAdd)->format('Y-m-d');
 
                     // Calculate fine amount if configured
                     $fineAmount = 0;

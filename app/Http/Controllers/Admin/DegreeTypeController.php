@@ -30,9 +30,9 @@ class DegreeTypeController extends Controller
         $this->path = 'degree-type';
         $this->access = 'degree-type';
 
-        $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-create|'.$this->access.'-edit|'.$this->access.'-delete', ['only' => ['index','show']]);
+        $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-create|'.$this->access.'-edit|'.$this->access.'-delete', ['only' => ['index','show','downloadBlankForm','previewAcceptanceLetter']]);
         $this->middleware('permission:'.$this->access.'-create', ['only' => ['create','store']]);
-        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['edit','update']]);
+        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['edit','update','formConfig','saveFormConfig']]);
         $this->middleware('permission:'.$this->access.'-delete', ['only' => ['destroy']]);
     }
 
@@ -249,6 +249,15 @@ class DegreeTypeController extends Controller
     {
         $degreeType->load('applicationSetting');
         return $service->previewPdf($degreeType)->stream('acceptance-letter-preview.pdf');
+    }
+
+    /**
+     * Download a blank, printable application form PDF for this degree type.
+     */
+    public function downloadBlankForm(DegreeType $degreeType, \App\Services\BlankApplicationFormService $service)
+    {
+        $filename = str_replace(' ', '_', $degreeType->title) . '_Application_Form.pdf';
+        return $service->pdf($degreeType)->download($filename);
     }
 
     /**

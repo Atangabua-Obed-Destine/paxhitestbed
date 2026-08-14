@@ -91,6 +91,9 @@
                                             <a href="{{ route('admin.degree-type.form-config', $row) }}" class="btn btn-icon btn-sm btn-info" title="{{ __('Application Form Configuration') }}">
                                                 <i class="fas fa-sliders-h"></i>
                                             </a>
+                                            <a href="{{ route('admin.degree-type.blank-form.download', $row) }}" class="btn btn-icon btn-sm btn-secondary" title="{{ __('Download Blank Application Form') }}" target="_blank">
+                                                <i class="fas fa-print"></i>
+                                            </a>
                                             <button type="button" class="btn btn-icon btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal-{{ $row->id }}" title="{{ __('btn_edit') }}">
                                                 <i class="fas fa-edit"></i>
                                             </button>

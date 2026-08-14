@@ -1253,13 +1253,14 @@ class SemesterProgressionService
                         continue;
                     }
 
-                    // Calculate due date based on configured due_days or default based on semester type
-                    if ($feeConfig->due_days) {
-                        $daysToAdd = $feeConfig->due_days;
+                    // Calculate due date based on configured due_month/due_day or default based on semester type
+                    if ($feeConfig->due_month && $feeConfig->due_day) {
+                        $year = $semester->year ?? date('Y');
+                        $dueDate = \Carbon\Carbon::createFromDate($year, $feeConfig->due_month, $feeConfig->due_day)->format('Y-m-d');
                     } else {
                         $daysToAdd = ($yearSemester->semester_type == 1) ? 30 : 60;
+                        $dueDate = Carbon::now()->addDays($daysToAdd)->format('Y-m-d');
                     }
-                    $dueDate = Carbon::now()->addDays($daysToAdd)->format('Y-m-d');
 
                     // Calculate fine amount if configured
                     $fineAmount = 0;

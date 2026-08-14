@@ -15,7 +15,8 @@ class ProgramSemesterFee extends Model
         'semester_id',
         'fees_category_id',
         'amount',
-        'due_days',
+        'due_month',
+        'due_day',
         'fine_amount',
         'fine_type',
         'status',
@@ -24,7 +25,8 @@ class ProgramSemesterFee extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'fine_amount' => 'decimal:2',
-        'due_days' => 'integer',
+        'due_month' => 'integer',
+        'due_day' => 'integer',
         'status' => 'boolean',
     ];
 

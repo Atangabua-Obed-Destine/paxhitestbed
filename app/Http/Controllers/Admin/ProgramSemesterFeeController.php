@@ -129,8 +129,10 @@ class ProgramSemesterFeeController extends Controller
             'fees_category.*' => 'exists:fees_categories,id',
             'amount' => 'required|array',
             'amount.*' => 'required|numeric|min:0',
-            'due_days' => 'nullable|array',
-            'due_days.*' => 'nullable|integer|min:1|max:365',
+            'due_month' => 'nullable|array',
+            'due_month.*' => 'nullable|integer|min:1|max:12',
+            'due_day' => 'nullable|array',
+            'due_day.*' => 'nullable|integer|min:1|max:31',
             'fine_amount' => 'nullable|array',
             'fine_amount.*' => 'nullable|numeric|min:0',
             'fine_type' => 'nullable|array',
@@ -179,7 +181,8 @@ class ProgramSemesterFeeController extends Controller
                     $amount = $request->amount[$index] ?? 0;
                     
                     // Handle optional fields - convert empty strings to null
-                    $dueDays = !empty($request->due_days[$index]) ? $request->due_days[$index] : null;
+                    $dueMonth = !empty($request->due_month[$index]) ? $request->due_month[$index] : null;
+                    $dueDay = !empty($request->due_day[$index]) ? $request->due_day[$index] : null;
                     $fineAmount = !empty($request->fine_amount[$index]) ? $request->fine_amount[$index] : null;
                     $fineType = !empty($request->fine_type[$index]) ? $request->fine_type[$index] : null;
 
@@ -192,7 +195,8 @@ class ProgramSemesterFeeController extends Controller
                         ],
                         [
                             'amount' => $amount,
-                            'due_days' => $dueDays,
+                            'due_month' => $dueMonth,
+                            'due_day' => $dueDay,
                             'fine_amount' => $fineAmount,
                             'fine_type' => $fineType,
                             'status' => 1,
@@ -312,7 +316,8 @@ class ProgramSemesterFeeController extends Controller
     {
         $request->validate([
             'amount' => 'required|numeric|min:0',
-            'due_days' => 'nullable|integer|min:1|max:365',
+            'due_month' => 'nullable|integer|min:1|max:12',
+            'due_day' => 'nullable|integer|min:1|max:31',
             'fine_amount' => 'nullable|numeric|min:0',
             'fine_type' => 'nullable|in:fixed,percentage',
             'status' => 'required|boolean',
@@ -326,7 +331,8 @@ class ProgramSemesterFeeController extends Controller
             $programSemesterFee->amount = $request->amount;
             
             // Handle optional fields - convert empty strings to null
-            $programSemesterFee->due_days = !empty($request->due_days) ? $request->due_days : null;
+            $programSemesterFee->due_month = !empty($request->due_month) ? $request->due_month : null;
+            $programSemesterFee->due_day = !empty($request->due_day) ? $request->due_day : null;
             $programSemesterFee->fine_amount = !empty($request->fine_amount) ? $request->fine_amount : null;
             $programSemesterFee->fine_type = !empty($request->fine_type) ? $request->fine_type : null;
             

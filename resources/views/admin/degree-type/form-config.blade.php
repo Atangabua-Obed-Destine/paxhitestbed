@@ -160,8 +160,9 @@
                                             <textarea class="form-control texteditor" name="acceptance_letter_html" rows="12">{{ optional($settings)->acceptance_letter_html }}</textarea>
                                             <div class="alert alert-secondary mt-2 mb-0">
                                                 <strong>{{ __('Placeholders') }}:</strong>
-                                                [name] [first_name] [last_name] [student_id] [matricule] [program] [degree_type] [faculty] [intake] [admission_date] [date] [institution] [address] [email] [phone] [fee_breakdown]
+                                                [name] [first_name] [last_name] [student_id] [matricule] [program] [degree_type] [faculty] [intake] [admission_date] [date] [institution] [address] [email] [phone] [dob] [place_of_birth] [fee_breakdown] [fee_breakdown_total] [fee_breakdown_total_words] [payment_deadlines]
                                                 <br><small class="text-muted">{{ __('[fee_breakdown] inserts the Year-1 first-installment fee table from the programme\'s fee configuration (add your own heading above it).') }}</small>
+                                                <br><small class="text-muted">{{ __('[payment_deadlines] inserts a formatted list of all Year-1 regular installment deadlines with spelled-out amounts.') }}</small>
                                             </div>
                                         </div>
                                     </div>

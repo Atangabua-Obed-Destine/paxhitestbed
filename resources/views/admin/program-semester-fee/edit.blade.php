@@ -94,9 +94,18 @@
                                 @endif
 
                                 <div class="form-group col-md-6">
-                                    <label for="due_days">Due Days <small class="text-muted">(optional)</small></label>
-                                    <input type="number" class="form-control" name="due_days" id="due_days" value="{{ old('due_days', $row->due_days) }}" min="1" max="365" placeholder="e.g., 30">
-                                    <small class="form-text text-muted">Number of days from enrollment for due date (leave empty to use default)</small>
+                                    <label>Due Date <small class="text-muted">(optional)</small></label>
+                                    <div class="d-flex">
+                                        <select class="form-control me-1" name="due_month" id="due_month" style="width: 60%;">
+                                            <option value="">Month</option>
+                                            @php $months = [1=>'Jan',2=>'Feb',3=>'Mar',4=>'Apr',5=>'May',6=>'Jun',7=>'Jul',8=>'Aug',9=>'Sep',10=>'Oct',11=>'Nov',12=>'Dec']; @endphp
+                                            @foreach($months as $m => $name)
+                                                <option value="{{ $m }}" @if(old('due_month', $row->due_month) == $m) selected @endif>{{ $name }}</option>
+                                            @endforeach
+                                        </select>
+                                        <input type="number" class="form-control" name="due_day" id="due_day" value="{{ old('due_day', $row->due_day) }}" min="1" max="31" placeholder="Day" style="width: 40%;">
+                                    </div>
+                                    <small class="form-text text-muted">Fixed month and day for the due date</small>
                                 </div>
 
                                 <div class="form-group col-md-6">

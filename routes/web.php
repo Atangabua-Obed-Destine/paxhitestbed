@@ -358,12 +358,14 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
 
     // Academic Routes
+    Route::get('academic/health-status', 'AcademicHealthController@index')->name('academic-health.index');
     Route::resource('academic/faculty', 'FacultyController');
     Route::resource('academic/sector', 'SectorController');
     Route::resource('academic/academic-department', 'AcademicDepartmentController');
     Route::get('academic/degree-type/{degree_type}/form-config', 'DegreeTypeController@formConfig')->name('degree-type.form-config');
     Route::post('academic/degree-type/{degree_type}/form-config', 'DegreeTypeController@saveFormConfig')->name('degree-type.form-config.save');
     Route::get('academic/degree-type/{degree_type}/acceptance-letter/preview', 'DegreeTypeController@previewAcceptanceLetter')->name('degree-type.acceptance-letter.preview');
+    Route::get('academic/degree-type/{degree_type}/blank-form/download', 'DegreeTypeController@downloadBlankForm')->name('degree-type.blank-form.download');
     Route::resource('academic/degree-type', 'DegreeTypeController');
     Route::resource('academic/program', 'ProgramController');
     Route::resource('academic/batch', 'BatchController');

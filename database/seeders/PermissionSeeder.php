@@ -125,6 +125,11 @@ class PermissionSeeder extends Seeder
             ['name' => 'faculty-edit', 'group' => 'Faculty', 'title' => 'Edit'],
             ['name' => 'faculty-delete', 'group' => 'Faculty', 'title' => 'Delete'],
 
+            ['name' => 'degree-type-view', 'group' => 'Degree Type', 'title' => 'View'],
+            ['name' => 'degree-type-create', 'group' => 'Degree Type', 'title' => 'Create'],
+            ['name' => 'degree-type-edit', 'group' => 'Degree Type', 'title' => 'Edit'],
+            ['name' => 'degree-type-delete', 'group' => 'Degree Type', 'title' => 'Delete'],
+
             ['name' => 'program-view', 'group' => 'Program', 'title' => 'View'],
             ['name' => 'program-create', 'group' => 'Program', 'title' => 'Create'],
             ['name' => 'program-edit', 'group' => 'Program', 'title' => 'Edit'],

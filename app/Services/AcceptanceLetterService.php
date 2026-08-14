@@ -54,7 +54,10 @@ class AcceptanceLetterService
         // Normalise the user's template first (strip Word junk/fixed widths), THEN substitute,
         // so our generated [fee_breakdown] table is injected clean and untouched.
         $tokens = $this->tokens($student, $dt);
-        $tokens['[fee_breakdown]'] = $this->feeBreakdownHtml($student);
+        $feeData = $this->getFeeBreakdownData($student);
+        $tokens['[fee_breakdown]'] = $feeData['html'];
+        $tokens['[fee_breakdown_total]'] = $feeData['total'];
+        $tokens['[fee_breakdown_total_words]'] = $feeData['words'];
 
         return strtr($this->normalizeLetterHtml($setting->acceptance_letter_html), $tokens);
     }
@@ -65,10 +68,20 @@ class AcceptanceLetterService
      */
     public function feeBreakdownHtml(Student $student): string
     {
+        return $this->getFeeBreakdownData($student)['html'];
+    }
+
+    /**
+     * Get the fee breakdown HTML, numeric total, and total in words.
+     */
+    public function getFeeBreakdownData(Student $student): array
+    {
+        $emptyResult = ['html' => '', 'total' => '0', 'words' => 'Zero'];
+
         $student->loadMissing('studentEnrolls.semester');
         $enroll = $student->studentEnrolls->first();
         if (!$enroll || !$student->program_id) {
-            return '';
+            return $emptyResult;
         }
 
         // The student's first (Year-1) regular semester for this programme.
@@ -81,7 +94,7 @@ class AcceptanceLetterService
             ->first() ?? $enroll->semester;
 
         if (!$firstSemester) {
-            return '';
+            return $emptyResult;
         }
 
         $setting = Setting::where('status', '1')->first();
@@ -119,7 +132,7 @@ class AcceptanceLetterService
         }
 
         if (empty($rows)) {
-            return '';
+            return $emptyResult;
         }
 
         $html = '<table class="fee-breakdown"><thead><tr>'
@@ -134,7 +147,17 @@ class AcceptanceLetterService
                . '<th class="amt">' . $money($total) . '</th>'
                . '</tr></tfoot></table>';
 
-        return $html;
+        $words = 'Zero';
+        if (class_exists('NumberFormatter')) {
+            $formatter = new \NumberFormatter("en", \NumberFormatter::SPELLOUT);
+            $words = ucwords($formatter->format($total));
+        }
+
+        return [
+            'html' => $html,
+            'total' => $money($total),
+            'words' => $words
+        ];
     }
 
     /**
@@ -183,6 +206,18 @@ class AcceptanceLetterService
 
         $name = trim(($student->first_name ?? '') . ' ' . ($student->last_name ?? ''));
         $admissionDate = $student->admission_date ? date('F j, Y', strtotime($student->admission_date)) : '';
+        $dob = $student->dob ? date('F j, Y', strtotime($student->dob)) : '';
+
+        // Retrieve place of birth from the original application (linked by registration_no)
+        $application = \App\Models\Application::where('registration_no', $student->registration_no)->first();
+        $placeOfBirthParts = [];
+        if ($application) {
+            if ($application->birth_city) $placeOfBirthParts[] = $application->birth_city;
+            if ($application->birth_division) $placeOfBirthParts[] = $application->birth_division;
+            if ($application->birth_region) $placeOfBirthParts[] = $application->birth_region;
+            if ($application->birth_country) $placeOfBirthParts[] = $application->birth_country;
+        }
+        $placeOfBirth = implode(', ', $placeOfBirthParts);
 
         return [
             '[name]'           => $name,
@@ -200,7 +235,92 @@ class AcceptanceLetterService
             '[address]'        => optional($setting)->address ?? '',
             '[email]'          => $student->email ?? '',
             '[phone]'          => $student->phone ?? '',
+            '[dob]'            => $dob,
+            '[place_of_birth]' => $placeOfBirth,
+            '[payment_deadlines]' => $this->getPaymentDeadlinesHtml($student, $setting),
         ];
+    }
+
+    /**
+     * Build the payment deadlines HTML list based on the student's program and first-year semesters.
+     */
+    public function getPaymentDeadlinesHtml(Student $student, ?Setting $setting = null): string
+    {
+        $student->loadMissing('studentEnrolls.semester');
+        $enroll = $student->studentEnrolls->first();
+        if (!$enroll || !$student->program_id) {
+            return '';
+        }
+
+        // Get the admission year or current year as base
+        $baseYear = $student->admission_date ? date('Y', strtotime($student->admission_date)) : date('Y');
+
+        // Find all non-resit semesters for Year 1
+        $semesters = Semester::where('is_resit', 0)
+            ->where('year', '1') // Based on your db schema, year is often stored as "1" or integer 1
+            ->whereHas('programs', fn ($q) => $q->where('program_id', $student->program_id))
+            ->get();
+
+        if ($semesters->isEmpty()) {
+            return '';
+        }
+
+        // Fetch all installment fees for these semesters
+        $installmentFees = ProgramSemesterFee::with(['feesCategory', 'semester'])
+            ->where('program_id', $student->program_id)
+            ->whereIn('semester_id', $semesters->pluck('id'))
+            ->where('status', 1)
+            ->get()
+            ->filter(function ($fee) {
+                $categoryTitle = strtolower($fee->feesCategory->title ?? '');
+                return optional($fee->feesCategory)->is_first_installment ||
+                       optional($fee->feesCategory)->is_second_installment ||
+                       str_contains($categoryTitle, 'installment') ||
+                       str_contains($categoryTitle, 'instalment');
+            })
+            ->sortBy(function ($fee) {
+                // Sort roughly by semester type then due month
+                return [optional($fee->semester)->semester_type, $fee->due_month];
+            });
+
+        if ($installmentFees->isEmpty()) {
+            return '';
+        }
+
+        $currency = $setting->currency_symbol ?? 'FCFA';
+        $dp = $setting->decimal_place ?? 0;
+        
+        $html = '<ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">';
+
+        // Set up NumberFormatter for spelled-out amounts
+        $formatter = null;
+        if (class_exists('NumberFormatter')) {
+            $formatter = new \NumberFormatter("en", \NumberFormatter::SPELLOUT);
+        }
+
+        foreach ($installmentFees as $fee) {
+            $categoryName = $fee->feesCategory->title ?? 'Installment';
+            $categoryName = str_replace(['First', 'Second', 'Third', 'Instalment'], ['1st', '2nd', '3rd', 'Installment'], $categoryName);
+
+            $amountNum = number_format((float) $fee->amount, $dp, '.', ',');
+            $amountWords = $formatter ? ucwords($formatter->format($fee->amount)) : '';
+
+            $dueDateStr = 'TBD';
+            if ($fee->due_month && $fee->due_day) {
+                // If due month is early in the year (Jan-July), bump the year to account for Spring semester
+                $year = $fee->due_month <= 7 ? $baseYear + 1 : $baseYear;
+                $dueDate = \Carbon\Carbon::createFromDate($year, $fee->due_month, $fee->due_day);
+                $dueDateStr = $dueDate->format('l, F jS, Y');
+            } elseif (optional($fee->feesCategory)->is_first_installment) {
+                $dueDateStr = 'Upon Enrollment';
+            }
+
+            // e.g. - 1st Installment: Tuesday September 30th 2025 being (150,000) One Hundred and Fifty Thousand FCFA
+            $html .= '<li>- ' . e($categoryName) . ': ' . e($dueDateStr) . ' being (' . $amountNum . ') ' . e($amountWords) . ' ' . e($currency) . '</li>';
+        }
+        $html .= '</ul>';
+
+        return $html;
     }
 
     /**
@@ -248,6 +368,7 @@ class AcceptanceLetterService
             '[institution]' => optional($setting)->title ?? config('app.name'),
             '[address]' => optional($setting)->address ?? '',
             '[email]' => 'jane.doe@example.com', '[phone]' => '+237 6XX XXX XXX',
+            '[dob]' => 'January 1, 2000', '[place_of_birth]' => 'Buea, South West, Cameroon',
         ];
 
         // Sample fee-breakdown table so the admin sees how [fee_breakdown] renders.
@@ -259,6 +380,14 @@ class AcceptanceLetterService
             . '<tr><td>Health &amp; Accident Insurance</td><td class="amt">15,000</td></tr>'
             . '<tr><td>Student Identity Card</td><td class="amt">3,000</td></tr>'
             . '</tbody><tfoot><tr><th>' . e(__('Total')) . '</th><th class="amt">138,500</th></tr></tfoot></table>';
+
+        $sample['[fee_breakdown_total]'] = '138,500';
+        $sample['[fee_breakdown_total_words]'] = 'One Hundred Thirty-Eight Thousand Five Hundred';
+        
+        $sample['[payment_deadlines]'] = '<ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">'
+            . '<li>- 1st Installment: Tuesday, September 30th, ' . date('Y') . ' being (120,500) One Hundred Twenty Thousand Five Hundred ' . $currency . '</li>'
+            . '<li>- 2nd Installment: Saturday, January 31st, ' . (date('Y') + 1) . ' being (18,000) Eighteen Thousand ' . $currency . '</li>'
+            . '</ul>';
 
         // Normalise the template first, then substitute (keeps the sample table intact).
         $pdf = Pdf::loadView('admin.acceptance-letter.pdf', [
