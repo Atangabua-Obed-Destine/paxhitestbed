@@ -11,11 +11,11 @@
                 <div class="info-content">
                     <div class="university-logo mb-4">
                         @if(isset($setting))
-                        <img src="{{ asset('/uploads/setting/'.$setting->logo_path) }}" alt="PAX Higher Institute Logo">
+                        <img src="{{ asset('/uploads/setting/'.$setting->logo_path) }}" alt="{{ $setting->title ?? 'PAX Higher Institute' }} Logo">
                         @endif
                     </div>
                     
-                    <h1 class="welcome-title">Welcome to PAX Higher Institute</h1>
+                    <h1 class="welcome-title">Welcome to {{ $setting->title ?? 'PAX Higher Institute' }}</h1>
                     <p class="welcome-subtitle">Student Portal Access</p>
                     
                     <div class="info-features">
@@ -83,7 +83,7 @@
                     <!-- Mobile Logo -->
                     <div class="mobile-logo d-lg-none mb-4">
                         @if(isset($setting))
-                        <img src="{{ asset('/uploads/setting/'.$setting->logo_path) }}" alt="PAX Higher Institute Logo">
+                        <img src="{{ asset('/uploads/setting/'.$setting->logo_path) }}" alt="{{ $setting->title ?? 'PAX Higher Institute' }} Logo">
                         @endif
                     </div>
                     

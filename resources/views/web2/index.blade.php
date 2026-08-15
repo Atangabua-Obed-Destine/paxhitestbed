@@ -91,7 +91,7 @@
                 <div class="relative h-full flex items-center z-10">
                     <div class="section-container text-center">
                         <div class="max-w-2xl mx-auto">
-                            <h1 class="text-4xl md:text-5xl font-heading font-bold text-white mb-4">Welcome to PAX Higher Institute</h1>
+                            <h1 class="text-4xl md:text-5xl font-heading font-bold text-white mb-4">Welcome to {{ $setting->title ?? 'PAX Higher Institute' }}</h1>
                             <p class="text-lg text-white/80 mb-8">Academic Excellence Rooted in Catholic Values</p>
                             <a href="{{ url('/about') }}" class="btn-accent text-base">Learn More</a>
                         </div>
@@ -417,7 +417,7 @@
         <div class="section-header" data-aos="fade-up">
             <span class="section-label">Testimonials</span>
             <h2 class="section-title">Voices of Our Community</h2>
-            <p class="section-desc">Hear from students, alumni, and faculty about their experience at PAX Higher Institute.</p>
+            <p class="section-desc">Hear from students, alumni, and faculty about their experience at {{ $setting->title ?? 'PAX Higher Institute' }}.</p>
         </div>
 
         <div class="swiper testimonial-swiper" data-aos="fade-up">
