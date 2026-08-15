@@ -230,7 +230,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
     // Dashboard Route
     Route::get('/', 'DashboardController@index')->name('dashboard.index');
-    Route::get('dashboard', 'DashboardController@index')->name('dashboard.index');
+    Route::get('dashboard', 'DashboardController@index');
 
     // Editor Image Upload (for TinyMCE paste/drag-drop)
     Route::post('editor/upload-image', 'EditorImageUploadController@upload')->name('editor.upload-image');
@@ -1197,7 +1197,7 @@ Route::middleware(['auth:student', 'XSS'])->prefix('student')->name('student.')-
 
         // Dashboard Route
         Route::get('/', 'DashboardController@index')->name('dashboard.index');
-        Route::get('dashboard', 'DashboardController@index')->name('dashboard.index');
+        Route::get('dashboard', 'DashboardController@index');
 
         // Form A2 Route
         Route::get('form-a2', 'FormA2Controller@index')->name('form-a2.index');
