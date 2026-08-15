@@ -61,7 +61,8 @@ class PurchaseVerificationController extends Controller
             // Update to Env
             $this->updateEnvVariable('ENVATO_LICENSE', '"'.$license.'"' ?? '"none"');
 
-
+            // Clear config cache so the new .env value is loaded immediately
+            \Illuminate\Support\Facades\Artisan::call('config:clear');
             Flasher::addSuccess(__('msg_your_license_verified'), __('msg_success'));
 
             return redirect()->route('admin.dashboard.index');
