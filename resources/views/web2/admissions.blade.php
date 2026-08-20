@@ -98,7 +98,7 @@
                 <i class="fas fa-list-ol"></i> Application Guide
             </span>
             <h2 class="text-3xl md:text-4xl font-heading font-bold text-surface-800">How to Apply</h2>
-            <p class="mt-3 text-surface-500 max-w-xl mx-auto">Follow these simple steps to complete your application to ' . institution_name() . '.</p>
+            <p class="mt-3 text-surface-500 max-w-xl mx-auto">Follow these simple steps to complete your application to {{ institution_name() }}.</p>
         </div>
 
         <div class="max-w-3xl mx-auto relative">

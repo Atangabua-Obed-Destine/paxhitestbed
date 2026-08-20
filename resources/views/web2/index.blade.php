@@ -18,12 +18,12 @@
 @extends('web2.layouts.master')
 
 @section('title', (institution_name()) . ' — Home')
-@section('description', '' . institution_name() . ' (' . (institution_code()) . '), a Catholic university in the Archdiocese of Bamenda, dedicated to academic excellence, moral formation, and holistic development.')
+@section('description', institution_name() . ' (' . institution_code() . ')' . (site_subtitle() ? ', ' . site_subtitle() : '') . ' — dedicated to academic excellence, moral formation, and holistic development.')
 @section('keywords', institution_code() . ', ' . institution_name() . ', Catholic University, Cameroon, programs, admissions')
 
 @section('social_meta_tags')
 <meta property="og:title" content="{{ institution_name() }}">
-<meta property="og:description" content="A Catholic institution of higher learning in the Archdiocese of Bamenda.">
+<meta property="og:description" content="{{ __('A Catholic institution of higher learning.') }}{{ site_subtitle() ? ' ' . site_subtitle() . '.' : '' }}">
 <meta property="og:image" content="{{ asset('uploads/setting/' . ($setting->logo_path ?? '')) }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ url('/') }}">
@@ -58,7 +58,7 @@
                             {{-- Catholic accent --}}
                             <div class="inline-flex items-center gap-2 mb-5 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white/80 text-xs font-medium">
                                 <i class="fas fa-cross text-accent-400 text-[10px]"></i>
-                                {{ $slider->pre_title ?? 'Archdiocese of Bamenda' }}
+                                {{ $slider->pre_title ?? site_subtitle() }}
                             </div>
                             <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white leading-tight mb-5 [text-shadow:_0_2px_20px_rgba(0,0,0,0.3)]">
                                 {!! $slider->title !!}
@@ -223,7 +223,7 @@
             @php
                 $whyCards = [
                     ['icon' => 'fas fa-book-open', 'title' => 'Academic Excellence', 'desc' => 'Rigorous curricula designed to meet international standards, with qualified faculty dedicated to student success.', 'color' => 'primary'],
-                    ['icon' => 'fas fa-cross', 'title' => 'Catholic Foundation', 'desc' => 'Rooted in the teachings of the Church and the values of the Archdiocese of Bamenda, fostering faith alongside learning.', 'color' => 'accent'],
+                    ['icon' => 'fas fa-cross', 'title' => 'Catholic Foundation', 'desc' => 'Rooted in the teachings of the Church' . (site_subtitle() ? ' and the values of ' . site_subtitle() : '') . ', fostering faith alongside learning.', 'color' => 'accent'],
                     ['icon' => 'fas fa-users', 'title' => 'Holistic Formation', 'desc' => 'Nurturing intellectual, spiritual, moral, and social growth for well-rounded graduates.', 'color' => 'secondary'],
                     ['icon' => 'fas fa-flask', 'title' => 'Research & Innovation', 'desc' => 'Engaging students in research projects that address real-world challenges in the community and beyond.', 'color' => 'primary'],
                     ['icon' => 'fas fa-hands-helping', 'title' => 'Community Service', 'desc' => 'Building a culture of service that extends learning beyond the classroom into the lives of others.', 'color' => 'accent'],

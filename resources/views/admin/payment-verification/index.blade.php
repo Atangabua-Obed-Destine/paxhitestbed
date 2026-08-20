@@ -237,6 +237,8 @@
                                                 <span class="badge badge-warning">{{ __('status_pending') }}</span>
                                             @elseif($status == 'approved')
                                                 <span class="badge badge-success">{{ __('status_approved') }}</span>
+                                            @elseif($status == 'reversed')
+                                                <span class="badge badge-dark" title="{{ __('This payment was recorded and then undone.') }}">{{ __('Reversed') }}</span>
                                             @else
                                                 <span class="badge badge-danger">{{ __('status_rejected') }}</span>
                                             @endif
@@ -245,8 +247,56 @@
                                             <a href="{{ route($route.'.show', [$row->payment_type, $row->id]) }}" class="btn btn-sm btn-info">
                                                 <i class="fas fa-eye"></i> {{ __('btn_view') }}
                                             </a>
+
+                                            {{-- Undoing a payment moves money in the fee, the payment
+                                                 account and the ledger, and can pull an application back
+                                                 out of the admissions queue — so it asks for a reason and
+                                                 says what it will do before doing it. --}}
+                                            @if($status == 'approved')
+                                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                                        data-bs-toggle="modal" data-bs-target="#reverseModal{{ $row->id }}">
+                                                    <i class="fas fa-rotate-left"></i> {{ __('Reverse') }}
+                                                </button>
+                                            @endif
                                         </td>
                                     </tr>
+
+                                    @if($status == 'approved')
+                                        <tr class="d-none"><td>
+                                        <div class="modal fade" id="reverseModal{{ $row->id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog">
+                                                <form action="{{ route($route.'.reverse', [$row->payment_type, $row->id]) }}" method="post">
+                                                    @csrf
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">{{ __('Reverse this payment?') }}</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p class="mb-2">{{ __('This will put back everything the approval changed:') }}</p>
+                                                            <ul class="small mb-3">
+                                                                <li>{{ __('the fee returns to what the remaining payments say it is') }}</li>
+                                                                <li>{{ __('any amount credited to a payment account is debited back') }}</li>
+                                                                <li>{{ __('the ledger entry is reversed by an opposing entry') }}</li>
+                                                                <li>{{ __('an application submitted because of this payment returns to draft') }}</li>
+                                                            </ul>
+                                                            <p class="small text-muted">{{ __('Nothing is deleted — the receipt is kept and marked reversed.') }}</p>
+                                                            <div class="form-group">
+                                                                <label for="reverse-reason-{{ $row->id }}">{{ __('Reason') }} <span class="text-danger">*</span></label>
+                                                                <textarea class="form-control" id="reverse-reason-{{ $row->id }}" name="reason" rows="2" required minlength="5"
+                                                                          placeholder="{{ __('e.g. recorded against the wrong applicant') }}"></textarea>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_cancel') }}</button>
+                                                            <button type="submit" class="btn btn-danger">{{ __('Reverse payment') }}</button>
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                        </td></tr>
+                                    @endif
                                   @empty
                                     <tr>
                                         <td colspan="11" class="text-center">{{ __('no_payment_receipts_found') }}</td>

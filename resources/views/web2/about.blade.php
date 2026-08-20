@@ -14,7 +14,7 @@
 @extends('web2.layouts.master')
 
 @section('title', 'About Us — ' . (institution_code()))
-@section('description', $about ? Str::limit(strip_tags($about->short_desc), 160) : 'Learn about ' . institution_name() . ', a Catholic institution in the Archdiocese of Bamenda.')
+@section('description', $about ? Str::limit(strip_tags($about->short_desc), 160) : 'Learn about ' . institution_name() . (site_subtitle() ? ', ' . site_subtitle() : '') . '.')
 
 @section('content')
 
@@ -23,10 +23,12 @@
      ================================================================ --}}
 <section class="page-hero">
     <div class="section-container relative z-10 text-center">
+        @if(site_subtitle() !== '')
         <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white/80 text-xs font-medium mb-5" data-aos="fade-down">
             <i class="fas fa-cross text-accent-400 text-[10px]"></i>
-            Est. in the Archdiocese of Bamenda
+            {{ site_subtitle() }}
         </div>
+        @endif
         <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white mb-4" data-aos="fade-up">About {{ institution_code() }}</h1>
         <p class="text-lg text-white/70 max-w-2xl mx-auto" data-aos="fade-up" data-aos-delay="100">Rooted in faith. Committed to excellence. Dedicated to transforming lives through Catholic higher education.</p>
         <nav class="mt-6 text-sm text-white/50" aria-label="Breadcrumb" data-aos="fade-up" data-aos-delay="150">
@@ -50,7 +52,7 @@
             <div class="lg:col-span-5 relative" data-aos="fade-right">
                 <div class="relative">
                     @if($about->attach)
-                    <img src="{{ asset('uploads/about-us/'.$about->attach) }}" alt="About ' . institution_name() . '" class="w-full rounded-2xl shadow-xl object-cover aspect-[3/4]">
+                    <img src="{{ asset('uploads/about-us/'.$about->attach) }}" alt="About {{ institution_name() }}" class="w-full rounded-2xl shadow-xl object-cover aspect-[3/4]">
                     @else
                     <div class="w-full aspect-[3/4] rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center">
                         <i class="fas fa-university text-6xl text-primary-300"></i>

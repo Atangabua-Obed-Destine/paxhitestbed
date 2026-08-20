@@ -105,7 +105,7 @@
                         {{ institution_name() }}
                     </div>
                     <div class="text-[10px] text-surface-400 font-medium tracking-wide uppercase">
-                        {{ $setting->site_subtitle ?? 'Archdiocese of Bamenda' }}
+                        {{ site_subtitle() }}
                     </div>
                 </div>
             </a>

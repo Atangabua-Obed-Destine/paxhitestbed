@@ -149,7 +149,7 @@
     <div class="section-container text-center relative z-10">
         <h2 class="text-3xl font-heading font-bold text-white mb-4" data-aos="fade-up">Come Experience {{ institution_code() }}</h2>
         <p class="text-lg text-white/70 max-w-xl mx-auto mb-8" data-aos="fade-up" data-aos-delay="100">
-            Visit our campus and see for yourself what makes ' . institution_name() . ' a special place to study and grow.
+            Visit our campus and see for yourself what makes {{ institution_name() }} a special place to study and grow.
         </p>
         <div class="flex flex-wrap justify-center gap-4" data-aos="fade-up" data-aos-delay="150">
             <a href="{{ url('/application') }}" class="btn-accent"><i class="fas fa-pen-to-square mr-2"></i> Apply Now</a>

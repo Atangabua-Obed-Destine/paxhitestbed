@@ -13,7 +13,7 @@
 
     {{-- SEO --}}
     <title>@yield('title', $setting->meta_title ?? institution_name())</title>
-    <meta name="description" content="@yield('meta_description', $setting->meta_description ?? '' . institution_name() . ' (' . (institution_code()) . ') — A Catholic university in the Archdiocese of Bamenda offering accredited HND and Degree programs.')">
+    <meta name="description" content="@yield('meta_description', $setting->meta_description ?? institution_name() . ' (' . institution_code() . ')' . (site_subtitle() ? ', ' . site_subtitle() : '') . ' — offering accredited HND and Degree programmes.')">
     <meta name="keywords" content="@yield('meta_keywords', $setting->meta_keywords ?? (institution_code() . ', ' . institution_name() . ', Catholic University, Cameroon'))">
     <meta name="author" content="{{ institution_name() }}">
     <meta name="robots" content="index, follow">
@@ -44,7 +44,7 @@
         @if($setting->logo_path)
         "logo": "{{ asset('uploads/setting/'.$setting->logo_path) }}",
         @endif
-        "description": "{{ $setting->meta_description ?? 'A Catholic institution of higher learning in the Archdiocese of Bamenda, Cameroon.' }}",
+        "description": "{{ $setting->meta_description ?? 'A Catholic institution of higher learning.' . (site_subtitle() ? ' ' . site_subtitle() . '.' : '') }}",
         "address": {
             "@type": "PostalAddress",
             "addressLocality": "Bamunka – Ndop",

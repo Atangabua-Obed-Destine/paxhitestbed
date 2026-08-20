@@ -2359,7 +2359,19 @@
                     $blocked.toggleClass('d-none', !!data.complete);
                     $controls.toggleClass('d-none', !data.complete);
 
-                    if (data.complete) { return; }
+                    if (data.complete) {
+                        // The fee is raised at this moment, not when the form was
+                        // opened, so the step was rendered without one. Adopt it
+                        // now rather than making the applicant reload to find a
+                        // payment button that works.
+                        if (data.fee_id) {
+                            $('#step-8').attr('data-fee-id', data.fee_id).data('fee-id', data.fee_id);
+                        }
+                        if (data.balance !== null && data.balance !== undefined) {
+                            $('#fee-balance-display').text(Number(data.balance).toLocaleString() + ' FCFA');
+                        }
+                        return;
+                    }
 
                     // Rebuild the list so it names what is outstanding *now*.
                     var $list = $('#payment-blockers-list');

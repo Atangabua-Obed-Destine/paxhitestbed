@@ -305,9 +305,12 @@ class ApplicationController extends Controller
             $application->registration_no = intval(10000000) + $application->id;
             $application->save();
 
-            // Provision the admission fee now, at intake, so the applicant can
-            // pay before submitting the form (via MoMo or manual receipt upload).
-            $this->ensureAdmissionFee($application);
+            // No fee is raised here. Starting a form is not the same as owing
+            // money for it: raising one at intake put an unpaid fee on the
+            // admission fees report for everyone who ever opened the wizard,
+            // including people who abandoned it on the first step. The fee is
+            // raised when the applicant finishes and reaches the payment step —
+            // see readiness().
 
             DB::commit();
 
@@ -335,8 +338,9 @@ class ApplicationController extends Controller
 
         $degreeType = $application->degreeType;
 
-        // Safety net: make sure the admission fee exists for this draft.
-        $this->ensureAdmissionFee($application);
+        // Deliberately no fee here either: simply viewing the form billed the
+        // applicant 21,000 FCFA, which is how the fees report filled with
+        // unpaid rows nobody had agreed to. See readiness().
 
         // Warn (but don't block) if the intake has been closed since the draft was created.
         $intake = $application->session;
@@ -379,9 +383,12 @@ class ApplicationController extends Controller
         // Admission-fee context for the Payment step.
         $feeSettings = DegreeTypeFormConfig::settings($degreeType);
         $admissionFee = $application->admissionFee()->first();
+        // No fee row yet means the applicant has not finished the form — the
+        // fee is raised when they reach the payment step. Fall back to the
+        // configured amount so the step shows what it will cost rather than 0.
         $admissionFeeBalance = $admissionFee
             ? max(0, ($admissionFee->fee_amount + $admissionFee->fine_amount - $admissionFee->discount_amount) - $admissionFee->paid_amount)
-            : 0;
+            : (float) ($feeSettings['fee_amount'] ?? 0);
         $latestReceipt = $admissionFee
             ? $admissionFee->paymentReceipts()->orderByDesc('id')->first()
             : null;
@@ -1416,10 +1423,27 @@ class ApplicationController extends Controller
 
         $missing = \App\Services\ApplicationCompleteness::missing($application);
 
+        // This is the moment the fee is owed: the form is finished and the
+        // applicant has reached the payment step. Raising it here rather than at
+        // intake keeps the admission fees report to people who actually intend
+        // to pay. ensureAdmissionFee() is idempotent, so arriving at the step
+        // repeatedly does not raise it twice.
+        if ($missing === []) {
+            $this->ensureAdmissionFee($application);
+            $application->refresh();
+        }
+
+        $fee = $application->admissionFee()->first();
+
         return response()->json([
             'complete' => $missing === [],
             'missing' => $missing,
             'fee_settled' => $this->admissionFeeIsSettled($application),
+            // The payment step was rendered before this fee existed, so it has
+            // no id to pay against. Hand it back rather than make the applicant
+            // reload to discover it.
+            'fee_id' => $fee->id ?? null,
+            'balance' => $fee ? $this->admissionFeeBalance($fee) : null,
         ]);
     }
 

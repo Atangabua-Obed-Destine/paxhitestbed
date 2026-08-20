@@ -67,3 +67,21 @@ if (!function_exists('institution_code')) {
         return app(\App\Services\LetterheadService::class)->institutionCode();
     }
 }
+
+if (!function_exists('site_subtitle')) {
+    /**
+     * The line that sits under the institution's name — its founding body,
+     * diocese, motto, or whatever the school chooses.
+     *
+     * Configured under Settings → Site Subtitle. It was previously written into
+     * the views as "Archdiocese of Bamenda", which is true of exactly one
+     * institution and wrong for every other deployment of this system.
+     *
+     * Returns an empty string when unset, so callers can leave the line out
+     * rather than print a stray label with nothing after it.
+     */
+    function site_subtitle(): string
+    {
+        return trim((string) optional(\App\Models\Setting::first())->site_subtitle);
+    }
+}

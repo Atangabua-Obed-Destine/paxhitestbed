@@ -189,6 +189,33 @@
                                                 <i class="fas fa-receipt"></i>
                                             </a>
                                         @endif
+
+                                        {{-- A fee raised in error can be removed, but only once no
+                                             approved payment stands against it: deleting a paid fee
+                                             would orphan a receipt, a ledger entry and a payment-account
+                                             credit. Reverse the payment first and this becomes available. --}}
+                                        @php
+                                            $settledPayments = $fee->paymentReceipts
+                                                ->where('verification_status', 'approved')->count();
+                                            $removable = $settledPayments === 0 && (float) $fee->paid_amount <= 0;
+                                        @endphp
+                                        @if($removable)
+                                            <form action="{{ route($route.'.delete', $fee->id) }}" method="post" class="d-inline"
+                                                  onsubmit="return confirm('{{ __('Remove this admission fee? The applicant will be charged again once they complete their application and continue to payment.') }}')">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ __('Remove this fee') }}">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        @else
+                                            {{-- A dead, greyed-out bin tells nobody what to do about it.
+                                                 Point at the one place the payment can be undone instead. --}}
+                                            <a href="{{ route('admin.payment-verification.index', ['payment_type' => 'all', 'status' => 'approved', 'search' => $app->registration_no ?? '']) }}"
+                                               class="btn btn-sm btn-outline-secondary"
+                                               title="{{ __('This fee has been paid. Reverse the payment first — then it can be removed.') }}">
+                                                <i class="fas fa-rotate-left"></i> {{ __('Reverse first') }}
+                                            </a>
+                                        @endif
                                     </td>
                                 </tr>
                             @empty

@@ -5,6 +5,19 @@
  * (c) Younes KHOUBZA <younes.khoubza@gmail.com>
  */
 
+// Where the browser should look for locally served assets.
+//
+// The path has to survive both deployments: this project is served from a
+// subdirectory in development (/paxhitestbed) and from the document root in
+// production, so a bare "/vendor/..." is right in one and a 404 in the other.
+// Deriving it from APP_URL covers both without a per-environment edit.
+//
+// They live under dashboard/ rather than vendor/ on purpose: the root .htaccess
+// already maps dashboard/ into public/, whereas a vendor/ URL would collide with
+// Composer's own vendor directory at the project root — which must never be
+// reachable over the web.
+$flasherBase = rtrim((string) parse_url((string) env('APP_URL', ''), PHP_URL_PATH), '/');
+
 return array(
     /*
     |---------------------------------------------------------------------------
@@ -60,7 +73,7 @@ return array(
     */
     'root_script' => array(
         'cdn' => 'https://cdn.jsdelivr.net/npm/@flasher/flasher@1.3.2/dist/flasher.min.js',
-        'local' => '/vendor/flasher/flasher.min.js',
+        'local' => $flasherBase . '/dashboard/flasher/flasher.min.js',
     ),
 
     /*
@@ -80,7 +93,7 @@ return array(
     */
     'styles' => array(
         'cdn' => 'https://cdn.jsdelivr.net/npm/@flasher/flasher@1.3.2/dist/flasher.min.css',
-        'local' => '/vendor/flasher/flasher.min.css',
+        'local' => $flasherBase . '/dashboard/flasher/flasher.min.css',
     ),
 
     /*
@@ -98,7 +111,20 @@ return array(
     |
     | This will copy the necessary assets to your application's public folder.
     */
-    'use_cdn' => true,
+    /*
+     * Served from this application, not a CDN.
+     *
+     * Flasher is what confirms an action succeeded — including reversing a
+     * payment, which moves money. A CDN the browser blocks, or one that is
+     * simply unreachable, would leave that action silent, and silent is the
+     * wrong failure for anything financial. It also stops browsers logging a
+     * tracking-prevention warning on every admin page.
+     *
+     * The files live in public/dashboard/flasher (see $flasherBase above for
+     * why not public/vendor). `php artisan flasher:install` writes them to
+     * public/vendor/flasher, so after upgrading the package copy them across.
+     */
+    'use_cdn' => false,
 
     /*
     |---------------------------------------------------------------------------

@@ -57,8 +57,10 @@
                     <img src="{{ asset('uploads/setting/'.$setting->logo_path) }}" alt="{{ $setting->title }}" class="h-12">
                     @endif
                     <div>
-                        <div class="text-white font-heading font-bold text-sm">' . institution_name() . '</div>
-                        <div class="text-[10px] text-white/40 uppercase tracking-wider">Archdiocese of Bamenda</div>
+                        <div class="text-white font-heading font-bold text-sm">{{ institution_name() }}</div>
+                        @if(site_subtitle() !== '')
+                        <div class="text-[10px] text-white/40 uppercase tracking-wider">{{ site_subtitle() }}</div>
+                        @endif
                     </div>
                 </div>
                 <p class="text-sm leading-relaxed mb-6">

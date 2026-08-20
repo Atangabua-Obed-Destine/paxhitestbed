@@ -31,7 +31,7 @@ class PaymentVerificationController extends Controller
         $this->path = 'payment-receipts';
         $this->access = 'payment-receipt';
 
-        $this->middleware('permission:' . $this->access . '-verify', ['only' => ['index', 'show', 'approve', 'reject']]);
+        $this->middleware('permission:' . $this->access . '-verify', ['only' => ['index', 'show', 'approve', 'reject', 'reverse']]);
     }
 
     /**
@@ -450,6 +450,43 @@ class PaymentVerificationController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
+    /**
+     * Undo an approved payment that should not have been recorded.
+     *
+     * Rejection is for a payment that was never accepted; this is for one that
+     * was, and moved money through the fee, the payment account, the ledger and
+     * — for an admission fee — the application's own status. All of that is put
+     * back together, in one transaction, by PaymentReversalService.
+     */
+    public function reverse(Request $request, $type, $id)
+    {
+        $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $receipt = PaymentReceipt::with('fee')->findOrFail($id);
+        $service = app(\App\Services\PaymentReversalService::class);
+
+        $result = $service->reverse($receipt, trim($request->input('reason')));
+
+        if (!$result['reversed']) {
+            Flasher::addError($result['message'], __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        $message = $result['message'];
+        if ($result['application']) {
+            $message .= ' ' . __('Application :no has been returned to draft.', [
+                'no' => $result['application']->registration_no,
+            ]);
+        }
+
+        Flasher::addSuccess($message, __('msg_success'));
+
+        return redirect()->route($this->route . '.index');
+    }
+
     public function reject(Request $request, $type, $id)
     {
         $request->validate([

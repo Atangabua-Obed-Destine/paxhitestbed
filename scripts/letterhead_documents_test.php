@@ -50,6 +50,8 @@ echo "\nNo institution's name is written into the markup\n";
 // ---------------------------------------------------------------------------
 
 $offenders = [];
+$subtitleOffenders = [];
+$leaks = [];
 $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(resource_path('views')));
 $scanned = 0;
 
@@ -73,6 +75,22 @@ foreach ($iterator as $file) {
     if (preg_match('~PAX HIGHER INSTITUTE|PAXHI|Pax, Innovatio~i', $source)) {
         $offenders[] = str_replace(resource_path('views') . DIRECTORY_SEPARATOR, '', $path);
     }
+
+    // The founding body belongs in Settings → Site Subtitle, not in markup.
+    if (strpos($source, 'Archdiocese of Bamenda') !== false) {
+        $subtitleOffenders[] = str_replace(resource_path('views') . DIRECTORY_SEPARATOR, '', $path);
+    }
+
+    // A concatenation that escaped its PHP string renders as literal text —
+    // "' . institution_name() . '" printed on the page instead of the name.
+    // Valid uses sit inside @section/@yield defaults; these do not.
+    foreach (preg_split('~\R~', $source) as $line) {
+        if (strpos($line, "' . institution_name() . '") !== false
+            && !preg_match('~@section|@yield|meta_description|meta_keywords~', $line)) {
+            $leaks[] = str_replace(resource_path('views') . DIRECTORY_SEPARATOR, '', $path);
+            break;
+        }
+    }
 }
 
 check(
@@ -80,6 +98,26 @@ check(
     $offenders === [],
     implode(', ', array_slice($offenders, 0, 5))
 );
+
+// The founding body is one institution's fact. It belongs in Settings → Site
+// Subtitle, not written into the homepage, footer, header and page metadata.
+check(
+    'no view hardcodes the founding body',
+    $subtitleOffenders === [],
+    implode(', ', array_slice($subtitleOffenders, 0, 5))
+);
+
+// A concatenation left outside a PHP string prints itself rather than the name,
+// so the page reads "' . institution_name() . '" in plain sight. Blade compiles
+// it happily, and a check that merely looked for the name elsewhere on the page
+// would not notice.
+check(
+    'no concatenation leaked into page text',
+    $leaks === [],
+    implode(', ', array_slice($leaks, 0, 5))
+);
+
+check('site_subtitle() is available to views', function_exists('site_subtitle'));
 
 // ---------------------------------------------------------------------------
 echo "\nThere is one answer to what the institution is called\n";

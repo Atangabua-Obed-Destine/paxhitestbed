@@ -513,6 +513,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
         Route::get('/', 'AdmissionFeesReportController@index')->name('index');
         Route::post('{fee}/walk-in', 'AdmissionFeesReportController@recordWalkIn')->name('walk-in');
         Route::get('receipt/{receipt}', 'AdmissionFeesReportController@receipt')->name('receipt');
+        Route::post('{fee}/delete', 'AdmissionFeesReportController@destroyFee')->name('delete');
     });
     Route::get('fees-student-multiprint', 'FeesStudentController@multiPrint')->name('fees-student.multiprint');
 
@@ -1099,6 +1100,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
         Route::get('/{type}/{id}', 'PaymentVerificationController@show')->name('payment-verification.show');
         Route::post('/{type}/{id}/approve', 'PaymentVerificationController@approve')->name('payment-verification.approve');
         Route::post('/{type}/{id}/reject', 'PaymentVerificationController@reject')->name('payment-verification.reject');
+        Route::post('/{type}/{id}/reverse', 'PaymentVerificationController@reverse')->name('payment-verification.reverse');
     });
 
     // Partial Payment Report Routes

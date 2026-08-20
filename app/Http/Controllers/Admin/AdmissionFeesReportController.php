@@ -238,6 +238,78 @@ class AdmissionFeesReportController extends Controller
      |  Digital receipt (printable)
      |----------------------------------------------------------------- */
 
+    /**
+     * Remove an admission fee that should never have been assigned.
+     *
+     * Refuses while any approved payment still stands against it. That is not
+     * caution for its own sake: deleting a paid fee would leave a receipt, a
+     * journal entry and a payment-account credit pointing at money that no
+     * longer has anything to belong to, and the ledger would stop agreeing with
+     * the accounts. Reverse the payment first — that route exists — and the fee
+     * becomes deletable.
+     *
+     * Once removed, the applicant's dashboard simply shows no fee, and one is
+     * assigned again when they finish the form and reach the payment step.
+     */
+    public function destroyFee(Request $request, Fee $fee)
+    {
+        if (!$fee->applicant_id) {
+            Flasher::addError(__('This is not an applicant admission fee.'), __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        $live = PaymentReceipt::where('fee_id', $fee->id)
+            ->where('verification_status', 'approved')
+            ->count();
+
+        if ($live > 0) {
+            Flasher::addError(
+                __('This fee has :count approved payment(s) against it. Reverse the payment first, then the fee can be removed.', ['count' => $live]),
+                __('msg_error')
+            );
+
+            return redirect()->back();
+        }
+
+        if ((float) $fee->paid_amount > 0) {
+            Flasher::addError(
+                __('This fee still carries a paid amount of :amount. Reverse the payment that recorded it before removing the fee.', [
+                    'amount' => number_format($fee->paid_amount),
+                ]),
+                __('msg_error')
+            );
+
+            return redirect()->back();
+        }
+
+        $application = Application::where('admission_fee_id', $fee->id)->first();
+        $reference = $application->registration_no ?? ('#' . $fee->id);
+
+        DB::transaction(function () use ($fee, $application) {
+            // A fee that was never paid may still have been posted; reversing is
+            // a no-op when there is nothing to reverse.
+            app(\App\Services\TransactionAutoMapService::class)->reverse('fee', $fee->id);
+
+            // Pending or rejected receipts belong to a fee that is going away.
+            PaymentReceipt::where('fee_id', $fee->id)->delete();
+
+            if ($application) {
+                $application->admission_fee_id = null;
+                $application->save();
+            }
+
+            $fee->delete();
+        });
+
+        Flasher::addSuccess(
+            __('Admission fee removed for :reference. It will be assigned again once the applicant completes their application and continues to payment.', ['reference' => $reference]),
+            __('msg_success')
+        );
+
+        return redirect()->route($this->route . '.index');
+    }
+
     public function receipt(PaymentReceipt $receipt)
     {
         // Only receipts tied to applicant admission fees are served here.
