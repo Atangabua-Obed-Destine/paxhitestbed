@@ -56,12 +56,22 @@ class AccountMappingController extends Controller
             ->get()
             ->groupBy('mapping_type');
 
+        // Where each category appears on the Income & Expenditure sheet.
+        // Headers are excluded: they total their children and can never carry a
+        // figure of their own.
+        $budgetLines = \App\Models\BudgetLine::active()
+            ->postable()
+            ->orderByRaw("FIELD(section, 'income', 'expenditure', 'capital')")
+            ->orderBy('code')
+            ->get();
+
         return view('admin.accounting.mappings.settings', compact(
             'feeCategories',
             'incomeCategories',
             'expenseCategories',
             'accounts',
-            'existingMappings'
+            'existingMappings',
+            'budgetLines'
         ));
     }
 
@@ -76,6 +86,7 @@ class AccountMappingController extends Controller
             'mappings.*.category_id' => 'nullable|integer',
             'mappings.*.debit_account_id' => 'required|exists:chart_of_accounts,id',
             'mappings.*.credit_account_id' => 'required|exists:chart_of_accounts,id',
+            'mappings.*.budget_line_id' => 'nullable|exists:budget_lines,id',
             'mappings.*.description' => 'nullable|string',
         ]);
 
@@ -95,6 +106,12 @@ class AccountMappingController extends Controller
                     [
                         'debit_account_id' => $mappingData['debit_account_id'],
                         'credit_account_id' => $mappingData['credit_account_id'],
+                        // Blank means the category has no home on the sheet
+                        // yet; the report lists it as unallocated rather than
+                        // dropping it.
+                        'budget_line_id' => !empty($mappingData['budget_line_id'])
+                            ? $mappingData['budget_line_id']
+                            : null,
                         'description' => $mappingData['description'] ?? null,
                         'status' => 'active',
                         'created_by' => $mappingData['created_by'] ?? Auth::id(),

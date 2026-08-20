@@ -4,6 +4,13 @@
 
      @include('admin.layouts.common.header_script')
 
+     {{-- Page-specific styles. Four views already pushed to this stack — the
+          budget sheet, bank reconciliation and the two journal-entry screens —
+          but nothing rendered it, so their styling was silently dropped and
+          those tables drew unformatted. Placed last so a page can override the
+          theme it inherits. --}}
+     @stack('css')
+
 </head>
 
 <body>
@@ -396,5 +403,7 @@
     <!-- AI Support Chatbot -->
     <script defer src="https://ai.innovakickstarter.com/vendor/chatbot/js/external-chatbot.js" data-chatbot-uuid="cb9eb69c-7a17-4bed-95b1-20cb70b0d125" data-iframe-width="420" data-iframe-height="745" data-language="en"></script>
 
+
+    @include('components.chat-widget')
 </body>
 </html>

@@ -1,6 +1,6 @@
 {{--
     ================================================================
-    HOMEPAGE — PAX Higher Institute
+    HOMEPAGE — {{ institution_name() }}
     ================================================================
     Sections:
     1. Hero Slider
@@ -17,12 +17,12 @@
 --}}
 @extends('web2.layouts.master')
 
-@section('title', ($setting->title ?? 'PAX Higher Institute') . ' — Home')
-@section('description', 'PAX Higher Institute (PAXHI), a Catholic university in the Archdiocese of Bamenda, dedicated to academic excellence, moral formation, and holistic development.')
-@section('keywords', 'PAXHI, PAX Higher Institute, Catholic University, Bamenda, Archdiocese, programs, admissions')
+@section('title', (institution_name()) . ' — Home')
+@section('description', '' . institution_name() . ' (' . (institution_code()) . '), a Catholic university in the Archdiocese of Bamenda, dedicated to academic excellence, moral formation, and holistic development.')
+@section('keywords', institution_code() . ', ' . institution_name() . ', Catholic University, Cameroon, programs, admissions')
 
 @section('social_meta_tags')
-<meta property="og:title" content="{{ $setting->title ?? 'PAX Higher Institute' }}">
+<meta property="og:title" content="{{ institution_name() }}">
 <meta property="og:description" content="A Catholic institution of higher learning in the Archdiocese of Bamenda.">
 <meta property="og:image" content="{{ asset('uploads/setting/' . ($setting->logo_path ?? '')) }}">
 <meta property="og:type" content="website">
@@ -58,7 +58,7 @@
                             {{-- Catholic accent --}}
                             <div class="inline-flex items-center gap-2 mb-5 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white/80 text-xs font-medium">
                                 <i class="fas fa-cross text-accent-400 text-[10px]"></i>
-                                Archdiocese of Bamenda
+                                {{ $slider->pre_title ?? 'Archdiocese of Bamenda' }}
                             </div>
                             <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white leading-tight mb-5 [text-shadow:_0_2px_20px_rgba(0,0,0,0.3)]">
                                 {!! $slider->title !!}
@@ -77,7 +77,7 @@
                                 </a>
                                 <a href="{{ url('/about') }}"
                                    class="bg-white/10 backdrop-blur-md border border-white/30 text-white hover:bg-white/20 rounded-xl px-7 py-3.5 text-base font-semibold transition-all inline-flex items-center gap-2">
-                                    <i class="fas fa-play-circle"></i>Discover PAXHI
+                                    <i class="fas fa-play-circle"></i>Discover {{ institution_code() }}
                                 </a>
                             </div>
                             @endif
@@ -91,7 +91,7 @@
                 <div class="relative h-full flex items-center z-10">
                     <div class="section-container text-center">
                         <div class="max-w-2xl mx-auto">
-                            <h1 class="text-4xl md:text-5xl font-heading font-bold text-white mb-4">Welcome to {{ $setting->title ?? 'PAX Higher Institute' }}</h1>
+                            <h1 class="text-4xl md:text-5xl font-heading font-bold text-white mb-4">Welcome to {{ institution_name() }}</h1>
                             <p class="text-lg text-white/80 mb-8">Academic Excellence Rooted in Catholic Values</p>
                             <a href="{{ url('/about') }}" class="btn-accent text-base">Learn More</a>
                         </div>
@@ -183,7 +183,7 @@
 
             {{-- Text Side --}}
             <div data-aos="fade-left">
-                <div class="section-label">Welcome to PAXHI</div>
+                <div class="section-label">Welcome to {{ institution_code() }}</div>
                 <h2 class="section-title !text-left">{{ $welcomeMessage->title }}</h2>
                 @if($welcomeMessage->designation)
                 <div class="inline-flex items-center gap-2 px-3 py-1 bg-accent-50 rounded-lg text-accent-600 text-sm font-medium mb-5">
@@ -214,7 +214,7 @@
 <section class="py-20 lg:py-24 bg-surface-50 overflow-hidden">
     <div class="section-container">
         <div class="section-header" data-aos="fade-up">
-            <span class="section-label">Why Choose PAXHI</span>
+            <span class="section-label">Why Choose {{ institution_code() }}</span>
             <h2 class="section-title">An Education that Transforms</h2>
             <p class="section-desc">We combine academic rigor with Catholic moral formation, preparing graduates to serve with competence and character.</p>
         </div>
@@ -308,7 +308,7 @@
     <div class="section-container relative z-10">
         <div class="text-center mb-14" data-aos="fade-up">
             <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 text-accent-400 text-xs font-medium uppercase tracking-wider mb-4">
-                <i class="fas fa-chart-line"></i>PAXHI at a Glance
+                <i class="fas fa-chart-line"></i>{{ institution_code() }} at a Glance
             </span>
             <h2 class="text-3xl md:text-4xl font-heading font-bold text-white">Numbers That Speak</h2>
         </div>
@@ -417,7 +417,7 @@
         <div class="section-header" data-aos="fade-up">
             <span class="section-label">Testimonials</span>
             <h2 class="section-title">Voices of Our Community</h2>
-            <p class="section-desc">Hear from students, alumni, and faculty about their experience at {{ $setting->title ?? 'PAX Higher Institute' }}.</p>
+            <p class="section-desc">Hear from students, alumni, and faculty about their experience at {{ institution_name() }}.</p>
         </div>
 
         <div class="swiper testimonial-swiper" data-aos="fade-up">

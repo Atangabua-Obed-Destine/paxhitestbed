@@ -14,20 +14,24 @@ class OhadaChartOfAccountsSeeder extends Seeder
      */
     public function run(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        ChartOfAccount::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // Never truncate. Once the ledger is live, wiping the chart would orphan
+        // every journal line, mapping and budget-line link that points at it.
+        // Re-running is now safe and only refreshes names.
+        if (ChartOfAccount::whereHas('journalEntryLines')->exists()) {
+            $this->command?->warn('Chart of accounts already carries postings — refreshing names only.');
+        }
 
-        // Due to size, I'll create key accounts - you can expand this later
         $accounts = $this->getOhadaAccounts();
 
-        // First pass: Create all accounts
+        // First pass: create or refresh all accounts.
         $accountMap = [];
         foreach ($accounts as $account) {
-            $parentCode = $account['parent_code'] ?? null;
             unset($account['parent_code']);
-            
-            $created = ChartOfAccount::create($account);
+
+            $created = ChartOfAccount::updateOrCreate(
+                ['account_code' => $account['account_code']],
+                $account
+            );
             $accountMap[$created->account_code] = $created->id;
         }
 
@@ -129,17 +133,22 @@ class OhadaChartOfAccountsSeeder extends Seeder
             ['account_code' => '911', 'account_name' => 'Grants Committed', 'account_name_fr' => 'Subventions Engagées', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '91'],
             ['account_code' => '912', 'account_name' => 'Tuition Pre-payments', 'account_name_fr' => 'Avances de Scolarité', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '91'],
             
-            // Analytical Cost Centers for School Management
-            ['account_code' => '92', 'account_name' => 'Cost by Department', 'account_name_fr' => 'Coûts par Département', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'heading', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '9'],
-            ['account_code' => '921', 'account_name' => 'Primary Section Costs', 'account_name_fr' => 'Coûts Section Primaire', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
-            ['account_code' => '922', 'account_name' => 'Secondary Section Costs', 'account_name_fr' => 'Coûts Section Secondaire', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
-            ['account_code' => '923', 'account_name' => 'Administration Costs', 'account_name_fr' => 'Coûts Administration', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
-            ['account_code' => '924', 'account_name' => 'Sports & Activities Costs', 'account_name_fr' => 'Coûts Sports et Activités', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
-            
-            ['account_code' => '93', 'account_name' => 'Revenue by Source', 'account_name_fr' => 'Revenus par Source', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'heading', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '9'],
-            ['account_code' => '931', 'account_name' => 'Tuition Revenue Analysis', 'account_name_fr' => 'Analyse Revenus Scolarité', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
-            ['account_code' => '932', 'account_name' => 'Cafeteria Revenue', 'account_name_fr' => 'Revenus Cantine', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
-            ['account_code' => '933', 'account_name' => 'Transportation Revenue', 'account_name_fr' => 'Revenus Transport', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
+            // Analytical cost and revenue centres — OHADA class 9 is where
+            // management accounting lives, so these mirror this university's
+            // actual faculties rather than a generic school's sections.
+            ['account_code' => '92', 'account_name' => 'Cost by Faculty', 'account_name_fr' => 'Coûts par Faculté', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'heading', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '9'],
+            ['account_code' => '921', 'account_name' => 'FAFS - Agriculture and Food Sciences', 'account_name_fr' => 'FAFS - Agriculture et Sciences Alimentaires', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
+            ['account_code' => '922', 'account_name' => 'SMBS - Medical and Biomedical Sciences', 'account_name_fr' => 'SMBS - Sciences Médicales et Biomédicales', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
+            ['account_code' => '923', 'account_name' => 'FMS/FBF - Management, Business and Finance', 'account_name_fr' => 'FMS/FBF - Gestion, Commerce et Finance', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
+            ['account_code' => '924', 'account_name' => 'SCEDT - Computer Engineering and Digital Technology', 'account_name_fr' => 'SCEDT - Génie Informatique et Technologie Numérique', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
+            ['account_code' => '925', 'account_name' => 'Central Administration', 'account_name_fr' => 'Administration Centrale', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '92'],
+
+            ['account_code' => '93', 'account_name' => 'Revenue by Faculty', 'account_name_fr' => 'Revenus par Faculté', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'heading', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '9'],
+            ['account_code' => '931', 'account_name' => 'FAFS - Agriculture and Food Sciences', 'account_name_fr' => 'FAFS - Agriculture et Sciences Alimentaires', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
+            ['account_code' => '932', 'account_name' => 'SMBS - Medical and Biomedical Sciences', 'account_name_fr' => 'SMBS - Sciences Médicales et Biomédicales', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
+            ['account_code' => '933', 'account_name' => 'FMS/FBF - Management, Business and Finance', 'account_name_fr' => 'FMS/FBF - Gestion, Commerce et Finance', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
+            ['account_code' => '934', 'account_name' => 'SCEDT - Computer Engineering and Digital Technology', 'account_name_fr' => 'SCEDT - Génie Informatique et Technologie Numérique', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
+            ['account_code' => '935', 'account_name' => 'Other Income', 'account_name_fr' => 'Autres Revenus', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'credit', 'is_system' => false, 'parent_code' => '93'],
             
             ['account_code' => '94', 'account_name' => 'Project Tracking', 'account_name_fr' => 'Suivi de Projets', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'heading', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '9'],
             ['account_code' => '941', 'account_name' => 'Infrastructure Projects', 'account_name_fr' => 'Projets d\'Infrastructure', 'class_number' => 9, 'account_type' => 'analytical', 'account_category' => 'detail', 'normal_balance' => 'debit', 'is_system' => false, 'parent_code' => '94'],

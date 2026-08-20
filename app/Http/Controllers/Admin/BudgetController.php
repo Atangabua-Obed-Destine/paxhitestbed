@@ -37,6 +37,10 @@ class BudgetController extends Controller
     {
         $data['title'] = __('text_budgets');
         
+        // Every budget, annual and departmental alike — they are the same kind
+        // of thing at different scopes, and hiding the annual one made the
+        // register look empty while an annual budget existed. The editing
+        // screens are guarded instead, in redirectInstitutional().
         $query = Budget::query();
         
         // Apply filters
@@ -77,6 +81,11 @@ class BudgetController extends Controller
         $data['title'] = __('text_create_budget');
         $data['departments'] = Department::where('status', 1)->orderBy('title')->get();
         
+        // Annual budgets a sub-budget can be delegated out of.
+        $data['annualBudgets'] = Budget::where('is_institutional', true)
+            ->whereIn('status', ['draft', 'pending_approval', 'approved', 'active'])
+            ->orderByDesc('start_date')->get();
+
         return view('admin.budget.create', $data);
     }
 
@@ -93,6 +102,8 @@ class BudgetController extends Controller
             'end_date' => 'required|date|after:start_date',
             'total_amount' => 'required|numeric|min:0',
             'department_id' => 'required_if:type,departmental',
+            // Optional: which annual budget this one is delegated out of.
+            'parent_id' => 'nullable|exists:budgets,id',
         ]);
 
         DB::beginTransaction();
@@ -120,9 +131,40 @@ class BudgetController extends Controller
     public function show($id)
     {
         $data['title'] = __('text_budget_details');
-        $data['row'] = Budget::with(['department', 'allocations.expenseCategory', 'allocations.department', 'expenses', 'revisions'])->findOrFail($id);
-        
+        $data['row'] = Budget::with([
+            'department', 'allocations.expenseCategory', 'allocations.department',
+            'allocations.budgetLine', 'expenses', 'revisions',
+            'children.department', 'parent',
+        ])->findOrFail($id);
+
         return view('admin.budget.show', $data);
+    }
+
+    /**
+     * Send an institutional budget back to its own editor.
+     *
+     * The departmental screens know nothing about budget lines, the opening
+     * balance or income, so an annual sheet edited through them would lose the
+     * structure it depends on — and an allocation created there would carry no
+     * budget_line_id, putting a figure on no line of the sheet at all.
+     *
+     * Enforced here rather than by hiding buttons: a hidden button does not
+     * stop someone reaching the URL.
+     *
+     * @return \Illuminate\Http\RedirectResponse|null
+     */
+    protected function redirectInstitutional($budget)
+    {
+        if (!$budget || !$budget->is_institutional) {
+            return null;
+        }
+
+        Flasher::addWarning(
+            __('This is the annual Income & Expenditure sheet. It is edited on its own screen.'),
+            __('msg_warning')
+        );
+
+        return redirect()->route('admin.budget-sheet.show', $budget->id);
     }
 
     /**
@@ -132,7 +174,11 @@ class BudgetController extends Controller
     {
         $data['title'] = __('text_edit_budget');
         $data['row'] = Budget::findOrFail($id);
-        
+
+        if ($redirect = $this->redirectInstitutional($data['row'])) {
+            return $redirect;
+        }
+
         // Only allow editing draft budgets
         if (!in_array($data['row']->status, ['draft', 'pending_approval'])) {
             Flasher::addError(__('msg_cannot_edit_active_budget'), __('msg_error'));
@@ -141,6 +187,11 @@ class BudgetController extends Controller
         
         $data['departments'] = Department::where('status', 1)->orderBy('title')->get();
         
+        // Annual budgets a sub-budget can be delegated out of.
+        $data['annualBudgets'] = Budget::where('is_institutional', true)
+            ->whereIn('status', ['draft', 'pending_approval', 'approved', 'active'])
+            ->orderByDesc('start_date')->get();
+
         return view('admin.budget.edit', $data);
     }
 
@@ -150,7 +201,11 @@ class BudgetController extends Controller
     public function update(Request $request, $id)
     {
         $budget = Budget::findOrFail($id);
-        
+
+        if ($redirect = $this->redirectInstitutional($budget)) {
+            return $redirect;
+        }
+
         // Only allow editing draft budgets
         if (!in_array($budget->status, ['draft', 'pending_approval'])) {
             Flasher::addError(__('msg_cannot_edit_active_budget'), __('msg_error'));
@@ -165,6 +220,8 @@ class BudgetController extends Controller
             'end_date' => 'required|date|after:start_date',
             'total_amount' => 'required|numeric|min:0',
             'department_id' => 'required_if:type,departmental',
+            // Optional: which annual budget this one is delegated out of.
+            'parent_id' => 'nullable|exists:budgets,id',
         ]);
 
         DB::beginTransaction();

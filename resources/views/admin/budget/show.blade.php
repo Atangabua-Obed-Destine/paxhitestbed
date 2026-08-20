@@ -49,7 +49,13 @@
                         <h5>{{ __('text_budget_details') }}</h5>
                         <div class="card-header-right">
                             @can('budget-edit')
-                            @if(in_array($row->status, ['draft', 'pending_approval']))
+                            @if($row->is_institutional)
+                            {{-- One editor. The departmental form has no opening
+                                 balance and no budget lines, so it cannot edit a sheet. --}}
+                            <a href="{{ route('admin.budget-sheet.show', $row->id) }}" class="btn btn-primary btn-sm">
+                                <i class="feather icon-file-text"></i> {{ __('Open the sheet') }}
+                            </a>
+                            @elseif(in_array($row->status, ['draft', 'pending_approval']))
                             <a href="{{ route('admin.budget.edit', $row->id) }}" class="btn btn-primary btn-sm">
                                 <i class="feather icon-edit"></i> {{ __('btn_edit') }}
                             </a>
@@ -67,6 +73,16 @@
                     </div>
                     <div class="card-block">
                         <table class="table table-borderless">
+                            <tr>
+                                <td><strong>{{ __('Belongs to') }}</strong></td>
+                                <td>
+                                    @if($row->parent)
+                                        <a href="{{ route('admin.budget-sheet.show', $row->parent->id) }}">{{ $row->parent->title }}</a>
+                                    @else
+                                        <span class="text-muted">{{ __('Not part of an annual budget') }}</span>
+                                    @endif
+                                </td>
+                            </tr>
                             <tr>
                                 <th style="width: 200px;">{{ __('field_budget_code') }}:</th>
                                 <td><strong>{{ $row->budget_code }}</strong></td>
@@ -119,13 +135,67 @@
                     </div>
                 </div>
 
+
+                {{-- Sub-budgets: the part of this annual budget that has been
+                     handed to a department or project to spend. Shown only when
+                     some has, so the page stays quiet until it is relevant. --}}
+                @if($row->children->count())
+                <div class="card">
+                    <div class="card-header">
+                        <h5>{{ __('Sub-budgets delegated from this one') }}</h5>
+                    </div>
+                    <div class="card-block table-border-style">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>{{ __('field_title') }}</th>
+                                        <th>{{ __('field_department') }}</th>
+                                        <th class="text-right">{{ __('field_total_amount') }}</th>
+                                        <th class="text-right">{{ __('Spent') }}</th>
+                                        <th>{{ __('field_status') }}</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($row->children as $child)
+                                    <tr>
+                                        <td>{{ $child->title }}</td>
+                                        <td>{{ optional($child->department)->title ?? '—' }}</td>
+                                        <td class="text-right">{{ number_format($child->total_amount) }}</td>
+                                        <td class="text-right">{{ number_format($child->spent_amount) }}</td>
+                                        <td><span class="badge badge-secondary">{{ ucfirst(str_replace('_', ' ', $child->status)) }}</span></td>
+                                        <td class="text-right">
+                                            <a href="{{ route('admin.budget.show', $child->id) }}" class="btn btn-sm btn-outline-primary">{{ __('Open') }}</a>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                    <tr>
+                                        <td colspan="2"><strong>{{ __('Total delegated') }}</strong></td>
+                                        <td class="text-right"><strong>{{ number_format($row->children->sum('total_amount')) }}</strong></td>
+                                        <td class="text-right"><strong>{{ number_format($row->children->sum('spent_amount')) }}</strong></td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
                 <!-- Budget Allocations -->
                 <div class="card">
                     <div class="card-header">
                         <h5>{{ __('text_budget_allocations') }}</h5>
                         <div class="card-header-right">
                             @can('budget-allocation-create')
-                            @if(in_array($row->status, ['draft', 'pending_approval', 'approved']))
+                            @if($row->is_institutional)
+                            {{-- An allocation made on the departmental screen carries no
+                                 budget line, so its figure would sit on no line of the sheet. --}}
+                            <a href="{{ route('admin.budget-sheet.show', $row->id) }}" class="btn btn-primary btn-sm">
+                                <i class="feather icon-edit"></i> {{ __('Enter figures on the sheet') }}
+                            </a>
+                            @elseif(in_array($row->status, ['draft', 'pending_approval', 'approved']))
                             <a href="{{ route('admin.budget.allocations', $row->id) }}" class="btn btn-primary btn-sm">
                                 <i class="feather icon-plus"></i> {{ __('text_manage_allocations') }}
                             </a>

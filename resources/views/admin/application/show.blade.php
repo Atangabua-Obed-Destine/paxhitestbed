@@ -535,57 +535,7 @@
                         <h5 class="mb-0">{{ __('Academic history') }}</h5>
                     </div>
                     <div class="card-block table-border-style">
-                        <div class="table-responsive">
-                            <table class="table table-striped table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>{{ __('Institution') }}</th>
-                                        <th>{{ __('Location') }}</th>
-                                        <th>{{ __('Instruction language') }}</th>
-                                        <th>{{ __('Dates attended') }}</th>
-                                        <th>{{ __('Certificate / notes') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($row->academicHistories as $history)
-                                        <tr>
-                                            <td>{{ $history->institution_name }}</td>
-                                            <td>
-                                                @php
-                                                    $locationParts = array_filter([$history->city, $history->country]);
-                                                @endphp
-                                                {{ count($locationParts) ? implode(', ', $locationParts) : __('N/A') }}
-                                            </td>
-                                            <td>{{ $history->instruction_language ?? __('N/A') }}</td>
-                                            <td>
-                                                @php
-                                                    $from = $formatDate($history->date_from);
-                                                    $to = $formatDate($history->date_to);
-                                                @endphp
-                                                {{ $from ? $from : __('N/A') }} @if($to || $from) - @endif {{ $to ?? __('Present') }}
-                                            </td>
-                                            <td>
-                                                @php
-                                                    $details = array_filter([
-                                                        $history->certificate_obtained,
-                                                        $history->gce_ol_detail,
-                                                        $history->gce_al_detail,
-                                                        $history->probatoire_detail,
-                                                        $history->baccalaureate_detail,
-                                                        $history->notes,
-                                                    ]);
-                                                @endphp
-                                                {{ count($details) ? implode(' | ', $details) : __('N/A') }}
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="5" class="text-center text-muted">{{ __('No academic entries recorded.') }}</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
+                        @include('admin.application.partials.qualification-table', ['row' => $row])
                     </div>
                 </div>
             </div>

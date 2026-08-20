@@ -252,8 +252,10 @@ class StudentTransferInController extends Controller
 
         // Academic History (Store as JSON in students table)
         if($request->has('academic_history') && is_array($request->academic_history)){
+            // Same content test as the application forms, so a row filled in
+            // with the qualification but not yet the school is still kept.
             $academicData = array_filter($request->academic_history, function($item){
-                return !empty($item['institution_name']);
+                return \App\Support\ApplicationQualificationCards::rowHasContent((array) $item);
             });
             
             if(!empty($academicData)){

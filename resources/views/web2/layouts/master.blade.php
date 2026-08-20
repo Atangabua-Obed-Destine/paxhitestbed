@@ -1,6 +1,6 @@
 {{--
     ================================================================
-    PAX HIGHER INSTITUTE — Master Layout (Redesign)
+    {{ institution_name() }} — Master Layout (Redesign)
     Tailwind CSS 4 · Alpine.js · Vite · Laravel 10
     ================================================================
 --}}
@@ -12,10 +12,10 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
     {{-- SEO --}}
-    <title>@yield('title', $setting->meta_title ?? $setting->title ?? 'PAX Higher Institute')</title>
-    <meta name="description" content="@yield('meta_description', $setting->meta_description ?? 'PAX Higher Institute (PAXHI) — A Catholic university in the Archdiocese of Bamenda offering accredited HND and Degree programs.')">
-    <meta name="keywords" content="@yield('meta_keywords', $setting->meta_keywords ?? 'PAXHI, PAX Higher Institute, Catholic University, Bamenda, Cameroon, HND, Degree Programs')">
-    <meta name="author" content="{{ $setting->title ?? 'PAX Higher Institute' }}">
+    <title>@yield('title', $setting->meta_title ?? institution_name())</title>
+    <meta name="description" content="@yield('meta_description', $setting->meta_description ?? '' . institution_name() . ' (' . (institution_code()) . ') — A Catholic university in the Archdiocese of Bamenda offering accredited HND and Degree programs.')">
+    <meta name="keywords" content="@yield('meta_keywords', $setting->meta_keywords ?? (institution_code() . ', ' . institution_name() . ', Catholic University, Cameroon'))">
+    <meta name="author" content="{{ institution_name() }}">
     <meta name="robots" content="index, follow">
     <meta name="theme-color" content="#1e3a5f">
     <meta name="base-url" content="{{ url('/') }}">
@@ -38,8 +38,8 @@
     {
         "@context": "https://schema.org",
         "@type": "EducationalOrganization",
-        "name": "{{ $setting->title ?? 'PAX Higher Institute' }}",
-        "alternateName": "PAXHI",
+        "name": "{{ institution_name() }}",
+        "alternateName": "{{ institution_code() }}",
         "url": "{{ url('/') }}",
         @if($setting->logo_path)
         "logo": "{{ asset('uploads/setting/'.$setting->logo_path) }}",
@@ -148,5 +148,7 @@
 
     {{-- Page-specific scripts --}}
     @yield('scripts')
+
+    @include('components.chat-widget')
 </body>
 </html>

@@ -366,16 +366,11 @@
     {{-- ══════════ PAGE 1: Report Header + KPIs + Distribution Table ══════════ --}}
     
     <!-- Header -->
+    {{-- The configured letterhead, exactly as authored, in place of a
+         masthead this report used to assemble from Settings. --}}
+    @include('partials.document-header', ['forPdf' => true, 'rule' => false])
+
     <div class="report-header">
-        <div class="header-logo">
-            @if(isset($setting) && $setting->logo_path && file_exists(public_path('uploads/setting/' . $setting->logo_path)))
-                <img src="{{ public_path('uploads/setting/' . $setting->logo_path) }}" alt="Logo">
-            @endif
-        </div>
-        <div class="header-center">
-            <h1>{{ $setting->title ?? 'PAX HIGHER INSTITUTE (PAXHI)' }}</h1>
-            <p>{{ $setting->address ?? '' }}{{ $setting->phone ? ' | Tel: ' . $setting->phone : '' }}{{ $setting->email ? ' | ' . $setting->email : '' }}</p>
-        </div>
         <div class="header-right">
             <div class="report-title">STAFF TAX DISTRIBUTION REPORT</div>
             Effective Date: {{ \Carbon\Carbon::parse($effective_date)->format('F d, Y') }}
@@ -583,16 +578,11 @@
     <div class="page-break"></div>
 
     <!-- Repeat header on page 2 -->
+    {{-- The configured letterhead, exactly as authored, in place of a
+         masthead this report used to assemble from Settings. --}}
+    @include('partials.document-header', ['forPdf' => true, 'rule' => false])
+
     <div class="report-header">
-        <div class="header-logo">
-            @if(isset($setting) && $setting->logo_path && file_exists(public_path('uploads/setting/' . $setting->logo_path)))
-                <img src="{{ public_path('uploads/setting/' . $setting->logo_path) }}" alt="Logo">
-            @endif
-        </div>
-        <div class="header-center">
-            <h1>{{ $setting->title ?? 'PAX HIGHER INSTITUTE (PAXHI)' }}</h1>
-            <p>Staff Tax Distribution Report — Supplementary Details</p>
-        </div>
         <div class="header-right">
             <div class="report-title">PAGE 2 — DETAILS</div>
             Ref: TAX-RPT-{{ $generated_at->format('Ymd-His') }}

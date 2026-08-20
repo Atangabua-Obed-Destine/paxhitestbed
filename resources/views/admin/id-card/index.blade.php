@@ -1,6 +1,14 @@
 @extends('admin.layouts.master')
 @section('title', $title)
 @section('content')
+{{-- The card artwork is uploaded under the ID Card Setting screen. Until one
+     is uploaded we fall back to the file that used to be hardcoded here, so an
+     install that has not configured anything looks exactly as it did before. --}}
+@php
+    $cardBackground = !empty($print->background)
+        ? asset('uploads/card-setting/' . $print->background)
+        : asset('uploads/templates/paxid.jpg');
+@endphp
 
 <!-- Start Content-->
 <div class="main-body">
@@ -287,7 +295,7 @@
                 width: 711px;
                 height: 450px;
                 position: relative;
-                background: url('{{ asset('uploads/templates/paxid.jpg') }}') no-repeat center center;
+                background: url('{{ $cardBackground }}') no-repeat center center;
                 background-size: cover;
                 font-family: 'Anton', sans-serif;
                 font-style: normal;

@@ -55,6 +55,17 @@ class OrangeMomoController extends Controller
             $application = Application::findOrFail($applicationId);
             $applicantId = Auth::guard('applicant')->id();
             if (!$applicantId || (int) $application->applicant_id !== (int) $applicantId) abort(403);
+
+            // The applicant may not pay until the application is complete:
+            // approving this fee submits it, with no further chance to review.
+            $outstanding = \App\Services\ApplicationCompleteness::missingLabels($application);
+            if ($outstanding) {
+                return response()->json([
+                    'ok' => false,
+                    'error' => 'Please complete your application before paying. Still outstanding: ' . implode(', ', $outstanding),
+                    'missing' => $outstanding,
+                ], 422);
+            }
         } else {
             $studentId = Auth::guard('student')->id();
             $ownerId = $fee->studentEnroll->student_id ?? null;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>@yield('title') - {{ isset($setting) ? $setting->title : 'PAX Higher Institute' }}</title>
+    <title>@yield('title') - {{ institution_name() }}</title>
     
     <!-- Favicon -->
     @if(isset($setting) && is_file('uploads/setting/'.$setting->favicon_path))

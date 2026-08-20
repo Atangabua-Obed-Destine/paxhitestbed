@@ -28,7 +28,19 @@ class BudgetDashboardController extends Controller
     public function index()
     {
         // Get active budgets
-        $activeBudgets = Budget::where('status', 'active')->get();
+        // Departmental budgets only: averaging a whole-institution sheet
+        // together with departmental pots produces a utilisation rate that
+        // means nothing. The annual budget gets its own card below instead.
+        $activeBudgets = Budget::where('status', 'active')
+            ->where('is_institutional', false)->get();
+
+        // The annual sheet, reported on its own terms. Falls back to the most
+        // recent one when none is active, so the card is not blank all the way
+        // up to the day the year is activated.
+        $annualBudget = Budget::where('is_institutional', true)
+            ->orderByRaw("FIELD(status, 'active', 'approved', 'pending_approval', 'draft', 'closed', 'cancelled')")
+            ->orderByDesc('start_date')
+            ->first();
         
         // Calculate overall KPIs
         $kpis = $this->calculateKPIs($activeBudgets);
@@ -49,7 +61,8 @@ class BudgetDashboardController extends Controller
             'departmentData',
             'monthlyTrendData',
             'categoryData',
-            'alerts'
+            'alerts',
+            'annualBudget'
         ));
     }
     
@@ -136,8 +149,12 @@ class BudgetDashboardController extends Controller
     {
         $currentYear = Carbon::now()->year;
         
+        // Counts the same expenses as the KPI figures above, which use
+        // "not rejected". Filtering to "approved" only made the trend chart
+        // disagree with the totals on the same screen — every expense starts as
+        // pending, so the chart read zero while the KPIs showed the full spend.
         $monthlySpending = Expense::whereYear('date', $currentYear)
-            ->where('approval_status', 'approved')
+            ->where('approval_status', '!=', 'rejected')
             ->whereNotNull('budget_id')
             ->select(
                 DB::raw('MONTH(date) as month'),

@@ -28,10 +28,38 @@ class BudgetAllocationController extends Controller
     /**
      * Show allocation form for a budget
      */
+    /**
+     * Send an institutional budget back to its own editor.
+     *
+     * An allocation created here carries an expense category but no
+     * budget_line_id, so its figure would appear on no line of the annual
+     * sheet — present in the totals, invisible on the page.
+     *
+     * @return \Illuminate\Http\RedirectResponse|null
+     */
+    protected function redirectInstitutional($budget)
+    {
+        if (!$budget || !$budget->is_institutional) {
+            return null;
+        }
+
+        Flasher::addWarning(
+            __('This is the annual Income & Expenditure sheet. Its figures are entered on its own screen.'),
+            __('msg_warning')
+        );
+
+        return redirect()->route('admin.budget-sheet.show', $budget->id);
+    }
+
     public function index($budgetId)
     {
         $data['title'] = __('text_budget_allocations');
         $data['budget'] = Budget::with(['allocations.expenseCategory', 'allocations.department'])->findOrFail($budgetId);
+        $budget = $data['budget'];
+        if ($redirect = $this->redirectInstitutional($budget)) {
+            return $redirect;
+        }
+
         $data['expenseCategories'] = ExpenseCategory::where('status', 1)->orderBy('title')->get();
         $data['departments'] = Department::where('status', 1)->orderBy('title')->get();
         
@@ -44,6 +72,10 @@ class BudgetAllocationController extends Controller
     public function store(Request $request, $budgetId)
     {
         $budget = Budget::findOrFail($budgetId);
+        if ($redirect = $this->redirectInstitutional($budget)) {
+            return $redirect;
+        }
+
         
         // Can't allocate to active or closed budgets
         if (in_array($budget->status, ['active', 'closed', 'cancelled'])) {
@@ -94,6 +126,10 @@ class BudgetAllocationController extends Controller
     public function update(Request $request, $budgetId, $id)
     {
         $budget = Budget::findOrFail($budgetId);
+        if ($redirect = $this->redirectInstitutional($budget)) {
+            return $redirect;
+        }
+
         $allocation = BudgetAllocation::where('budget_id', $budgetId)->findOrFail($id);
         
         // Can't modify active or closed budgets
@@ -146,6 +182,10 @@ class BudgetAllocationController extends Controller
     public function destroy($budgetId, $id)
     {
         $budget = Budget::findOrFail($budgetId);
+        if ($redirect = $this->redirectInstitutional($budget)) {
+            return $redirect;
+        }
+
         $allocation = BudgetAllocation::where('budget_id', $budgetId)->findOrFail($id);
         
         // Can't delete from active or closed budgets

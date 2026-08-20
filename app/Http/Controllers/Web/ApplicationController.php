@@ -13,6 +13,7 @@ use App\Models\Session;
 use App\Models\Setting;
 use App\Models\MailSetting;
 use App\Services\DegreeTypeFormConfig;
+use App\Support\ApplicationQualificationCards;
 use App\Traits\FileUploader;
 use Carbon\Carbon;
 use Flasher\Laravel\Facade\Flasher;
@@ -26,6 +27,15 @@ use Illuminate\Validation\Rule;
 class ApplicationController extends Controller
 {
     use FileUploader;
+
+    /**
+     * Checklist documents that are collected inside Applicant Information →
+     * Identification, next to the identity data they corroborate, rather than
+     * on the Documents step. The Documents step then reconciles them instead of
+     * asking for them a second time. Keys not present in a degree type's
+     * checklist are simply ignored.
+     */
+    protected const IDENTITY_DOCUMENT_KEYS = ['birth_certificate', 'national_id_card', 'national_id_card_back'];
 
     protected $title, $route, $view, $path;
 
@@ -66,6 +76,19 @@ class ApplicationController extends Controller
     protected function documentRequirements(?DegreeType $degreeType): array
     {
         return DegreeTypeFormConfig::documents($degreeType);
+    }
+
+    /**
+     * Is there anything worth saving in a submitted qualification row?
+     *
+     * A prescribed card is always rendered, so an applicant who has not reached
+     * it yet posts it back empty. Testing institution_name alone was too strict:
+     * someone who filled the qualification and awarding body but not yet the
+     * school would have silently lost both.
+     */
+    protected function academicRowHasContent(array $history): bool
+    {
+        return ApplicationQualificationCards::rowHasContent($history);
     }
 
     /**
@@ -340,6 +363,29 @@ class ApplicationController extends Controller
             ->orderBy('title', 'asc')
             ->get();
 
+        // Split the checklist three ways: identity documents on the
+        // Identification tab of step 1, qualification documents inside their
+        // card on step 3, and only what is left over on the Documents step.
+        $documentRequirements = $this->documentRequirements($degreeType);
+        $qualificationCards = ApplicationQualificationCards::build(
+            $application,
+            $degreeType,
+            static::IDENTITY_DOCUMENT_KEYS,
+            old('academic_history')
+        );
+        $identityDocuments = $qualificationCards['identityDocuments'];
+        $remainingDocuments = $qualificationCards['remainingDocuments'];
+
+        // Admission-fee context for the Payment step.
+        $feeSettings = DegreeTypeFormConfig::settings($degreeType);
+        $admissionFee = $application->admissionFee()->first();
+        $admissionFeeBalance = $admissionFee
+            ? max(0, ($admissionFee->fee_amount + $admissionFee->fine_amount - $admissionFee->discount_amount) - $admissionFee->paid_amount)
+            : 0;
+        $latestReceipt = $admissionFee
+            ? $admissionFee->paymentReceipts()->orderByDesc('id')->first()
+            : null;
+
         $data = [
             'title' => $this->title,
             'route' => $this->route,
@@ -356,10 +402,19 @@ class ApplicationController extends Controller
             'present_districts' => [],
             'permanent_districts' => [],
             'applicationSetting' => ApplicationSetting::where('slug', 'admission')->where('status', '1')->first(),
-            'documentRequirements' => $this->documentRequirements($degreeType),
+            'documentRequirements' => $documentRequirements,
+            'identityDocuments' => $identityDocuments,
+            'remainingDocuments' => $remainingDocuments,
+            'qualificationCards' => $qualificationCards['cards'],
+            'qualificationExtras' => $qualificationCards['extras'],
+            'qualificationDocuments' => $qualificationCards['qualificationDocuments'],
             'guardianTypes' => ['Parent', 'Sponsor', 'Guardian'],
             'fluencyOptions' => ['excellent', 'good', 'fair', 'minimal'],
             'admissionFeeRequired' => !$this->admissionFeeIsSettled($application),
+            'admissionFee' => $admissionFee,
+            'admissionFeeBalance' => $admissionFeeBalance,
+            'admissionFeeSettings' => $feeSettings,
+            'latestPaymentReceipt' => $latestReceipt,
         ];
 
         $data['districtOptions'] = $provinces
@@ -376,6 +431,57 @@ class ApplicationController extends Controller
             ->toArray();
 
         return view('application.apply', $data);
+    }
+
+    /**
+     * Printable copy of the applicant's own application.
+     *
+     * Deliberately renders the SAME view the admin preview uses, so what the
+     * applicant prints and what the admissions office reads can never drift
+     * apart. That view is self-contained — no admin routes or guards — the only
+     * difference here is that access is scoped to the owning applicant.
+     */
+    public function printPreview(Request $request, Application $application)
+    {
+        $this->authorizeApplication($application);
+
+        $application->load([
+            'program', 'batch',
+            'preferredProgramFirst', 'preferredProgramSecond', 'preferredProgramThird',
+            'guardians', 'academicHistories', 'languages', 'documents', 'religionDetail',
+        ]);
+
+        $degreeType = $application->degreeType;
+
+        $data = [
+            'title' => $this->title,
+            'row' => $application,
+            'path' => $this->path,
+            'setting' => Setting::where('status', '1')->first(),
+            'documentRequirements' => DegreeTypeFormConfig::documents($degreeType),
+            'fieldEnabled' => function (string $slug) use ($degreeType): bool {
+                return DegreeTypeFormConfig::fieldEnabled($degreeType, $slug);
+            },
+        ];
+
+        if (!$request->boolean('download')) {
+            return view('admin.application.preview', $data);
+        }
+
+        // Same document, streamed as a real PDF (dompdf, as used for acceptance
+        // letters). If it cannot be rendered, fall back to the printable HTML
+        // rather than showing the applicant an error page.
+        try {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.application.preview', $data);
+            $pdf->setPaper('a4', 'portrait');
+            $pdf->setOption('isHtml5ParserEnabled', true);
+            $pdf->setOption('isRemoteEnabled', true);
+
+            return $pdf->download('application-' . $application->registration_no . '.pdf');
+        } catch (\Throwable $e) {
+            report($e);
+            return view('admin.application.preview', $data);
+        }
     }
 
     /** Submit an application (was the singleton store()). */
@@ -450,6 +556,7 @@ class ApplicationController extends Controller
         $rules = [
             'program' => ['required', 'exists:programs,id'],
             'first_name' => ['required', 'string', 'max:191'],
+            'other_names' => ['nullable', 'string', 'max:191'],
             'last_name' => ['required', 'string', 'max:191'],
             'gender' => ['required', Rule::in([1, 2, 3])],
             'dob' => ['required', 'date', 'before:today'],
@@ -462,9 +569,11 @@ class ApplicationController extends Controller
             'national_id' => ['nullable', 'string', 'max:191'],
             'national_id_issue_date' => ['nullable', 'date'],
             'national_id_issue_place' => ['nullable', 'string', 'max:191'],
+            'national_id_expiry_date' => ['nullable', 'date'],
             'passport_no' => ['nullable', 'string', 'max:191'],
             'passport_issue_date' => ['nullable', 'date'],
             'passport_issue_country' => ['nullable', 'string', 'max:191'],
+            'passport_expiry_date' => ['nullable', 'date'],
             'country' => ['required', 'string', 'max:191'],
             'present_province' => ['required', 'string', 'max:191'],
             'present_district' => ['required', 'string', 'max:191'],
@@ -536,13 +645,20 @@ class ApplicationController extends Controller
 
         if ($academicHistoryEnabled) {
             $rules['academic_history'] = ['required', 'array', 'min:1'];
+            $rules['academic_history.*.qualification_key'] = ['nullable', 'string', 'max:100'];
             $rules['academic_history.*.institution_name'] = ['required', 'string', 'max:255'];
+            $rules['academic_history.*.awarding_body'] = ['nullable', 'string', 'max:191'];
+            $rules['academic_history.*.institution_same_as_awarding_body'] = ['nullable', 'boolean'];
             $rules['academic_history.*.city'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.country'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.instruction_language'] = ['nullable', 'string', 'max:191'];
-            $rules['academic_history.*.date_from'] = ['nullable', 'date'];
-            $rules['academic_history.*.date_to'] = ['nullable', 'date'];
+            $rules['academic_history.*.start_year'] = ['nullable', 'integer', 'digits:4'];
+            // Cannot finish before starting; caught here rather than showing a
+            // qualification that ran backwards on the review page.
+            $rules['academic_history.*.end_year'] = ['nullable', 'integer', 'digits:4', 'gte:academic_history.*.start_year'];
             $rules['academic_history.*.certificate_obtained'] = ['nullable', 'string', 'max:191'];
+            $rules['academic_history.*.certificate_file'] = ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'];
+            $rules['academic_history.*.existing_certificate_file'] = ['nullable', 'string', 'max:255'];
             $rules['academic_history.*.gce_ol_detail'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.gce_al_detail'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.probatoire_detail'] = ['nullable', 'string', 'max:191'];
@@ -591,6 +707,7 @@ class ApplicationController extends Controller
             $application->academic_year = $validated['academic_year'] ?? $application->academic_year;
 
             $application->first_name = $validated['first_name'];
+            $application->other_names = $validated['other_names'] ?? null;
             $application->last_name = $validated['last_name'];
             $application->gender = (int) $validated['gender'];
             $application->dob = $validated['dob'];
@@ -610,9 +727,11 @@ class ApplicationController extends Controller
             $application->national_id = $validated['national_id'] ?? null;
             $application->national_id_issue_date = $validated['national_id_issue_date'] ?? null;
             $application->national_id_issue_place = $validated['national_id_issue_place'] ?? null;
+            $application->national_id_expiry_date = $validated['national_id_expiry_date'] ?? null;
             $application->passport_no = $validated['passport_no'] ?? null;
             $application->passport_issue_date = $validated['passport_issue_date'] ?? null;
             $application->passport_issue_country = $validated['passport_issue_country'] ?? null;
+            $application->passport_expiry_date = $validated['passport_expiry_date'] ?? null;
 
             $application->country = $validated['country'];
             $application->present_province = $validated['present_province'];
@@ -650,6 +769,9 @@ class ApplicationController extends Controller
             $application->status = 1;
             $application->stage = 'submitted';
             $application->progress = Application::stageProgressMap()['submitted'];
+            // Stamped once, at submission. The admin register filters on this
+            // date, so leaving it null hides the application from admissions.
+            $application->apply_date = $application->apply_date ?: now()->toDateString();
 
             $application->portal_meta = [
                 'agreed_to_terms' => $request->boolean('agree_terms'),
@@ -693,17 +815,25 @@ class ApplicationController extends Controller
             if ($academicHistoryEnabled) {
                 $application->academicHistories()->delete();
                 foreach ($validated['academic_history'] ?? [] as $order => $history) {
-                    if (!filled($history['institution_name'] ?? null)) {
+                    if (!$this->academicRowHasContent($history)) {
                         continue;
                     }
                     $application->academicHistories()->create([
-                        'institution_name' => $history['institution_name'],
+                        // Binds the row back to its card on the next render.
+                        'qualification_key' => $history['qualification_key'] ?? null,
+                        'institution_name' => $history['institution_name'] ?? null,
+                        'awarding_body' => $history['awarding_body'] ?? null,
+                        'institution_same_as_awarding_body' => !empty($history['institution_same_as_awarding_body']),
                         'city' => $history['city'] ?? null,
                         'country' => $history['country'] ?? null,
                         'instruction_language' => $history['instruction_language'] ?? null,
-                        'date_from' => $history['date_from'] ?? null,
-                        'date_to' => $history['date_to'] ?? null,
+                        'start_year' => $history['start_year'] ?? null,
+                        'end_year' => $history['end_year'] ?? null,
                         'certificate_obtained' => $history['certificate_obtained'] ?? null,
+                        // A newly attached certificate wins; otherwise keep the one the
+                        // form carried back, since these rows are deleted and rewritten.
+                        'certificate_file' => $this->uploadMedia($request, "academic_history.$order.certificate_file", $this->path)
+                            ?: ($history['existing_certificate_file'] ?? null),
                         'gce_ol_detail' => $history['gce_ol_detail'] ?? null,
                         'gce_al_detail' => $history['gce_al_detail'] ?? null,
                         'probatoire_detail' => $history['probatoire_detail'] ?? null,
@@ -802,6 +932,7 @@ class ApplicationController extends Controller
                 'second_program_choice_id' => ['nullable', 'exists:programs,id'],
                 'third_program_choice_id' => ['nullable', 'exists:programs,id'],
                 'first_name' => ['nullable', 'string', 'max:191'],
+                'other_names' => ['nullable', 'string', 'max:191'],
                 'last_name' => ['nullable', 'string', 'max:191'],
                 'gender' => ['nullable', 'in:1,2,3'],
                 'dob' => ['nullable', 'date', 'before:today'],
@@ -811,9 +942,11 @@ class ApplicationController extends Controller
                 'national_id' => ['nullable', 'string', 'max:191'],
                 'national_id_issue_date' => ['nullable', 'date'],
                 'national_id_issue_place' => ['nullable', 'string', 'max:191'],
+                'national_id_expiry_date' => ['nullable', 'date'],
                 'passport_no' => ['nullable', 'string', 'max:191'],
                 'passport_issue_date' => ['nullable', 'date'],
                 'passport_issue_country' => ['nullable', 'string', 'max:191'],
+                'passport_expiry_date' => ['nullable', 'date'],
                 'country' => ['nullable', 'string', 'max:191'],
                 'present_province' => ['nullable', 'string', 'max:191'],
                 'present_district' => ['nullable', 'string', 'max:191'],
@@ -862,13 +995,20 @@ class ApplicationController extends Controller
 
             if ($academicHistoryEnabled) {
                 $rules['academic_history'] = ['nullable', 'array'];
+                $rules['academic_history.*.qualification_key'] = ['nullable', 'string', 'max:100'];
                 $rules['academic_history.*.institution_name'] = ['nullable', 'string', 'max:255'];
+                $rules['academic_history.*.awarding_body'] = ['nullable', 'string', 'max:191'];
+                $rules['academic_history.*.institution_same_as_awarding_body'] = ['nullable', 'boolean'];
                 $rules['academic_history.*.city'] = ['nullable', 'string', 'max:100'];
                 $rules['academic_history.*.country'] = ['nullable', 'string', 'max:100'];
                 $rules['academic_history.*.instruction_language'] = ['nullable', 'string', 'max:100'];
-                $rules['academic_history.*.date_from'] = ['nullable', 'date'];
-                $rules['academic_history.*.date_to'] = ['nullable', 'date'];
+                // A draft may legitimately be half-filled, so years are only
+                // sanity-checked here, never required.
+                $rules['academic_history.*.start_year'] = ['nullable', 'integer', 'digits:4'];
+                $rules['academic_history.*.end_year'] = ['nullable', 'integer', 'digits:4'];
                 $rules['academic_history.*.certificate_obtained'] = ['nullable', 'string', 'max:191'];
+                $rules['academic_history.*.certificate_file'] = ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'];
+                $rules['academic_history.*.existing_certificate_file'] = ['nullable', 'string', 'max:255'];
                 $rules['academic_history.*.gce_ol_detail'] = ['nullable', 'string', 'max:500'];
                 $rules['academic_history.*.gce_al_detail'] = ['nullable', 'string', 'max:500'];
                 $rules['academic_history.*.probatoire_detail'] = ['nullable', 'string', 'max:500'];
@@ -897,7 +1037,7 @@ class ApplicationController extends Controller
             }
 
             foreach ([
-                'first_name', 'last_name', 'nationality', 'national_id', 'national_id_issue_place',
+                'first_name', 'other_names', 'last_name', 'nationality', 'national_id', 'national_id_issue_place',
                 'passport_no', 'passport_issue_country', 'country', 'present_province', 'present_district',
                 'present_village', 'present_address', 'permanent_province', 'permanent_district', 'permanent_village',
                 'permanent_address', 'postal_address_line1', 'postal_address_line2', 'phone', 'alternate_phone',
@@ -918,11 +1058,29 @@ class ApplicationController extends Controller
             if ($request->has('national_id_issue_date')) {
                 $application->national_id_issue_date = $request->input('national_id_issue_date') ?: null;
             }
+            foreach (['national_id_expiry_date', 'passport_expiry_date'] as $expiryField) {
+                if ($request->has($expiryField)) {
+                    $application->$expiryField = $request->input($expiryField) ?: null;
+                }
+            }
             if ($request->has('passport_issue_date')) {
                 $application->passport_issue_date = $request->input('passport_issue_date') ?: null;
             }
             if ($request->has('declaration_signed_date')) {
                 $application->declaration_signed_date = $request->input('declaration_signed_date') ?: null;
+            }
+            // The declaration tick is kept in portal_meta, and used to be written
+            // only at the moment of submission. Now that approving the admission
+            // fee submits the application by itself, the applicant has to have
+            // agreed before they pay — so a draft has to remember the answer.
+            if ($request->has('agree_terms')) {
+                $meta = $application->portal_meta;
+                $meta = is_array($meta) ? $meta : (array) json_decode((string) $meta, true);
+                $agreed = $request->boolean('agree_terms');
+                $meta['agreed_to_terms'] = $agreed;
+                $meta['agreed_at'] = $agreed ? now()->toDateTimeString() : null;
+                $meta['agreed_ip'] = $agreed ? $request->ip() : null;
+                $application->portal_meta = $meta;
             }
             if ($request->filled('email')) {
                 $application->email = $validated['email'];
@@ -948,8 +1106,6 @@ class ApplicationController extends Controller
                 $application->signature = $this->uploadImage($request, 'signature', $this->path, 300, 100);
             }
 
-            $progress = $this->calculateDraftProgress($application, $guardiansEnabled, $academicHistoryEnabled, $languageEnabled);
-            $application->draft_progress = $progress;
             $application->draft_last_saved_at = now();
             $application->save();
 
@@ -980,17 +1136,25 @@ class ApplicationController extends Controller
             if ($academicHistoryEnabled && $request->has('academic_history')) {
                 $application->academicHistories()->delete();
                 foreach ($request->input('academic_history', []) as $order => $history) {
-                    if (!filled($history['institution_name'] ?? null)) {
+                    if (!$this->academicRowHasContent($history)) {
                         continue;
                     }
                     $application->academicHistories()->create([
-                        'institution_name' => $history['institution_name'],
+                        // Binds the row back to its card on the next render.
+                        'qualification_key' => $history['qualification_key'] ?? null,
+                        'institution_name' => $history['institution_name'] ?? null,
+                        'awarding_body' => $history['awarding_body'] ?? null,
+                        'institution_same_as_awarding_body' => !empty($history['institution_same_as_awarding_body']),
                         'city' => $history['city'] ?? null,
                         'country' => $history['country'] ?? null,
                         'instruction_language' => $history['instruction_language'] ?? null,
-                        'date_from' => $history['date_from'] ?? null,
-                        'date_to' => $history['date_to'] ?? null,
+                        'start_year' => $history['start_year'] ?? null,
+                        'end_year' => $history['end_year'] ?? null,
                         'certificate_obtained' => $history['certificate_obtained'] ?? null,
+                        // A newly attached certificate wins; otherwise keep the one the
+                        // form carried back, since these rows are deleted and rewritten.
+                        'certificate_file' => $this->uploadMedia($request, "academic_history.$order.certificate_file", $this->path)
+                            ?: ($history['existing_certificate_file'] ?? null),
                         'gce_ol_detail' => $history['gce_ol_detail'] ?? null,
                         'gce_al_detail' => $history['gce_al_detail'] ?? null,
                         'probatoire_detail' => $history['probatoire_detail'] ?? null,
@@ -1021,6 +1185,15 @@ class ApplicationController extends Controller
                         $filePath = $this->uploadMedia($request, "documents.$key.file", $this->path);
                         $note = $request->input("documents.$key.note");
                         if ($filePath) {
+                            // Mirror onto the legacy column exactly as update()
+                            // does. Draft saves skipped this, which left
+                            // school_certificate / collage_certificate empty
+                            // until a full submit — and now that certificates
+                            // are uploaded from their qualification card, a
+                            // draft save is the usual way they arrive.
+                            if (isset($document['assign_to_column'])) {
+                                $application->{$document['assign_to_column']} = $filePath;
+                            }
                             $application->documents()->updateOrCreate(
                                 ['document_type' => $key],
                                 [
@@ -1035,13 +1208,32 @@ class ApplicationController extends Controller
                 }
             }
 
+            // Progress is computed only after the guardian / academic history /
+            // language rows have been rewritten above — computing it earlier would
+            // count the previous save's relations and lag a step behind.
+            $progress = $this->calculateDraftProgress($application, $guardiansEnabled, $academicHistoryEnabled, $languageEnabled);
+            $application->draft_progress = $progress;
+            $application->save();
+
             DB::commit();
+
+            // Normally the fee is approved last and the observer on Fee submits
+            // the application. The order reverses when the fee was taken at the
+            // counter before the applicant had finished — the walk-in desk is not
+            // bound by the completeness gate that the applicant's own payment
+            // routes are. Whichever of the two happens second submits, so ask here
+            // as well. It is a no-op unless the fee really is already settled.
+            $autoSubmitted = app(\App\Services\ApplicationSubmissionService::class)
+                ->autoSubmit($application, __('admission fee was approved'));
 
             return response()->json([
                 'success' => true,
-                'message' => __('Draft saved successfully. You can continue your application later.'),
+                'message' => $autoSubmitted
+                    ? __('Your application is complete and your fee is paid, so it has been submitted.')
+                    : __('Draft saved successfully. You can continue your application later.'),
                 'last_saved' => now()->format('F j, Y g:i A'),
                 'progress' => $progress,
+                'auto_submitted' => $autoSubmitted,
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
@@ -1095,8 +1287,13 @@ class ApplicationController extends Controller
             $filledFields += min($application->guardians()->count(), 5);
         }
         if ($academicHistoryEnabled) {
-            $totalFields += 3;
-            $filledFields += min($application->academicHistories()->count(), 3);
+            // Score against the cards this degree type actually prescribes.
+            // The old fixed target of 3 left an applicant permanently short of
+            // 100% when only two qualifications were ever asked for.
+            $cardCount = count(DegreeTypeFormConfig::qualifications($application->degreeType));
+            $target = max($cardCount, 1);
+            $totalFields += $target;
+            $filledFields += min($application->academicHistories()->count(), $target);
         }
         if ($languageEnabled) {
             $totalFields += 2;
@@ -1192,18 +1389,75 @@ class ApplicationController extends Controller
     }
 
     /** Upload an admission-fee payment receipt for one application. */
+    /** What is still owed on a fee: charged, plus fine, less discount and payments. */
+    protected function admissionFeeBalance(?\App\Models\Fee $fee): float
+    {
+        if (!$fee) {
+            return 0.0;
+        }
+
+        $due = (float) $fee->fee_amount + (float) $fee->fine_amount - (float) $fee->discount_amount;
+
+        return max(round($due - (float) $fee->paid_amount, 2), 0.0);
+    }
+
+    /**
+     * What is still outstanding on this application, as JSON.
+     *
+     * The payment step decides whether to offer the payment controls, and that
+     * decision is made from saved data. Since the wizard saves over AJAX, the
+     * decision taken when the page was rendered goes stale as soon as the
+     * applicant fills anything in — it used to insist on details they had just
+     * entered until they reloaded the page. This lets the step re-ask.
+     */
+    public function readiness(Application $application)
+    {
+        $this->authorizeApplication($application);
+
+        $missing = \App\Services\ApplicationCompleteness::missing($application);
+
+        return response()->json([
+            'complete' => $missing === [],
+            'missing' => $missing,
+            'fee_settled' => $this->admissionFeeIsSettled($application),
+        ]);
+    }
+
     public function uploadAdmissionFeeReceipt(Request $request, Application $application)
     {
         $this->authorizeApplication($application);
 
         if (!$application->admissionFee) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('No admission fee found for your application.'),
+                ], 422);
+            }
             Flasher::addError(__('No admission fee found for your application.'));
             return redirect()->route('application.dashboard');
         }
 
+        // Nothing may be paid for until the form behind it is finished. Approving
+        // this fee submits the application outright, so an unfinished one would be
+        // sent to admissions with no chance to catch it.
+        if ($blockers = \App\Services\ApplicationCompleteness::missingLabels($application)) {
+            $message = __('Please complete your application before paying. Still outstanding: :items', [
+                'items' => implode(', ', $blockers),
+            ]);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'missing' => $blockers,
+                ], 422);
+            }
+            Flasher::addError($message);
+            return redirect()->route('application.edit', $application);
+        }
+
         $request->validate([
             'payment_date' => 'required|date|before_or_equal:today',
-            'amount' => 'required|numeric|min:0.01',
             'payment_reference' => 'required|string|max:255',
             'payment_method' => 'required|in:1,2,3,4,5,6',
             'receipt_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
@@ -1223,13 +1477,28 @@ class ApplicationController extends Controller
         $paymentReceipt->receipt_file = $receiptPath;
         $paymentReceipt->payment_reference = $request->payment_reference;
         $paymentReceipt->payment_date = $request->payment_date;
-        $paymentReceipt->amount = $request->amount;
+        // Taken from the fee, never from the form. The admission fee is set by
+        // the institution, so a posted amount is at best redundant and at worst
+        // an applicant declaring their own figure against a receipt.
+        $paymentReceipt->amount = $this->admissionFeeBalance($application->admissionFee);
         $paymentReceipt->payment_method = $request->payment_method;
         $paymentReceipt->student_note = $request->student_note;
         $paymentReceipt->verification_status = 'pending';
         $paymentReceipt->save();
 
-        Flasher::addSuccess(__('Payment receipt uploaded successfully! Your payment will be verified by our administration team shortly.'));
+        $message = __('Payment receipt uploaded successfully! Your payment will be verified by our administration team shortly.');
+
+        // The wizard's payment step posts this over AJAX (it cannot nest a form
+        // inside the application form), so answer in kind when JSON is wanted.
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'fee_settled' => $this->admissionFeeIsSettled($application->fresh()),
+            ]);
+        }
+
+        Flasher::addSuccess($message);
         return redirect()->route('application.dashboard');
     }
 

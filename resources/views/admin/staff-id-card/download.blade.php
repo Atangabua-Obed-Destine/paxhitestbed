@@ -1,4 +1,12 @@
 <!DOCTYPE html>
+{{-- The card artwork is uploaded under the ID Card Setting screen. Until one
+     is uploaded we fall back to the file that used to be hardcoded here, so an
+     install that has not configured anything looks exactly as it did before. --}}
+@php
+    $cardBackground = !empty($print->background)
+        ? asset('uploads/card-setting/' . $print->background)
+        : asset('uploads/templates/staffid.jpg');
+@endphp
 <html lang="en">
 <head>
     <meta charset="utf-8">
@@ -96,7 +104,7 @@
             width: 639px;
             height: 1011px;
             position: relative;
-            background: url('{{ asset('uploads/templates/staffid.jpg') }}') no-repeat center center;
+            background: url('{{ $cardBackground }}') no-repeat center center;
             background-size: cover;
             color: #000;
         }

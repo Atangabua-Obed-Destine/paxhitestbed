@@ -1,15 +1,15 @@
 {{--
     ================================================================
-    PROGRAM DETAIL — PAX Higher Institute
+    PROGRAM DETAIL — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', $program->title . ' — ' . ($setting->title ?? 'PAXHI'))
+@section('title', $program->title . ' — ' . (institution_code()))
 @section('description', Str::limit(strip_tags($program->excerpt ?? $program->description), 160))
 
 @section('social_meta_tags')
-<meta property="og:title" content="{{ $program->title }} — PAXHI">
+<meta property="og:title" content="{{ $program->title }} — {{ institution_code() }}">
 <meta property="og:description" content="{{ Str::limit(strip_tags($program->excerpt ?? $program->description), 160) }}">
 @if($program->featured_image)
 <meta property="og:image" content="{{ asset('uploads/programs/'.$program->featured_image) }}">

@@ -212,7 +212,7 @@
                                 <i class="fas fa-star"></i> NEWS & PRESS RELEASES
                             </h5>
                             <h2 style="font-size: 38px; font-weight: 700; color: #003366; margin-bottom: 15px;">
-                                Get the Latest News & Updates on PAXHI
+                                Get the Latest News & Updates on {{ institution_code() }}
                             </h2>
                             <div style="width: 80px; height: 4px; background: linear-gradient(90deg, #0066CC, #FF6B35); border-radius: 2px; margin: 0 auto;"></div>
                         </div>

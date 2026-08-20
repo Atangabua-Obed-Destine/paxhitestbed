@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    PROJECTS LISTING — PAX Higher Institute
+    PROJECTS LISTING — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Research & Projects — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Explore research projects and academic initiatives at PAX Higher Institute — driving innovation and community impact.')
+@section('title', 'Research & Projects — ' . (institution_code()))
+@section('description', 'Explore research projects and academic initiatives at ' . institution_name() . ' — driving innovation and community impact.')
 
 @section('content')
 

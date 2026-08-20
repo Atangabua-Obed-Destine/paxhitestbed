@@ -71,6 +71,24 @@
                                     </div>
                                 </div>
 
+
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="parent_id">{{ __('Belongs to') }}</label>
+                                        <select class="form-control" name="parent_id" id="parent_id">
+                                            <option value="">{{ __('Not part of an annual budget') }}</option>
+                                            @foreach($annualBudgets ?? [] as $annual)
+                                            <option value="{{ $annual->id }}" {{ old('parent_id', $row->parent_id ?? null) == $annual->id ? 'selected' : '' }}>
+                                                {{ $annual->title }}
+                                            </option>
+                                            @endforeach
+                                        </select>
+                                        <small class="text-muted">
+                                            {{ __('Naming the annual budget this comes out of lets the sheet show how much of a line is delegated.') }}
+                                        </small>
+                                        <div class="invalid-feedback">{{ $errors->first('parent_id') }}</div>
+                                    </div>
+                                </div>
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label for="start_date">{{ __('field_start_date') }} <span>*</span></label>

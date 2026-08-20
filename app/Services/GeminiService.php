@@ -8,11 +8,14 @@ use Illuminate\Support\Facades\Log;
 class GeminiService
 {
     protected $apiKey;
-    protected $baseUrl = 'https://generativelanguage.googleapis.com/v1';
+    protected $model;
+    // v1beta: the v1 endpoint no longer serves the current flash models.
+    protected $baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
 
     public function __construct()
     {
         $this->apiKey = config('services.gemini.api_key');
+        $this->model = config('services.gemini.model', 'gemini-3.5-flash');
     }
 
     /**
@@ -179,7 +182,7 @@ class GeminiService
             'base_url' => $this->baseUrl
         ]);
         
-        $url = "{$this->baseUrl}/models/gemini-2.5-flash:generateContent?key={$this->apiKey}";
+        $url = "{$this->baseUrl}/models/{$this->model}:generateContent?key={$this->apiKey}";
         
         Log::info('GeminiService: Making API request', [
             'url' => substr($url, 0, 100) . '...'

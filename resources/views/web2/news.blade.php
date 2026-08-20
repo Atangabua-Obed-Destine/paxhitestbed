@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    NEWS LISTING — PAX Higher Institute
+    NEWS LISTING — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'News & Updates — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Stay updated with the latest news, announcements, and stories from PAX Higher Institute.')
+@section('title', 'News & Updates — ' . (institution_code()))
+@section('description', 'Stay updated with the latest news, announcements, and stories from ' . institution_name() . '.')
 
 @section('content')
 

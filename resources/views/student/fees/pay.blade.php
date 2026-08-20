@@ -146,6 +146,11 @@
                             @endif
 
                             @php
+                            }
+
+                            // Everything above this point ran only for an unpaid fee: a
+                            // partially paid one keeps the discount, fine and totals that
+                            // were stored when its first instalment was taken.
                             // Complete calculation for unpaid fees
                             if($row->status != 2) {
                                 $net_amount = ($row->fee_amount - $discount_amount) + $fine_amount;

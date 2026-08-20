@@ -47,17 +47,12 @@
             background: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.15); position: relative;
         }
 
-        /* Header */
-        .doc-header { display: grid; grid-template-columns: 90px 1fr 35mm; gap: 8mm; align-items: center;
+        /* Header. The letterhead runs the full width, exactly as configured;
+           the title and the applicant photo sit in a row beneath it. */
+        .doc-titlebar { display: grid; grid-template-columns: 1fr 35mm; gap: 8mm; align-items: end;
             border-bottom: 2px solid var(--line); padding-bottom: 4mm; }
-        .doc-header .brand-logo img { max-height: 78px; max-width: 90px; object-fit: contain; }
-        .doc-header .brand-body { text-align: center; }
-        .brand-body .school-name { font-size: 16pt; font-weight: 700; letter-spacing: .5px;
-            text-transform: uppercase; margin: 0; color: var(--accent); }
-        .brand-body .school-tagline { font-size: 9pt; color: var(--muted); margin: 1mm 0 0; font-style: italic; }
-        .brand-body .school-contact { font-size: 8.5pt; color: var(--muted); margin: 2mm 0 0;
-            font-family: system-ui, sans-serif; }
-        .brand-body .doc-title { display: inline-block; margin-top: 3mm; padding: 2mm 6mm;
+        .doc-titlebar .title-cell { text-align: center; }
+        .doc-titlebar .doc-title { display: inline-block; padding: 2mm 6mm;
             border: 1.5px solid var(--line); font-weight: 700; text-transform: uppercase;
             letter-spacing: 1.5px; font-size: 11.5pt; }
         .photo-box { width: 35mm; height: 45mm; border: 1px solid var(--line);
@@ -234,25 +229,14 @@
     {{-- =========================================================
          Header (logo · school block · applicant photo)
          ========================================================= --}}
-    <div class="doc-header">
-        <div class="brand-logo">
-            @if(!empty($setting->logo_path) && is_file(public_path('uploads/setting/'.$setting->logo_path)))
-                <img src="{{ asset('uploads/setting/'.$setting->logo_path) }}" alt="Logo">
-            @endif
-        </div>
-        <div class="brand-body">
-            <h1 class="school-name">{{ $schoolName }}</h1>
-            @if($schoolAddress)
-                <div class="school-tagline">{!! nl2br(e($schoolAddress)) !!}</div>
-            @endif
-            @if($schoolPhone || $schoolEmail)
-                <div class="school-contact">
-                    @if($schoolPhone) <span>{{ __('Tel') }}: {{ $schoolPhone }}</span> @endif
-                    @if($schoolPhone && $schoolEmail) &nbsp;·&nbsp; @endif
-                    @if($schoolEmail) <span>{{ __('Email') }}: {{ $schoolEmail }}</span> @endif
-                </div>
-            @endif
-            <div class="doc-title">{{ __('Application for Admission') }}</div>
+    {{-- The configured letterhead, rendered exactly as authored. This used to
+         be a header assembled here from Settings, which meant the form carried a
+         different institution name from every letter the same office sent. --}}
+    @include('partials.document-header', ['rule' => false])
+
+    <div class="doc-titlebar">
+        <div class="title-cell">
+            <span class="doc-title">{{ __('Application for Admission') }}</span>
         </div>
         <div class="photo-box">
             @if($row->photo && is_file(public_path('uploads/'.$path.'/'.$row->photo)))
@@ -570,45 +554,12 @@
     @if($fieldEnabled('application_academic_history') && $row->academicHistories->count() > 0)
         <div class="section">
             <div class="section-title"><span class="num">9</span>{{ __('Academic History') }}</div>
-            <table class="data">
-                <thead>
-                    <tr>
-                        <th style="width: 26%">{{ __('Institution') }}</th>
-                        <th style="width: 14%">{{ __('City / Country') }}</th>
-                        <th style="width: 20%">{{ __('Period') }}</th>
-                        <th style="width: 20%">{{ __('Certificate') }}</th>
-                        <th style="width: 20%">{{ __('Details') }}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                @foreach($row->academicHistories as $h)
-                    <tr>
-                        <td>{{ $h->institution_name }}</td>
-                        <td>{{ trim(implode(', ', array_filter([$h->city, $h->country]))) ?: '—' }}</td>
-                        <td>
-                            @php
-                                $from = $h->date_from && strtotime((string)$h->date_from) > 0 ? date('M Y', strtotime((string)$h->date_from)) : null;
-                                $to   = $h->date_to   && strtotime((string)$h->date_to)   > 0 ? date('M Y', strtotime((string)$h->date_to))   : null;
-                            @endphp
-                            {{ $from && $to ? "$from — $to" : ($from ?: ($to ?: '—')) }}
-                        </td>
-                        <td>{{ $h->certificate_obtained ?: '—' }}</td>
-                        <td>
-                            @php
-                                $details = array_filter([
-                                    $h->gce_ol_detail ? 'GCE O/L: '.$h->gce_ol_detail : null,
-                                    $h->gce_al_detail ? 'GCE A/L: '.$h->gce_al_detail : null,
-                                    $h->probatoire_detail ? 'Probatoire: '.$h->probatoire_detail : null,
-                                    $h->baccalaureate_detail ? 'Bacc.: '.$h->baccalaureate_detail : null,
-                                    $h->notes,
-                                ]);
-                            @endphp
-                            {!! $details ? nl2br(e(implode("\n", $details))) : '—' !!}
-                        </td>
-                    </tr>
-                @endforeach
-                </tbody>
-            </table>
+            @include('admin.application.partials.qualification-table', [
+                'row' => $row,
+                'pdf' => true,
+                'tableClass' => 'data',
+                'wrap' => false,
+            ])
         </div>
     @endif
 

@@ -1,6 +1,6 @@
 {{--
     ================================================================
-    HEADER / NAVIGATION — PAX Higher Institute
+    HEADER / NAVIGATION — {{ institution_name() }}
     ================================================================
     Structure:
     1. Top Utility Bar (contact info + social icons) — desktop only
@@ -100,11 +100,12 @@
                 @endif
                 <div class="hidden sm:block">
                     <div class="text-primary-500 font-heading font-bold text-base lg:text-lg leading-tight"
+                         style="max-width: 260px; white-space: normal; word-wrap: break-word;"
                          :class="scrolled ? 'text-sm lg:text-base' : ''">
-                        {{ $setting->title ?? 'PAX Higher Institute' }}
+                        {{ institution_name() }}
                     </div>
                     <div class="text-[10px] text-surface-400 font-medium tracking-wide uppercase">
-                        Archdiocese of Bamenda
+                        {{ $setting->site_subtitle ?? 'Archdiocese of Bamenda' }}
                     </div>
                 </div>
             </a>
@@ -304,7 +305,7 @@
                 @if($setting->logo_path && file_exists(public_path('uploads/setting/'.$setting->logo_path)))
                 <img src="{{ asset('uploads/setting/'.$setting->logo_path) }}" alt="{{ $setting->title }}" class="h-10">
                 @endif
-                <span class="font-heading font-bold text-primary-500 text-sm">PAXHI</span>
+                <span class="font-heading font-bold text-primary-500 text-sm">{{ institution_code() }}</span>
             </div>
             <button @click="$store.nav.close()" class="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-surface-50 cursor-pointer">
                 <svg class="w-5 h-5 text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

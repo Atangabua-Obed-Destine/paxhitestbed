@@ -58,6 +58,7 @@ class AcceptanceLetterService
         $tokens['[fee_breakdown]'] = $feeData['html'];
         $tokens['[fee_breakdown_total]'] = $feeData['total'];
         $tokens['[fee_breakdown_total_words]'] = $feeData['words'];
+        $tokens['[fee_breakdown_total_deadline]'] = $feeData['deadline'];
 
         return strtr($this->normalizeLetterHtml($setting->acceptance_letter_html), $tokens);
     }
@@ -153,10 +154,21 @@ class AcceptanceLetterService
             $words = ucwords($formatter->format($total));
         }
 
+        $dueDateStr = 'TBD';
+        if ($firstInstallment && $firstInstallment->due_month && $firstInstallment->due_day) {
+            $baseYear = $student->admission_date ? date('Y', strtotime($student->admission_date)) : date('Y');
+            $year = $firstInstallment->due_month <= 7 ? $baseYear + 1 : $baseYear;
+            $dueDate = \Carbon\Carbon::createFromDate($year, $firstInstallment->due_month, $firstInstallment->due_day);
+            $dueDateStr = $dueDate->format('l, F jS, Y');
+        } elseif ($firstInstallment && optional($firstInstallment->feesCategory)->is_first_installment) {
+            $dueDateStr = 'Upon Enrollment';
+        }
+
         return [
             'html' => $html,
             'total' => $money($total),
-            'words' => $words
+            'words' => $words,
+            'deadline' => $dueDateStr
         ];
     }
 
@@ -228,6 +240,8 @@ class AcceptanceLetterService
             '[program]'        => optional($student->program)->title ?? '',
             '[degree_type]'    => optional($degreeType)->title ?? '',
             '[faculty]'        => optional(optional($student->program)->faculty)->title ?? '',
+            '[faculty_title]'  => optional(optional($student->program)->faculty)->title ?? '',
+            '[faculty_shortcode]'=> optional(optional($student->program)->faculty)->shortcode ?? '',
             '[intake]'         => optional(optional($enroll)->session)->title ?? '',
             '[admission_date]' => $admissionDate,
             '[date]'           => date('F j, Y'),
@@ -335,6 +349,12 @@ class AcceptanceLetterService
             return null;
         }
 
+        // The editor stores image paths relative to the page it was edited on
+        // ("../../../../uploads/..."), which dompdf cannot resolve — it dropped
+        // them without an error, so letters went out with the image missing and
+        // nothing to show anything was wrong.
+        $body = \App\Services\DocumentHtml::resolveImages($body, true);
+
         $pdf = Pdf::loadView('admin.acceptance-letter.pdf', [
             'body' => $body,
             'student' => $student,
@@ -363,6 +383,8 @@ class AcceptanceLetterService
             '[program]' => optional($degreeType->programs()->first())->title ?? 'Sample Programme',
             '[degree_type]' => $degreeType->title,
             '[faculty]' => optional(optional($degreeType->programs()->first())->faculty)->title ?? 'Sample Faculty',
+            '[faculty_title]' => optional(optional($degreeType->programs()->first())->faculty)->title ?? 'Sample Faculty',
+            '[faculty_shortcode]' => optional(optional($degreeType->programs()->first())->faculty)->shortcode ?? 'SFAC',
             '[intake]' => date('Y') . '/' . (date('Y') + 1),
             '[admission_date]' => date('F j, Y'), '[date]' => date('F j, Y'),
             '[institution]' => optional($setting)->title ?? config('app.name'),
@@ -383,6 +405,7 @@ class AcceptanceLetterService
 
         $sample['[fee_breakdown_total]'] = '138,500';
         $sample['[fee_breakdown_total_words]'] = 'One Hundred Thirty-Eight Thousand Five Hundred';
+        $sample['[fee_breakdown_total_deadline]'] = 'Tuesday, September 30th, ' . date('Y');
         
         $sample['[payment_deadlines]'] = '<ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">'
             . '<li>- 1st Installment: Tuesday, September 30th, ' . date('Y') . ' being (120,500) One Hundred Twenty Thousand Five Hundred ' . $currency . '</li>'

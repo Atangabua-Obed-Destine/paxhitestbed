@@ -9,6 +9,9 @@
             <div class="modal-body">
                 <!-- Details View Start -->
                 <h4><mark class="text-primary">{{ __('field_title') }}:</mark> {{ $row->title }}</h4>
+                @if($row->pre_title)
+                    <p><mark class="text-primary">Pre Title:</mark> {{ $row->pre_title }}</p>
+                @endif
                 <hr/>
                 <div class="">
                     <div class="row">

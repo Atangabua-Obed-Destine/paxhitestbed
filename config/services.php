@@ -50,6 +50,10 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
+
+        // Configurable because Google retires models: gemini-2.5-flash stopped
+        // accepting new API keys, which silently broke every AI feature here.
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash'),
     ],
 
     'google_books' => [

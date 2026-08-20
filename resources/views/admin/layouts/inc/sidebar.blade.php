@@ -231,6 +231,9 @@
                 
                 @canany(['degree-type-create', 'degree-type-view'])
                 <li class="{{ Request::is('admin/academic/degree-type*') ? 'active' : '' }}"><a href="{{ route('admin.degree-type.index') }}" class="">Degree Types</a></li>
+                @can('letterhead-view')
+                <li class="{{ Request::is('admin/academic/letterhead*') ? 'active' : '' }}"><a href="{{ route('admin.letterhead.index') }}" class="">{{ __('Letterhead') }}</a></li>
+                @endcan
                 @endcanany
                 
                 @canany(['program-create', 'program-view'])
@@ -618,7 +621,11 @@
                 @endcanany
 
                 @can('staff-id-card-view')
-                <li class="{{ Request::is('admin/staff/staff-id-card*') ? 'active' : '' }}"><a href="{{ route('admin.staff-id-card.index') }}" class="">{{ trans_choice('module_staff', 1) }} {{ __('field_id_card') }}</a></li>
+                <li class="{{ Request::is('admin/staff/staff-id-card') ? 'active' : '' }}"><a href="{{ route('admin.staff-id-card.index') }}" class="">{{ trans_choice('module_staff', 1) }} {{ __('field_id_card') }}</a></li>
+                @endcan
+
+                @can('staff-id-card-setting-view')
+                <li class="{{ Request::is('admin/staff/staff-id-card-setting*') ? 'active' : '' }}"><a href="{{ route('admin.staff-id-card-setting.index') }}" class="">{{ trans_choice('module_staff', 1) }} {{ __('field_id_card') }} {{ __('Setting') }}</a></li>
                 @endcan
 
                 @canany(['staff-note-create', 'staff-note-view'])
@@ -778,11 +785,28 @@
                     </a>
                 </li>
                 
-                <li class="{{ Request::is('admin/budget') && !Request::is('admin/budget-*') ? 'active' : '' }}">
-                    <a href="{{ route('admin.budget.index') }}" class="">
-                        <i class="fas fa-list"></i> {{ trans_choice('module_budget', 2) }}
+                <li class="{{ Request::is('admin/budget-sheet*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.budget-sheet.index') }}" class="">
+                        <i class="fas fa-file-invoice-dollar"></i> {{ __('Income & Expenditure Sheet') }}
                     </a>
                 </li>
+
+                <li class="{{ Request::is('admin/budget') && !Request::is('admin/budget-*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.budget.index') }}" class="">
+                        {{-- Named explicitly: sitting beside the institutional
+                             sheet, a bare "Budgets" gave no way to tell the two
+                             apart. --}}
+                        <i class="fas fa-list"></i> {{ __('Departmental Budgets') }}
+                    </a>
+                </li>
+
+                @can('budget-line-view')
+                <li class="{{ Request::is('admin/budget-line*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.budget-line.index') }}" class="">
+                        <i class="fas fa-stream"></i> {{ __('Budget Lines') }}
+                    </a>
+                </li>
+                @endcan
                 
                 @canany(['budget-report-performance', 'budget-report-variance', 'budget-report-department', 'budget-report-cashflow'])
                 <li class="{{ Request::is('admin/budget-reports*') ? 'active' : '' }} pcoded-hasmenu">
@@ -1531,7 +1555,7 @@
         @endcanany
 
         @canany(['setting-view', 'province-view', 'province-create', 'district-view', 'district-create', 'language-view', 'language-create', 'translations-view', 'translations-create', 'setting-mail', 'setting-sms', 'setting-payment', 'application-setting-view', 'religion-view', 'religion-create', 'schedule-setting-view', 'role-view', 'role-edit', 'field-staff', 'field-student', 'field-application', 'student-panel-view'])
-        <li class="nav-item pcoded-hasmenu {{ Request::is('admin/setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/translations*') ? 'pcoded-trigger active' : '' }}">
+        <li class="nav-item pcoded-hasmenu {{ Request::is('admin/setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/translations*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/chat*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
                 <span class="pcoded-micon"><i class="fas fa-cog"></i></span>
                 <span class="pcoded-mtext">{{ trans_choice('module_setting', 2) }}</span>
@@ -1575,6 +1599,18 @@
 
                 @can('application-setting-view')
                 <li class="{{ Request::is('admin/setting/application-setting*') ? 'active' : '' }}"><a href="{{ route('admin.application-setting.index') }}" class="">{{ trans_choice('module_application_setting', 1) }}</a></li>
+                @endcan
+
+                @can('chat-setting-view')
+                <li class="{{ Request::is('admin/chat/setting*') ? 'active' : '' }}"><a href="{{ route('admin.chat-setting.index') }}" class="">{{ __('Chat Assistant') }}</a></li>
+                @endcan
+
+                @can('chat-knowledge-view')
+                <li class="{{ Request::is('admin/chat/knowledge*') ? 'active' : '' }}"><a href="{{ route('admin.chat-knowledge.index') }}" class="">{{ __('Chat Knowledge Base') }}</a></li>
+                @endcan
+
+                @can('chat-conversation-view')
+                <li class="{{ Request::is('admin/chat/conversation*') ? 'active' : '' }}"><a href="{{ route('admin.chat-conversation.index') }}" class="">{{ __('Chat Conversations') }}</a></li>
                 @endcan
 
                 @canany(['religion-view', 'religion-create', 'religion-edit', 'religion-delete'])

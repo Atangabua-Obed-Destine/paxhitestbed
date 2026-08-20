@@ -129,7 +129,7 @@
                                                     {{ $category->title }}
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label class="mb-1 small text-muted">{{ __('debit_account') }} (Payment From)</label>
                                                 <select class="form-control form-control-sm account-select" 
                                                         data-debit-select="fee_{{ $category->id }}">
@@ -146,7 +146,7 @@
                                                     @endforeach
                                                 </select>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label class="mb-1 small text-muted">{{ __('credit_account') }} (Revenue Account)</label>
                                                 <select class="form-control form-control-sm account-select" 
                                                         data-credit-select="fee_{{ $category->id }}">
@@ -159,6 +159,23 @@
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
+                                                    </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="mb-1 small text-muted">{{ __('Budget line') }}</label>
+                                                <select class="form-control form-control-sm budget-line-select"
+                                                        data-budget-select="fee_{{ $category->id }}">
+                                                    <option value="">{{ __('Not on the sheet') }}</option>
+                                                    @foreach($budgetLines as $line)
+                                                    <option value="{{ $line->id }}"
+                                                        @if(isset($existingMappings['fee_category']) &&
+                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first() &&
+                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first()->budget_line_id == $line->id)
+                                                            selected
+                                                        @endif>
+                                                        {{ $line->code }} - {{ $line->name }}
                                                     </option>
                                                     @endforeach
                                                 </select>
@@ -206,7 +223,7 @@
                                                     {{ $category->title }}
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label class="mb-1 small text-muted">{{ __('debit_account') }} (Payment From)</label>
                                                 <select class="form-control form-control-sm account-select" 
                                                         data-debit-select="income_{{ $category->id }}">
@@ -223,7 +240,7 @@
                                                     @endforeach
                                                 </select>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label class="mb-1 small text-muted">{{ __('credit_account') }} (Revenue Account)</label>
                                                 <select class="form-control form-control-sm account-select" 
                                                         data-credit-select="income_{{ $category->id }}">
@@ -236,6 +253,23 @@
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
+                                                    </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="mb-1 small text-muted">{{ __('Budget line') }}</label>
+                                                <select class="form-control form-control-sm budget-line-select"
+                                                        data-budget-select="income_{{ $category->id }}">
+                                                    <option value="">{{ __('Not on the sheet') }}</option>
+                                                    @foreach($budgetLines as $line)
+                                                    <option value="{{ $line->id }}"
+                                                        @if(isset($existingMappings['income_category']) &&
+                                                            $existingMappings['income_category']->where('category_id', $category->id)->first() &&
+                                                            $existingMappings['income_category']->where('category_id', $category->id)->first()->budget_line_id == $line->id)
+                                                            selected
+                                                        @endif>
+                                                        {{ $line->code }} - {{ $line->name }}
                                                     </option>
                                                     @endforeach
                                                 </select>
@@ -283,7 +317,7 @@
                                                     {{ $category->title }}
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label class="mb-1 small text-muted">{{ __('debit_account') }} (Expense Account)</label>
                                                 <select class="form-control form-control-sm account-select" 
                                                         data-debit-select="expense_{{ $category->id }}">
@@ -300,7 +334,7 @@
                                                     @endforeach
                                                 </select>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label class="mb-1 small text-muted">{{ __('credit_account') }} (Payment From)</label>
                                                 <select class="form-control form-control-sm account-select" 
                                                         data-credit-select="expense_{{ $category->id }}">
@@ -313,6 +347,23 @@
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
+                                                    </option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="mb-1 small text-muted">{{ __('Budget line') }}</label>
+                                                <select class="form-control form-control-sm budget-line-select"
+                                                        data-budget-select="expense_{{ $category->id }}">
+                                                    <option value="">{{ __('Not on the sheet') }}</option>
+                                                    @foreach($budgetLines as $line)
+                                                    <option value="{{ $line->id }}"
+                                                        @if(isset($existingMappings['expense_category']) &&
+                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first() &&
+                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first()->budget_line_id == $line->id)
+                                                            selected
+                                                        @endif>
+                                                        {{ $line->code }} - {{ $line->name }}
                                                     </option>
                                                     @endforeach
                                                 </select>
@@ -824,6 +875,9 @@ $(document).ready(function() {
         const creditSelect = $('[data-credit-select="' + rowId + '"]');
         const debitAccountId = debitSelect.val();
         const creditAccountId = creditSelect.val();
+        // Optional: a category with no sheet line is reported as
+        // unallocated rather than being dropped from the sheet.
+        const budgetLineId = $('[data-budget-select="' + rowId + '"]').val() || null;
         
         // Validate both accounts are selected
         if (!debitAccountId || !creditAccountId) {
@@ -856,7 +910,8 @@ $(document).ready(function() {
                     mapping_type: mappingType,
                     category_id: categoryId || null,
                     debit_account_id: debitAccountId,
-                    credit_account_id: creditAccountId
+                    credit_account_id: creditAccountId,
+                    budget_line_id: budgetLineId
                 }]
             },
             success: function(response) {

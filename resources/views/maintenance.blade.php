@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAXHI Institute | Maintenance Mode</title>
+    <title>{{ institution_name() }} | Maintenance Mode</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;500;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -62,17 +62,19 @@
 <body>
     <div class="container">
         <div class="logo">
-            <img src="https://paxhi.org/uploads/setting/PAXHI_LOGO_1753146564_1753331669.png" alt="PAXHI Logo" width="100">
+            @if(!empty($setting->logo_path) && is_file(public_path('uploads/setting/'.$setting->logo_path)))
+                <img src="{{ asset('uploads/setting/'.$setting->logo_path) }}" alt="{{ institution_name() }}" width="100">
+            @endif
         </div>
         <h1>We’ll be back soon!</h1>
         <p>
-            The <strong>PAXHI Institute </strong> is currently undergoing 
+            The <strong>{{ institution_name() }} </strong> is currently undergoing 
             scheduled maintenance. We’re working hard to bring you a better experience.
         </p>
         <div class="loader"></div>
         <p>Please check back later.</p>
         <div class="footer">
-            &copy; {{ date('Y') }} PAXHI Institute. All Rights Reserved.
+            &copy; {{ date('Y') }} {{ institution_name() }}. All Rights Reserved.
         </div>
     </div>
 </body>

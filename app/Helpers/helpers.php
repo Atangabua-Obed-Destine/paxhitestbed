@@ -45,3 +45,25 @@ if (!function_exists('upload_exists')) {
         return file_exists(public_path('uploads/' . $path));
     }
 }
+
+if (!function_exists('institution_name')) {
+    /**
+     * What this institution is called.
+     *
+     * Views used to write `$setting->title ?? 'PAX HIGHER INSTITUTE'`, which put
+     * one particular school's name into the code of a system meant to serve any
+     * — and left forty places to edit when it changed. There is now one answer.
+     */
+    function institution_name(): string
+    {
+        return app(\App\Services\LetterheadService::class)->institutionName();
+    }
+}
+
+if (!function_exists('institution_code')) {
+    /** The short form, for places too narrow for the full name. */
+    function institution_code(): string
+    {
+        return app(\App\Services\LetterheadService::class)->institutionCode();
+    }
+}

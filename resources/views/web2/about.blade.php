@@ -1,6 +1,6 @@
 {{--
     ================================================================
-    ABOUT US — PAX Higher Institute
+    ABOUT US — {{ institution_name() }}
     ================================================================
     Sections:
     1. Page Hero
@@ -13,8 +13,8 @@
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'About Us — ' . ($setting->title ?? 'PAXHI'))
-@section('description', $about ? Str::limit(strip_tags($about->short_desc), 160) : 'Learn about PAX Higher Institute, a Catholic institution in the Archdiocese of Bamenda.')
+@section('title', 'About Us — ' . (institution_code()))
+@section('description', $about ? Str::limit(strip_tags($about->short_desc), 160) : 'Learn about ' . institution_name() . ', a Catholic institution in the Archdiocese of Bamenda.')
 
 @section('content')
 
@@ -27,7 +27,7 @@
             <i class="fas fa-cross text-accent-400 text-[10px]"></i>
             Est. in the Archdiocese of Bamenda
         </div>
-        <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white mb-4" data-aos="fade-up">About PAXHI</h1>
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white mb-4" data-aos="fade-up">About {{ institution_code() }}</h1>
         <p class="text-lg text-white/70 max-w-2xl mx-auto" data-aos="fade-up" data-aos-delay="100">Rooted in faith. Committed to excellence. Dedicated to transforming lives through Catholic higher education.</p>
         <nav class="mt-6 text-sm text-white/50" aria-label="Breadcrumb" data-aos="fade-up" data-aos-delay="150">
             <a href="{{ url('/') }}" class="hover:text-accent-400 transition-colors">Home</a>
@@ -50,7 +50,7 @@
             <div class="lg:col-span-5 relative" data-aos="fade-right">
                 <div class="relative">
                     @if($about->attach)
-                    <img src="{{ asset('uploads/about-us/'.$about->attach) }}" alt="About PAX Higher Institute" class="w-full rounded-2xl shadow-xl object-cover aspect-[3/4]">
+                    <img src="{{ asset('uploads/about-us/'.$about->attach) }}" alt="About ' . institution_name() . '" class="w-full rounded-2xl shadow-xl object-cover aspect-[3/4]">
                     @else
                     <div class="w-full aspect-[3/4] rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center">
                         <i class="fas fa-university text-6xl text-primary-300"></i>

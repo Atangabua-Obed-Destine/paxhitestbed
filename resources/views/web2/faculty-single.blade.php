@@ -1,11 +1,11 @@
 {{--
     ================================================================
-    FACULTY DETAIL — PAX Higher Institute
+    FACULTY DETAIL — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', $faculty->title . ' — ' . ($setting->title ?? 'PAXHI'))
+@section('title', $faculty->title . ' — ' . (institution_code()))
 @section('description', Str::limit(strip_tags($faculty->excerpt ?? $faculty->description), 160))
 
 @section('content')

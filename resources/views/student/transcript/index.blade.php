@@ -35,7 +35,7 @@
                         @endif
                     </div>
                     <div class="transcript-institution-info">
-                        <h1 class="transcript-institution-name">{{ $setting->title ?? 'PAXHI UNIVERSITY INSTITUTE' }}</h1>
+                        <h1 class="transcript-institution-name">{{ institution_name() }}</h1>
                         @if(isset($setting->address))
                         <p class="transcript-institution-address">{{ $setting->address }}</p>
                         @endif
@@ -569,7 +569,7 @@
                 </div>
                 <div class="transcript-footer-right">
                     <p class="transcript-footer-generated">Generated: {{ date('F d, Y \a\t h:i A') }}</p>
-                    <p class="transcript-footer-system">{{ $setting->title ?? 'PAXHI' }} Student Portal</p>
+                    <p class="transcript-footer-system">{{ institution_code() }} Student Portal</p>
                 </div>
             </div>
 

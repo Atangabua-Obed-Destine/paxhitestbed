@@ -11,7 +11,7 @@ class DegreeTypeDocument extends Model
 {
     protected $fillable = [
         'degree_type_id', 'doc_key', 'label', 'description',
-        'required', 'assign_to_column', 'sort_order', 'status',
+        'required', 'assign_to_column', 'qualification_group', 'sort_order', 'status',
     ];
 
     protected $casts = [

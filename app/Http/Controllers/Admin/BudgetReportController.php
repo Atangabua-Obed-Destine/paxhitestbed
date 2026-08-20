@@ -57,9 +57,15 @@ class BudgetReportController extends Controller
                     : 0;
                 
                 $reportData[] = [
-                    'budget_code' => $budget->code,
+                    // budgets stores budget_code; ->code was always null.
+                    'budget_code' => $budget->budget_code,
                     'budget_title' => $budget->title,
-                    'category' => $allocation->expenseCategory->title,
+                    // An institutional sheet line has no expense category —
+                    // it belongs to a budget line instead. Reading ->title
+                    // straight off a null relation crashed the report.
+                    'category' => optional($allocation->expenseCategory)->title
+                        ?? optional($allocation->budgetLine)->name
+                        ?? $allocation->title,
                     'allocated' => $allocation->allocated_amount,
                     'spent' => $allocation->spent_amount,
                     'committed' => $allocation->committed_amount,
@@ -78,7 +84,7 @@ class BudgetReportController extends Controller
         // Export handling
         if ($request->has('export')) {
             if ($request->export == 'pdf') {
-                \Flasher::addWarning('PDF export requires DomPDF package. Please contact administrator.');
+                Flasher::addWarning(__('PDF export is not available for this report yet.'));
                 return redirect()->back();
             }
         }
@@ -115,9 +121,11 @@ class BudgetReportController extends Controller
                 : 0;
             
             return [
-                'budget_code' => $allocation->budget->code,
+                'budget_code' => $allocation->budget->budget_code,
                 'budget_title' => $allocation->budget->title,
-                'category' => $allocation->expenseCategory->title,
+                'category' => optional($allocation->expenseCategory)->title
+                    ?? optional($allocation->budgetLine)->name
+                    ?? $allocation->title,
                 'allocated' => $allocation->allocated_amount,
                 'spent' => $allocation->spent_amount,
                 'variance' => $variance,
@@ -145,7 +153,7 @@ class BudgetReportController extends Controller
         // Export handling
         if ($request->has('export')) {
             if ($request->export == 'pdf') {
-                \Flasher::addWarning('PDF export requires DomPDF package. Please contact administrator.');
+                Flasher::addWarning(__('PDF export is not available for this report yet.'));
                 return redirect()->back();
             }
         }
@@ -212,7 +220,7 @@ class BudgetReportController extends Controller
         // Export handling
         if ($request->has('export')) {
             if ($request->export == 'pdf') {
-                \Flasher::addWarning('PDF export requires DomPDF package. Please contact administrator.');
+                Flasher::addWarning(__('PDF export is not available for this report yet.'));
                 return redirect()->back();
             }
         }
@@ -314,7 +322,7 @@ class BudgetReportController extends Controller
         // Export handling
         if ($request->has('export')) {
             if ($request->export == 'pdf') {
-                \Flasher::addWarning('PDF export requires DomPDF package. Please contact administrator.');
+                Flasher::addWarning(__('PDF export is not available for this report yet.'));
                 return redirect()->back();
             }
         }

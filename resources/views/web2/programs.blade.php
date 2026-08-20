@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    PROGRAMS LISTING — PAX Higher Institute
+    PROGRAMS LISTING — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Academic Programs — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Explore our diverse range of accredited academic programs at PAX Higher Institute.')
+@section('title', 'Academic Programs — ' . (institution_code()))
+@section('description', 'Explore our diverse range of accredited academic programs at ' . institution_name() . '.')
 
 @section('content')
 

@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    CAMPUS LIFE — PAX Higher Institute
+    CAMPUS LIFE — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Campus Life — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Experience life at PAX Higher Institute — student support services, campus facilities, faith activities, and a vibrant community rooted in Catholic values.')
+@section('title', 'Campus Life — ' . (institution_code()))
+@section('description', 'Experience life at ' . institution_name() . ' — student support services, campus facilities, faith activities, and a vibrant community rooted in Catholic values.')
 
 @section('content')
 
@@ -23,7 +23,7 @@
             Campus Life
         </h1>
         <p class="mt-4 text-lg text-white/70 max-w-2xl" data-aos="fade-up" data-aos-delay="150">
-            More than just academics — discover the vibrant community, support systems, and faith-filled experiences that define life at PAXHI.
+            More than just academics — discover the vibrant community, support systems, and faith-filled experiences that define life at {{ institution_code() }}.
         </p>
     </div>
 </section>
@@ -35,7 +35,7 @@
             <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-secondary-50 text-secondary-600 text-xs font-semibold uppercase tracking-wider mb-4">
                 <i class="fas fa-heart"></i> What Makes Us Special
             </span>
-            <h2 class="text-3xl md:text-4xl font-heading font-bold text-surface-800">The PAXHI Experience</h2>
+            <h2 class="text-3xl md:text-4xl font-heading font-bold text-surface-800">The {{ institution_code() }} Experience</h2>
         </div>
 
         @php
@@ -147,9 +147,9 @@
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[400px] text-white"><i class="fas fa-cross"></i></div>
     </div>
     <div class="section-container text-center relative z-10">
-        <h2 class="text-3xl font-heading font-bold text-white mb-4" data-aos="fade-up">Come Experience PAXHI</h2>
+        <h2 class="text-3xl font-heading font-bold text-white mb-4" data-aos="fade-up">Come Experience {{ institution_code() }}</h2>
         <p class="text-lg text-white/70 max-w-xl mx-auto mb-8" data-aos="fade-up" data-aos-delay="100">
-            Visit our campus and see for yourself what makes PAX Higher Institute a special place to study and grow.
+            Visit our campus and see for yourself what makes ' . institution_name() . ' a special place to study and grow.
         </p>
         <div class="flex flex-wrap justify-center gap-4" data-aos="fade-up" data-aos-delay="150">
             <a href="{{ url('/application') }}" class="btn-accent"><i class="fas fa-pen-to-square mr-2"></i> Apply Now</a>

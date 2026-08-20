@@ -118,7 +118,11 @@ class ExpenseController extends Controller
                             ->orderBy('title', 'asc')->get();
         
         // Get active budgets for dropdown
+        // Departmental budgets only. The Income and Expenditure sheet reports
+        // spending through its category mappings, so charging an expense
+        // directly against it would count that spending twice.
         $data['activeBudgets'] = \App\Models\Budget::whereIn('status', ['active', 'approved'])
+                            ->where('is_institutional', false)
                             ->orderBy('created_at', 'desc')->get();
 
         return view($this->view.'.create', $data);
@@ -273,7 +277,11 @@ class ExpenseController extends Controller
                             ->orderBy('title', 'asc')->get();
         
         // Get active budgets for dropdown
+        // Departmental budgets only. The Income and Expenditure sheet reports
+        // spending through its category mappings, so charging an expense
+        // directly against it would count that spending twice.
         $data['activeBudgets'] = \App\Models\Budget::whereIn('status', ['active', 'approved'])
+                            ->where('is_institutional', false)
                             ->orderBy('created_at', 'desc')->get();
 
         return view($this->view.'.edit', $data);

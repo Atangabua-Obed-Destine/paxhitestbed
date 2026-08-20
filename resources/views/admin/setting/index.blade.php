@@ -28,6 +28,11 @@
                             </div>
                         </div>
 
+                        <div class="form-group col-md-6">
+                            <label for="site_subtitle">Site Subtitle</label>
+                            <input type="text" class="form-control" name="site_subtitle" id="site_subtitle" value="{{ isset($row->site_subtitle)?$row->site_subtitle:'' }}">
+                        </div>
+
                         {{-- <div class="form-group col-md-6">
                             <label for="academy_code">{{ __('field_academy_code') }}</label>
                             <input type="text" class="form-control" name="academy_code" id="academy_code" value="{{ isset($row->academy_code)?$row->academy_code:'' }}">

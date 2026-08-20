@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
-    <title>{{ __('Verify Receipt') }} · {{ $receipt->receipt_number }} · {{ $setting->title ?? 'PAX HIGHER INSTITUTE' }}</title>
+    <title>{{ __('Verify Receipt') }} · {{ $receipt->receipt_number }} · {{ institution_name() }}</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <style>
@@ -53,7 +53,7 @@
                 <img src="{{ asset($setting->logo_path) }}" alt="Logo">
             @endif
             <div>
-                <h1>{{ $setting->title ?? 'PAX HIGHER INSTITUTE' }}</h1>
+                <h1>{{ institution_name() }}</h1>
                 <small>{{ __('Receipt Verification') }}</small>
             </div>
         </div>

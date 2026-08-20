@@ -24,6 +24,9 @@ class Budget extends Model
         'start_date',
         'end_date',
         'total_amount',
+        'opening_balance',
+        'is_institutional',
+        'parent_id',
         'allocated_amount',
         'spent_amount',
         'remaining_amount',
@@ -54,6 +57,22 @@ class Budget extends Model
     /**
      * Relationships
      */
+    /**
+     * The annual budget this one draws from.
+     *
+     * Null on an annual budget, which is the top of its own tree.
+     */
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    /** Departmental and project budgets delegated out of this one. */
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
     public function department()
     {
         return $this->belongsTo(Department::class, 'department_id');

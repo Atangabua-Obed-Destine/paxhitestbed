@@ -261,7 +261,7 @@
               <div class="row g-3">
                 <div class="form-group col-md-6">
                   <label for="nationality">{{ __('field_nationality') }}</label>
-                  <input type="text" class="form-control" id="nationality" name="nationality" value="{{ old('nationality', $row->nationality) }}">
+                  @include('partials.country-select', ['name' => 'nationality', 'id' => 'nationality', 'value' => old('nationality', $row->nationality)])
                 </div>
                 <div class="form-group col-md-6">
                   <label for="national_id">{{ __('field_national_id') }}</label>
@@ -328,7 +328,7 @@
               <div class="row g-3">
                 <div class="form-group col-md-6">
                   <label for="country">{{ __('field_country') }} <span>*</span></label>
-                  <input type="text" class="form-control" id="country" name="country" value="{{ old('country', $row->country) }}" required>
+                  @include('partials.country-select', ['name' => 'country', 'id' => 'country', 'value' => old('country', $row->country), 'required' => true])
                 </div>
                 <div class="form-group col-md-6">
                   <label for="present_province_edit">{{ __('Present province') }}</label>
@@ -433,7 +433,7 @@
                           <input type="text" class="form-control mb-1" name="guardians[{{ $index }}][address_line2]" placeholder="{{ __('Address line 2') }}" value="{{ $guardian['address_line2'] ?? '' }}">
                           <input type="text" class="form-control mb-1" name="guardians[{{ $index }}][city]" placeholder="{{ __('City') }}" value="{{ $guardian['city'] ?? '' }}">
                           <input type="text" class="form-control mb-1" name="guardians[{{ $index }}][state]" placeholder="{{ __('State / region') }}" value="{{ $guardian['state'] ?? '' }}">
-                          <input type="text" class="form-control" name="guardians[{{ $index }}][country]" placeholder="{{ __('Country') }}" value="{{ $guardian['country'] ?? '' }}">
+                          @include('partials.country-select', ['name' => "guardians[{$index}][country]", 'value' => $guardian['country'] ?? null])
                         </td>
                         <td class="text-center">
                           <button type="button" class="btn btn-danger btn-sm btn-icon-only remove-guardian-row"><i class="fas fa-trash-alt"></i></button>
@@ -456,35 +456,51 @@
                 <table class="table table-bordered table-sm align-middle" id="academic-history-table">
                   <thead>
                     <tr>
-                      <th>{{ __('Institution') }}</th>
+                      <th>{{ __('Qualification') }}</th>
+                      <th>{{ __('Awarding body / Institution') }}</th>
                       <th>{{ __('Location') }}</th>
-                      <th>{{ __('Instruction language') }}</th>
-                      <th>{{ __('Dates') }}</th>
-                      <th>{{ __('Qualifications / notes') }}</th>
+                      <th>{{ __('Language') }}</th>
+                      <th>{{ __('Years') }}</th>
+                      <th>{{ __('Notes') }}</th>
                       <th class="text-center">{{ __('Actions') }}</th>
                     </tr>
                   </thead>
                   <tbody>
                     @php
                       $historyRows = old('academic_history', $row->academicHistories->map(fn($item) => $item->toArray())->toArray());
+                      $configuredCards = \App\Services\DegreeTypeFormConfig::qualifications($row->degreeType);
                     @endphp
                     @foreach($historyRows as $index => $history)
+                      @php
+                        $cardKey = $history['qualification_key'] ?? null;
+                        $cardLabel = $cardKey && isset($configuredCards[$cardKey]) ? $configuredCards[$cardKey]['label'] : null;
+                      @endphp
                       <tr data-index="{{ $index }}">
                         <td>
                           <input type="hidden" name="academic_history[{{ $index }}][id]" value="{{ $history['id'] ?? '' }}">
-                          <input type="text" class="form-control mb-1" name="academic_history[{{ $index }}][institution_name]" placeholder="{{ __('Institution name') }}" value="{{ $history['institution_name'] ?? '' }}">
+                          {{-- Preserved so a staff edit cannot orphan the row from its card. --}}
+                          <input type="hidden" name="academic_history[{{ $index }}][qualification_key]" value="{{ $cardKey }}">
                           <input type="text" class="form-control" name="academic_history[{{ $index }}][certificate_obtained]" placeholder="{{ __('Certificate obtained') }}" value="{{ $history['certificate_obtained'] ?? '' }}">
+                          @if($cardLabel)
+                            <small class="text-muted">{{ $cardLabel }}</small>
+                          @else
+                            <small class="text-muted">{{ __('Added by applicant') }}</small>
+                          @endif
                         </td>
                         <td>
-                          <input type="text" class="form-control mb-1" name="academic_history[{{ $index }}][country]" placeholder="{{ __('Country') }}" value="{{ $history['country'] ?? '' }}">
+                          <input type="text" class="form-control mb-1" name="academic_history[{{ $index }}][awarding_body]" placeholder="{{ __('Awarding body') }}" value="{{ $history['awarding_body'] ?? '' }}">
+                          <input type="text" class="form-control" name="academic_history[{{ $index }}][institution_name]" placeholder="{{ __('Institution name') }}" value="{{ $history['institution_name'] ?? '' }}">
+                        </td>
+                        <td>
+                          @include('partials.country-select', ['name' => "academic_history[{$index}][country]", 'value' => $history['country'] ?? null, 'class' => 'form-control-sm mb-1'])
                           <input type="text" class="form-control" name="academic_history[{{ $index }}][city]" placeholder="{{ __('City') }}" value="{{ $history['city'] ?? '' }}">
                         </td>
                         <td>
                           <input type="text" class="form-control" name="academic_history[{{ $index }}][instruction_language]" value="{{ $history['instruction_language'] ?? '' }}">
                         </td>
                         <td>
-                          <input type="date" class="form-control mb-1" name="academic_history[{{ $index }}][date_from]" value="{{ $history['date_from'] ?? '' }}">
-                          <input type="date" class="form-control" name="academic_history[{{ $index }}][date_to]" value="{{ $history['date_to'] ?? '' }}">
+                          <input type="number" class="form-control mb-1" name="academic_history[{{ $index }}][start_year]" placeholder="{{ __('From') }}" min="1900" max="2200" value="{{ $history['start_year'] ?? '' }}">
+                          <input type="number" class="form-control" name="academic_history[{{ $index }}][end_year]" placeholder="{{ __('To') }}" min="1900" max="2200" value="{{ $history['end_year'] ?? '' }}">
                         </td>
                         <td>
                           <input type="text" class="form-control mb-1" name="academic_history[{{ $index }}][gce_ol_detail]" placeholder="{{ __('GCE O/L or Probatoire detail') }}" value="{{ $history['gce_ol_detail'] ?? '' }}">
@@ -1167,7 +1183,7 @@
           '<input type="text" class="form-control mb-1" name="guardians[' + index + '][address_line2]" placeholder="{{ __('Address line 2') }}">' +
           '<input type="text" class="form-control mb-1" name="guardians[' + index + '][city]" placeholder="{{ __('City') }}">' +
           '<input type="text" class="form-control mb-1" name="guardians[' + index + '][state]" placeholder="{{ __('State / region') }}">' +
-          '<input type="text" class="form-control" name="guardians[' + index + '][country]" placeholder="{{ __('Country') }}">' +
+          '<select class="form-control" name="guardians[' + index + '][country]">' + countryOptionsHtml() + '</select>' +
         '</td>' +
         '<td class="text-center"><button type="button" class="btn btn-danger btn-sm btn-icon-only remove-guardian-row"><i class="fas fa-trash-alt"></i></button></td>' +
         '</tr>';
@@ -1178,13 +1194,18 @@
       $(this).closest('tr').remove();
     });
 
+@include('partials.country-options-js')
     $('#add-history-row').on('click', function() {
       var index = historyIndex++;
       var row = '<tr data-index="' + index + '">' +
-        '<td><input type="hidden" name="academic_history[' + index + '][id]" value=""><input type="text" class="form-control mb-1" name="academic_history[' + index + '][institution_name]" placeholder="{{ __('Institution name') }}"><input type="text" class="form-control" name="academic_history[' + index + '][certificate_obtained]" placeholder="{{ __('Certificate obtained') }}"></td>' +
-        '<td><input type="text" class="form-control mb-1" name="academic_history[' + index + '][country]" placeholder="{{ __('Country') }}"><input type="text" class="form-control" name="academic_history[' + index + '][city]" placeholder="{{ __('City') }}"></td>' +
+        '<td><input type="hidden" name="academic_history[' + index + '][id]" value="">' +
+          '<input type="hidden" name="academic_history[' + index + '][qualification_key]" value="">' +
+          '<input type="text" class="form-control" name="academic_history[' + index + '][certificate_obtained]" placeholder="{{ __('Certificate obtained') }}">' +
+          '<small class="text-muted">{{ __('Added by applicant') }}</small></td>' +
+        '<td><input type="text" class="form-control mb-1" name="academic_history[' + index + '][awarding_body]" placeholder="{{ __('Awarding body') }}"><input type="text" class="form-control" name="academic_history[' + index + '][institution_name]" placeholder="{{ __('Institution name') }}"></td>' +
+        '<td><select class="form-control form-control-sm mb-1" name="academic_history[' + index + '][country]">' + countryOptionsHtml() + '</select><input type="text" class="form-control" name="academic_history[' + index + '][city]" placeholder="{{ __('City') }}"></td>' +
         '<td><input type="text" class="form-control" name="academic_history[' + index + '][instruction_language]"></td>' +
-        '<td><input type="date" class="form-control mb-1" name="academic_history[' + index + '][date_from]"><input type="date" class="form-control" name="academic_history[' + index + '][date_to]"></td>' +
+        '<td><input type="number" class="form-control mb-1" min="1900" max="2200" name="academic_history[' + index + '][start_year]" placeholder="{{ __('From') }}"><input type="number" class="form-control" min="1900" max="2200" name="academic_history[' + index + '][end_year]" placeholder="{{ __('To') }}"></td>' +
         '<td>' +
           '<input type="text" class="form-control mb-1" name="academic_history[' + index + '][gce_ol_detail]" placeholder="{{ __('GCE O/L or Probatoire detail') }}">' +
           '<input type="text" class="form-control mb-1" name="academic_history[' + index + '][gce_al_detail]" placeholder="{{ __('GCE A/L or Baccalaureate detail') }}">' +

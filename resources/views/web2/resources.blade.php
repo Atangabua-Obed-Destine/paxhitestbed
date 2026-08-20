@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    DOWNLOADS / RESOURCES — PAX Higher Institute
+    DOWNLOADS / RESOURCES — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Downloads & Resources — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Download student guides, academic calendars, forms, policies and more from PAX Higher Institute.')
+@section('title', 'Downloads & Resources — ' . (institution_code()))
+@section('description', 'Download student guides, academic calendars, forms, policies and more from ' . institution_name() . '.')
 
 @section('content')
 

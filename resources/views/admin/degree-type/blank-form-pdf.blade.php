@@ -320,26 +320,38 @@
         <em>For holders of Probatoire and Baccalaureate, indicate the series obtained and the year.</em>
     </div>
 
+    @php
+        // Same cards the online form prescribes, so paper and web agree.
+        $blankCards = \App\Services\DegreeTypeFormConfig::qualifications($degreeType);
+        $blankExtras = max(0, 5 - count($blankCards));
+    @endphp
     <table class="form-table">
         <thead>
             <tr>
-                <th style="width:18%;" rowspan="2">Name of Institution(s)</th>
+                <th style="width:16%;" rowspan="2">Qualification</th>
+                <th style="width:14%;" rowspan="2">Awarding Body</th>
+                <th style="width:16%;" rowspan="2">Name of Institution</th>
                 <th style="width:12%;" rowspan="2">City (Country)</th>
                 <th style="width:10%;" rowspan="2">Language of Instruction</th>
-                <th colspan="2" style="text-align:center;">Dates Attended</th>
-                <th colspan="4" style="text-align:center;">Certificates Obtained</th>
+                <th colspan="2" style="text-align:center;">Years</th>
+                <th colspan="2" style="text-align:center;">Certificates Obtained</th>
             </tr>
             <tr>
                 <th style="width:7%;">From</th>
                 <th style="width:7%;">To</th>
-                <th style="width:10%;">GCE O/L</th>
-                <th style="width:10%;">GCE A/L</th>
-                <th style="width:10%;">PROB</th>
-                <th style="width:10%;">BAC</th>
+                <th style="width:9%;">GCE O/L or PROB</th>
+                <th style="width:9%;">GCE A/L or BAC</th>
             </tr>
         </thead>
         <tbody>
-            @for($i = 0; $i < 5; $i++)
+            @foreach($blankCards as $blankCard)
+            <tr>
+                <td class="tall"><strong>{{ $blankCard['label'] }}</strong></td>
+                <td></td><td></td><td></td><td></td>
+                <td></td><td></td><td></td><td></td>
+            </tr>
+            @endforeach
+            @for($i = 0; $i < $blankExtras; $i++)
             <tr>
                 <td class="tall"></td><td></td><td></td><td></td><td></td>
                 <td></td><td></td><td></td><td></td>

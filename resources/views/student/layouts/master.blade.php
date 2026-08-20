@@ -1609,5 +1609,7 @@
     
     <script defer src="https://ai.innovakickstarter.com/vendor/chatbot/js/external-chatbot.js" data-chatbot-uuid="1e603773-8c6f-4275-ac48-f63bf9a9844d" data-iframe-width="420" data-iframe-height="745" data-language="en" ></script>
 
+
+    @include('components.chat-widget')
 </body>
 </html>

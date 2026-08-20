@@ -315,7 +315,7 @@
 
         /* Header */
         .card-body::before {
-            content: "PAXHI";
+            content: "{{ institution_code() }}";
             display: block;
             text-align: center;
             font-size: 22pt;

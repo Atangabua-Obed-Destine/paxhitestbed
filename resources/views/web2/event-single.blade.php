@@ -1,11 +1,11 @@
 {{--
     ================================================================
-    EVENT DETAIL — PAX Higher Institute
+    EVENT DETAIL — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', ($event->title ?? 'Event') . ' — ' . ($setting->title ?? 'PAXHI'))
+@section('title', ($event->title ?? 'Event') . ' — ' . (institution_code()))
 @section('description', Str::limit(strip_tags($event->description ?? ''), 160))
 
 @section('content')

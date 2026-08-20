@@ -260,7 +260,7 @@
                                     @if($fieldEnabled('student_nationality'))
                                     <div class="form-group col-md-6">
                                         <label for="nationality">{{ __('field_nationality') }}</label>
-                                        <input type="text" class="form-control" name="nationality" id="nationality" value="{{ old('nationality') }}">
+                                        @include('partials.country-select', ['name' => 'nationality', 'id' => 'nationality', 'value' => old('nationality')])
                                     </div>
                                     @endif
                                 </div>

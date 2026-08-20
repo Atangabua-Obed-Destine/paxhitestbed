@@ -85,6 +85,7 @@ class SliderController extends Controller
         //Data Insert
         $slider = new Slider;
         $slider->language_id = Language::version()->id;
+        $slider->pre_title = $request->pre_title;
         $slider->title = $request->title;
         $slider->sub_title = $request->sub_title;
         $slider->button_text = $request->button_text;
@@ -135,6 +136,7 @@ class SliderController extends Controller
         ]);
 
         //Data Update
+        $slider->pre_title = $request->pre_title;
         $slider->title = $request->title;
         $slider->sub_title = $request->sub_title;
         $slider->button_text = $request->button_text;

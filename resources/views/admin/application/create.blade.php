@@ -266,7 +266,7 @@
                             @if(field('application_nationality')->status == 1)
                             <div class="form-group col-md-6">
                                 <label for="nationality">{{ __('field_nationality') }}</label>
-                                <input type="text" class="form-control" name="nationality" id="nationality" value="{{ old('nationality') }}">
+                                @include('partials.country-select', ['name' => 'nationality', 'id' => 'nationality', 'value' => old('nationality')])
 
                                 <div class="invalid-feedback">
                                   {{ __('required_field') }} {{ __('field_nationality') }}

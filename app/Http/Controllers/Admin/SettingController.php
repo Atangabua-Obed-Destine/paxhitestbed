@@ -171,6 +171,7 @@ class SettingController extends Controller
             // Insert Data
             $data = new Setting;
             $data->title = $request->title;
+            $data->site_subtitle = $request->site_subtitle;
             $data->academy_code = $request->academy_code;
             $data->meta_title = $request->meta_title;
             $data->meta_description = $request->meta_description;
@@ -196,6 +197,7 @@ class SettingController extends Controller
             // Update Data
             $data = Setting::find($id);
             $data->title = $request->title;
+            $data->site_subtitle = $request->site_subtitle;
             $data->academy_code = $request->academy_code;
             $data->meta_title = $request->meta_title;
             $data->meta_description = $request->meta_description;

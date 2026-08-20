@@ -44,6 +44,32 @@
             margin-bottom: 1rem;
             position: relative;
         }
+        .qualification-card {
+            background: #fbfcfe;
+            border-color: #d7dded;
+            padding: 1.25rem;
+        }
+        .qualification-card-header {
+            border-bottom: 1px solid #e3e6ed;
+            padding-bottom: 0.6rem;
+            margin-bottom: 1rem;
+        }
+        .qualification-card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }
+        .qualification-card-description {
+            font-size: 0.825rem;
+            color: #6c757d;
+            margin: 0.25rem 0 0;
+        }
+        /* Sets the evidence apart from the qualification's detail fields. */
+        .qualification-card-documents {
+            border-top: 1px dashed #d7dded;
+            margin-top: 0.5rem;
+            padding-top: 1rem;
+        }
         .repeater-actions {
             position: absolute;
             top: 0.75rem;
@@ -58,7 +84,68 @@
             font-size: 0.85rem;
             color: #6c757d;
         }
+
+        body { background: #f8f9fa; }
+        .application-card { border: none; border-radius: 0.75rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); overflow: hidden; }
+        
+        .wizard-container { display: flex; flex-direction: column; }
+        @media (min-width: 768px) { .wizard-container { flex-direction: row; } }
+        
+        .wizard-sidebar { background: #fdfdfd; border-right: 1px solid #e9ecef; padding: 2rem; min-width: 250px; }
+        .wizard-content { padding: 2rem; flex-grow: 1; background: #fff; }
+        
+        .wizard-nav { list-style: none; padding: 0; margin: 0; }
+        .wizard-nav .nav-item { margin-bottom: 1rem; }
+        .wizard-nav .nav-link { 
+            display: flex; align-items: flex-start; color: #6c757d; padding: 0.5rem 0; border: none; background: transparent; text-align: left;
+        }
+        .wizard-nav .nav-link.active { color: #0d6efd; font-weight: 600; }
+        .wizard-nav .nav-link.completed { color: #198754; }
+        
+        .step-indicator { 
+            width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            background: #e9ecef; color: #495057; font-size: 0.875rem; font-weight: 600; margin-right: 1rem; flex-shrink: 0;
+        }
+        .nav-link.active .step-indicator { background: #0d6efd; color: #fff; }
+        .nav-link.completed .step-indicator { background: #198754; color: #fff; }
+        
+        .nav-link small { display: block; font-size: 0.75rem; color: #adb5bd; font-weight: normal; margin-top: 0.25rem; }
+        
+        /* Sub-tabs styling */
+        .step-tabs .nav-link { 
+            border-radius: 2rem; padding: 0.5rem 1.5rem; margin-right: 0.5rem; color: #495057; font-weight: 500; font-size: 0.9rem;
+        }
+        .step-tabs .nav-link.active { background-color: #e7f1ff; color: #0c7cd5; border: 1px solid #0c7cd5; }
+        .step-tabs .nav-link i.fa-check-circle { display: none; color: #198754; margin-right: 5px; }
+        .step-tabs .nav-link.completed i.fa-check-circle { display: inline-block; }
+        
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+        
+        .step-header { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #e9ecef; }
+        /* Right-aligned status badge: "Profile · 1 of 3" on tabbed steps, "69% complete" elsewhere. */
+        .step-header .step-status { float: right; }
+        .step-header .step-status:empty { display: none; }
+        .step-header h2 { font-size: 1.75rem; font-weight: 600; color: #212529; margin-bottom: 0.5rem; }
+        .step-header p { color: #6c757d; margin-bottom: 0; }
+        
+        .form-section-title { font-size: 1.1rem; font-weight: 600; margin-top: 2rem; margin-bottom: 1rem; color: #343a40; }
+        
+        .card-radio { border: 1px solid #dee2e6; border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: all 0.2s; }
+        .card-radio:hover { border-color: #adb5bd; }
+        .card-radio.active { border-color: #0d6efd; background-color: #f8faff; box-shadow: 0 0 0 1px #0d6efd; }
+        
+        .review-section { border: 1px solid #e9ecef; border-radius: 0.5rem; margin-bottom: 1.5rem; background: #fff; }
+        .review-section-header { background: #f8f9fa; padding: 1rem 1.25rem; border-bottom: 1px solid #e9ecef; border-radius: 0.5rem 0.5rem 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .review-section-header h5 { margin: 0; font-size: 1.1rem; font-weight: 600; color: #343a40; }
+        .review-section-body { padding: 1.25rem; }
+        .review-item { margin-bottom: 1rem; }
+        .review-label { font-size: 0.8rem; color: #6c757d; display: block; margin-bottom: 0.25rem; }
+        .review-value { font-weight: 500; color: #212529; }
+        
+        .wizard-footer { display: flex; justify-content: space-between; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #e9ecef; }
     </style>
+
     <!-- Institutional portal theme (loads last so it overrides the admin skin) -->
     <link rel="stylesheet" href="{{ asset('dashboard/css/application-portal.css') }}?v={{ filemtime(public_path('dashboard/css/application-portal.css')) }}">
 </head>
@@ -138,7 +225,7 @@
                     </div>
                 @endif
 
-                <div class="wizard-sec-bg">
+                
                     @php
                         // Degree-type-aware field resolver: when an application's degree type is
                         // bound (applicant portal), the per-degree-type override decides the toggle;
@@ -203,6 +290,7 @@
                                         'date_from' => $h->date_from?->format('Y-m-d'),
                                         'date_to' => $h->date_to?->format('Y-m-d'),
                                         'certificate_obtained' => $h->certificate_obtained,
+                                        'certificate_file' => $h->certificate_file,
                                         'gce_ol_detail' => $h->gce_ol_detail,
                                         'gce_al_detail' => $h->gce_al_detail,
                                         'probatoire_detail' => $h->probatoire_detail,
@@ -232,6 +320,11 @@
                             }
                             return [['language' => 'English', 'fluency_level' => 'excellent']];
                         };
+
+                        // Uploaded checklist files, keyed by document_type. Defined once here
+                        // because both the Identification tab and the Documents step render
+                        // document inputs through the shared partial.
+                        $uploadedDocs = $application->documents ? $application->documents->keyBy('document_type') : collect();
 
                         $oldGuardians = $getGuardians();
                         $oldAcademicHistory = $getAcademicHistory();
@@ -276,79 +369,151 @@
                         </div>
                     </div>
 
-                    <form id="hnd-application-form" class="needs-validation" novalidate action="{{ route('application.update', $application) }}" method="post" enctype="multipart/form-data" style="display: none;">
-                        @csrf
-
-                        <h3>{{ __('Programme Selection') }}</h3>
-                        <section class="form-step">
-                            <p class="step-caption">{{ __('These were chosen when you started this application and cannot be changed here. To apply for a different programme or intake, start a new application from My Account.') }}</p>
-                            @php
-                                $facultyTitle = optional($faculties->firstWhere('id', optional($application->program)->faculty_id))->title;
-                                $secondProgTitle = $application->second_program_choice_id ? optional($programs->firstWhere('id', $application->second_program_choice_id))->title : null;
-                                $thirdProgTitle = $application->third_program_choice_id ? optional($programs->firstWhere('id', $application->third_program_choice_id))->title : null;
-                            @endphp
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Programme & Intake') }}</legend>
-                                <div class="row">
-                                    <div class="form-group col-md-6">
-                                        <label>{{ __('Degree Type') }}</label>
-                                        <input type="text" class="form-control is-mirrored" value="{{ optional($degreeType)->title }}" readonly>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label>{{ __('field_faculty') }}</label>
-                                        <input type="text" class="form-control is-mirrored" value="{{ $facultyTitle }}" readonly>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label>{{ __('First Choice Programme') }}</label>
-                                        <input type="text" class="form-control is-mirrored" value="{{ optional($application->program)->title }}" readonly>
-                                    </div>
-
-                                    @if(optional(field('application_program_choice_second'))->status == 1)
-                                        <div class="form-group col-md-6">
-                                            <label>{{ __('Second Choice Programme') }}</label>
-                                            <input type="text" class="form-control is-mirrored" value="{{ $secondProgTitle ?? '—' }}" readonly>
-                                        </div>
-                                    @endif
-
-                                    @if(optional(field('application_program_choice_third'))->status == 1)
-                                        <div class="form-group col-md-6">
-                                            <label>{{ __('Third Choice Programme') }}</label>
-                                            <input type="text" class="form-control is-mirrored" value="{{ $thirdProgTitle ?? '—' }}" readonly>
-                                        </div>
-                                    @endif
-
-                                    @if(optional(field('application_academic_year'))->status == 1)
-                                        <div class="form-group col-md-6">
-                                            <label>{{ __('Academic Year Applied For') }}</label>
-                                            <input type="text" class="form-control is-mirrored" value="{{ $application->academic_year }}" readonly>
-                                        </div>
-                                    @endif
-                                </div>
-
-                                {{-- Hidden inputs carry the intake choices so the submission stays valid --}}
-                                <input type="hidden" name="program" value="{{ $application->program_id }}">
-                                @if(optional(field('application_program_choice_second'))->status == 1)
-                                    <input type="hidden" name="second_program_choice_id" value="{{ $application->second_program_choice_id }}">
-                                @endif
-                                @if(optional(field('application_program_choice_third'))->status == 1)
-                                    <input type="hidden" name="third_program_choice_id" value="{{ $application->third_program_choice_id }}">
-                                @endif
-                                @if(optional(field('application_academic_year'))->status == 1)
-                                    <input type="hidden" name="academic_year" value="{{ $application->academic_year }}">
-                                @endif
-                            </fieldset>
-                        </section>
-
-                        <h3>{{ __('Personal Information') }}</h3>
-                        <section class="form-step">
+                    {{-- The form is visible from the start: .wizard-step CSS already hides every
+                         step but the active one, so there is no flash of unstyled content, and the
+                         form no longer depends on JavaScript running to become usable. --}}
+                    <form id="hnd-application-form" class="needs-validation" novalidate action="{{ route('application.update', $application) }}" method="post" enctype="multipart/form-data">
+    <div class="wizard-container">
+        <!-- Sidebar -->
+        <div class="wizard-sidebar">
+            <h6 class="text-uppercase text-muted fw-bold mb-2" style="font-size: 0.75rem; letter-spacing: 1px;">YOUR APPLICATION</h6>
+            {{-- Seeded from the server's saved draft_progress so a returning applicant sees
+                 their real completion, and kept in sync with the header bar on every save. --}}
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong id="sidebar-progress-text">{{ $application->draft_progress ?? 0 }}% complete</strong>
+                <small class="text-muted" id="sidebar-step-position"></small>
+            </div>
+            <div class="progress mb-4" style="height: 6px;">
+                <div class="progress-bar bg-primary" id="sidebar-progress-bar" role="progressbar" style="width: {{ $application->draft_progress ?? 0 }}%"></div>
+            </div>
+            
+            <ul class="wizard-nav">
+                <li class="nav-item">
+                    <button type="button" class="nav-link active" data-step="1">
+                        <div class="step-indicator">1</div>
+                        <div>
+                            <strong>Applicant's Information</strong>
+                            <small>Personal details, identification and contact</small>
+                        </div>
+                    </button>
+                </li>
+                @if(optional(field('application_guardians'))->status == 1)
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-step="2">
+                        <div class="step-indicator">2</div>
+                        <div>
+                            <strong>Family & Financial Support</strong>
+                            <small>Parents, guardian and sponsor information</small>
+                        </div>
+                    </button>
+                </li>
+                @endif
+                @if(optional(field('application_academic_history'))->status == 1)
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-step="3">
+                        <div class="step-indicator">3</div>
+                        <div>
+                            <strong>Academic Qualifications</strong>
+                            <small>Schools attended, qualifications</small>
+                        </div>
+                    </button>
+                </li>
+                @endif
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-step="4">
+                        <div class="step-indicator">4</div>
+                        <div>
+                            <strong>Programme Choices</strong>
+                            <small>Rank your preferred programmes</small>
+                        </div>
+                    </button>
+                </li>
+                @if(optional(field('application_language_proficiency'))->status == 1)
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-step="5">
+                        <div class="step-indicator">5</div>
+                        <div>
+                            <strong>Languages</strong>
+                            <small>Languages you studied and use</small>
+                        </div>
+                    </button>
+                </li>
+                @endif
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-step="6">
+                        <div class="step-indicator">6</div>
+                        <div>
+                            <strong>Documents</strong>
+                            <small>Review uploaded files</small>
+                        </div>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-step="7">
+                        <div class="step-indicator">7</div>
+                        <div>
+                            <strong>Review & Confirm</strong>
+                            <small>Check your application before submission</small>
+                        </div>
+                    </button>
+                </li>
+                @if(!empty($admissionFeeSettings['fee_enabled']))
+                <li class="nav-item">
+                    <button type="button" class="nav-link" data-step="8">
+                        <div class="step-indicator">8</div>
+                        <div>
+                            <strong>Payment</strong>
+                            <small>{{ __('Application fee') }}: {{ number_format($admissionFeeSettings['fee_amount'], 0) }} FCFA</small>
+                        </div>
+                    </button>
+                </li>
+                @endif
+            </ul>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="wizard-content">
+            @csrf
+    
+    <div class="wizard-step active" id="step-1">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>Applicant's Information</h2>
+            <p>Tell us about the applicant. Use information from official documents.</p>
+        </div>
+        
+        <ul class="nav nav-pills step-tabs mb-4" id="step1Tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="profile-tab" data-bs-toggle="pill" data-bs-target="#profile" type="button" role="tab"><i class="fas fa-check-circle"></i> Profile</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="identification-tab" data-bs-toggle="pill" data-bs-target="#identification" type="button" role="tab"><i class="fas fa-check-circle"></i> Identification</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="contact-tab" data-bs-toggle="pill" data-bs-target="#contact" type="button" role="tab"><i class="fas fa-check-circle"></i> Contact</button>
+            </li>
+        </ul>
+        
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="profile" role="tabpanel">
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i> <strong>Use the applicant's official information.</strong> Enter the applicant's name and date of birth exactly as shown on their birth certificate.
+                </div>
+                <h4 class="form-section-title">Applicant's name</h4>
+                
                             <p class="step-caption">{{ __('Provide your legal personal information exactly as it appears on official identification documents.') }}</p>
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Names & Identification') }}</legend>
+                            
+                                
                                 <div class="row">
                                     <div class="form-group col-md-4">
                                         <label for="first_name">{{ __('field_first_name') }} <span>*</span></label>
                                         <input type="text" class="form-control" name="first_name" id="first_name" value="{{ $getValue('first_name') }}" required>
                                         <div class="invalid-feedback">{{ __('Enter your first name.') }}</div>
+                                    </div>
+                                    <div class="form-group col-md-4">
+                                        <label for="other_names">{{ __('Middle / Other name') }} <small class="text-muted">{{ __('Optional') }}</small></label>
+                                        <input type="text" class="form-control" name="other_names" id="other_names" value="{{ $getValue('other_names') }}" placeholder="{{ __('e.g. Michael') }}">
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label for="last_name">{{ __('field_last_name') }} <span>*</span></label>
@@ -374,19 +539,23 @@
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label for="dob">{{ __('field_dob') }} <span>*</span></label>
-                                        <input type="date" class="form-control" name="dob" id="dob" value="{{ $getValue('dob') ? (is_string($getValue('dob')) ? $getValue('dob') : $getValue('dob')->format('Y-m-d')) : '' }}" required style="cursor: pointer;" onfocus="this.showPicker && this.showPicker()" onclick="this.showPicker && this.showPicker()">
-                                        <div class="invalid-feedback">{{ __('Specify your date of birth.') }}</div>
+                                        {{-- max is yesterday, not today: the server rule is
+                                             before:today, so a date of today is rejected. Without
+                                             it the picker offered future dates that only failed
+                                             once the draft reached the server. --}}
+                                        <input type="date" class="form-control" name="dob" id="dob" value="{{ $getValue('dob') ? (is_string($getValue('dob')) ? $getValue('dob') : $getValue('dob')->format('Y-m-d')) : '' }}" required max="{{ now()->subDay()->format('Y-m-d') }}" style="cursor: pointer;" onfocus="this.showPicker && this.showPicker()" onclick="this.showPicker && this.showPicker()">
+                                        <div class="invalid-feedback">{{ __('Enter a date of birth in the past.') }}</div>
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label for="nationality">{{ __('field_nationality') }} <span>*</span></label>
-                                        <input type="text" class="form-control" name="nationality" id="nationality" value="{{ $getValue('nationality') }}" required>
+                                        @include('partials.country-select', ['name' => 'nationality', 'id' => 'nationality', 'value' => $getValue('nationality'), 'required' => true])
                                         <div class="invalid-feedback">{{ __('Provide your nationality.') }}</div>
                                     </div>
                                 </div>
-                            </fieldset>
+                            
 
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Birth & Religious Details') }}</legend>
+                            
+                                
                                 <div class="row">
                                     @if(optional(field('application_birth_city'))->status == 1)
                                         <div class="form-group col-md-3">
@@ -472,10 +641,54 @@
                                         </div>
                                     @endif
                                 </div>
-                            </fieldset>
+                            
 
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Official Identification') }}</legend>
+                            
+                                
+            </div>{{-- /Profile tab --}}
+
+            <div class="tab-pane fade" id="identification" role="tabpanel">
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-id-card me-2"></i>
+                    <strong>{{ __('Proof of identity.') }}</strong>
+                    {{ __('Upload the applicant\'s photograph and identity documents here. The name and date of birth on these files must match the Profile tab.') }}
+                </div>
+
+                <h4 class="form-section-title">{{ __('Applicant photograph') }}</h4>
+                <div class="row">
+                    <div class="form-group col-md-6">
+                        <label for="photo">{{ __('Recent Passport Photograph (max 5MB)') }} <span>*</span></label>
+                        {{-- data-has-existing mirrors the server rule: the photo is only
+                             mandatory when none has been uploaded on a previous save. --}}
+                        <input type="file" class="form-control size-guard" data-max-size-mb="5" data-has-existing="{{ $application->photo ? '1' : '0' }}" name="photo" id="photo" accept="image/jpeg,image/png,image/*" @if(!$application->photo) required @endif>
+                        <div class="invalid-feedback">{{ __('Upload a recent passport style photograph.') }}</div>
+                        <small class="document-help">{{ __('Use a clear, recent colour photograph with the applicant facing the camera. Avoid selfies, filters and group photographs.') }}</small>
+                        @if($application->photo)
+                            <small class="text-success d-block mt-1"><i class="fas fa-check-circle me-1"></i>{{ __('A photograph is already on file. Choose a new file only if you want to replace it.') }}</small>
+                        @endif
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="signature">{{ __('Signature Sample (max 2MB)') }}</label>
+                        <input type="file" class="form-control size-guard" data-max-size-mb="2" data-has-existing="{{ $application->signature ? '1' : '0' }}" name="signature" id="signature" accept="image/jpeg,image/png,image/*">
+                        @if($application->signature)
+                            <small class="text-success d-block mt-1"><i class="fas fa-check-circle me-1"></i>{{ __('A signature is already on file.') }}</small>
+                        @endif
+                    </div>
+                </div>
+
+                @if(optional(field('application_document_checklist'))->status == 1 && count($identityDocuments))
+                    <h4 class="form-section-title">{{ __('Identity documents') }}</h4>
+                    <p class="document-help">{{ __('Accepted formats: JPG, PNG, PDF. Maximum size per file: 10MB.') }}</p>
+                    <div class="row">
+                        @foreach($identityDocuments as $key => $document)
+                            <div class="col-md-6">
+                                @include('application.partials.document-input', ['key' => $key, 'document' => $document, 'uploadedDocs' => $uploadedDocs])
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                <h4 class="form-section-title">{{ __('Identification numbers') }}</h4>
                                 <div class="row">
                                     <div class="form-group col-md-4">
                                         <label for="national_id">{{ __('National Identity Card Number') }}</label>
@@ -493,6 +706,10 @@
                                             <input type="text" class="form-control" name="national_id_issue_place" id="national_id_issue_place" value="{{ $getValue('national_id_issue_place') }}">
                                         </div>
                                     @endif
+                                    <div class="form-group col-md-4">
+                                        <label for="national_id_expiry_date">{{ __('National ID Expiry Date') }} <small class="text-muted">{{ __('Optional') }}</small></label>
+                                        <input type="date" class="form-control" name="national_id_expiry_date" id="national_id_expiry_date" value="{{ $getValue('national_id_expiry_date') ? (is_string($getValue('national_id_expiry_date')) ? $getValue('national_id_expiry_date') : $getValue('national_id_expiry_date')->format('Y-m-d')) : '' }}">
+                                    </div>
                                 </div>
                                 <div class="row">
                                     <div class="form-group col-md-4">
@@ -511,19 +728,25 @@
                                             <input type="text" class="form-control" name="passport_issue_country" id="passport_issue_country" value="{{ $getValue('passport_issue_country') }}">
                                         </div>
                                     @endif
+                                    <div class="form-group col-md-4">
+                                        <label for="passport_expiry_date">{{ __('Passport Expiry Date') }} <small class="text-muted">{{ __('Optional') }}</small></label>
+                                        <input type="date" class="form-control" name="passport_expiry_date" id="passport_expiry_date" value="{{ $getValue('passport_expiry_date') ? (is_string($getValue('passport_expiry_date')) ? $getValue('passport_expiry_date') : $getValue('passport_expiry_date')->format('Y-m-d')) : '' }}">
+                                    </div>
                                 </div>
-                            </fieldset>
-                        </section>
+            </div>{{-- /Identification tab --}}
 
-                        <h3>{{ __('Address & Contact') }}</h3>
-                        <section class="form-step">
+            <div class="tab-pane fade" id="contact" role="tabpanel">
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-phone-alt me-2"></i> <strong>How we can reach the applicant.</strong> Use an active phone number and email.
+                </div>
+                
                             <p class="step-caption">{{ __('Provide current and permanent address information so we can reach you physically or through mail.') }}</p>
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Current Residence') }}</legend>
+                            
+                                
                                 <div class="row">
                                     <div class="form-group col-md-4">
                                         <label for="country">{{ __('field_country') }} <span>*</span></label>
-                                        <input type="text" class="form-control" name="country" id="country" value="{{ $getValue('country', 'Cameroon') }}" required>
+                                        @include('partials.country-select', ['name' => 'country', 'id' => 'country', 'value' => $getValue('country'), 'required' => true])
                                         <div class="invalid-feedback">{{ __('Enter the country where you currently reside.') }}</div>
                                     </div>
                                     <div class="form-group col-md-4">
@@ -547,10 +770,10 @@
                                         <input type="text" class="form-control" name="present_address" id="present_address" value="{{ $getValue('present_address') }}">
                                     </div>
                                 </div>
-                            </fieldset>
+                            
 
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Permanent Address & Postal Details') }}</legend>
+                            
+                                
                                 <div class="form-check mb-3">
                                     <input class="form-check-input" type="checkbox" value="1" id="same_as_residence">
                                     <label class="form-check-label" for="same_as_residence">{{ __('Same as Current Residence') }}</label>
@@ -582,10 +805,10 @@
                                         </div>
                                     @endif
                                 </div>
-                            </fieldset>
+                            
 
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Contact Channels') }}</legend>
+                            
+                                
                                 <div class="row">
                                     <div class="form-group col-md-4">
                                         <label for="phone">{{ __('Primary Phone Number') }} <span>*</span></label>
@@ -623,12 +846,26 @@
                                         </div>
                                     @endif
                                 </div>
-                            </fieldset>
-                        </section>
-
-                        @if(optional(field('application_guardians'))->status == 1)
-                            <h3>{{ __('Guardians & Emergency Contacts') }}</h3>
-                            <section class="form-step">
+                            
+                        
+            </div>
+        </div>
+        
+        <div class="wizard-footer">
+            <div></div> <!-- Empty div for flex-between spacing when no back button -->
+            <button type="button" class="btn btn-primary btn-next">Save and continue <i class="fas fa-arrow-right ms-2"></i></button>
+        </div>
+    </div>
+    
+    @if(optional(field('application_guardians'))->status == 1)
+    <div class="wizard-step" id="step-2">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>Family & Financial Support</h2>
+            <p>Tell us about the applicant's parents and the people responsible for their care and school fees.</p>
+        </div>
+        
                                 <p class="step-caption">{{ __('Provide details for your parents, legal guardians, or sponsors who can be contacted during the admission process.') }}</p>
                                 <div id="guardianRepeater">
                                     @foreach($oldGuardians as $index => $guardian)
@@ -702,90 +939,176 @@
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label>{{ __('Country') }}</label>
-                                                    <input type="text" class="form-control" name="guardians[{{ $index }}][country]" value="{{ $guardian['country'] ?? '' }}">
+                                                    @include('partials.country-select', ['name' => "guardians[{$index}][country]", 'value' => $guardian['country'] ?? null])
                                                 </div>
                                             </div>
                                         </div>
                                     @endforeach
                                 </div>
                                 <button type="button" class="btn btn-outline-primary" id="addGuardian">{{ __('Add another guardian / sponsor') }}</button>
-                            </section>
-                        @endif
+                            
+        
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-outline-secondary btn-prev"><i class="fas fa-arrow-left me-2"></i> Back</button>
+            <button type="button" class="btn btn-primary btn-next">Save and continue <i class="fas fa-arrow-right ms-2"></i></button>
+        </div>
+    </div>
+    @endif
 
-                        @if(optional(field('application_academic_history'))->status == 1)
-                            <h3>{{ __('Academic Background') }}</h3>
-                            <section class="form-step">
-                                <p class="step-caption">{{ __('List all secondary and post-secondary institutions attended starting with the most recent.') }}</p>
-                                <div id="academicHistoryRepeater">
-                                    @foreach($oldAcademicHistory as $index => $history)
-                                        <div class="repeater-item academic-item" data-index="{{ $index }}">
-                                            <div class="repeater-actions" @if($loop->first && count($oldAcademicHistory) === 1) style="display: none;" @endif>
-                                                <button type="button" class="remove-academic" aria-label="{{ __('Remove record') }}">&times;</button>
-                                            </div>
-                                            <div class="row">
-                                                <div class="form-group col-md-6">
-                                                    <label>{{ __('Institution Name') }} <span>*</span></label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][institution_name]" value="{{ $history['institution_name'] ?? '' }}" required>
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('Country') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][country]" value="{{ $history['country'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('City') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][city]" value="{{ $history['city'] ?? '' }}">
-                                                </div>
-                                            </div>
-                                            <div class="row">
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('Language of Instruction') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][instruction_language]" value="{{ $history['instruction_language'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('From (Year)') }}</label>
-                                                    <input type="date" class="form-control" name="academic_history[{{ $index }}][date_from]" value="{{ $history['date_from'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('To (Year)') }}</label>
-                                                    <input type="date" class="form-control" name="academic_history[{{ $index }}][date_to]" value="{{ $history['date_to'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('Certificate Obtained') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][certificate_obtained]" value="{{ $history['certificate_obtained'] ?? '' }}">
-                                                </div>
-                                            </div>
-                                            <div class="row">
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('GCE O-Level / Probatoire Subjects Passed') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][gce_ol_detail]" value="{{ $history['gce_ol_detail'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('GCE A-Level / Baccalaureate Subjects Passed') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][gce_al_detail]" value="{{ $history['gce_al_detail'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('Probatoire Stream (if applicable)') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][probatoire_detail]" value="{{ $history['probatoire_detail'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('Baccalaureate Option (if applicable)') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][baccalaureate_detail]" value="{{ $history['baccalaureate_detail'] ?? '' }}">
-                                                </div>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>{{ __('Additional Notes') }}</label>
-                                                <textarea class="form-control" name="academic_history[{{ $index }}][notes]" rows="2">{{ $history['notes'] ?? '' }}</textarea>
-                                            </div>
+    @if(optional(field('application_academic_history'))->status == 1)
+    <div class="wizard-step" id="step-3">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>Academic Qualifications</h2>
+            <p>Schools attended, qualifications and supporting certificates.</p>
+        </div>
+        <div class="alert alert-info mb-4">
+            <i class="fas fa-graduation-cap me-2"></i>
+            <strong>{{ __('Complete each required qualification') }}</strong>
+            <p class="mb-2 mt-1 small">{{ __('Fill in every card shown below and upload the document named on each card. If your certificate has a different name, enter that name as the equivalent.') }}</p>
+            @if(count($qualificationCards))
+                <ul class="mb-0 small">
+                    @foreach($qualificationCards as $card)
+                        <li>{{ $card['description'] ?: $card['label'] }}</li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
+
+        <div class="form-section">
+            <h4 class="form-section-title">{{ __('Academic qualifications') }} <span class="text-danger">*</span></h4>
+            <p class="step-caption">{{ __('Complete every required qualification card below. Add an earlier qualification only if it supports this application.') }}</p>
+
+            <div id="academicHistoryRepeater">
+                {{-- Prescribed cards first, in the order an administrator set
+                     under Degree Types → Form Configuration. Their index must be
+                     stable so the uploads and the details post together. --}}
+                @foreach($qualificationCards as $index => $card)
+                    @include('application.partials.qualification-card', [
+                        'index' => $index,
+                        'card' => $card,
+                        'uploadedDocs' => $uploadedDocs,
+                    ])
+                @endforeach
+
+                {{-- Then anything the applicant added themselves. --}}
+                @foreach($qualificationExtras as $extraIndex => $extra)
+                    @include('application.partials.qualification-card', [
+                        'index' => count($qualificationCards) + $extraIndex,
+                        'card' => [
+                            'key' => null,
+                            'label' => __('Additional qualification'),
+                            'description' => null,
+                            'required' => false,
+                            'documents' => [],
+                            'history' => $extra,
+                        ],
+                        'uploadedDocs' => $uploadedDocs,
+                    ])
+                @endforeach
+            </div>
+
+            <div class="d-flex align-items-center gap-3 mt-2">
+                <button type="button" class="btn btn-outline-primary" id="addAcademicHistory">
+                    <i class="fas fa-plus me-1"></i> {{ __('Add another qualification') }}
+                </button>
+                <small class="text-muted">{{ __('You can add up to 5 qualifications.') }}</small>
+            </div>
+        </div>
+                            
+        
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-outline-secondary btn-prev"><i class="fas fa-arrow-left me-2"></i> Back</button>
+            <button type="button" class="btn btn-primary btn-next">Save and continue <i class="fas fa-arrow-right ms-2"></i></button>
+        </div>
+    </div>
+    @endif
+
+    <div class="wizard-step" id="step-4">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>Programme Choices</h2>
+            <p>Review your preferred programmes.</p>
+        </div>
+        <div class="alert alert-warning mb-4">
+            <i class="fas fa-exclamation-triangle me-2"></i> <strong>Choose carefully.</strong> These were chosen when you started this application. To apply for a different programme, start a new application from My Account.
+        </div>
+        
+                            <p class="step-caption">{{ __('These were chosen when you started this application and cannot be changed here. To apply for a different programme or intake, start a new application from My Account.') }}</p>
+                            @php
+                                $facultyTitle = optional($faculties->firstWhere('id', optional($application->program)->faculty_id))->title;
+                                $secondProgTitle = $application->second_program_choice_id ? optional($programs->firstWhere('id', $application->second_program_choice_id))->title : null;
+                                $thirdProgTitle = $application->third_program_choice_id ? optional($programs->firstWhere('id', $application->third_program_choice_id))->title : null;
+                            @endphp
+                            
+                                
+                                <div class="row">
+                                    <div class="form-group col-md-6">
+                                        <label>{{ __('Degree Type') }}</label>
+                                        <input type="text" class="form-control is-mirrored" value="{{ optional($degreeType)->title }}" readonly>
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label>{{ __('field_faculty') }}</label>
+                                        <input type="text" class="form-control is-mirrored" value="{{ $facultyTitle }}" readonly>
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label>{{ __('First Choice Programme') }}</label>
+                                        <input type="text" class="form-control is-mirrored" value="{{ optional($application->program)->title }}" readonly>
+                                    </div>
+
+                                    @if(optional(field('application_program_choice_second'))->status == 1)
+                                        <div class="form-group col-md-6">
+                                            <label>{{ __('Second Choice Programme') }}</label>
+                                            <input type="text" class="form-control is-mirrored" value="{{ $secondProgTitle ?? '—' }}" readonly>
                                         </div>
-                                    @endforeach
-                                </div>
-                                <button type="button" class="btn btn-outline-primary" id="addAcademicHistory">{{ __('Add another institution') }}</button>
-                            </section>
-                        @endif
+                                    @endif
 
-                        @if(optional(field('application_language_proficiency'))->status == 1)
-                            <h3>{{ __('Language Proficiency') }}</h3>
-                            <section class="form-step">
+                                    @if(optional(field('application_program_choice_third'))->status == 1)
+                                        <div class="form-group col-md-6">
+                                            <label>{{ __('Third Choice Programme') }}</label>
+                                            <input type="text" class="form-control is-mirrored" value="{{ $thirdProgTitle ?? '—' }}" readonly>
+                                        </div>
+                                    @endif
+
+                                    @if(optional(field('application_academic_year'))->status == 1)
+                                        <div class="form-group col-md-6">
+                                            <label>{{ __('Academic Year Applied For') }}</label>
+                                            <input type="text" class="form-control is-mirrored" value="{{ $application->academic_year }}" readonly>
+                                        </div>
+                                    @endif
+                                </div>
+
+                                {{-- Hidden inputs carry the intake choices so the submission stays valid --}}
+                                <input type="hidden" name="program" value="{{ $application->program_id }}">
+                                @if(optional(field('application_program_choice_second'))->status == 1)
+                                    <input type="hidden" name="second_program_choice_id" value="{{ $application->second_program_choice_id }}">
+                                @endif
+                                @if(optional(field('application_program_choice_third'))->status == 1)
+                                    <input type="hidden" name="third_program_choice_id" value="{{ $application->third_program_choice_id }}">
+                                @endif
+                                @if(optional(field('application_academic_year'))->status == 1)
+                                    <input type="hidden" name="academic_year" value="{{ $application->academic_year }}">
+                                @endif
+                            
+                        
+        
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-outline-secondary btn-prev"><i class="fas fa-arrow-left me-2"></i> Back</button>
+            <button type="button" class="btn btn-primary btn-next">Save and continue <i class="fas fa-arrow-right ms-2"></i></button>
+        </div>
+    </div>
+    
+    @if(optional(field('application_language_proficiency'))->status == 1)
+    <div class="wizard-step" id="step-5">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>Languages</h2>
+            <p>Languages you studied and use.</p>
+        </div>
+        
                                 <p class="step-caption">{{ __('Indicate languages you speak or understand and your proficiency level.') }}</p>
                                 <div id="languageRepeater">
                                     @foreach($oldLanguages as $index => $language)
@@ -816,63 +1139,106 @@
                                     @endforeach
                                 </div>
                                 <button type="button" class="btn btn-outline-primary" id="addLanguage">{{ __('Add another language') }}</button>
-                            </section>
-                        @endif
+                            
+        
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-outline-secondary btn-prev"><i class="fas fa-arrow-left me-2"></i> Back</button>
+            <button type="button" class="btn btn-primary btn-next">Save and continue <i class="fas fa-arrow-right ms-2"></i></button>
+        </div>
+    </div>
+    @endif
 
-                        <h3>{{ __('Documents & Declaration') }}</h3>
-                        <section class="form-step">
-                            <p class="step-caption">{{ __('Upload the required documents, review your declaration, and set up your applicant portal access.') }}</p>
-
-                            <fieldset class="scheduler-border">
-                                <legend>{{ __('Passport Photo & Signature') }}</legend>
-                                <div class="row">
-                                    <div class="form-group col-md-6">
-                                        <label for="photo">{{ __('Recent Passport Photograph (max 5MB)') }} <span>*</span></label>
-                                        <input type="file" class="form-control size-guard" data-max-size-mb="5" name="photo" id="photo" accept="image/jpeg,image/png,image/*" required>
-                                        <div class="invalid-feedback">{{ __('Upload a recent passport style photograph.') }}</div>
-                                    </div>
-                                    <div class="form-group col-md-6">
-                                        <label for="signature">{{ __('Signature Sample (max 2MB)') }}</label>
-                                        <input type="file" class="form-control size-guard" data-max-size-mb="2" name="signature" id="signature" accept="image/jpeg,image/png,image/*">
-                                    </div>
-                                </div>
-                            </fieldset>
+    <div class="wizard-step" id="step-6">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>Documents</h2>
+            <p>Review uploaded files and provide remaining documents.</p>
+        </div>
+        <div id="documents-original-container">
 
                             @if(optional(field('application_document_checklist'))->status == 1)
-                                <fieldset class="scheduler-border">
-                                    <legend>{{ __('Document Checklist') }}</legend>
-                                    <p class="document-help">{{ __('Upload clear scans or photos. Accepted formats: JPG, PNG, PDF. Maximum size per file: 10MB.') }}</p>
-                                    @php
-                                        // Get already uploaded documents for this application
-                                        $uploadedDocs = $application->documents ? $application->documents->keyBy('document_type') : collect();
-                                    @endphp
-                                    <div class="row">
-                                        @foreach($documentRequirements as $key => $document)
-                                            @php
-                                                $existingDoc = $uploadedDocs->get($key);
-                                                $hasExistingFile = $existingDoc && $existingDoc->file_path;
-                                            @endphp
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label for="document_{{ $key }}" class="form-label">{{ $document['label'] }} @if($document['required'] && !$hasExistingFile)<span>*</span>@endif</label>
-                                                    @if($hasExistingFile)
-                                                        <div class="alert alert-success py-2 px-3 mb-2">
-                                                            <i class="fas fa-check-circle me-1"></i> {{ __('Document uploaded') }}
-                                                            <a href="{{ asset('uploads/student/'.$existingDoc->file_path) }}" target="_blank" class="ms-2 btn btn-sm btn-outline-primary">
-                                                                <i class="fas fa-eye"></i> {{ __('View') }}
-                                                            </a>
-                                                            <small class="d-block text-muted mt-1">{{ __('Upload a new file below to replace') }}</small>
-                                                        </div>
+
+                                    {{-- Reconciliation panel: identity files were already collected on
+                                         Applicant Information → Identification, so this step reports
+                                         them rather than asking for them a second time. --}}
+                                    @if(count($identityDocuments) || $application->photo)
+                                        <div class="alert alert-info mb-4">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>{{ __('Collected under Applicant Information') }}</strong>
+                                            <p class="mb-2 mt-1 small">{{ __('These files were received under Applicant Information → Identification. Go back to that step to replace any of them.') }}</p>
+                                            <ul class="mb-0 small">
+                                                <li>
+                                                    @if($application->photo)
+                                                        <i class="fas fa-check text-success me-1"></i>
+                                                    @else
+                                                        <i class="fas fa-exclamation-triangle text-warning me-1"></i>
                                                     @endif
-                                                    <input type="file" class="form-control document-input" data-document-key="{{ $key }}" data-has-existing="{{ $hasExistingFile ? '1' : '0' }}" data-max-size-mb="10" name="documents[{{ $key }}][file]" id="document_{{ $key }}" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" @if($document['required'] && !$hasExistingFile) required @endif>
-                                                    @if(!empty($document['description']))
-                                                        <small class="document-help">{{ $document['description'] }}</small>
-                                                    @endif
-                                                    <textarea class="form-control mt-2" name="documents[{{ $key }}][note]" rows="1" placeholder="{{ __('Notes (optional)') }}">{{ old('documents.'.$key.'.note', $existingDoc->notes ?? '') }}</textarea>
+                                                    {{ __('Applicant photograph') }}
+                                                    <span class="text-muted">— {{ $application->photo ? __('uploaded') : __('still required') }}</span>
+                                                </li>
+                                                @foreach($identityDocuments as $key => $document)
+                                                    @php
+                                                        $identityDoc = $uploadedDocs->get($key);
+                                                        $identityUploaded = $identityDoc && $identityDoc->file_path;
+                                                    @endphp
+                                                    <li>
+                                                        @if($identityUploaded)
+                                                            <i class="fas fa-check text-success me-1"></i>
+                                                        @else
+                                                            <i class="fas fa-exclamation-triangle text-warning me-1"></i>
+                                                        @endif
+                                                        {{ $document['label'] }}
+                                                        <span class="text-muted">— {{ $identityUploaded ? __('uploaded') : ($document['required'] ? __('still required') : __('optional')) }}</span>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+
+                                    {{-- Same reconciliation for the qualification evidence: it belongs
+                                         to its card on the Academic Qualifications step, so this step
+                                         reports it instead of asking for the same certificate twice. --}}
+                                    @if(count($qualificationDocuments))
+                                        <div class="alert alert-info mb-4">
+                                            <i class="fas fa-graduation-cap me-2"></i>
+                                            <strong>{{ __('Collected under Academic Qualifications') }}</strong>
+                                            <p class="mb-2 mt-1 small">{{ __('These files were received with the qualification they belong to. Go back to that step to replace any of them.') }}</p>
+                                            <ul class="mb-0 small">
+                                                @foreach($qualificationCards as $card)
+                                                    @foreach($card['documents'] as $key => $document)
+                                                        @php
+                                                            $qualDoc = $uploadedDocs->get($key);
+                                                            $qualUploaded = $qualDoc && $qualDoc->file_path;
+                                                        @endphp
+                                                        <li>
+                                                            @if($qualUploaded)
+                                                                <i class="fas fa-check text-success me-1"></i>
+                                                            @else
+                                                                <i class="fas fa-exclamation-triangle text-warning me-1"></i>
+                                                            @endif
+                                                            {{ $card['label'] }} — {{ $document['label'] }}
+                                                            <span class="text-muted">— {{ $qualUploaded ? __('uploaded') : ($document['required'] ? __('still required') : __('optional')) }}</span>
+                                                        </li>
+                                                    @endforeach
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+
+                                    @if(count($remainingDocuments))
+                                        <h4 class="form-section-title">{{ __('Remaining application documents') }}</h4>
+                                        <p class="document-help">{{ __('Upload clear scans or photos. Accepted formats: JPG, PNG, PDF. Maximum size per file: 10MB.') }}</p>
+                                        <div class="row">
+                                            @foreach($remainingDocuments as $key => $document)
+                                                <div class="col-md-6">
+                                                    @include('application.partials.document-input', ['key' => $key, 'document' => $document, 'uploadedDocs' => $uploadedDocs])
                                                 </div>
-                                            </div>
-                                        @endforeach
-                                    </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <p class="text-muted">{{ __('No further documents are required for this programme.') }}</p>
+                                    @endif
                                     <div class="card document-summary mt-3">
                                         <div class="card-body">
                                             <h5 class="card-title mb-3">{{ __('Checklist Status') }}</h5>
@@ -917,48 +1283,339 @@
                                             </div>
                                         </div>
                                     </div>
-                                </fieldset>
+                                
                             @endif
 
 
 
-                            @if(optional(field('application_declaration'))->status == 1)
-                                <fieldset class="scheduler-border">
-                                    <legend>{{ __('Declaration') }}</legend>
-                                    <p>{{ __('I certify that the information provided in this application is true and complete. I understand that withholding or misrepresenting information may result in the cancellation of admission.') }}</p>
-                                    <div class="row">
-                                        <div class="form-group col-md-6">
-                                            <label for="declaration_name">{{ __('Full Name of Applicant') }} <span>*</span></label>
-                                            <input type="text" class="form-control" name="declaration_name" id="declaration_name" value="{{ $getValue('declaration_name', $getValue('first_name').' '.$getValue('last_name')) }}" required>
-                                        </div>
-                                        <div class="form-group col-md-6">
-                                            <label for="declaration_signed_date">{{ __('Date') }} <span>*</span></label>
-                                            <input type="date" class="form-control" name="declaration_signed_date" id="declaration_signed_date" value="{{ $getValue('declaration_signed_date') ? (is_string($getValue('declaration_signed_date')) ? $getValue('declaration_signed_date') : $getValue('declaration_signed_date')->format('Y-m-d')) : now()->toDateString() }}" required>
-                                        </div>
-                                    </div>
-                                    <div class="form-check mt-3">
-                                        <input class="form-check-input" type="checkbox" value="1" id="agree_terms" name="agree_terms" {{ old('agree_terms') ? 'checked' : '' }} required>
-                                        <label class="form-check-label" for="agree_terms">{{ __('I agree that the information provided is accurate and I accept the institute’s admission policies.') }}</label>
-                                        <div class="invalid-feedback">{{ __('You must accept the declaration to submit your application.') }}</div>
-                                    </div>
-                                </fieldset>
-                            @endif
                             <div class="mt-4 text-end">
-                                <button type="button" class="btn btn-outline-secondary me-2" id="saveDraftFinalBtn"><i class="fas fa-save me-1"></i> {{ __('Save Draft') }}</button>
-                                @if(!empty($admissionFeeRequired))
-                                    <div class="alert alert-warning text-start mt-3 mb-2">
-                                        <i class="fas fa-exclamation-triangle me-1"></i>
-                                        {{ __('You must pay your admission fee before you can submit this application.') }}
-                                    </div>
-                                    <a href="{{ route('application.dashboard') }}#feeModal{{ $application->id }}" class="btn btn-warning">
-                                        <i class="fas fa-mobile-alt me-1"></i>{{ __('Proceed to pay application fee') }}
-                                    </a>
-                                @else
-                                    <button type="button" class="btn btn-primary d-none" id="wizardSubmitButton">{{ __('Submit Application') }}</button>
-                                @endif
+                                {{-- Payment lives on its own step. This block used to carry
+                                     a fee warning and a link out to the dashboard fee modal,
+                                     left over from the single-page form — it sent applicants
+                                     away from the wizard two steps before Payment. --}}
+                                <button type="button" class="btn btn-outline-secondary me-2" id="saveDraftFinalBtn">
+                                    <i class="fas fa-save me-1"></i> {{ __('Save Draft') }}
+                                </button>
                             </div>
-                        </section>
-                    </form>
+                        
+        </div>
+        
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-outline-secondary btn-prev"><i class="fas fa-arrow-left me-2"></i> Back</button>
+            <button type="button" class="btn btn-primary btn-next">Continue to Review <i class="fas fa-arrow-right ms-2"></i></button>
+        </div>
+    </div>
+    
+    <div class="wizard-step" id="step-7">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>Review & Confirm</h2>
+            <p>Check your application before submission.</p>
+        </div>
+        <div class="alert alert-info mb-4">
+            <i class="fas fa-check-double me-2"></i> <strong>Check the details before you confirm.</strong> Unless resubmission is requested, you cannot change your information once you confirm.
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+            <div>
+                <strong>{{ __('Keep a copy') }}</strong>
+                <p class="text-muted small mb-0">{{ __('Print or download the information currently saved in your application.') }}</p>
+            </div>
+            <div>
+                {{-- Opens the same printable document the admissions office reads. --}}
+                <a href="{{ route('application.print', $application) }}" target="_blank" rel="noopener"
+                   class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-print me-1"></i> {{ __('Print') }}
+                </a>
+                <a href="{{ route('application.print', $application) }}?download=1" target="_blank" rel="noopener"
+                   class="btn btn-outline-secondary btn-sm ms-1">
+                    <i class="fas fa-file-pdf me-1"></i> {{ __('Download PDF') }}
+                </a>
+            </div>
+        </div>
+
+        <div id="review-summary-container">
+            <!-- Populated by JS -->
+            <div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Generating summary...</p></div>
+        </div>
+        
+        {{-- The declaration belongs with the confirmation that governs it.
+             It was previously two steps earlier, on Documents. --}}
+        @if(optional(field('application_declaration'))->status == 1)
+            
+                
+                <p>{{ __('I certify that the information provided in this application is true and complete. I understand that withholding or misrepresenting information may result in the cancellation of admission.') }}</p>
+                <div class="row">
+                    <div class="form-group col-md-6">
+                        <label for="declaration_name">{{ __('Full Name of Applicant') }} <span>*</span></label>
+                        <input type="text" class="form-control" name="declaration_name" id="declaration_name" value="{{ $getValue('declaration_name', $getValue('first_name').' '.$getValue('last_name')) }}" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="declaration_signed_date">{{ __('Date') }} <span>*</span></label>
+                        <input type="date" class="form-control" name="declaration_signed_date" id="declaration_signed_date" value="{{ $getValue('declaration_signed_date') ? (is_string($getValue('declaration_signed_date')) ? $getValue('declaration_signed_date') : $getValue('declaration_signed_date')->format('Y-m-d')) : now()->toDateString() }}" required>
+                    </div>
+                </div>
+                <div class="form-check mt-3">
+                    {{-- The tick is remembered on the draft, so it has to survive a
+                         reload, and un-ticking has to be posted as well as ticking —
+                         an unchecked box sends nothing at all on its own. --}}
+                    <input type="hidden" name="agree_terms" value="0">
+                    <input class="form-check-input" type="checkbox" value="1" id="agree_terms" name="agree_terms" {{ old('agree_terms', \App\Services\ApplicationCompleteness::hasAgreedToTerms($application) ? 1 : 0) ? 'checked' : '' }} required>
+                    <label class="form-check-label fw-bold" for="agree_terms">
+                        {{ __('I verify that all information is correct and complete, I accept the institute’s admission policies, and I consent to :institution processing this application.', ['institution' => optional($setting ?? null)->title ?? config('app.name')]) }}
+                        <span class="text-danger">*</span>
+                    </label>
+                    <div class="invalid-feedback">{{ __('You must accept the declaration to submit your application.') }}</div>
+                </div>
+            
+        @endif
+
+
+        
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-outline-secondary btn-prev"><i class="fas fa-arrow-left me-2"></i> Back</button>
+            @if(!empty($admissionFeeSettings['fee_enabled']))
+                <button type="button" class="btn btn-primary btn-next" id="continue-to-payment-btn" disabled>{{ __('Continue to payment') }} <i class="fas fa-arrow-right ms-2"></i></button>
+            @else
+                <button type="submit" class="btn btn-success" id="submit-application-btn" disabled>{{ __('Submit Application') }} <i class="fas fa-paper-plane ms-2"></i></button>
+            @endif
+        </div>
+    </div>
+
+    @if(!empty($admissionFeeSettings['fee_enabled']))
+    <div class="wizard-step" id="step-8"
+         data-fee-id="{{ $admissionFee->id ?? '' }}"
+         data-application-id="{{ $application->id }}">
+        <div class="step-header">
+            <span class="badge bg-light text-primary border mb-2 step-counter"></span>
+            <span class="badge bg-light text-primary border mb-2 step-status"></span>
+            <h2>{{ __('Payment') }}</h2>
+            <p>{{ __('Application fee') }}: {{ number_format($admissionFeeSettings['fee_amount'], 0) }} FCFA</p>
+        </div>
+
+        @php
+            $feePaid = empty($admissionFeeRequired);
+            $mtnMomoEnabled = (bool) config('momo.providers.mtn.enabled');
+            $orangeMomoEnabled = (bool) config('momo.providers.orange.enabled');
+            $anyMomoEnabled = $mtnMomoEnabled || $orangeMomoEnabled;
+            $receiptPending = $latestPaymentReceipt && $latestPaymentReceipt->verification_status === 'pending';
+            $receiptRejected = $latestPaymentReceipt && $latestPaymentReceipt->verification_status === 'rejected';
+            // An applicant may not pay until the form is finished, because
+            // approving the fee submits the application there and then.
+            $paymentBlockers = \App\Services\ApplicationCompleteness::missing($application);
+        @endphp
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <small class="text-uppercase text-muted fw-bold" style="font-size:.75rem;letter-spacing:1px;">{{ __('Application fee') }}</small>
+                    <div class="fs-4 fw-bold">{{ number_format($admissionFeeSettings['fee_amount'], 0) }} FCFA</div>
+                    @if($admissionFee && $admissionFee->due_date)
+                        <small class="text-muted">{{ __('Due') }}: {{ \Carbon\Carbon::parse($admissionFee->due_date)->format('M j, Y') }}</small>
+                    @endif
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <small class="text-uppercase text-muted fw-bold" style="font-size:.75rem;letter-spacing:1px;">{{ __('Outstanding balance') }}</small>
+                    <div class="fs-4 fw-bold" id="fee-balance-display">{{ number_format($admissionFeeBalance, 0) }} FCFA</div>
+                    <small class="text-muted">
+                        @if($feePaid)
+                            <span class="text-success"><i class="fas fa-check-circle me-1"></i>{{ __('Payment confirmed') }}</span>
+                        @elseif($receiptPending)
+                            <span class="text-warning"><i class="fas fa-hourglass-half me-1"></i>{{ __('Receipt awaiting verification') }}</span>
+                        @else
+                            @if($paymentBlockers){{ __('Complete your application to pay') }}@else{{ __('Payment required before submission') }}@endif
+                        @endif
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        @if($feePaid)
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>{{ __('Your admission fee is settled.') }}</strong>
+                {{ __('You can now submit your application.') }}
+            </div>
+        @else
+            <div id="payment-blocked" class="{{ $paymentBlockers ? '' : 'd-none' }}">
+                {{-- Payment is held back rather than merely warned about: once the
+                     fee is approved the application submits itself, so anything
+                     unfinished at that moment would reach admissions unfinished. --}}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>{{ __('Finish your application before paying.') }}</strong>
+                    <p class="mb-0 mt-1 small">{{ __('As soon as your payment is approved your application is submitted automatically — so there is nothing left to press, and nothing to come back for. That is why we ask for the last few details first.') }}</p>
+                </div>
+
+                <h6 class="fw-bold">{{ __('Still outstanding') }}</h6>
+                <ul class="list-group mb-4" id="payment-blockers-list">
+                    @foreach($paymentBlockers as $blocker)
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-circle-exclamation text-warning me-2"></i>{{ $blocker['label'] }}</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary go-to-step" data-step="{{ $blocker['step'] }}">
+                                {{ __('Go there') }}
+                            </button>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+
+            {{-- Both states are rendered and toggled, rather than one being
+                 chosen at render time. The applicant fills the form over AJAX,
+                 so a list of outstanding items decided when the page loaded is
+                 stale by the time they reach this step — it used to insist on
+                 fields they had just filled in until they reloaded. --}}
+            <div id="payment-controls" class="{{ $paymentBlockers ? 'd-none' : '' }}">
+            @if($receiptPending)
+                <div class="alert alert-warning">
+                    <i class="fas fa-hourglass-half me-2"></i>
+                    <strong>{{ __('Your receipt is awaiting verification.') }}</strong>
+                    <p class="mb-0 mt-1 small">{{ __('Admissions will confirm your payment, normally within 7 business days. You will be able to submit this application as soon as it is confirmed — no further action is needed from you now.') }}</p>
+                </div>
+            @elseif($receiptRejected)
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle me-2"></i>
+                    <strong>{{ __('Your last receipt was not accepted.') }}</strong>
+                    @if($latestPaymentReceipt->rejection_reason)
+                        <p class="mb-0 mt-1 small">{{ $latestPaymentReceipt->rejection_reason }}</p>
+                    @endif
+                    <p class="mb-0 mt-1 small">{{ __('Please pay again or upload a clearer receipt below.') }}</p>
+                </div>
+            @endif
+
+            {{-- data-status-exempt: these are payment-method choices, not sequential
+                 sub-steps, so the step badge keeps showing overall completion. --}}
+            <ul class="nav nav-pills step-tabs mb-4" id="paymentTabs" role="tablist" data-status-exempt="1">
+                @if($mtnMomoEnabled)
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#payMtn" type="button" role="tab">{{ __('MTN MoMo') }}</button>
+                    </li>
+                @endif
+                @if($orangeMomoEnabled)
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {{ !$mtnMomoEnabled ? 'active' : '' }}" data-bs-toggle="pill" data-bs-target="#payOrange" type="button" role="tab">{{ __('Orange Money') }}</button>
+                    </li>
+                @endif
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link {{ !$anyMomoEnabled ? 'active' : '' }}" data-bs-toggle="pill" data-bs-target="#payManual" type="button" role="tab">{{ __('Upload payment proof') }}</button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                @if($mtnMomoEnabled)
+                    <div class="tab-pane fade show active" id="payMtn" role="tabpanel">
+                        <p class="step-caption">{{ __('Pay instantly from your MTN Mobile Money account. Approve the prompt on your phone.') }}</p>
+                        <div class="row">
+                            <div class="form-group col-md-6">
+                                <label for="momo_msisdn_mtn">{{ __('MTN phone number') }}</label>
+                                <input type="tel" class="form-control momo-msisdn" id="momo_msisdn_mtn" data-skip-autosave="1" placeholder="670000000">
+                            </div>
+                        </div>
+                        <div class="momo-status alert alert-info d-none mt-3" role="alert"></div>
+                        <button type="button" class="btn btn-warning momo-pay-btn" data-provider="mtn">
+                            <i class="fas fa-mobile-alt me-1"></i>{{ __('Pay') }} {{ number_format($admissionFeeBalance, 0) }} FCFA
+                        </button>
+                    </div>
+                @endif
+
+                @if($orangeMomoEnabled)
+                    <div class="tab-pane fade {{ !$mtnMomoEnabled ? 'show active' : '' }}" id="payOrange" role="tabpanel">
+                        <p class="step-caption">{{ __('Pay instantly from your Orange Money account.') }}</p>
+                        <div class="row">
+                            <div class="form-group col-md-6">
+                                <label for="momo_msisdn_orange">{{ __('Orange phone number') }}</label>
+                                <input type="tel" class="form-control momo-msisdn" id="momo_msisdn_orange" data-skip-autosave="1" placeholder="690000000">
+                            </div>
+                        </div>
+                        <div class="momo-status alert alert-info d-none mt-3" role="alert"></div>
+                        <button type="button" class="btn btn-danger momo-pay-btn" data-provider="orange">
+                            <i class="fas fa-mobile-alt me-1"></i>{{ __('Pay') }} {{ number_format($admissionFeeBalance, 0) }} FCFA
+                        </button>
+                    </div>
+                @endif
+
+                <div class="tab-pane fade {{ !$anyMomoEnabled ? 'show active' : '' }}" id="payManual" role="tabpanel">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>{{ __('What to upload') }}</strong>
+                        <p class="mb-0 mt-1 small">{{ __('A clear PDF, JPG or PNG of the bank receipt or payment confirmation. Make sure the amount, date and payment reference are legible.') }}</p>
+                    </div>
+                    @if(!empty($admissionFeeSettings['fee_instructions']))
+                        <div class="mb-3">{!! $admissionFeeSettings['fee_instructions'] !!}</div>
+                    @endif
+
+                    {{-- Not a nested <form>: these inputs are namespaced under pay_* and
+                         posted over AJAX, so they never travel with the application. --}}
+                    <div class="row">
+                        <div class="form-group col-md-4">
+                            <label for="pay_payment_date">{{ __('Payment date') }} <span>*</span></label>
+                            <input type="date" class="form-control" id="pay_payment_date" data-skip-autosave="1" max="{{ date('Y-m-d') }}">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="pay_amount">{{ __('Amount') }}</label>
+                            {{-- The admission fee is set by the institution, not
+                                 negotiated at the point of payment. Left editable,
+                                 an applicant could declare any amount against a
+                                 receipt and leave admissions to reconcile it. --}}
+                            <input type="number" step="0.01" class="form-control" id="pay_amount" data-skip-autosave="1"
+                                   value="{{ $admissionFeeBalance }}" readonly>
+                            <small class="text-muted">{{ __('Set by the institution — this is the outstanding balance.') }}</small>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="pay_payment_method">{{ __('Payment method') }} <span>*</span></label>
+                            <select class="form-control" id="pay_payment_method" data-skip-autosave="1">
+                                <option value="4">{{ __('Bank Transfer') }}</option>
+                                <option value="2">{{ __('Cash') }}</option>
+                                <option value="3">{{ __('Cheque') }}</option>
+                                <option value="1">{{ __('Card') }}</option>
+                                <option value="5">{{ __('E-wallet') }}</option>
+                                <option value="6">{{ __('MTN MoMo') }}</option>
+                                <option value="7">{{ __('Orange Money') }}</option>
+                                <option value="8">{{ __('Other') }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="form-group col-md-6">
+                            <label for="pay_payment_reference">{{ __('Payment reference') }} <span>*</span></label>
+                            <input type="text" class="form-control" id="pay_payment_reference" data-skip-autosave="1" placeholder="{{ __('Receipt or transaction reference') }}">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="pay_receipt_file">{{ __('Proof of payment') }} <span>*</span></label>
+                            <input type="file" class="form-control" id="pay_receipt_file" data-skip-autosave="1" accept=".pdf,.jpg,.jpeg,.png">
+                            <small class="document-help">{{ __('PDF, JPG or PNG. Maximum file size 2 MB.') }}</small>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="form-group col-12">
+                            <label for="pay_student_note">{{ __('Additional note') }} <small class="text-muted">{{ __('Optional') }}</small></label>
+                            <textarea class="form-control" id="pay_student_note" data-skip-autosave="1" rows="2" placeholder="{{ __('Anything that helps Admissions verify the payment') }}"></textarea>
+                        </div>
+                    </div>
+                    <div id="receipt-upload-status" class="alert d-none" role="alert"></div>
+                    <button type="button" class="btn btn-primary" id="upload-receipt-btn">
+                        <i class="fas fa-upload me-1"></i>{{ __('Upload proof of payment') }}
+                    </button>
+                </div>
+            </div>
+            </div>
+        @endif
+
+        <div class="wizard-footer">
+            <button type="button" class="btn btn-outline-secondary btn-prev"><i class="fas fa-arrow-left me-2"></i> Back</button>
+            <button type="submit" class="btn btn-success" id="submit-application-btn" disabled>{{ __('Submit Application') }} <i class="fas fa-paper-plane ms-2"></i></button>
+        </div>
+    </div>
+    @endif
+
+        </div> <!-- End Content -->
+    </div> <!-- End Container -->
+    </form>
+    </div> <!-- Close page-wrapper -->
+    </div> <!-- Close main-body -->
                 </div>
             </div>
         </div>
@@ -973,8 +1630,789 @@
 </div>
 
 @include('admin.layouts.common.footer_script')
+
+    
+    <script>
+    "use strict";
+    $(document).ready(function () {
+
+        /* =============================================================
+         | Vertical wizard
+         |
+         | Steps are discovered from the DOM instead of being hard-coded,
+         | so when a degree type switches a whole section off (guardians,
+         | academic history, languages) the wizard simply has fewer steps
+         | and the numbering still reads 1..N.
+         |============================================================= */
+
+        var $form = $('#hnd-application-form');
+        var $steps = $('.wizard-step');
+        var stepIds = $steps.map(function () { return this.id; }).get();
+        var totalSteps = stepIds.length;
+
+        if (!$form.length || !totalSteps) {
+            return;
+        }
+
+        var feeRequired = {{ !empty($admissionFeeRequired) ? 'true' : 'false' }};
+        var currentIndex = 0;
+        var highestIndexReached = 0;
+
+        function stepIdAt(index) {
+            return stepIds[index];
+        }
+
+        function indexOfStepId(id) {
+            return stepIds.indexOf(id);
+        }
+
+        /** Native trim, so the code does not rely on $.trim (removed in jQuery 4). */
+        function trim(value) {
+            return String(value === null || value === undefined ? '' : value).trim();
+        }
+
+        function escapeHtml(value) {
+            return $('<div>').text(value === null || value === undefined ? '' : value).html();
+        }
+
+        function notify(type, message) {
+            if (window.toastr && typeof toastr[type] === 'function') {
+                toastr[type](message);
+            } else {
+                window.alert(message);
+            }
+        }
+
+        /** Human-readable label for a field, used in validation messages. */
+        function labelFor(element) {
+            var $el = $(element);
+            var text = '';
+            var id = $el.attr('id');
+
+            if ($el.closest('label').length) {
+                text = $el.closest('label').text();
+            }
+            if (!text && id) {
+                text = $('label[for="' + id + '"]').first().text();
+            }
+            if (!text) {
+                text = $el.closest('.form-group, .form-check').find('label').first().text();
+            }
+            if (!text) {
+                text = $el.attr('name') || 'this field';
+            }
+
+            return trim(text.replace(/\*/g, ''));
+        }
+
+        /**
+         * A field counts as active unless something other than a collapsed
+         * wizard step or an inactive tab pane is hiding it. Those two are
+         * "not scrolled to yet", not "not applicable" — fields inside them
+         * must still be validated before the applicant leaves the step.
+         */
+        function isFieldActive(element) {
+            if (element.disabled) {
+                return false;
+            }
+
+            var node = element;
+            while (node && node !== document.body) {
+                var $node = $(node);
+                if (!$node.hasClass('wizard-step') && !$node.hasClass('tab-pane')) {
+                    if ($node.css('display') === 'none') {
+                        return false;
+                    }
+                }
+                node = node.parentElement;
+            }
+
+            return true;
+        }
+
+        /**
+         * Marks every unfilled required field inside $container and returns
+         * the first one, or null when the container is complete.
+         */
+        function validateContainer($container) {
+            var firstInvalid = null;
+
+            $container.find('input[required], select[required], textarea[required]').each(function () {
+                var $field = $(this);
+
+                if (!isFieldActive(this)) {
+                    $field.removeClass('is-invalid');
+                    return;
+                }
+
+                var ok;
+                if (this.type === 'radio' || this.type === 'checkbox') {
+                    ok = $form.find('input[name="' + this.name + '"]:checked').length > 0;
+                } else if (this.type === 'file') {
+                    ok = !!this.value || String($field.attr('data-has-existing')) === '1';
+                } else {
+                    ok = trim($field.val() || '') !== '';
+                }
+
+                $field.toggleClass('is-invalid', !ok);
+                if (!ok && !firstInvalid) {
+                    firstInvalid = this;
+                }
+            });
+
+            // Being filled in is not the same as being right. A date outside its
+            // allowed range or a malformed email used to pass here and fail only
+            // once the draft reached the server — by which time the applicant had
+            // already been moved on to the next step.
+            $container.find('input, select, textarea').each(function () {
+                var $field = $(this);
+
+                if (!isFieldActive(this) || typeof this.checkValidity !== 'function') {
+                    return;
+                }
+                // Emptiness is the loop above's business, not this one's.
+                if (this.type !== 'checkbox' && this.type !== 'radio' && trim($field.val() || '') === '') {
+                    return;
+                }
+                if (this.checkValidity()) {
+                    return;
+                }
+
+                $field.addClass('is-invalid');
+                if (!firstInvalid) {
+                    firstInvalid = this;
+                }
+            });
+
+            return firstInvalid;
+        }
+
+        /**
+         * Why a field is blocking the step.
+         *
+         * The browser already phrases range and format problems well ("Value must
+         * be 2026-08-19 or earlier"), so pass those through rather than replacing
+         * them with a generic "please complete".
+         */
+        function invalidMessage(element) {
+            var label = labelFor(element);
+            var reason = element && element.validationMessage ? trim(element.validationMessage) : '';
+            var filled = trim($(element).val() || '') !== '';
+
+            if (filled && reason) {
+                return 'Check "' + label + '": ' + reason;
+            }
+
+            return 'Please complete "' + label + '" before continuing.';
+        }
+
+        /** Activate a Bootstrap pill, with fallbacks so navigation never dead-ends. */
+        function showTab($button) {
+            if (!$button || !$button.length) {
+                return;
+            }
+
+            if (window.bootstrap && bootstrap.Tab) {
+                bootstrap.Tab.getOrCreateInstance($button[0]).show();
+            } else if (typeof $button.tab === 'function') {
+                $button.tab('show');
+            } else {
+                var target = $button.attr('data-bs-target');
+                $button.closest('.step-tabs').find('.nav-link').removeClass('active');
+                $button.addClass('active');
+                $(target).closest('.tab-content').find('.tab-pane').removeClass('show active');
+                $(target).addClass('show active');
+            }
+
+            // Programmatic tab moves must update the badge too — the click and
+            // shown.bs.tab handlers only cover tabs the applicant clicks. Called
+            // twice on purpose: now for the synchronous fallbacks, and again on
+            // the next tick for Bootstrap, whose shown event is asynchronous.
+            refreshStepStatus();
+            window.setTimeout(refreshStepStatus, 0);
+        }
+
+        /** Bring an invalid field into view, opening its tab first if needed. */
+        function revealField(element) {
+            var $pane = $(element).closest('.tab-pane');
+
+            if ($pane.length && !$pane.hasClass('active')) {
+                showTab($('[data-bs-target="#' + $pane.attr('id') + '"]'));
+            }
+
+            setTimeout(function () {
+                try {
+                    element.focus();
+                } catch (e) { /* focusing a hidden control is not fatal */ }
+            }, 250);
+        }
+
+        /** Step counters and sidebar indicators, numbered over the steps that exist. */
+        function paintStaticLabels() {
+            $steps.each(function (index) {
+                $(this).find('.step-counter').text('STEP ' + (index + 1) + ' OF ' + totalSteps);
+            });
+
+            $('.wizard-nav .nav-link').each(function () {
+                var index = indexOfStepId('step-' + $(this).data('step'));
+                if (index > -1) {
+                    $(this).find('.step-indicator').text(index + 1);
+                }
+            });
+        }
+
+        /**
+         * The right-hand badge on the current step: the sub-tab position when the
+         * step has tabs ("Profile · 1 of 3"), otherwise overall completion.
+         */
+        function refreshStepStatus() {
+            var $step = $('#' + stepIdAt(currentIndex));
+            var $tabs = $step.find('.step-tabs:not([data-status-exempt]) .nav-link');
+            var $badge = $step.find('.step-status');
+
+            if ($tabs.length) {
+                var position = $tabs.index($step.find('.step-tabs:not([data-status-exempt]) .nav-link.active'));
+                if (position < 0) {
+                    position = 0;
+                }
+                $badge.text(trim($tabs.eq(position).text()) + ' · ' + (position + 1) + ' of ' + $tabs.length);
+                return;
+            }
+
+            $badge.text(trim($('#draft-progress-text').text()) + ' complete');
+        }
+
+        function updateWizardUI() {
+            if (currentIndex > highestIndexReached) {
+                highestIndexReached = currentIndex;
+            }
+
+            $steps.removeClass('active');
+            $('#' + stepIdAt(currentIndex)).addClass('active');
+
+            $('.wizard-nav .nav-link').each(function () {
+                var index = indexOfStepId('step-' + $(this).data('step'));
+                $(this)
+                    .toggleClass('active', index === currentIndex)
+                    .toggleClass('completed', index > -1 && index <= highestIndexReached && index !== currentIndex);
+            });
+
+            $('#sidebar-step-position').text('Step ' + (currentIndex + 1) + ' of ' + totalSteps);
+            refreshStepStatus();
+
+            if (stepIdAt(currentIndex) === 'step-7') {
+                generateReviewSummary();
+            }
+
+            $(document).trigger('wizard:step-shown', [stepIdAt(currentIndex)]);
+
+            var $anchor = $('.wizard-container');
+            if ($anchor.length) {
+                $('html, body').animate({ scrollTop: $anchor.offset().top - 50 }, 300);
+            }
+        }
+
+        function goToIndex(index) {
+            if (index < 0 || index >= totalSteps || index === currentIndex) {
+                return;
+            }
+            currentIndex = index;
+            updateWizardUI();
+        }
+
+        /** Persist through the draft module in the auto-save block, when present. */
+        function saveDraftQuietly() {
+            var bridge = window.PaxApplicationDraft;
+            if (!bridge || typeof bridge.save !== 'function') {
+                return null;
+            }
+
+            var request = bridge.save(false);
+            return (request && typeof request.always === 'function') ? request : null;
+        }
+
+        /* ---- Navigation ------------------------------------------------ */
+
+        $('.btn-next').on('click', function () {
+            var $button = $(this);
+            var $step = $('#' + stepIdAt(currentIndex));
+            var $activePane = $step.find('.tab-pane.active');
+
+            // 1. Immediate feedback on what the applicant can actually see.
+            if ($activePane.length) {
+                var paneInvalid = validateContainer($activePane);
+                if (paneInvalid) {
+                    notify('error', invalidMessage(paneInvalid));
+                    revealField(paneInvalid);
+                    return;
+                }
+
+                // 2. Move across the remaining tabs before moving down a step.
+                var $activeTab = $step.find('.step-tabs:not([data-status-exempt]) .nav-link.active');
+                var $nextTab = $activeTab.parent().nextAll('.nav-item').first().find('.nav-link');
+                if ($nextTab.length) {
+                    $activeTab.addClass('completed');
+                    showTab($nextTab);
+                    $('html, body').animate({ scrollTop: $step.offset().top - 50 }, 300);
+                    return;
+                }
+                $activeTab.addClass('completed');
+            }
+
+            // 3. Leaving the step: check every pane, including any the applicant
+            //    skipped past by clicking a tab directly.
+            var stepInvalid = validateContainer($step);
+            if (stepInvalid) {
+                notify('error', invalidMessage(stepInvalid));
+                revealField(stepInvalid);
+                return;
+            }
+
+            // 4. "Save and continue" saves first, and only continues if the
+            //    save was accepted. It used to advance on .always(), so a draft
+            //    the server rejected — a date of birth in the future, say — still
+            //    moved the applicant to the next step, leaving the bad value
+            //    behind them and unsaved.
+            $button.prop('disabled', true);
+
+            var advance = function () {
+                $button.prop('disabled', false);
+                goToIndex(currentIndex + 1);
+            };
+
+            var stayPut = function (message, fieldName) {
+                $button.prop('disabled', false);
+                notify('error', message);
+
+                // Put the applicant back on the field the server objected to,
+                // wherever it lives, rather than just naming it.
+                if (fieldName) {
+                    var $field = $form.find('[name="' + fieldName + '"]').first();
+                    if ($field.length) {
+                        $field.addClass('is-invalid');
+                        revealField($field[0]);
+                    }
+                }
+            };
+
+            var pending = saveDraftQuietly();
+            if (!pending) {
+                advance();
+                return;
+            }
+
+            pending.done(function (response) {
+                // The endpoint answers 200 with success:false for problems it
+                // handles itself, so a resolved promise is not proof of a save.
+                if (response && response.success === false) {
+                    stayPut(response.message || '{{ __('Your answers could not be saved. Please check them and try again.') }}');
+                    return;
+                }
+                advance();
+            }).fail(function (xhr) {
+                var payload = xhr.responseJSON || {};
+                var errors = payload.errors || {};
+                var firstField = Object.keys(errors)[0] || null;
+                var message = firstField
+                    ? [].concat(errors[firstField])[0]
+                    : (payload.message || '{{ __('Your answers could not be saved. Please check them and try again.') }}');
+
+                stayPut(message, firstField);
+            });
+        });
+
+        $('.btn-prev').on('click', function () {
+            var $step = $('#' + stepIdAt(currentIndex));
+            var $activeTab = $step.find('.step-tabs:not([data-status-exempt]) .nav-link.active');
+
+            if ($activeTab.length) {
+                var $prevTab = $activeTab.parent().prevAll('.nav-item').first().find('.nav-link');
+                if ($prevTab.length) {
+                    showTab($prevTab);
+                    $('html, body').animate({ scrollTop: $step.offset().top - 50 }, 300);
+                    return;
+                }
+            }
+
+            goToIndex(currentIndex - 1);
+        });
+
+        $('.wizard-nav .nav-link').on('click', function () {
+            var target = indexOfStepId('step-' + $(this).data('step'));
+
+            if (target === -1 || target === currentIndex) {
+                return;
+            }
+            if (target <= highestIndexReached) {
+                goToIndex(target);
+            } else {
+                notify('warning', 'Please complete the preceding steps before skipping ahead.');
+            }
+        });
+
+        /* ---- Declaration and submission gate --------------------------- */
+
+        // #agree_terms is the declaration: named, required, and validated on the
+        // server. #declaration-checkbox was an unnamed duplicate of it that has
+        // been removed; the lookup stays only so an older cached view cannot
+        // throw, and every use below is length-guarded.
+        var $declaration = $('#declaration-checkbox');
+        var $agreeTerms = $('#agree_terms');
+
+        // A degree type can switch the declaration off entirely, in which case
+        // there is nothing to tick — the gate must open rather than lock the
+        // applicant out of the step that follows.
+        var declarationRequired = $agreeTerms.length > 0 || $declaration.length > 0;
+        var $submitButton = $('#submit-application-btn');
+
+        var $continueToPayment = $('#continue-to-payment-btn');
+
+        function syncDeclaration(checked) {
+            if ($declaration.length) {
+                $declaration.prop('checked', checked);
+            }
+            if ($agreeTerms.length) {
+                $agreeTerms.prop('checked', checked).toggleClass('is-invalid', false);
+            }
+
+            // Confirming the declaration lets the applicant reach the payment step;
+            // actually submitting additionally requires a settled fee.
+            $continueToPayment.prop('disabled', !checked);
+            $submitButton.prop('disabled', !checked || feeRequired);
+        }
+
+        $declaration.on('change', function () {
+            syncDeclaration($(this).is(':checked'));
+        });
+        $agreeTerms.on('change', function () {
+            syncDeclaration($(this).is(':checked'));
+        });
+
+        // Restore the gate after a failed submit repopulated the form. With no
+        // declaration configured there is nothing to restore and nothing to
+        // withhold, so the gate opens.
+        syncDeclaration(
+            !declarationRequired
+                || ($agreeTerms.length ? $agreeTerms.is(':checked') : $declaration.is(':checked'))
+        );
+
+        if (feeRequired) {
+            // The Payment step already explains the outstanding balance in full,
+            // so this only needs to keep the button locked and say why on hover.
+            $submitButton
+                .prop('disabled', true)
+                .attr('title', "{{ __('Please pay your admission fee before submitting your application.') }}");
+        }
+
+        /* ---- Final gate: nothing incomplete reaches the server ---------- */
+
+        $form.on('submit', function (event) {
+            var invalid = validateContainer($steps);
+            if (!invalid) {
+                return;
+            }
+
+            event.preventDefault();
+            // Keep the auto-save module's submit handler from clearing the
+            // unsaved-changes flag on a submission that is not going through.
+            event.stopImmediatePropagation();
+
+            var ownerIndex = indexOfStepId($(invalid).closest('.wizard-step').attr('id'));
+            if (ownerIndex > -1) {
+                goToIndex(ownerIndex);
+            }
+
+            notify('error', 'Please complete "' + labelFor(invalid) + '" before submitting.');
+            revealField(invalid);
+        });
+
+        /* ---- Review summary -------------------------------------------- */
+
+        /** Current display value of a named field, resolved across input types. */
+        function displayValue(name) {
+            var $fields = $form.find('[name="' + name + '"]');
+            if (!$fields.length) {
+                return null;
+            }
+
+            var element = $fields[0];
+
+            if (element.type === 'radio' || element.type === 'checkbox') {
+                var $checked = $fields.filter(':checked');
+                if (!$checked.length) {
+                    return '';
+                }
+                var text = trim($checked.closest('label').text());
+                return text || $checked.val();
+            }
+
+            if (element.tagName === 'SELECT') {
+                return trim($fields.find('option:selected').text());
+            }
+
+            if (element.type === 'file') {
+                if (element.files && element.files.length) {
+                    return element.files[0].name;
+                }
+                return String($fields.attr('data-has-existing')) === '1' ? 'Already uploaded' : '';
+            }
+
+            return trim($fields.val() || '');
+        }
+
+        function buildSection(title, rows, stepId) {
+            if (!rows.length) {
+                return '';
+            }
+
+            var index = indexOfStepId(stepId);
+            var html = '<div class="review-section"><div class="review-section-header"><h5>' +
+                escapeHtml(title) + '</h5>';
+
+            if (index > -1) {
+                html += '<button type="button" class="btn btn-sm btn-link edit-step-btn" data-step-id="' +
+                    escapeHtml(stepId) + '">Edit</button>';
+            }
+
+            html += '</div><div class="review-section-body"><div class="row">';
+
+            rows.forEach(function (row) {
+                var value = row.value === null || row.value === undefined || row.value === ''
+                    ? '<span class="text-muted">Not provided</span>'
+                    : escapeHtml(row.value);
+
+                html += '<div class="col-md-4 review-item"><span class="review-label">' +
+                    escapeHtml(row.label) + '</span><span class="review-value">' + value + '</span></div>';
+            });
+
+            return html + '</div></div></div>';
+        }
+
+        /** Rows for named fields, skipping any the degree type did not render. */
+        function fieldRows(pairs) {
+            var rows = [];
+            pairs.forEach(function (pair) {
+                var value = displayValue(pair[0]);
+                if (value !== null) {
+                    rows.push({ label: pair[1], value: value });
+                }
+            });
+            return rows;
+        }
+
+        /** Rows summarising a repeater, one line per entry. */
+        function repeaterRows($items, label, describe) {
+            var rows = [];
+            $items.each(function (index) {
+                var text = describe($(this));
+                if (text) {
+                    rows.push({ label: label + ' ' + (index + 1), value: text });
+                }
+            });
+            return rows;
+        }
+
+        function generateReviewSummary() {
+            var html = '';
+
+            html += buildSection("Applicant's Information", fieldRows([
+                ['first_name', 'First Name'],
+                ['last_name', 'Last Name'],
+                ['gender', 'Gender'],
+                ['dob', 'Date of Birth'],
+                ['nationality', 'Nationality'],
+                ['birth_city', 'City of Birth'],
+                ['birth_division', 'Division of Birth'],
+                ['birth_region', 'Region of Birth'],
+                ['birth_country', 'Country of Birth'],
+                ['religion', 'Religion'],
+                ['mother_tongue', 'Mother Tongue'],
+                ['national_id', 'National ID'],
+                ['passport_no', 'Passport No.']
+            ]), 'step-1');
+
+            html += buildSection('Contact & Address', fieldRows([
+                ['country', 'Country of Residence'],
+                ['present_province', 'Current Province'],
+                ['present_district', 'Current District'],
+                ['present_village', 'Current Village'],
+                ['present_address', 'Current Address'],
+                ['permanent_province', 'Permanent Province'],
+                ['permanent_district', 'Permanent District'],
+                ['permanent_address', 'Permanent Address'],
+                ['phone', 'Phone'],
+                ['alternate_phone', 'Alternate Phone'],
+                ['email', 'Email']
+            ]), 'step-1');
+
+            // Programme choices are read-only mirrors, so read them off the labels.
+            var programmeRows = [];
+            $('#step-4 .is-mirrored').each(function () {
+                var $input = $(this);
+                programmeRows.push({
+                    label: trim($input.closest('.form-group').find('label').first().text()),
+                    value: trim($input.val() || '')
+                });
+            });
+            html += buildSection('Programme Choices', programmeRows, 'step-4');
+
+            html += buildSection('Family & Financial Support',
+                repeaterRows($('#guardianRepeater .guardian-item'), 'Guardian', function ($item) {
+                    var name = trim($item.find('[name*="[full_name]"]').val() || '');
+                    var type = trim($item.find('[name*="[type]"]').val() || '');
+                    var phone = trim($item.find('[name*="[phone_primary]"]').val() || '');
+                    if (!name) {
+                        return '';
+                    }
+                    return name + (type ? ' (' + type + ')' : '') + (phone ? ' — ' + phone : '');
+                }), 'step-2');
+
+            html += buildSection('Academic Qualifications',
+                repeaterRows($('#academicHistoryRepeater .academic-item'), 'Qualification', function ($item) {
+                    var certificate = trim($item.find('[name*="[certificate_obtained]"]').val() || '');
+                    var name = trim($item.find('[name*="[institution_name]"]').val() || '');
+                    var endYear = trim($item.find('[name*="[end_year]"]').val() || '');
+                    // Lead with the qualification: it is what the card is about,
+                    // and the school is the supporting detail.
+                    if (!certificate && !name) {
+                        return '';
+                    }
+                    return (certificate || name)
+                        + (certificate && name ? ' — ' + name : '')
+                        + (endYear ? ' (' + endYear + ')' : '');
+                }), 'step-3');
+
+            html += buildSection('Languages',
+                repeaterRows($('#languageRepeater .language-item'), 'Language', function ($item) {
+                    var language = trim($item.find('[name*="[language]"]').val() || '');
+                    var fluency = $item.find('[name*="[fluency_level]"] option:selected').text();
+                    if (!language) {
+                        return '';
+                    }
+                    return language + (trim(fluency) ? ' — ' + trim(fluency) : '');
+                }), 'step-5');
+
+            var documentRows = fieldRows([
+                ['photo', 'Passport Photograph'],
+                ['signature', 'Signature']
+            ]);
+            $('.document-input').each(function () {
+                var $input = $(this);
+                var label = trim($input.closest('.form-group, td, div').find('label').first().text().replace(/\*/g, ''));
+                var value;
+
+                if (this.files && this.files.length) {
+                    value = this.files[0].name;
+                } else if (String($input.attr('data-has-existing')) === '1') {
+                    value = 'Already uploaded';
+                } else {
+                    value = '';
+                }
+
+                documentRows.push({ label: label || $input.data('document-key'), value: value });
+            });
+            html += buildSection('Documents', documentRows, 'step-6');
+
+            html += buildSection('Declaration', fieldRows([
+                ['declaration_name', 'Full Name of Applicant'],
+                ['declaration_signed_date', 'Date']
+            ]), 'step-6');
+
+            $('#review-summary-container').html(html);
+        }
+
+        // Delegated so it survives every regeneration of the summary.
+        $('#review-summary-container').on('click', '.edit-step-btn', function () {
+            goToIndex(indexOfStepId($(this).data('step-id')));
+        });
+
+        // The payment step lists what is still outstanding before an applicant is
+        // allowed to pay; each entry jumps to the step that would fix it.
+        $(document).on('click', '.go-to-step', function () {
+            goToIndex(indexOfStepId('step-' + $(this).data('step')));
+        });
+
+        /* ---- Live readiness of the payment step -------------------------- */
+
+        /**
+         * Re-ask the server what is still outstanding, and show the payment
+         * controls or the outstanding list accordingly.
+         *
+         * The step is rendered with both, because the answer decided when the
+         * page loaded stops being true the moment the applicant fills anything
+         * in — the form saves over AJAX and never reloads. Without this the step
+         * kept naming details that had already been supplied, and only a manual
+         * refresh would let them pay.
+         */
+        function refreshPaymentReadiness() {
+            var $blocked = $('#payment-blocked');
+            var $controls = $('#payment-controls');
+
+            if (!$blocked.length && !$controls.length) {
+                return;   // fee already settled, or no fee for this degree type
+            }
+
+            $.getJSON("{{ route('application.readiness', $application) }}")
+                .done(function (data) {
+                    if (!data) { return; }
+
+                    $blocked.toggleClass('d-none', !!data.complete);
+                    $controls.toggleClass('d-none', !data.complete);
+
+                    if (data.complete) { return; }
+
+                    // Rebuild the list so it names what is outstanding *now*.
+                    var $list = $('#payment-blockers-list');
+                    if (!$list.length) { return; }
+
+                    $list.empty();
+                    $.each(data.missing || [], function (_, item) {
+                        $list.append(
+                            $('<li class="list-group-item d-flex justify-content-between align-items-center"></li>')
+                                .append($('<span></span>')
+                                    .append('<i class="fas fa-circle-exclamation text-warning me-2"></i>')
+                                    .append($('<span></span>').text(item.label)))
+                                .append($('<button type="button" class="btn btn-sm btn-outline-primary go-to-step"></button>')
+                                    .attr('data-step', item.step)
+                                    .text("{{ __('Go there') }}"))
+                        );
+                    });
+                });
+        }
+
+        // Whenever the payment step comes into view, and again after any save,
+        // so finishing a field on an earlier step unlocks payment without a reload.
+        $(document).on('wizard:step-shown', function (event, stepId) {
+            if (stepId === 'step-8') {
+                refreshPaymentReadiness();
+            }
+        });
+
+        $(document).on('application:draft-saved', function () {
+            if (stepIdAt(currentIndex) === 'step-8') {
+                refreshPaymentReadiness();
+            }
+        });
+
+        /* ---- Boot ------------------------------------------------------- */
+
+        // Keep the status badge in step with tab changes, however the tab was
+        // switched (Bootstrap event, or our own fallback in showTab()).
+        $(document).on('shown.bs.tab', '.step-tabs .nav-link', refreshStepStatus);
+        $(document).on('click', '.step-tabs .nav-link', function () {
+            window.setTimeout(refreshStepStatus, 0);
+        });
+
+        // Let the auto-save module refresh the badge after progress changes.
+        window.PaxApplicationWizard = { refreshStatus: refreshStepStatus };
+
+        paintStaticLabels();
+        updateWizardUI();
+    });
+    </script>
+    
 <script src="{{ asset('dashboard/plugins/jquery-validation/js/jquery.validate.min.js') }}"></script>
-<script src="{{ asset('dashboard/js/pages/jquery.steps.js') }}"></script>
+
 <script>
     "use strict";
 
@@ -988,6 +2426,10 @@
         const districtCache = {};
     const districtData = <?php echo json_encode($districtOptions ?? []); ?>;
         const documentRequirementsData = <?php echo json_encode($documentRequirements ?? []); ?>;
+
+        // Country options for rows added in the browser, built from the same
+        // list the server-rendered selects use so the two cannot diverge.
+        @include('partials.country-options-js')
         const presentDistrictSelect = document.getElementById('present_district');
         const permanentDistrictSelect = document.getElementById('permanent_district');
         if (presentDistrictSelect) {
@@ -1116,53 +2558,6 @@
                 });
             }
 
-            $form.steps({
-                headerTag: "h3",
-                bodyTag: "section",
-                transitionEffect: "slideLeft",
-                autoFocus: true,
-                labels: {
-                    finish: "{{ __('Submit Application') }}",
-                    next: "{{ __('btn_next') }}",
-                    previous: "{{ __('btn_previous') }}"
-                },
-                onInit: function(event, currentIndex) {
-                    toggleFinishButton(currentIndex);
-                },
-                onStepChanged: function(event, currentIndex) {
-                    toggleFinishButton(currentIndex);
-                },
-                onStepChanging: function(event, currentIndex, newIndex) {
-                    if (currentIndex > newIndex) {
-                        return true;
-                    }
-                    validator.settings.ignore = ":hidden,:disabled";
-                    return $form.valid();
-                },
-                onFinishing: function() {
-                    validator.settings.ignore = ":hidden,:disabled";
-                    var ok = $form.valid();
-                    if (!ok && window.console && validator.errorList) {
-                        console.warn('Application form invalid fields (finish):');
-                        validator.errorList.forEach(function(e){
-                            console.warn(' - name="' + (e.element && e.element.name) + '" id="' + (e.element && e.element.id) + '" — ' + e.message);
-                        });
-                        if (typeof console.table === 'function') {
-                            console.table(validator.errorList.map(function(e){ return { name: e.element && e.element.name, id: e.element && e.element.id, message: e.message }; }));
-                        }
-                    }
-                    return ok;
-                },
-                onFinished: function() {
-                    @if(!empty($admissionFeeRequired))
-                        alert("{{ __('Please pay your admission fee before submitting your application.') }}");
-                        window.location.href = "{{ route('application.dashboard') }}#feeModal{{ $application->id }}";
-                        return;
-                    @endif
-                    $form.trigger('submit');
-                }
-            });
-
             let initialIndex = 0;
             if (typeof $form.steps === 'function') {
                 const indexCandidate = $form.steps('getCurrentIndex');
@@ -1261,7 +2656,7 @@
                         </div>
                         <div class="form-group col-md-4">
                             <label>{{ __('Country') }}</label>
-                            <input type="text" class="form-control" name="guardians[${index}][country]">
+                            <select class="form-control" name="guardians[${index}][country]">${countryOptionsHtml()}</select>
                         </div>
                     </div>
                 </div>
@@ -1285,66 +2680,78 @@
             });
         };
 
+        // Mirrors resources/views/application/partials/qualification-card.blade.php
+        // for an applicant-added qualification: same field names, no configured
+        // document slots, so it falls back to its own certificate upload.
         const academicTemplate = () => {
             const index = $(academicRepeaterSelector + ' .academic-item').length;
+            const thisYear = new Date().getFullYear();
+            let years = '<option value="">{{ __('Select') }}</option>';
+            for (let y = thisYear + 1; y >= thisYear - 60; y--) {
+                years += '<option value="' + y + '">' + y + '</option>';
+            }
+
             return `
-                <div class="repeater-item academic-item" data-index="${index}">
+                <div class="repeater-item academic-item qualification-card" data-index="${index}" data-qualification-key="">
                     <div class="repeater-actions">
-                        <button type="button" class="remove-academic" aria-label="{{ __('Remove record') }}">&times;</button>
+                        <button type="button" class="remove-academic" aria-label="{{ __('Remove qualification') }}">&times;</button>
+                    </div>
+                    <div class="qualification-card-header">
+                        <h5 class="qualification-card-title">{{ __('Additional qualification') }}</h5>
+                    </div>
+                    <input type="hidden" name="academic_history[${index}][qualification_key]" value="">
+                    <div class="row">
+                        <div class="form-group col-md-6">
+                            <label>{{ __('Certificate / Qualification') }}</label>
+                            <input type="text" class="form-control" name="academic_history[${index}][certificate_obtained]">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>{{ __('Awarding body') }}</label>
+                            <input type="text" class="form-control awarding-body-input" name="academic_history[${index}][awarding_body]">
+                        </div>
                     </div>
                     <div class="row">
                         <div class="form-group col-md-6">
-                            <label>{{ __('Institution Name') }} <span>*</span></label>
-                            <input type="text" class="form-control" name="academic_history[${index}][institution_name]" required>
+                            <label>{{ __('School / Institution attended') }}</label>
+                            <input type="text" class="form-control institution-name-input" name="academic_history[${index}][institution_name]">
+                            <div class="form-check mt-2">
+                                <input type="hidden" name="academic_history[${index}][institution_same_as_awarding_body]" value="0">
+                                <input type="checkbox" class="form-check-input same-as-awarding" value="1"
+                                       name="academic_history[${index}][institution_same_as_awarding_body]"
+                                       id="same_as_awarding_${index}">
+                                <label class="form-check-label" for="same_as_awarding_${index}">{{ __('Same as awarding body') }}</label>
+                            </div>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('Country') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][country]">
+                        <div class="form-group col-md-6">
+                            <label>{{ __('Language of instruction') }}</label>
+                            <input type="text" class="form-control" name="academic_history[${index}][instruction_language]">
                         </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('City') }}</label>
+                    </div>
+                    <div class="row">
+                        <div class="form-group col-md-6">
+                            <label>{{ __('Country where studied') }}</label>
+                            <select class="form-control" name="academic_history[${index}][country]">${countryOptionsHtml()}</select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>{{ __('City / Town / Village where studied') }}</label>
                             <input type="text" class="form-control" name="academic_history[${index}][city]">
                         </div>
                     </div>
                     <div class="row">
-                        <div class="form-group col-md-3">
-                            <label>{{ __('Language of Instruction') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][instruction_language]">
+                        <div class="form-group col-md-6">
+                            <label>{{ __('Start year') }}</label>
+                            <select class="form-control" name="academic_history[${index}][start_year]">${years}</select>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('From (Year)') }}</label>
-                            <input type="date" class="form-control" name="academic_history[${index}][date_from]">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('To (Year)') }}</label>
-                            <input type="date" class="form-control" name="academic_history[${index}][date_to]">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('Certificate Obtained') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][certificate_obtained]">
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="form-group col-md-3">
-                            <label>{{ __('GCE O-Level / Probatoire Subjects Passed') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][gce_ol_detail]">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('GCE A-Level / Baccalaureate Subjects Passed') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][gce_al_detail]">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('Probatoire Stream (if applicable)') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][probatoire_detail]">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('Baccalaureate Option (if applicable)') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][baccalaureate_detail]">
+                        <div class="form-group col-md-6">
+                            <label>{{ __('Completion year') }}</label>
+                            <select class="form-control" name="academic_history[${index}][end_year]">${years}</select>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>{{ __('Additional Notes') }}</label>
-                        <textarea class="form-control" name="academic_history[${index}][notes]" rows="2"></textarea>
+                        <label>{{ __('Upload certificate or result slip') }} <small class="text-muted">{{ __('Optional') }}</small></label>
+                        <input type="hidden" name="academic_history[${index}][existing_certificate_file]" value="">
+                        <input type="file" class="form-control size-guard" data-max-size-mb="10" name="academic_history[${index}][certificate_file]" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+                        <small class="document-help">{{ __('PDF, JPG or PNG. Maximum file size 10 MB.') }}</small>
                     </div>
                 </div>
             `;
@@ -1359,12 +2766,51 @@
             }
 
             $addButton.on('click', function() {
+                // Cap matches the note beside the button and the server side.
+                if ($container.find('.academic-item').length >= 5) {
+                    return;
+                }
                 $container.append(academicTemplate());
+                refreshAcademicControls();
             });
 
             $container.on('click', '.remove-academic', function() {
-                $(this).closest('.academic-item').remove();
+                // Prescribed cards have no remove button, but guard anyway so a
+                // required qualification can never be deleted from the DOM.
+                var $item = $(this).closest('.academic-item');
+                if ($item.data('qualification-key')) {
+                    return;
+                }
+                $item.remove();
+                refreshAcademicControls();
             });
+
+            // Mirror the awarding body into the institution field on request.
+            $container.on('change', '.same-as-awarding', function() {
+                var $card = $(this).closest('.academic-item');
+                var $institution = $card.find('.institution-name-input');
+                if (this.checked) {
+                    $institution.val($card.find('.awarding-body-input').val()).prop('readonly', true);
+                } else {
+                    $institution.prop('readonly', false);
+                }
+            });
+
+            $container.on('input', '.awarding-body-input', function() {
+                var $card = $(this).closest('.academic-item');
+                if ($card.find('.same-as-awarding').is(':checked')) {
+                    $card.find('.institution-name-input').val($(this).val());
+                }
+            });
+
+            refreshAcademicControls();
+        };
+
+        /** Hide the add button once the cap is reached. */
+        const refreshAcademicControls = () => {
+            const $container = $(academicRepeaterSelector);
+            const atCap = $container.find('.academic-item').length >= 5;
+            $('#addAcademicHistory').prop('disabled', atCap).toggleClass('disabled', atCap);
         };
 
         const languageTemplate = () => {
@@ -1799,10 +3245,51 @@
             });
         };
 
+        // A file input only needs sending when its current selection has not
+        // already been persisted by an earlier save. Without this, every
+        // auto-save re-uploaded the photo, signature and every document,
+        // orphaning a fresh copy on disk each time.
+        const fileSignature = (file) => file.name + ':' + file.size + ':' + file.lastModified;
+
+        const filePending = (input) => {
+            if (!input.files || !input.files.length) {
+                return false;
+            }
+            return input.dataset.savedSignature !== fileSignature(input.files[0]);
+        };
+
+        const markFilesSaved = () => {
+            $('#hnd-application-form').find('input[type="file"]').each(function() {
+                if (this.files && this.files.length) {
+                    this.dataset.savedSignature = fileSignature(this.files[0]);
+                }
+            });
+        };
+
         // Get form data as FormData object
         const getFormData = () => {
             const $form = $('#hnd-application-form');
-            return new FormData($form[0]);
+            const formData = new FormData();
+
+            $form.find('input, select, textarea').each(function() {
+                // Payment-step controls belong to the fee endpoints, not to the
+                // application draft — never ship them with a save.
+                if (!this.name || this.disabled || this.hasAttribute('data-skip-autosave')) {
+                    return;
+                }
+                if (this.type === 'file') {
+                    if (filePending(this)) {
+                        formData.append(this.name, this.files[0]);
+                    }
+                    return;
+                }
+                if ((this.type === 'checkbox' || this.type === 'radio') && !this.checked) {
+                    return;
+                }
+                formData.append(this.name, $(this).val());
+            });
+
+            return formData;
         };
 
         // Update auto-save status indicator
@@ -1826,10 +3313,20 @@
             }
         };
 
-        // Update progress display
+        // Update progress display. The header bar and the sidebar bar show the
+        // same server-calculated completion so they can never disagree.
         const updateProgress = (progress) => {
+            if (typeof progress !== 'number') {
+                return;
+            }
             $('#draft-progress-text').text(progress + '%');
             $('#draft-progress-bar').css('width', progress + '%');
+            $('#sidebar-progress-text').text(progress + '% complete');
+            $('#sidebar-progress-bar').css('width', progress + '%');
+
+            if (window.PaxApplicationWizard && typeof window.PaxApplicationWizard.refreshStatus === 'function') {
+                window.PaxApplicationWizard.refreshStatus();
+            }
         };
 
         // Update last saved time
@@ -1861,10 +3358,26 @@
                 formChanged = false;
 
                 if (response.success) {
+                    // The save completed the last outstanding item on an
+                    // application whose fee was already paid, so the server
+                    // submitted it. Reload rather than leave an editable wizard
+                    // standing over an application that is no longer a draft.
+                    if (response.auto_submitted) {
+                        formChanged = false;
+                        toastr.success(response.message, '{{ __("Application Submitted") }}');
+                        setTimeout(function () { window.location.reload(); }, 1500);
+                        return;
+                    }
+
                     updateAutoSaveStatus('saved');
                     updateLastSavedTime(response.last_saved);
                     updateProgress(response.progress);
+                    markFilesSaved();
                     lastSavedData = getFormDataAsString();
+
+                    // Anything that depends on saved data — the payment step's
+                    // list of outstanding items — can now re-ask.
+                    $(document).trigger('application:draft-saved', [response]);
 
                     if (showNotification) {
                         toastr.success(response.message, '{{ __("Draft Saved") }}', {
@@ -1904,10 +3417,16 @@
             });
         };
 
-        // Get form data as string for comparison
+        // Get form data as string for comparison. File selections are folded in
+        // as signatures so that picking a new document also counts as a change.
         const getFormDataAsString = () => {
             const $form = $('#hnd-application-form');
-            return $form.find('input:not([type="file"]), select, textarea').serialize();
+            const scalars = $form.find('input:not([type="file"]), select, textarea').serialize();
+            const files = $form.find('input[type="file"]').map(function() {
+                return this.name + '=' + (filePending(this) ? fileSignature(this.files[0]) : '');
+            }).get().join('&');
+
+            return scalars + '|' + files;
         };
 
         // Start auto-save timer
@@ -1981,6 +3500,210 @@
                 }
             });
         });
+
+        // Exposed so the wizard's "Save and continue" button persists the draft
+        // before advancing, instead of only navigating.
+        window.PaxApplicationDraft = {
+            save: saveDraft,
+            isDirty: () => formChanged
+        };
+    })(jQuery);
+</script>
+
+{{-- ===================================================================
+   | Payment step (step 8)
+   |
+   | Mobile Money mirrors the dashboard fee modal so both entry points behave
+   | identically. The receipt upload posts over AJAX because the wizard is one
+   | large <form> and HTML forbids nesting another inside it.
+   |=================================================================== --}}
+<script type="text/javascript">
+    "use strict";
+    (function ($) {
+        const $step = $('#step-8');
+        if (!$step.length) {
+            return;
+        }
+
+        const CSRF = $('meta[name="csrf-token"]').attr('content') || $('input[name=_token]').val();
+        const MOMO_BASE = "{{ url('payment/momo') }}";
+        const RECEIPT_URL = "{{ route('application.admission-fee.upload', $application) }}";
+        const feeId = $step.data('fee-id');
+        const applicationId = $step.data('application-id');
+
+        const showStatus = (el, level, message) => {
+            if (!el) { return; }
+            el.className = 'momo-status alert alert-' + level + ' mt-3';
+            el.textContent = message;
+        };
+
+        /* ---- Mobile Money ---------------------------------------------- */
+
+        const pollStatus = (provider, reference, statusBox, btn, intervalSec, timeoutSec) => {
+            const started = Date.now();
+
+            const retryOrGiveUp = () => {
+                if ((Date.now() - started) / 1000 >= timeoutSec) {
+                    btn.disabled = false;
+                    showStatus(statusBox, 'warning', "{{ __('Still waiting for the provider. Refresh this page in a moment to check again.') }}");
+                    return;
+                }
+                setTimeout(tick, intervalSec * 1000);
+            };
+
+            const tick = () => {
+                fetch(MOMO_BASE + '/' + provider + '/status/' + encodeURIComponent(reference))
+                    .then(r => r.json())
+                    .then(function (data) {
+                        if (!data.ok) { retryOrGiveUp(); return; }
+                        if (data.status === 'successful') {
+                            showStatus(statusBox, 'success', "{{ __('Payment successful. Reloading so you can submit...') }}");
+                            setTimeout(() => window.location.reload(), 1500);
+                            return;
+                        }
+                        if (data.status === 'failed' || data.status === 'timeout') {
+                            btn.disabled = false;
+                            showStatus(statusBox, 'danger', data.reason || "{{ __('Payment did not complete.') }}");
+                            return;
+                        }
+                        retryOrGiveUp();
+                    })
+                    .catch(retryOrGiveUp);
+            };
+
+            tick();
+        };
+
+        $step.on('click', '.momo-pay-btn', function () {
+            const btn = this;
+            const provider = $(btn).data('provider');
+            const tabPane = btn.closest('.tab-pane');
+            const statusBox = tabPane ? tabPane.querySelector('.momo-status') : null;
+            const msisdnInput = tabPane ? tabPane.querySelector('.momo-msisdn') : null;
+
+            if (!feeId) {
+                showStatus(statusBox, 'danger', "{{ __('No admission fee is attached to this application.') }}");
+                return;
+            }
+
+            const payload = { fee_id: feeId, application_id: applicationId };
+            if (provider === 'mtn') {
+                const msisdn = ((msisdnInput && msisdnInput.value) || '').trim();
+                if (!msisdn) {
+                    showStatus(statusBox, 'warning', "{{ __('Please enter the phone number.') }}");
+                    return;
+                }
+                payload.msisdn = msisdn;
+            }
+
+            btn.disabled = true;
+            showStatus(statusBox, 'info', "{{ __('Contacting payment provider...') }}");
+
+            fetch(MOMO_BASE + '/' + provider + '/initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+                body: JSON.stringify(payload),
+            }).then(async function (r) {
+                const text = await r.text();
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    throw new Error('HTTP ' + r.status + ' — ' + (text.substring(0, 200) || 'empty response'));
+                }
+            }).then(function (data) {
+                if (!data.ok) {
+                    btn.disabled = false;
+                    showStatus(statusBox, 'danger', data.error || "{{ __('Unable to start payment.') }}");
+                    return;
+                }
+                if (provider === 'orange' && data.payment_url) {
+                    showStatus(statusBox, 'info', "{{ __('Redirecting to Orange Money...') }}");
+                    window.location.href = data.payment_url;
+                    return;
+                }
+                showStatus(statusBox, 'info', "{{ __('Approve the request on your phone. Waiting for confirmation...') }}");
+                pollStatus(provider, data.reference, statusBox, btn, data.poll_interval || 3, data.poll_timeout || 90);
+            }).catch(function (err) {
+                btn.disabled = false;
+                showStatus(statusBox, 'danger', (err && err.message) ? err.message : "{{ __('Network error. Please try again.') }}");
+            });
+        });
+
+        /* ---- Manual receipt upload ------------------------------------- */
+
+        const $receiptStatus = $('#receipt-upload-status');
+
+        const showReceiptStatus = (level, message) => {
+            $receiptStatus.attr('class', 'alert alert-' + level).text(message).removeClass('d-none');
+        };
+
+        $('#upload-receipt-btn').on('click', function () {
+            const $btn = $(this);
+            const file = $('#pay_receipt_file')[0].files[0];
+            const required = [
+                ['#pay_payment_date', "{{ __('Enter the payment date.') }}"],
+                ['#pay_amount', "{{ __('Enter the amount paid.') }}"],
+                ['#pay_payment_reference', "{{ __('Enter the payment reference.') }}"],
+            ];
+
+            for (const [selector, message] of required) {
+                if (!String($(selector).val() || '').trim()) {
+                    $(selector).addClass('is-invalid').trigger('focus');
+                    showReceiptStatus('warning', message);
+                    return;
+                }
+                $(selector).removeClass('is-invalid');
+            }
+
+            if (!file) {
+                $('#pay_receipt_file').addClass('is-invalid');
+                showReceiptStatus('warning', "{{ __('Attach the proof of payment.') }}");
+                return;
+            }
+            $('#pay_receipt_file').removeClass('is-invalid');
+
+            const payload = new FormData();
+            payload.append('_token', CSRF);
+            payload.append('payment_date', $('#pay_payment_date').val());
+            payload.append('amount', $('#pay_amount').val());
+            payload.append('payment_reference', $('#pay_payment_reference').val());
+            payload.append('payment_method', $('#pay_payment_method').val());
+            payload.append('student_note', $('#pay_student_note').val());
+            payload.append('receipt_file', file);
+
+            $btn.prop('disabled', true);
+            showReceiptStatus('info', "{{ __('Uploading your receipt...') }}");
+
+            $.ajax({
+                url: RECEIPT_URL,
+                method: 'POST',
+                data: payload,
+                processData: false,
+                contentType: false,
+                dataType: 'json',
+                headers: { 'Accept': 'application/json' },
+            }).done(function (response) {
+                if (response && response.success) {
+                    showReceiptStatus('success', response.message);
+                    // A verified fee unlocks submission; a pending one does not,
+                    // so reload to pick up whichever state the server recorded.
+                    setTimeout(() => window.location.reload(), 1800);
+                    return;
+                }
+                $btn.prop('disabled', false);
+                showReceiptStatus('danger', (response && response.message) || "{{ __('Upload failed. Please try again.') }}");
+            }).fail(function (xhr) {
+                $btn.prop('disabled', false);
+                let message = "{{ __('Upload failed. Please try again.') }}";
+                if (xhr.responseJSON) {
+                    if (xhr.responseJSON.message) { message = xhr.responseJSON.message; }
+                    if (xhr.responseJSON.errors) {
+                        message += ': ' + Object.values(xhr.responseJSON.errors).flat().slice(0, 2).join(', ');
+                    }
+                }
+                showReceiptStatus('danger', message);
+            });
+        });
     })(jQuery);
 </script>
 
@@ -2000,5 +3723,7 @@
 
 {{-- Dynamic Popup Component for Applicant Portal --}}
 @include('components.dynamic-popup', ['area' => 'applicant_portal'])
+
+    @include('components.chat-widget')
 </body>
 </html>

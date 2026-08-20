@@ -92,6 +92,55 @@
             </div>
 
             <!-- Budget Alerts -->
+            {{-- The annual sheet reported on its own terms. Folding it into the
+                 figures above would let a 48M institutional budget swamp every
+                 departmental average. --}}
+            @isset($annualBudget)
+            @php
+                $annualUtil = $annualBudget->total_amount > 0
+                    ? round($annualBudget->spent_amount / $annualBudget->total_amount * 100, 1)
+                    : 0;
+                $annualTone = $annualUtil > 100 ? 'danger' : ($annualUtil > 90 ? 'warning' : 'success');
+            @endphp
+            <div class="col-sm-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>{{ __('Annual budget') }} — {{ $annualBudget->title }}</h5>
+                        <div class="card-header-right">
+                            <a href="{{ route('admin.budget-sheet.show', $annualBudget->id) }}" class="btn btn-sm btn-primary">
+                                {{ __('Open the sheet') }}
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-block">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <h6 class="text-muted">{{ __('Status') }}</h6>
+                                <h4>{{ ucfirst(str_replace('_', ' ', $annualBudget->status)) }}</h4>
+                            </div>
+                            <div class="col-md-3">
+                                <h6 class="text-muted">{{ __('Budgeted spending') }}</h6>
+                                <h4>{{ number_format($annualBudget->total_amount) }}</h4>
+                            </div>
+                            <div class="col-md-3">
+                                <h6 class="text-muted">{{ __('Actual spending') }}</h6>
+                                <h4>{{ number_format($annualBudget->spent_amount) }}</h4>
+                            </div>
+                            <div class="col-md-3">
+                                <h6 class="text-muted">{{ __('field_utilization') }}</h6>
+                                <h4 class="text-{{ $annualTone }}">{{ $annualUtil }}%</h4>
+                            </div>
+                        </div>
+                        @if($annualBudget->total_amount == 0)
+                            <p class="text-muted small mb-0 mt-3">
+                                {{ __('No figures have been entered on this sheet yet, so there is nothing to measure against.') }}
+                            </p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            @endisset
+
             @if(count($alerts) > 0)
             <div class="col-sm-12">
                 <div class="card">

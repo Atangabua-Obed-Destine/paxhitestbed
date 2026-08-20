@@ -1,6 +1,6 @@
 {{--
     ================================================================
-    FOOTER — PAX Higher Institute
+    FOOTER — {{ institution_name() }}
     ================================================================
     Structure:
     1. Pre-footer CTA band
@@ -25,7 +25,7 @@
     <div class="section-container py-12 relative z-10">
         <div class="flex flex-col md:flex-row items-center justify-between gap-6">
             <div class="text-center md:text-left">
-                <h3 class="text-xl md:text-2xl font-heading font-bold mb-1 text-white">Begin Your Journey at PAXHI</h3>
+                <h3 class="text-xl md:text-2xl font-heading font-bold mb-1 text-white">Begin Your Journey at {{ institution_code() }}</h3>
                 <p class="text-white/70 text-sm md:text-base">Discover academic excellence rooted in Catholic values and tradition.</p>
             </div>
             <div class="flex flex-wrap gap-3">
@@ -57,7 +57,7 @@
                     <img src="{{ asset('uploads/setting/'.$setting->logo_path) }}" alt="{{ $setting->title }}" class="h-12">
                     @endif
                     <div>
-                        <div class="text-white font-heading font-bold text-sm">PAX Higher Institute</div>
+                        <div class="text-white font-heading font-bold text-sm">' . institution_name() . '</div>
                         <div class="text-[10px] text-white/40 uppercase tracking-wider">Archdiocese of Bamenda</div>
                     </div>
                 </div>
@@ -205,7 +205,7 @@
             <div class="flex flex-col md:flex-row items-center justify-between gap-3 text-[12px] text-white/40">
                 <div class="flex items-center gap-1.5">
                     <i class="fas fa-cross text-accent-500/60 text-[10px]"></i>
-                    <span>&copy; {{ date('Y') }} {{ $setting->title ?? 'PAX Higher Institute' }}. All rights reserved.</span>
+                    <span>&copy; {{ date('Y') }} {{ institution_name() }}. All rights reserved.</span>
                 </div>
                 <div class="flex items-center gap-4">
                     @foreach($footer_pages ?? [] as $page)

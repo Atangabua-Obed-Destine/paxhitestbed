@@ -94,9 +94,20 @@
                                     <tr>
                                         <td>{{ $row->id }}</td>
                                         <td><strong>{{ $row->budget_code }}</strong></td>
-                                        <td>{{ $row->title }}</td>
                                         <td>
-                                            @if($row->type == 'annual')
+                                            @if($row->is_institutional)
+                                                <a href="{{ route('admin.budget-sheet.show', $row->id) }}">{{ $row->title }}</a>
+                                            @else
+                                                {{ $row->title }}
+                                            @endif
+                                        </td>
+                                        <td>
+                                            {{-- The annual sheet is a different instrument from a
+                                                 departmental pot, so it says so rather than sharing
+                                                 the plain "Annual" label with a project budget. --}}
+                                            @if($row->is_institutional)
+                                            <span class="badge badge-dark">{{ __('Annual (Institutional)') }}</span>
+                                            @elseif($row->type == 'annual')
                                             <span class="badge badge-primary">{{ __('text_annual') }}</span>
                                             @elseif($row->type == 'departmental')
                                             <span class="badge badge-info">{{ __('text_departmental') }}</span>

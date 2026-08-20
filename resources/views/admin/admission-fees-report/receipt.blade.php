@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
-    <title>{{ $receipt->receipt_number }} · {{ $setting->title ?? 'PAX HIGHER INSTITUTE' }}</title>
+    <title>{{ $receipt->receipt_number }} · {{ app(\App\Services\LetterheadService::class)->institutionName() }}</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
         /* ---------- Base ---------- */
@@ -139,22 +139,10 @@
 <div class="sheet">
     <div class="digital-badge">{{ __('Digital Receipt') }}</div>
 
-    <div class="r-head">
-        <div class="logo">
-            @if($setting && $setting->logo_path)
-                <img src="{{ asset($setting->logo_path) }}" alt="Logo">
-            @endif
-        </div>
-        <div class="school">
-            <h1>{{ $setting->title ?? 'PAX HIGHER INSTITUTE (PAXHI)' }}</h1>
-            <div>{{ $setting->address ?? 'BAMUNKA-NDOP, NGOKETUNJIA DIVISION, NORTH-WEST REGION, CAMEROON' }}</div>
-            <div><em>{{ __('Motto') }}: Pax, Innovatio, et Scientia</em></div>
-            <div class="contact">
-                @if($setting?->phone) {{ __('Tel') }}: {{ $setting->phone }} @endif
-                @if($setting?->email) · {{ $setting->email }} @endif
-            </div>
-        </div>
-    </div>
+    {{-- The configured letterhead, exactly as authored. This block used to
+         carry one school's name, address and motto written into the markup, so
+         a receipt disagreed with every letter the same office issued. --}}
+    @include('partials.document-header', ['forPdf' => $forPdf ?? false, 'rule' => false])
 
     <div class="r-title">
         {{ __('Receipt for Registration') }}

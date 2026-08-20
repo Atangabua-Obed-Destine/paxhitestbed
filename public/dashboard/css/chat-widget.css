@@ -1,0 +1,154 @@
+/* Context-aware chat widget. Deliberately self-contained and prefixed so it
+   cannot collide with the four different portal themes it is injected into. */
+
+#pax-chat {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 10500;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#pax-chat-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 20px;
+    background: #0d6efd;
+    color: #fff;
+    font-size: .95rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(13, 110, 253, .35);
+}
+
+#pax-chat-toggle:hover { background: #0b5ed7; }
+.pax-chat-icon { font-size: 1.1rem; line-height: 1; }
+
+#pax-chat-panel {
+    width: 370px;
+    max-width: calc(100vw - 40px);
+    height: 520px;
+    max-height: calc(100vh - 120px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 48px rgba(16, 24, 40, .18);
+}
+
+#pax-chat-panel[hidden] { display: none; }
+
+#pax-chat-panel header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: #0d6efd;
+    color: #fff;
+}
+
+#pax-chat-panel header small { display: block; opacity: .85; font-size: .75rem; }
+
+.pax-chat-actions button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+#pax-chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    background: #f8f9fb;
+}
+
+.pax-msg {
+    max-width: 85%;
+    margin-bottom: 10px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    font-size: .88rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.pax-msg-user {
+    margin-left: auto;
+    background: #0d6efd;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+
+.pax-msg-assistant {
+    margin-right: auto;
+    background: #fff;
+    color: #212529;
+    border: 1px solid #e6e8eb;
+    border-bottom-left-radius: 4px;
+}
+
+.pax-msg-error { background: #fff4f4; border-color: #f3c2c2; color: #842029; }
+
+.pax-msg-link {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: .82rem;
+    font-weight: 600;
+    color: #0d6efd;
+    text-decoration: none;
+}
+.pax-msg-link:hover { text-decoration: underline; }
+
+.pax-typing { display: inline-flex; gap: 3px; }
+.pax-typing span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #b6bcc4; animation: pax-bounce 1.2s infinite;
+}
+.pax-typing span:nth-child(2) { animation-delay: .15s; }
+.pax-typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes pax-bounce { 0%, 60%, 100% { opacity: .3 } 30% { opacity: 1 } }
+
+#pax-chat-form {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid #e9ecef;
+    background: #fff;
+}
+
+#pax-chat-input {
+    flex: 1;
+    border: 1px solid #dfe3e8;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: .88rem;
+    outline: none;
+}
+#pax-chat-input:focus { border-color: #0d6efd; }
+
+#pax-chat-send {
+    border: none;
+    border-radius: 8px;
+    padding: 9px 16px;
+    background: #0d6efd;
+    color: #fff;
+    font-size: .85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+#pax-chat-send:disabled { opacity: .55; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+    #pax-chat { right: 12px; bottom: 12px; }
+    #pax-chat-panel { width: calc(100vw - 24px); height: 70vh; }
+    .pax-chat-toggle-label { display: none; }
+}

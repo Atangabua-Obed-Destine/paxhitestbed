@@ -27,6 +27,7 @@
 
                             <ul class="nav nav-tabs" role="tablist">
                                 <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-sections" role="tab">{{ __('Sections & Fields') }}</a></li>
+                                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-qualifications" role="tab">{{ __('Qualifications') }}</a></li>
                                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-documents" role="tab">{{ __('Documents') }}</a></li>
                                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-settings" role="tab">{{ __('Fee & Intro') }}</a></li>
                                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-letter" role="tab">{{ __('Acceptance Letter') }}</a></li>
@@ -55,14 +56,70 @@
                                     </div>
                                 </div>
 
-                                {{-- DOCUMENTS --}}
-                                <div class="tab-pane fade" id="tab-documents" role="tabpanel">
+                                {{-- QUALIFICATIONS --}}
+                                <div class="tab-pane fade" id="tab-qualifications" role="tabpanel">
+                                    <p class="text-muted">
+                                        {{ __('Each qualification below becomes one card on the Academic Qualifications step. Attach documents to a card on the Documents tab — that is what decides how many uploads the card asks for.') }}
+                                    </p>
                                     <div class="table-responsive">
                                         <table class="table table-bordered align-middle">
                                             <thead>
                                                 <tr>
-                                                    <th style="width:30%">{{ __('Document') }}</th>
+                                                    <th style="width:28%">{{ __('Qualification') }}</th>
+                                                    <th>{{ __('Guidance shown to the applicant') }}</th>
+                                                    <th class="text-center">{{ __('Required') }}</th>
+                                                    <th class="text-center">{{ __('Enabled') }}</th>
+                                                    <th class="text-center">{{ __('Order') }}</th>
+                                                    <th class="text-center">{{ __('Delete') }}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @forelse($qualifications as $qual)
+                                                    <tr>
+                                                        <td>
+                                                            <input type="text" class="form-control form-control-sm" name="qual[{{ $qual->id }}][label]" value="{{ $qual->label }}">
+                                                            <small class="text-muted">{{ $qual->qual_key }}</small>
+                                                        </td>
+                                                        <td><input type="text" class="form-control form-control-sm" name="qual[{{ $qual->id }}][description]" value="{{ $qual->description }}"></td>
+                                                        <td class="text-center"><input type="checkbox" name="qual[{{ $qual->id }}][required]" value="1" {{ $qual->required ? 'checked' : '' }}></td>
+                                                        <td class="text-center"><input type="checkbox" name="qual[{{ $qual->id }}][status]" value="1" {{ $qual->status ? 'checked' : '' }}></td>
+                                                        <td class="text-center"><input type="number" class="form-control form-control-sm" style="width:75px;margin:auto;" name="qual[{{ $qual->id }}][sort_order]" value="{{ $qual->sort_order }}"></td>
+                                                        <td class="text-center"><input type="checkbox" name="qual_delete[]" value="{{ $qual->id }}"></td>
+                                                    </tr>
+                                                @empty
+                                                    <tr><td colspan="6" class="text-center text-muted">{{ __('No qualifications configured — the default A-Level and O-Level cards will be used.') }}</td></tr>
+                                                @endforelse
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <h6 class="mt-3">{{ __('Add new qualifications') }}</h6>
+                                    <table class="table table-sm">
+                                        <thead><tr><th>{{ __('Label') }}</th><th>{{ __('Key (optional)') }}</th><th class="text-center">{{ __('Required') }}</th></tr></thead>
+                                        <tbody>
+                                            @for($i = 0; $i < 3; $i++)
+                                            <tr>
+                                                <td><input type="text" class="form-control form-control-sm" name="newqual_label[]" placeholder="{{ __('e.g. Bachelor\'s Degree') }}"></td>
+                                                <td><input type="text" class="form-control form-control-sm" name="newqual_key[]" placeholder="bachelor_degree"></td>
+                                                <td class="text-center"><input type="checkbox" name="newqual_required[{{ $i }}]" value="1"></td>
+                                            </tr>
+                                            @endfor
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {{-- DOCUMENTS --}}
+                                <div class="tab-pane fade" id="tab-documents" role="tabpanel">
+                                    <p class="text-muted">
+                                        {{ __('A document with a qualification is collected inside that qualification\'s card, so the applicant is never asked for it twice. Leave it as a standalone document to collect it on the Documents step.') }}
+                                    </p>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:26%">{{ __('Document') }}</th>
                                                     <th>{{ __('Description') }}</th>
+                                                    <th style="width:16%">{{ __('Collected under') }}</th>
                                                     <th class="text-center">{{ __('Required') }}</th>
                                                     <th class="text-center">{{ __('Enabled') }}</th>
                                                     <th class="text-center">{{ __('Order') }}</th>
@@ -77,13 +134,21 @@
                                                             <small class="text-muted">{{ $doc->doc_key }}</small>
                                                         </td>
                                                         <td><input type="text" class="form-control form-control-sm" name="doc[{{ $doc->id }}][description]" value="{{ $doc->description }}"></td>
+                                                        <td>
+                                                            <select class="form-control form-control-sm" name="doc[{{ $doc->id }}][qualification_group]">
+                                                                <option value="">{{ __('Documents step') }}</option>
+                                                                @foreach($qualifications as $qual)
+                                                                    <option value="{{ $qual->qual_key }}" {{ $doc->qualification_group === $qual->qual_key ? 'selected' : '' }}>{{ $qual->label }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                        </td>
                                                         <td class="text-center"><input type="checkbox" name="doc[{{ $doc->id }}][required]" value="1" {{ $doc->required ? 'checked' : '' }}></td>
                                                         <td class="text-center"><input type="checkbox" name="doc[{{ $doc->id }}][status]" value="1" {{ $doc->status ? 'checked' : '' }}></td>
                                                         <td class="text-center"><input type="number" class="form-control form-control-sm" style="width:75px;margin:auto;" name="doc[{{ $doc->id }}][sort_order]" value="{{ $doc->sort_order }}"></td>
                                                         <td class="text-center"><input type="checkbox" name="doc_delete[]" value="{{ $doc->id }}"></td>
                                                     </tr>
                                                 @empty
-                                                    <tr><td colspan="6" class="text-center text-muted">{{ __('No documents configured.') }}</td></tr>
+                                                    <tr><td colspan="7" class="text-center text-muted">{{ __('No documents configured.') }}</td></tr>
                                                 @endforelse
                                             </tbody>
                                         </table>
@@ -158,9 +223,9 @@
                                         <div class="form-group col-md-12">
                                             <label>{{ __('Letter Body') }}</label>
                                             <textarea class="form-control texteditor" name="acceptance_letter_html" rows="12">{{ optional($settings)->acceptance_letter_html }}</textarea>
-                                            <div class="alert alert-secondary mt-2 mb-0">
+                                            <div class="alert bg-white border mt-2 mb-0">
                                                 <strong>{{ __('Placeholders') }}:</strong>
-                                                [name] [first_name] [last_name] [student_id] [matricule] [program] [degree_type] [faculty] [intake] [admission_date] [date] [institution] [address] [email] [phone] [dob] [place_of_birth] [fee_breakdown] [fee_breakdown_total] [fee_breakdown_total_words] [payment_deadlines]
+                                                [name] [first_name] [last_name] [student_id] [matricule] [program] [degree_type] [faculty] [faculty_title] [faculty_shortcode] [intake] [admission_date] [date] [institution] [address] [email] [phone] [dob] [place_of_birth] [fee_breakdown] [fee_breakdown_total] [fee_breakdown_total_words] [fee_breakdown_total_deadline] [payment_deadlines]
                                                 <br><small class="text-muted">{{ __('[fee_breakdown] inserts the Year-1 first-installment fee table from the programme\'s fee configuration (add your own heading above it).') }}</small>
                                                 <br><small class="text-muted">{{ __('[payment_deadlines] inserts a formatted list of all Year-1 regular installment deadlines with spelled-out amounts.') }}</small>
                                             </div>

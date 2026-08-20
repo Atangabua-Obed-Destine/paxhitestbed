@@ -1,11 +1,11 @@
 {{--
     ================================================================
-    NEWS DETAIL — PAX Higher Institute
+    NEWS DETAIL — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', ($news->title ?? 'News') . ' — ' . ($setting->title ?? 'PAXHI'))
+@section('title', ($news->title ?? 'News') . ' — ' . (institution_code()))
 @section('description', Str::limit(strip_tags($news->description ?? ''), 160))
 
 @section('content')
@@ -109,7 +109,7 @@
                 {{-- CTA --}}
                 <div class="bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl p-6 text-white" data-aos="fade-left" data-aos-delay="150">
                     <h3 class="font-heading font-bold text-lg mb-2 text-white">Stay Connected</h3>
-                    <p class="text-white/70 text-sm mb-4">Follow us on social media for the latest updates from PAXHI.</p>
+                    <p class="text-white/70 text-sm mb-4">Follow us on social media for the latest updates from {{ institution_code() }}.</p>
                     @if(isset($socialSetting))
                     <div class="flex gap-2">
                         @if($socialSetting->facebook)<a href="{{ $socialSetting->facebook }}" target="_blank" class="w-9 h-9 rounded-lg bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors"><i class="fab fa-facebook-f text-sm"></i></a>@endif

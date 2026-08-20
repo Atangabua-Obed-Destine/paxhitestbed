@@ -284,22 +284,11 @@
 </head>
 <body>
     <div class="er-page">
-        {{-- ══════════════════ INSTITUTION HEADER ══════════════════ --}}
+        {{-- The configured letterhead, exactly as authored, in place of a
+             masthead this document used to assemble from Settings. --}}
+        @include('partials.document-header', ['forPdf' => true, 'rule' => true])
+
         <div class="er-header">
-            @if($setting->logo_path)
-                <img src="{{ public_path('uploads/setting/' . $setting->logo_path) }}" class="er-logo" alt="Logo">
-            @endif
-            <h1>{{ $setting->title ?? 'PAX HIGHER INSTITUTE (PAXHI)' }}</h1>
-            @if($setting->address)
-                <div class="er-address">{{ $setting->address }}</div>
-            @endif
-            @if($setting->phone || $setting->email)
-                <div class="er-address">
-                    @if($setting->phone) Tel: {{ $setting->phone }} @endif
-                    @if($setting->phone && $setting->email) &nbsp;|&nbsp; @endif
-                    @if($setting->email) Email: {{ $setting->email }} @endif
-                </div>
-            @endif
             <div class="er-doc-title">{{ __('Semester Examination Results') }}</div>
         </div>
 
@@ -523,7 +512,7 @@
                 {{ __('This is a computer-generated document downloaded from the student portal. It is not an official certified result slip. For official documents, please contact the Registrar\'s Office.') }}
             </div>
             <div>
-                {{ $setting->title ?? 'PAX HIGHER INSTITUTE' }} &bull;
+                {{ institution_name() }} &bull;
                 {{ __('Generated on') }}: {{ $generatedAt->format('d M Y \a\t H:i') }} &bull;
                 {{ __('Student Portal') }}
             </div>

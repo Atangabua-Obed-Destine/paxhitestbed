@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    FAQ — PAX Higher Institute
+    FAQ — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Frequently Asked Questions — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Find answers to common questions about admissions, tuition, campus life, and more at PAX Higher Institute.')
+@section('title', 'Frequently Asked Questions — ' . (institution_code()))
+@section('description', 'Find answers to common questions about admissions, tuition, campus life, and more at ' . institution_name() . '.')
 
 @section('content')
 
@@ -23,7 +23,7 @@
             Frequently Asked Questions
         </h1>
         <p class="mt-4 text-lg text-white/70 max-w-2xl" data-aos="fade-up" data-aos-delay="150">
-            Got questions? We've got answers. Find everything you need to know about PAXHI.
+            Got questions? We've got answers. Find everything you need to know about {{ institution_code() }}.
         </p>
     </div>
 </section>

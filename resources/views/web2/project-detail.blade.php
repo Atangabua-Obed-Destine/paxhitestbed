@@ -1,11 +1,11 @@
 {{--
     ================================================================
-    PROJECT DETAIL — PAX Higher Institute
+    PROJECT DETAIL — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', ($project->title ?? 'Project') . ' — ' . ($setting->title ?? 'PAXHI'))
+@section('title', ($project->title ?? 'Project') . ' — ' . (institution_code()))
 @section('description', Str::limit(strip_tags($project->description ?? ''), 160))
 
 @section('content')

@@ -229,7 +229,7 @@
         @if(isset($generalSetting->logo_path))
             <img src="{{ asset('uploads/setting/'.$generalSetting->logo_path) }}" class="logo" alt="Logo">
         @endif
-        <h1>{{ $generalSetting->title ?? 'PAX HIGHER INSTITUTE (PAXHI)' }}</h1>
+        <h1>{{ institution_name() }} ({{ institution_code() }})</h1>
         <p>Form A3 &mdash; Course Registration Verification</p>
     </div>
 
@@ -359,7 +359,7 @@
     </div>
 
     <div class="footer">
-        <p>&copy; {{ date('Y') }} {{ $generalSetting->title ?? 'PAX HIGHER INSTITUTE' }}. All rights reserved.</p>
+        <p>&copy; {{ date('Y') }} {{ institution_name() }}. All rights reserved.</p>
     </div>
 </div>
 

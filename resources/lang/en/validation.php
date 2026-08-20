@@ -145,6 +145,53 @@ return [
     |
     */
 
-    'attributes' => [],
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Validation Attributes
+    |--------------------------------------------------------------------------
+    |
+    | Column names an applicant should never be shown. Without these the portal
+    | reports things like "The dob must be a date before today", naming a
+    | database column at somebody filling in a form.
+    |
+    */
+
+    'attributes' => [
+        'dob' => 'date of birth',
+        'first_name' => 'first name',
+        'last_name' => 'surname',
+        'other_names' => 'other names',
+        'national_id' => 'national ID number',
+        'national_id_issue_date' => 'national ID issue date',
+        'national_id_issue_place' => 'national ID place of issue',
+        'national_id_expiry_date' => 'national ID expiry date',
+        'passport_no' => 'passport number',
+        'passport_issue_date' => 'passport issue date',
+        'passport_issue_country' => 'passport country of issue',
+        'passport_expiry_date' => 'passport expiry date',
+        'present_province' => 'region of residence',
+        'present_district' => 'division of residence',
+        'present_village' => 'village of residence',
+        'present_address' => 'address',
+        'permanent_province' => 'permanent region',
+        'permanent_district' => 'permanent division',
+        'alternate_phone' => 'alternative phone number',
+        'mother_tongue' => 'mother tongue',
+        'studied_in_english' => 'studied in English',
+        'instruction_language_secondary' => 'language of instruction at secondary school',
+        'birth_city' => 'town or city of birth',
+        'birth_division' => 'division of birth',
+        'birth_region' => 'region of birth',
+        'birth_country' => 'country of birth',
+        'academic_year' => 'academic year',
+        'declaration_name' => 'name on the declaration',
+        'declaration_signed_date' => 'date of the declaration',
+        'agree_terms' => 'declaration',
+        'program' => 'programme',
+        'second_program_choice_id' => 'second programme choice',
+        'third_program_choice_id' => 'third programme choice',
+        'registration_fee_bank' => 'bank',
+        'registration_fee_reference' => 'payment reference',
+    ],
 
 ];

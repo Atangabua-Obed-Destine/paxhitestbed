@@ -25,6 +25,11 @@
                       <div class="row">
                         <!-- Form Start -->
                         <div class="form-group col-md-12">
+                            <label for="pre_title">Pre Title</label>
+                            <input type="text" class="form-control" name="pre_title" id="pre_title" value="{{ old('pre_title') }}">
+                        </div>
+
+                        <div class="form-group col-md-12">
                             <label for="title">{{ __('field_title') }} <span>*</span></label>
                             <input type="text" class="form-control" name="title" id="title" value="{{ old('title') }}" required>
 

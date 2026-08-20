@@ -1,13 +1,13 @@
 {{--
     ================================================================
-    GALLERY — PAX Higher Institute
+    GALLERY — {{ institution_name() }}
     Masonry-style lightbox gallery with Alpine.js
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Gallery — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Explore our photo gallery — campus life, academic events, ceremonies, and community moments at PAX Higher Institute.')
+@section('title', 'Gallery — ' . (institution_code()))
+@section('description', 'Explore our photo gallery — campus life, academic events, ceremonies, and community moments at ' . institution_name() . '.')
 
 @section('content')
 

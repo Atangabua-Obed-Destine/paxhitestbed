@@ -2,7 +2,9 @@
 
 namespace App\Observers;
 
+use App\Models\Application;
 use App\Models\Fee;
+use App\Services\ApplicationSubmissionService;
 use App\Services\Resit\ResitFeeService;
 use App\Services\TransactionAutoMapService;
 
@@ -10,11 +12,16 @@ class FeeObserver
 {
     protected $autoMapService;
     protected $resitFeeService;
+    protected $submissionService;
 
-    public function __construct(TransactionAutoMapService $autoMapService, ResitFeeService $resitFeeService)
-    {
+    public function __construct(
+        TransactionAutoMapService $autoMapService,
+        ResitFeeService $resitFeeService,
+        ApplicationSubmissionService $submissionService
+    ) {
         $this->autoMapService = $autoMapService;
         $this->resitFeeService = $resitFeeService;
+        $this->submissionService = $submissionService;
     }
 
     /**
@@ -64,6 +71,35 @@ class FeeObserver
         }
 
         $this->resitFeeService->syncFromFee($fee);
+
+        $this->submitApplicationIfFeeSettled($fee);
+    }
+
+    /**
+     * An admission fee that has just been settled submits its application.
+     *
+     * Every route to a paid fee ends here — mobile money, an admin verifying an
+     * uploaded receipt, and a walk-in payment taken at the counter all save the
+     * Fee — so hooking the model is what makes the behaviour whole rather than
+     * true of whichever paths someone remembered to change.
+     *
+     * The applicant cannot pay until the form is complete, so by this point
+     * there is genuinely nothing left for them to do; leaving the application
+     * sitting in draft would only wait on a button press that adds nothing.
+     */
+    protected function submitApplicationIfFeeSettled(Fee $fee): void
+    {
+        if (!$fee->wasChanged('status') || (int) $fee->status !== 1) {
+            return;
+        }
+
+        $application = Application::where('admission_fee_id', $fee->id)->first();
+        if (!$application) {
+            // Ordinary student fee, not an application fee.
+            return;
+        }
+
+        $this->submissionService->autoSubmit($application, __('admission fee was approved'));
     }
 
     /**

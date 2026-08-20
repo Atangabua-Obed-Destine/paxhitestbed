@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    EVENTS LISTING — PAX Higher Institute
+    EVENTS LISTING — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Events — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Discover upcoming and past events at PAX Higher Institute — academic conferences, cultural celebrations, community gatherings, and more.')
+@section('title', 'Events — ' . (institution_code()))
+@section('description', 'Discover upcoming and past events at ' . institution_name() . ' — academic conferences, cultural celebrations, community gatherings, and more.')
 
 @section('content')
 

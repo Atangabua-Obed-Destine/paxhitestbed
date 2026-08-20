@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\DegreeType;
 use App\Models\Field;
 use App\Support\ApplicationDocumentRequirements;
+use App\Support\ApplicationQualificationRequirements;
 
 /**
  * Resolves the EFFECTIVE application-form configuration for a degree type:
@@ -74,12 +75,77 @@ class DegreeTypeFormConfig
                     if ($row->assign_to_column) {
                         $docs[$row->doc_key]['assign_to_column'] = $row->assign_to_column;
                     }
+                    if ($row->qualification_group) {
+                        $docs[$row->doc_key]['qualification_group'] = $row->qualification_group;
+                    }
                 }
                 return $docs;
             }
         }
 
         return ApplicationDocumentRequirements::all();
+    }
+
+    /**
+     * The qualification cards for this degree type, keyed by qual_key. Same
+     * per-degree-then-global fallback as documents(), so the applicant portal
+     * and the admin screens cannot disagree about which cards exist.
+     *
+     * @return array<string,array>
+     */
+    public static function qualifications(?DegreeType $degreeType): array
+    {
+        if ($degreeType) {
+            $rows = $degreeType->applicationQualifications()
+                ->where('status', 1)->orderBy('sort_order')->get();
+
+            if ($rows->isNotEmpty()) {
+                $cards = [];
+                foreach ($rows as $row) {
+                    $cards[$row->qual_key] = [
+                        'label' => $row->label,
+                        'description' => $row->description,
+                        'required' => (bool) $row->required,
+                    ];
+                }
+                return $cards;
+            }
+        }
+
+        return ApplicationQualificationRequirements::all();
+    }
+
+    /**
+     * Split the document checklist into where each item is actually collected.
+     *
+     * This is the single place that decides it, so no screen can drift and ask
+     * for the same file twice — the bug this whole feature exists to remove.
+     *
+     * @param  array $identityKeys Keys collected on the Identification tab.
+     * @return array{identity: array, qualification: array<string,array>, remaining: array}
+     */
+    public static function partitionDocuments(array $documents, array $qualifications, array $identityKeys): array
+    {
+        $identity = [];
+        $qualification = [];
+        $remaining = [];
+
+        foreach ($documents as $key => $document) {
+            $group = $document['qualification_group'] ?? null;
+
+            if (in_array($key, $identityKeys, true)) {
+                $identity[$key] = $document;
+            } elseif ($group && isset($qualifications[$group])) {
+                // Grouped under its card. A group naming a card that is not
+                // configured falls through to the Documents step rather than
+                // vanishing from the form entirely.
+                $qualification[$group][$key] = $document;
+            } else {
+                $remaining[$key] = $document;
+            }
+        }
+
+        return ['identity' => $identity, 'qualification' => $qualification, 'remaining' => $remaining];
     }
 
     /**

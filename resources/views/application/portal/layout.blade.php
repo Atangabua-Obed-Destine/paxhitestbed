@@ -156,5 +156,7 @@
     <script src="{{ asset('dashboard/js/vendor-all.min.js') }}"></script>
     <script src="{{ asset('dashboard/plugins/bootstrap/js/bootstrap.min.js') }}"></script>
     @stack('scripts')
+
+    @include('components.chat-widget')
 </body>
 </html>

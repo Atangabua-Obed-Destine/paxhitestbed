@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use App\Models\DegreeType;
 use App\Models\DegreeTypeFieldSetting;
 use App\Models\DegreeTypeDocument;
+use App\Models\DegreeTypeQualification;
 use App\Models\DegreeTypeApplicationSetting;
 use App\Models\Field;
 
@@ -164,6 +165,7 @@ class DegreeTypeController extends Controller
         $data['fields'] = Field::where('slug', 'like', 'application_%')->orderBy('slug')->get();
         $data['fieldMap'] = $degreeType->fieldSettings()->pluck('status', 'slug')->toArray();
         $data['documents'] = $degreeType->applicationDocuments()->orderBy('sort_order')->get();
+        $data['qualifications'] = $degreeType->applicationQualifications()->orderBy('sort_order')->get();
         $data['settings'] = $degreeType->applicationSetting;
 
         return view($this->view.'.form-config', $data);
@@ -184,7 +186,52 @@ class DegreeTypeController extends Controller
             );
         }
 
-        // 2) Existing documents (update / delete).
+        // 2a) Qualification cards. Saved before documents so a document can be
+        //     attached to a card created in the same request.
+        $qualDeleteIds = (array) $request->input('qual_delete', []);
+        foreach ((array) $request->input('qual', []) as $qualId => $row) {
+            $qual = DegreeTypeQualification::where('degree_type_id', $degreeType->id)->find($qualId);
+            if (!$qual) {
+                continue;
+            }
+            if (in_array($qualId, $qualDeleteIds)) {
+                // Release the documents first, otherwise they would point at a
+                // card that no longer exists and vanish from the form entirely.
+                DegreeTypeDocument::where('degree_type_id', $degreeType->id)
+                    ->where('qualification_group', $qual->qual_key)
+                    ->update(['qualification_group' => null]);
+                $qual->delete();
+                continue;
+            }
+            $qual->label = $row['label'] ?? $qual->label;
+            $qual->description = $row['description'] ?? null;
+            $qual->required = !empty($row['required']);
+            $qual->status = !empty($row['status']);
+            $qual->sort_order = (int) ($row['sort_order'] ?? $qual->sort_order);
+            $qual->save();
+        }
+
+        // 2b) New qualification cards.
+        $newQualLabels = (array) $request->input('newqual_label', []);
+        $newQualKeys = (array) $request->input('newqual_key', []);
+        $newQualRequired = (array) $request->input('newqual_required', []);
+        foreach ($newQualLabels as $i => $label) {
+            if (!filled($label)) {
+                continue;
+            }
+            $key = filled($newQualKeys[$i] ?? null) ? Str::slug($newQualKeys[$i], '_') : Str::slug($label, '_');
+            DegreeTypeQualification::updateOrCreate(
+                ['degree_type_id' => $degreeType->id, 'qual_key' => $key],
+                [
+                    'label' => $label,
+                    'required' => !empty($newQualRequired[$i]),
+                    'status' => 1,
+                    'sort_order' => 100 + $i,
+                ]
+            );
+        }
+
+        // 3) Existing documents (update / delete).
         $deleteIds = (array) $request->input('doc_delete', []);
         foreach ((array) $request->input('doc', []) as $docId => $row) {
             $doc = DegreeTypeDocument::where('degree_type_id', $degreeType->id)->find($docId);
@@ -197,6 +244,10 @@ class DegreeTypeController extends Controller
             }
             $doc->label = $row['label'] ?? $doc->label;
             $doc->description = $row['description'] ?? null;
+            // Blank means "collect it on the Documents step".
+            $doc->qualification_group = filled($row['qualification_group'] ?? null)
+                ? $row['qualification_group']
+                : null;
             $doc->required = !empty($row['required']);
             $doc->status = !empty($row['status']);
             $doc->sort_order = (int) ($row['sort_order'] ?? $doc->sort_order);

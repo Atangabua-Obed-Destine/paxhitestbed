@@ -18,6 +18,7 @@ class BudgetAllocation extends Model
     protected $fillable = [
         'budget_id',
         'expense_category_id',
+        'budget_line_id',
         'department_id',
         'title',
         'allocated_amount',
@@ -50,6 +51,17 @@ class BudgetAllocation extends Model
     public function budget()
     {
         return $this->belongsTo(Budget::class, 'budget_id');
+    }
+
+    /**
+     * The Income & Expenditure sheet line this allocation belongs to.
+     *
+     * Null for departmental allocations, which use an expense category instead.
+     * Exactly one of the two is set.
+     */
+    public function budgetLine()
+    {
+        return $this->belongsTo(BudgetLine::class, 'budget_line_id');
     }
 
     public function expenseCategory()

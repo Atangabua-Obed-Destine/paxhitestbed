@@ -85,7 +85,10 @@ class TransactionAutoMapService
                     'transaction_date' => $transactionData['date'],
                     'description' => $defaultMapping->description ?? $transactionData['description'],
                     'mapped_at' => now(),
-                    'mapped_by' => Auth::id() ?? 1, // Use system user if no auth
+                    // Null when no one is logged in: a posting made by the scheduler or a
+                    // console command was not made by a person, and inventing a user id
+                    // breaks the foreign key wherever that id does not exist.
+                    'mapped_by' => Auth::id(),
                     'status' => 'active',
                 ]
             );
@@ -118,7 +121,7 @@ class TransactionAutoMapService
      */
     public function reverse($transactionType, $transactionId, $userId = null)
     {
-        $userId = $userId ?? (Auth::id() ?? 1);
+        $userId = $userId ?? Auth::id();
 
         $mapping = TransactionMapping::where('transaction_type', $transactionType)
             ->where('transaction_id', $transactionId)
@@ -136,11 +139,26 @@ class TransactionAutoMapService
                     : null;
 
                 if ($original) {
+                    // Where the reversal belongs.
+                    //
+                    // It used to be dated today but filed in the original's
+                    // period, which contradict each other whenever the
+                    // correction happens in a later month — and that is the
+                    // normal case. An entry has to sit inside the period it is
+                    // filed under, or the period totals stop meaning anything.
+                    //
+                    // Correcting a mistake while its period is still open
+                    // belongs in that period, so the month reads correctly.
+                    // Once the period is closed its figures have been reported,
+                    // so the correction becomes a new event today instead.
+                    [$reversalDate, $reversalPeriodId, $reversalYearId]
+                        = $this->reversalPlacement($original);
+
                     $reversal = JournalEntry::create([
                         'entry_number'        => $this->generateEntryNumber(),
-                        'entry_date'          => now()->toDateString(),
-                        'fiscal_year_id'      => $original->fiscal_year_id,
-                        'accounting_period_id'=> $original->accounting_period_id,
+                        'entry_date'          => $reversalDate,
+                        'fiscal_year_id'      => $reversalYearId,
+                        'accounting_period_id'=> $reversalPeriodId,
                         'journal_type'        => 'general',
                         'description'         => 'Reversal - ' . ($original->description ?? ($transactionType . ' #' . $transactionId)),
                         'reference_type'      => $transactionType . '_reversal',
@@ -196,10 +214,62 @@ class TransactionAutoMapService
     /**
      * Create journal entry from mapping
      */
+    /**
+     * Decide the date and period a reversal belongs in.
+     *
+     * Returns [date, accounting_period_id, fiscal_year_id]. The date always
+     * falls inside the period returned with it.
+     *
+     * @param  \App\Models\JournalEntry $original
+     * @return array{0:string,1:?int,2:?int}
+     */
+    private function reversalPlacement($original): array
+    {
+        $originalPeriod = $original->accounting_period_id
+            ? AccountingPeriod::find($original->accounting_period_id)
+            : null;
+
+        // Still open: correct the month it belongs to, so that month reads right.
+        if ($originalPeriod && !$originalPeriod->is_closed) {
+            return [
+                $original->entry_date instanceof \DateTimeInterface
+                    ? $original->entry_date->format('Y-m-d')
+                    : (string) $original->entry_date,
+                $originalPeriod->id,
+                $original->fiscal_year_id,
+            ];
+        }
+
+        // Closed, or unknown: the correction is a new event, dated today.
+        $today = now()->toDateString();
+
+        $currentPeriod = AccountingPeriod::where('is_closed', false)
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->first();
+
+        $fiscalYear = FiscalYear::whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->first() ?? FiscalYear::where('is_active', true)->first();
+
+        return [
+            $today,
+            $currentPeriod->id ?? null,
+            $currentPeriod->fiscal_year_id ?? ($fiscalYear->id ?? $original->fiscal_year_id),
+        ];
+    }
+
     private function createJournalEntry($mapping, $transactionData)
     {
-        // Get active fiscal year and period
-        $fiscalYear = FiscalYear::where('is_active', true)->first();
+        // The fiscal year is the one the transaction falls in, not whichever
+        // happens to be active. Posting today does not make a payment from last
+        // October part of this year — and backfilling would file every historical
+        // entry under the current year with no period at all.
+        $fiscalYear = FiscalYear::where('start_date', '<=', $mapping->transaction_date)
+            ->where('end_date', '>=', $mapping->transaction_date)
+            ->first()
+            ?? FiscalYear::where('is_active', true)->first();
+
         $accountingPeriod = AccountingPeriod::where('is_closed', false)
             ->where('fiscal_year_id', $fiscalYear->id ?? null)
             ->where('start_date', '<=', $mapping->transaction_date)
@@ -223,7 +293,7 @@ class TransactionAutoMapService
             'total_credit' => $mapping->amount,
             'is_posted' => false,
             'is_system_generated' => true,
-            'created_by' => Auth::id() ?? 1,
+            'created_by' => Auth::id(),
         ]);
 
         // Create debit line
@@ -248,7 +318,7 @@ class TransactionAutoMapService
 
         // Post the journal entry
         $journalEntry->is_posted = true;
-        $journalEntry->posted_by = Auth::id() ?? 1;
+        $journalEntry->posted_by = Auth::id();
         $journalEntry->posted_at = now();
         $journalEntry->save();
 

@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    CMS PAGE TEMPLATE — PAX Higher Institute
+    CMS PAGE TEMPLATE — {{ institution_name() }}
     Generic page rendered from the Page model (admin CMS)
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', ($page->meta_title ?? $page->title ?? 'Page') . ' — ' . ($setting->title ?? 'PAXHI'))
+@section('title', ($page->meta_title ?? $page->title ?? 'Page') . ' — ' . (institution_code()))
 @section('description', $page->meta_description ?? Str::limit(strip_tags($page->description ?? ''), 160))
 
 @section('content')

@@ -155,17 +155,13 @@
 </head>
 <body @if(!isset($is_preview) || !$is_preview) onload="window.print()" @endif>
 
-    <div class="header">
-        @if(isset($generalSetting->logo_path))
-        <img src="{{ asset('uploads/setting/'.$generalSetting->logo_path) }}" class="logo" alt="Logo">
-        @endif
-        <div class="institution-info">
-            <p style="font-weight: bold;">REPUBLIQUE DU CAMEROUN / REPUBLIC OF CAMEROON</p>
-            <h2>{{ $generalSetting->title ?? 'PAX HIGHER INSTITUTE (PAXHI)' }}</h2>
-            <p>{{ $generalSetting->address ?? 'Bamunka-Ndop, North West Region, Cameroon' }}</p>
-            <p>Tel: {{ $generalSetting->phone ?? '' }} | Email: {{ $generalSetting->email ?? '' }}</p>
-        </div>
-    </div>
+        {{-- The configured letterhead, exactly as authored, in place of a
+             masthead each form used to assemble from Settings. --}}
+        {{-- Despite the file name these are returned as views, not run through
+             dompdf, so the letterhead must resolve its image to a URL. A
+             filesystem path would simply not load in a browser. --}}
+        @include('partials.document-header', ['forPdf' => false, 'rule' => true])
+
 
     <div class="title">
         STUDENT COURSE REGISTRATION FORM (FORM A3)

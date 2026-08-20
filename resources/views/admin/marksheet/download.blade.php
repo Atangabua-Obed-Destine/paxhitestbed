@@ -8,7 +8,7 @@
 
     <style type="text/css">
     /* ===============================================
-       PAX HIGHER INSTITUTE — Official Transcript Print
+       {{ institution_name() }} — Official Transcript Print
        =============================================== */
 
     @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Source+Sans+Pro:wght@400;600;700&display=swap');
@@ -499,8 +499,9 @@
 @endphp
 
 <div class="tp-page printable">
-    {{-- Letterhead background --}}
-    <img src="{{ url('uploads/letterhead/paxletterhead.jpg') }}" class="tp-letterhead" alt="">
+    {{-- Letterhead, configured under Academic → Letterhead. Was a hardcoded
+         filename, so changing it meant editing this view. --}}
+    @include('partials.letterhead', ['forPdf' => true])
 
     <div class="tp-content">
 

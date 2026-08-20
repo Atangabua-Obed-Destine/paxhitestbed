@@ -222,8 +222,11 @@
         </div>
         @endif
         
+        {{-- The configured letterhead, exactly as authored, in place of a
+             company name assembled here. --}}
+        @include('partials.document-header', ['forPdf' => true, 'rule' => false])
+
         <div class="report-header">
-            <div class="company-name">{{ config('app.name', 'PAXHI') }}</div>
             <div class="report-title">@yield('report_title')</div>
             <div class="report-date">{{ __('Generated on') }}: {{ now()->format('F d, Y H:i') }}</div>
         </div>
@@ -231,7 +234,7 @@
         @yield('content')
         
         <div class="report-footer">
-            <p>{{ config('app.name', 'PAXHI') }} - {{ __('Accounting Module') }}</p>
+            <p>{{ institution_name() }} - {{ __('Accounting Module') }}</p>
             <p>{{ __('This report is system generated') }}</p>
         </div>
     </div>

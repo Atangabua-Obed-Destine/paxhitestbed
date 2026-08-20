@@ -215,7 +215,7 @@
                                     </div>
                                     <div class="form-group col-md-4">
                                         <label for="nationality">{{ __('field_nationality') }} <span>*</span></label>
-                                        <input type="text" class="form-control" name="nationality" id="nationality" value="{{ old('nationality') }}" required>
+                                        @include('partials.country-select', ['name' => 'nationality', 'id' => 'nationality', 'value' => old('nationality'), 'required' => true])
                                         <div class="invalid-feedback">{{ __('Provide your nationality.') }}</div>
                                     </div>
                                 </div>
@@ -352,7 +352,7 @@
                                 <div class="row">
                                     <div class="form-group col-md-4">
                                         <label for="country">{{ __('field_country') }} <span>*</span></label>
-                                        <input type="text" class="form-control" name="country" id="country" value="{{ old('country', 'Cameroon') }}" required>
+                                        @include('partials.country-select', ['name' => 'country', 'id' => 'country', 'value' => old('country'), 'required' => true])
                                         <div class="invalid-feedback">{{ __('Enter the country where you currently reside.') }}</div>
                                     </div>
                                     <div class="form-group col-md-4">
@@ -509,7 +509,7 @@
                                                 </div>
                                                 <div class="form-group col-md-4">
                                                     <label>{{ __('Country') }}</label>
-                                                    <input type="text" class="form-control" name="guardians[{{ $index }}][country]" value="{{ $guardian['country'] ?? '' }}">
+                                                    @include('partials.country-select', ['name' => "guardians[{$index}][country]", 'value' => $guardian['country'] ?? null])
                                                 </div>
                                             </div>
                                         </div>
@@ -532,8 +532,18 @@
                                             </div>
                                             <div class="row">
                                                 <div class="form-group col-md-6">
-                                                    <label>{{ __('Institution Name') }} <span>*</span></label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][institution_name]" value="{{ $history['institution_name'] ?? '' }}" required>
+                                                    <label>{{ __('Certificate / Qualification') }} <span>*</span></label>
+                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][certificate_obtained]" value="{{ $history['certificate_obtained'] ?? '' }}" required>
+                                                </div>
+                                                <div class="form-group col-md-6">
+                                                    <label>{{ __('Awarding body') }}</label>
+                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][awarding_body]" value="{{ $history['awarding_body'] ?? '' }}">
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="form-group col-md-6">
+                                                    <label>{{ __('School / Institution attended') }}</label>
+                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][institution_name]" value="{{ $history['institution_name'] ?? '' }}">
                                                 </div>
                                                 <div class="form-group col-md-3">
                                                     <label>{{ __('City') }}</label>
@@ -541,25 +551,21 @@
                                                 </div>
                                                 <div class="form-group col-md-3">
                                                     <label>{{ __('Country') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][country]" value="{{ $history['country'] ?? '' }}">
+                                                    @include('partials.country-select', ['name' => "academic_history[{$index}][country]", 'value' => $history['country'] ?? null])
                                                 </div>
                                             </div>
                                             <div class="row">
-                                                <div class="form-group col-md-3">
+                                                <div class="form-group col-md-6">
                                                     <label>{{ __('Language of Instruction') }}</label>
                                                     <input type="text" class="form-control" name="academic_history[{{ $index }}][instruction_language]" value="{{ $history['instruction_language'] ?? '' }}">
                                                 </div>
                                                 <div class="form-group col-md-3">
-                                                    <label>{{ __('From (Year)') }}</label>
-                                                    <input type="date" class="form-control" name="academic_history[{{ $index }}][date_from]" value="{{ $history['date_from'] ?? '' }}">
+                                                    <label>{{ __('Start year') }}</label>
+                                                    <input type="number" class="form-control" min="1900" max="2200" name="academic_history[{{ $index }}][start_year]" value="{{ $history['start_year'] ?? '' }}">
                                                 </div>
                                                 <div class="form-group col-md-3">
-                                                    <label>{{ __('To (Year)') }}</label>
-                                                    <input type="date" class="form-control" name="academic_history[{{ $index }}][date_to]" value="{{ $history['date_to'] ?? '' }}">
-                                                </div>
-                                                <div class="form-group col-md-3">
-                                                    <label>{{ __('Certificate Obtained') }}</label>
-                                                    <input type="text" class="form-control" name="academic_history[{{ $index }}][certificate_obtained]" value="{{ $history['certificate_obtained'] ?? '' }}">
+                                                    <label>{{ __('Completion year') }}</label>
+                                                    <input type="number" class="form-control" min="1900" max="2200" name="academic_history[{{ $index }}][end_year]" value="{{ $history['end_year'] ?? '' }}">
                                                 </div>
                                             </div>
                                             <div class="row">
@@ -1203,7 +1209,7 @@
                         </div>
                         <div class="form-group col-md-4">
                             <label>{{ __('Country') }}</label>
-                            <input type="text" class="form-control" name="guardians[${index}][country]">
+                            <select class="form-control" name="guardians[${index}][country]">${countryOptionsHtml()}</select>
                         </div>
                     </div>
                 </div>
@@ -1228,6 +1234,7 @@
         };
 
         // Academic History Repeater
+@include('partials.country-options-js')
         const academicTemplate = () => {
             const index = $('#academicHistoryRepeater .academic-item').length;
             return `
@@ -1237,8 +1244,18 @@
                     </div>
                     <div class="row">
                         <div class="form-group col-md-6">
-                            <label>{{ __('Institution Name') }} <span>*</span></label>
-                            <input type="text" class="form-control" name="academic_history[${index}][institution_name]" required>
+                            <label>{{ __('Certificate / Qualification') }} <span>*</span></label>
+                            <input type="text" class="form-control" name="academic_history[${index}][certificate_obtained]" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>{{ __('Awarding body') }}</label>
+                            <input type="text" class="form-control" name="academic_history[${index}][awarding_body]">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="form-group col-md-6">
+                            <label>{{ __('School / Institution attended') }}</label>
+                            <input type="text" class="form-control" name="academic_history[${index}][institution_name]">
                         </div>
                         <div class="form-group col-md-3">
                             <label>{{ __('City') }}</label>
@@ -1246,25 +1263,21 @@
                         </div>
                         <div class="form-group col-md-3">
                             <label>{{ __('Country') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][country]">
+                            <select class="form-control" name="academic_history[${index}][country]">${countryOptionsHtml()}</select>
                         </div>
                     </div>
                     <div class="row">
-                        <div class="form-group col-md-3">
+                        <div class="form-group col-md-6">
                             <label>{{ __('Language of Instruction') }}</label>
                             <input type="text" class="form-control" name="academic_history[${index}][instruction_language]">
                         </div>
                         <div class="form-group col-md-3">
-                            <label>{{ __('From (Year)') }}</label>
-                            <input type="date" class="form-control" name="academic_history[${index}][date_from]">
+                            <label>{{ __('Start year') }}</label>
+                            <input type="number" class="form-control" min="1900" max="2200" name="academic_history[${index}][start_year]">
                         </div>
                         <div class="form-group col-md-3">
-                            <label>{{ __('To (Year)') }}</label>
-                            <input type="date" class="form-control" name="academic_history[${index}][date_to]">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label>{{ __('Certificate Obtained') }}</label>
-                            <input type="text" class="form-control" name="academic_history[${index}][certificate_obtained]">
+                            <label>{{ __('Completion year') }}</label>
+                            <input type="number" class="form-control" min="1900" max="2200" name="academic_history[${index}][end_year]">
                         </div>
                     </div>
                     <div class="row">

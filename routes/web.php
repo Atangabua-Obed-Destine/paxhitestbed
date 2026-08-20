@@ -98,6 +98,8 @@ Route::middleware(['XSS'])->namespace('Web')->group(function () {
         Route::post('application/{application}/save-draft', 'ApplicationController@saveDraft')->name('application.save-draft');
         Route::post('application/{application}/resubmit-documents', 'ApplicationController@resubmitDocuments')->name('application.resubmit-documents');
         Route::get('application/{application}/timeline', 'ApplicationController@timeline')->name('application.timeline');
+        Route::get('application/{application}/print', 'ApplicationController@printPreview')->name('application.print');
+        Route::get('application/{application}/readiness', 'ApplicationController@readiness')->name('application.readiness');
         Route::post('application/{application}/admission-fee/payment/upload', 'ApplicationController@uploadAdmissionFeeReceipt')->name('application.admission-fee.upload');
     });
 
@@ -362,6 +364,11 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('academic/faculty', 'FacultyController');
     Route::resource('academic/sector', 'SectorController');
     Route::resource('academic/academic-department', 'AcademicDepartmentController');
+    // Institution letterhead, reused by every printable document.
+    Route::get('academic/letterhead', 'LetterheadController@index')->name('letterhead.index');
+    Route::post('academic/letterhead', 'LetterheadController@update')->name('letterhead.update');
+    Route::get('academic/letterhead/preview', 'LetterheadController@preview')->name('letterhead.preview');
+
     Route::get('academic/degree-type/{degree_type}/form-config', 'DegreeTypeController@formConfig')->name('degree-type.form-config');
     Route::post('academic/degree-type/{degree_type}/form-config', 'DegreeTypeController@saveFormConfig')->name('degree-type.form-config.save');
     Route::get('academic/degree-type/{degree_type}/acceptance-letter/preview', 'DegreeTypeController@previewAcceptanceLetter')->name('degree-type.acceptance-letter.preview');
@@ -555,6 +562,29 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('installment-payment-verification/{id}', 'InstallmentPaymentVerificationController@show')->name('installment-payment-verification.show');
     Route::post('installment-payment-verification/{id}/approve', 'InstallmentPaymentVerificationController@approve')->name('installment-payment-verification.approve');
     Route::post('installment-payment-verification/{id}/reject', 'InstallmentPaymentVerificationController@reject')->name('installment-payment-verification.reject');
+
+    // The rows of the Income & Expenditure sheet. Declared before budget/{id}
+    // for the same reason as budget-sheet below.
+    Route::get('budget-line', 'BudgetLineController@index')->name('budget-line.index');
+    Route::post('budget-line/store', 'BudgetLineController@store')->name('budget-line.store');
+    Route::post('budget-line/{id}/update', 'BudgetLineController@update')->name('budget-line.update');
+    Route::post('budget-line/{id}/toggle', 'BudgetLineController@toggle')->name('budget-line.toggle');
+    Route::post('budget-line/{id}/delete', 'BudgetLineController@destroy')->name('budget-line.delete');
+
+    // Income & Expenditure sheet. Declared before the budget routes so
+    // "budget-sheet" is never swallowed by budget/{id}.
+    Route::get('budget-sheet', 'BudgetSheetController@index')->name('budget-sheet.index');
+    Route::post('budget-sheet/store', 'BudgetSheetController@store')->name('budget-sheet.store');
+    Route::get('budget-sheet/{id}/pdf', 'BudgetSheetController@exportPdf')->name('budget-sheet.pdf');
+    Route::get('budget-sheet/{id}/excel', 'BudgetSheetController@exportExcel')->name('budget-sheet.excel');
+    Route::get('budget-sheet/{id}', 'BudgetSheetController@show')->name('budget-sheet.show');
+    Route::post('budget-sheet/{id}/figures', 'BudgetSheetController@saveFigures')->name('budget-sheet.figures');
+    Route::post('budget-sheet/{id}/period', 'BudgetSheetController@updatePeriod')->name('budget-sheet.period');
+    Route::post('budget-sheet/{id}/delete', 'BudgetSheetController@destroy')->name('budget-sheet.delete');
+    Route::post('budget-sheet/{id}/submit', 'BudgetSheetController@submit')->name('budget-sheet.submit');
+    Route::post('budget-sheet/{id}/approve', 'BudgetSheetController@approve')->name('budget-sheet.approve');
+    Route::post('budget-sheet/{id}/activate', 'BudgetSheetController@activate')->name('budget-sheet.activate');
+    Route::post('budget-sheet/{id}/close', 'BudgetSheetController@close')->name('budget-sheet.close');
 
     // Budget Routes
     Route::get('budget', 'BudgetController@index')->name('budget.index');
@@ -763,6 +793,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('staff/staff-id-card-update-photo/{id}', 'StaffIdCardController@updatePhoto')->name('staff-id-card.update-photo');
     Route::get('staff/staff-id-card-download/{id}', 'StaffIdCardController@download')->name('staff-id-card.download');
     Route::post('staff/staff-id-card-download-zip', 'StaffIdCardController@downloadZip')->name('staff-id-card.download-zip');
+    Route::get('staff/staff-id-card-setting', 'StaffIdCardSettingController@index')->name('staff-id-card-setting.index');
+    Route::post('staff/staff-id-card-setting', 'StaffIdCardSettingController@store')->name('staff-id-card-setting.store');
 
     // Payroll Routes
     Route::resource('staff/payroll', 'PayrollController');
@@ -1021,6 +1053,20 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
     // Application Setting
     Route::resource('setting/application-setting', 'ApplicationSettingController');
+
+    // Context-aware chat assistant
+    Route::get('chat/setting', 'ChatSettingController@index')->name('chat-setting.index');
+    Route::post('chat/setting', 'ChatSettingController@update')->name('chat-setting.update');
+
+    Route::get('chat/conversation', 'ChatConversationController@index')->name('chat-conversation.index');
+    Route::get('chat/conversation/{chatConversation}', 'ChatConversationController@show')->name('chat-conversation.show');
+    Route::delete('chat/conversation/{chatConversation}', 'ChatConversationController@destroy')->name('chat-conversation.destroy');
+
+    Route::get('chat/knowledge', 'ChatKnowledgeController@index')->name('chat-knowledge.index');
+    Route::post('chat/knowledge', 'ChatKnowledgeController@store')->name('chat-knowledge.store');
+    Route::get('chat/knowledge/{chatKnowledge}/edit', 'ChatKnowledgeController@edit')->name('chat-knowledge.edit');
+    Route::put('chat/knowledge/{chatKnowledge}', 'ChatKnowledgeController@update')->name('chat-knowledge.update');
+    Route::delete('chat/knowledge/{chatKnowledge}', 'ChatKnowledgeController@destroy')->name('chat-knowledge.destroy');
 
     // Religion Routes
     Route::resource('setting/religion', 'ReligionController');
@@ -1395,3 +1441,17 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     });
 
 }); // End of admin route group
+
+/*
+|--------------------------------------------------------------------------
+| Context-aware chat assistant
+|--------------------------------------------------------------------------
+| One endpoint set for all four surfaces. Identity is resolved server-side by
+| ChatContext from the auth guards, so there is no per-portal route to keep in
+| sync and no way for a request to declare who it is.
+*/
+Route::middleware(['web'])->group(function () {
+    Route::post('chat/message', 'ChatController@message')->name('chat.message');
+    Route::get('chat/history', 'ChatController@history')->name('chat.history');
+    Route::post('chat/reset', 'ChatController@reset')->name('chat.reset');
+});

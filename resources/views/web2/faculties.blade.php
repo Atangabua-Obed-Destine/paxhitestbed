@@ -1,12 +1,12 @@
 {{--
     ================================================================
-    FACULTIES LISTING — PAX Higher Institute
+    FACULTIES LISTING — {{ institution_name() }}
     ================================================================
 --}}
 @extends('web2.layouts.master')
 
-@section('title', 'Faculties — ' . ($setting->title ?? 'PAXHI'))
-@section('description', 'Explore the faculties at PAX Higher Institute — each committed to academic excellence and moral formation.')
+@section('title', 'Faculties — ' . (institution_code()))
+@section('description', 'Explore the faculties at ' . institution_name() . ' — each committed to academic excellence and moral formation.')
 
 @section('content')
 

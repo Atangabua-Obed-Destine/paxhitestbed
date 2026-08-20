@@ -52,6 +52,12 @@ class DegreeType extends Model
         return $this->hasMany(DegreeTypeDocument::class, 'degree_type_id')->orderBy('sort_order');
     }
 
+    /** The qualification cards shown on the Academic Qualifications step. */
+    public function applicationQualifications()
+    {
+        return $this->hasMany(DegreeTypeQualification::class, 'degree_type_id')->orderBy('sort_order');
+    }
+
     public function applicationSetting()
     {
         return $this->hasOne(DegreeTypeApplicationSetting::class, 'degree_type_id');

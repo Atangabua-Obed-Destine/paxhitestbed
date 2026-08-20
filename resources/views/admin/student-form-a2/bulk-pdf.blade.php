@@ -171,16 +171,13 @@
     @endphp
     
     <div class="page">
-        <div class="header">
-            @if(isset($generalSetting->logo_path))
-            <img src="{{ asset('uploads/setting/'.$generalSetting->logo_path) }}" class="logo" alt="Logo">
-            @endif
-            <div class="institution-info">
-                <h2>{{ $generalSetting->title ?? 'PAX HIGHER INSTITUTE (PAXHI)' }}</h2>
-                <p>{{ $generalSetting->address ?? 'Bamunka-Ndop, North West Region, Cameroon' }}</p>
-                <p>Tel: {{ $generalSetting->phone ?? '' }} | Email: {{ $generalSetting->email ?? '' }}</p>
-            </div>
-        </div>
+        {{-- The configured letterhead, exactly as authored, in place of a
+             masthead each form used to assemble from Settings. --}}
+        {{-- Despite the file name these are returned as views, not run through
+             dompdf, so the letterhead must resolve its image to a URL. A
+             filesystem path would simply not load in a browser. --}}
+        @include('partials.document-header', ['forPdf' => false, 'rule' => true])
+
 
         <div class="title">
             ADMISSION CONFIRMATION (FORM A2) – {{ $enrollment->program->shortcode ?? 'PROGRAM' }}
@@ -276,7 +273,7 @@
         </table>
 
         <div class="footer-note">
-            The Finance Department of PAXHI confirms that this candidate has paid all the above fees and can therefore be registered in the University's Register and on the class list of the Faculty/School.
+            The Finance Department of {{ institution_code() }} confirms that this candidate has paid all the above fees and can therefore be registered in the University's Register and on the class list of the Faculty/School.
         </div>
 
         <div class="signature-section">
@@ -287,7 +284,7 @@
         <div class="section-header">PART 3: REGISTRY CLEARANCE</div>
         
         <div class="footer-note">
-            This is to certify that the above-named candidate has completed all required registration formalities at Pax Higher Institute and has been assigned the following matriculation number:
+            This is to certify that the above-named candidate has completed all required registration formalities at {{ institution_name() }} and has been assigned the following matriculation number:
         </div>
 
         <div style="margin-top: 15px; margin-bottom: 15px;">

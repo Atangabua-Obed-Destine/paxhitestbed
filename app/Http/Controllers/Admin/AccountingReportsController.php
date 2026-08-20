@@ -262,32 +262,59 @@ class AccountingReportsController extends Controller
      */
     protected function generateBudgetVsActualReport($fiscalYearId)
     {
-        // This would integrate with a Budget module if it exists
-        // For now, return structure for manual entry
-        
-        $accounts = ChartOfAccount::whereIn('account_code', function ($q) {
-            $q->select('account_code')
-              ->from('chart_of_accounts')
-              ->where(function ($sq) {
-                  $sq->where('account_code', 'like', '6%') // Expenses
-                     ->orWhere('account_code', 'like', '7%'); // Revenue
-              });
-        })->orderBy('account_code')->get();
+        $fiscalYear = \App\Models\FiscalYear::find($fiscalYearId);
+        if (!$fiscalYear) {
+            return [];
+        }
+
+        // Report against budget lines rather than ledger accounts. The sheet is
+        // finer grained than the statutory chart, and the figures come from the
+        // same resolver the sheet itself uses, so the two can never disagree.
+        $actualsService = app(\App\Services\BudgetActualsService::class);
+
+        $budget = \App\Models\Budget::where('is_institutional', true)
+            ->where('start_date', '<=', $fiscalYear->end_date)
+            ->where('end_date', '>=', $fiscalYear->start_date)
+            ->orderByDesc('start_date')
+            ->first();
+
+        $from = $budget ? optional($budget->start_date)->format('Y-m-d') : $fiscalYear->start_date->format('Y-m-d');
+        $to = $budget ? optional($budget->end_date)->format('Y-m-d') : $fiscalYear->end_date->format('Y-m-d');
+
+        $resolved = $actualsService->forPeriod($from, $to);
+        $actuals = $actualsService->withHeaderTotals($resolved['lines']);
+
+        $budgeted = [];
+        if ($budget) {
+            $budgeted = \App\Models\BudgetAllocation::where('budget_id', $budget->id)
+                ->whereNotNull('budget_line_id')
+                ->pluck('allocated_amount', 'budget_line_id')
+                ->map(fn ($v) => (float) $v)->toArray();
+            $budgeted = $actualsService->withHeaderTotals($budgeted);
+        }
 
         $report = [];
-        foreach ($accounts as $account) {
-            $actual = $this->getAccountBalance($account->id, $fiscalYearId);
-            
-            // In a full implementation, budget would come from a Budget model
-            $budget = 0;
-            
+        foreach (\App\Models\BudgetLine::sheet() as $line) {
+            $budgetAmount = (float) ($budgeted[$line->id] ?? 0);
+            $actualAmount = (float) ($actuals[$line->id] ?? 0);
+
+            // Skip lines with no activity either side, so the report is short
+            // enough to read.
+            if ($budgetAmount == 0.0 && $actualAmount == 0.0) {
+                continue;
+            }
+
             $report[] = [
-                'account_code' => $account->account_code,
-                'account_name' => $account->account_name,
-                'budget' => $budget,
-                'actual' => $actual,
-                'variance' => $budget - $actual,
-                'variance_percent' => $budget != 0 ? (($budget - $actual) / $budget) * 100 : 0,
+                'account_code' => $line->code,
+                'account_name' => $line->name,
+                'section' => $line->section,
+                'is_header' => (bool) $line->is_header,
+                'budget' => $budgetAmount,
+                'actual' => $actualAmount,
+                'variance' => $budgetAmount - $actualAmount,
+                'variance_percent' => $budgetAmount != 0.0
+                    ? (($budgetAmount - $actualAmount) / $budgetAmount) * 100
+                    : 0,
             ];
         }
 

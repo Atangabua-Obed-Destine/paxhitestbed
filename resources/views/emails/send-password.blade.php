@@ -130,7 +130,7 @@
                         @endisset
 
                         @isset($data['student_id'])
-                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Congratulations on your admission to PAX HIGHER INSTITUTE.</p>
+                        <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">Congratulations on your admission to {{ institution_name() }}.</p>
                         <p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; margin-bottom: 15px;">{{ __('field_student_id') }}: {{ $data['student_id'] }}</p>
                         @endisset
 

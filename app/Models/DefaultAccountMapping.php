@@ -17,6 +17,7 @@ class DefaultAccountMapping extends Model
 
     protected $fillable = [
         'mapping_type',
+        'budget_line_id',
         'category_id',
         'debit_account_id',
         'credit_account_id',

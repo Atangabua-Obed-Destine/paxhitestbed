@@ -27,6 +27,8 @@ use Carbon\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\File;
 use App\Support\ApplicationDocumentRequirements;
+use App\Support\ApplicationQualificationCards;
+use App\Services\DegreeTypeFormConfig;
 use Illuminate\Support\Facades\Mail;
 use App\Models\MailSetting;
 use App\Mail\SendPassword;
@@ -149,8 +151,12 @@ class ApplicationController extends Controller
         if(isset($request->program) || isset($request->status) || isset($request->registration_no) || isset($request->degree_type) || isset($request->session) || !empty($applicantQuery)){
             // Application Filter
             $applications = Application::with(['admissionFee.paymentReceipts', 'degreeType', 'session', 'applicant', 'program'])
-                        ->whereDate('apply_date', '>=', $start_date)
-                        ->whereDate('apply_date', '<=', $end_date);
+                        // Falls back to created_at: an application with no
+                        // apply_date used to match no date range at all and
+                        // vanish from this list entirely, which is a worse
+                        // failure than showing it against the day it was begun.
+                        ->whereRaw('DATE(COALESCE(apply_date, created_at)) >= ?', [$start_date])
+                        ->whereRaw('DATE(COALESCE(apply_date, created_at)) <= ?', [$end_date]);
                         if(!empty($request->batch)){
                             $applications->where('batch_id', $batch);
                         }
@@ -676,7 +682,7 @@ class ApplicationController extends Controller
         $data['view'] = $this->view;
         $data['path'] = $this->path;
         $data['access'] = $this->access;
-        $data['documentRequirements'] = ApplicationDocumentRequirements::all();
+        $data['documentRequirements'] = DegreeTypeFormConfig::documents($application->degreeType);
         $data['setting'] = Setting::where('status', '1')->first();
 
         return view($this->view.'.show', $data);
@@ -729,12 +735,15 @@ class ApplicationController extends Controller
                 ->orderBy('title', 'asc')
                 ->get(),
             'faculties' => \App\Models\Faculty::where('status', '1')->orderBy('title', 'asc')->get(),
-            'programs' => Program::where('status', '1')->orderBy('title', 'asc')->get(),
+            'programs' => Program::where('status', '1')
+                ->where('degree_type_id', $application->degree_type_id)
+                ->orderBy('title', 'asc')
+                ->get(),
             'religions' => \App\Models\Religion::where('status', '1')->orderBy('title', 'asc')->get(),
             'religions_json' => \App\Models\Religion::where('status', '1')->orderBy('title', 'asc')->get()->keyBy('id')->toJson(),
             'batches' => Batch::where('status', '1')->orderBy('id', 'desc')->get(),
             'statuses' => StatusType::where('status', '1')->orderBy('title')->get(),
-            'documentRequirements' => ApplicationDocumentRequirements::all(),
+            'documentRequirements' => DegreeTypeFormConfig::documents($application->degreeType),
             'guardianTypes' => ['Parent', 'Sponsor', 'Guardian'],
             'fluencyOptions' => ['excellent', 'good', 'fair', 'minimal'],
             'setting' => Setting::where('status', '1')->first(),
@@ -752,16 +761,12 @@ class ApplicationController extends Controller
      */
     public function update(Request $request, Application $application)
     {
-        $documentRequirements = ApplicationDocumentRequirements::all();
+        $degreeType = $application->degreeType;
+        $documentRequirements = DegreeTypeFormConfig::documents($degreeType);
         $newResubmissionRequests = [];
 
-        $fieldStatusCache = [];
-        $fieldEnabled = function (string $slug) use (&$fieldStatusCache): bool {
-            if (!array_key_exists($slug, $fieldStatusCache)) {
-                $fieldStatusCache[$slug] = (int) optional(Field::field($slug))->status === 1;
-            }
-
-            return $fieldStatusCache[$slug];
+        $fieldEnabled = function (string $slug) use ($degreeType): bool {
+            return DegreeTypeFormConfig::fieldEnabled($degreeType, $slug);
         };
 
         $request->merge([
@@ -923,12 +928,14 @@ class ApplicationController extends Controller
         if ($academicHistoryEnabled) {
             $rules['academic_history'] = ['nullable', 'array'];
             $rules['academic_history.*.id'] = ['nullable', 'exists:application_academic_histories,id'];
+            $rules['academic_history.*.qualification_key'] = ['nullable', 'string', 'max:100'];
             $rules['academic_history.*.institution_name'] = ['nullable', 'string', 'max:255'];
+            $rules['academic_history.*.awarding_body'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.city'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.country'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.instruction_language'] = ['nullable', 'string', 'max:191'];
-            $rules['academic_history.*.date_from'] = ['nullable', 'date'];
-            $rules['academic_history.*.date_to'] = ['nullable', 'date'];
+            $rules['academic_history.*.start_year'] = ['nullable', 'integer', 'digits:4'];
+            $rules['academic_history.*.end_year'] = ['nullable', 'integer', 'digits:4'];
             $rules['academic_history.*.certificate_obtained'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.gce_ol_detail'] = ['nullable', 'string', 'max:191'];
             $rules['academic_history.*.gce_al_detail'] = ['nullable', 'string', 'max:191'];
@@ -1103,7 +1110,7 @@ class ApplicationController extends Controller
 
             if ($academicHistoryEnabled) {
                 $histories = collect($validated['academic_history'] ?? [])->filter(function ($history) {
-                    return filled($history['institution_name'] ?? null);
+                    return ApplicationQualificationCards::rowHasContent((array) $history);
                 })->values();
 
                 $keptHistoryIds = [];
@@ -1115,12 +1122,17 @@ class ApplicationController extends Controller
                         $historyModel = $application->academicHistories()->make();
                     }
 
-                    $historyModel->institution_name = $historyData['institution_name'];
+                    // Keep the row bound to its card, otherwise a staff edit
+                    // would orphan it and the applicant's next visit would show
+                    // an empty qualification alongside a duplicate.
+                    $historyModel->qualification_key = $historyData['qualification_key'] ?? $historyModel->qualification_key;
+                    $historyModel->institution_name = $historyData['institution_name'] ?? null;
+                    $historyModel->awarding_body = $historyData['awarding_body'] ?? null;
                     $historyModel->city = $historyData['city'] ?? null;
                     $historyModel->country = $historyData['country'] ?? null;
                     $historyModel->instruction_language = $historyData['instruction_language'] ?? null;
-                    $historyModel->date_from = $historyData['date_from'] ?? null;
-                    $historyModel->date_to = $historyData['date_to'] ?? null;
+                    $historyModel->start_year = $historyData['start_year'] ?? null;
+                    $historyModel->end_year = $historyData['end_year'] ?? null;
                     $historyModel->certificate_obtained = $historyData['certificate_obtained'] ?? null;
                     $historyModel->gce_ol_detail = $historyData['gce_ol_detail'] ?? null;
                     $historyModel->gce_al_detail = $historyData['gce_al_detail'] ?? null;
@@ -1303,7 +1315,7 @@ class ApplicationController extends Controller
         $data['row'] = $application;
         $data['path'] = $this->path;
         $data['setting'] = Setting::where('status', '1')->first();
-        $data['documentRequirements'] = ApplicationDocumentRequirements::all();
+        $data['documentRequirements'] = DegreeTypeFormConfig::documents($application->degreeType);
         
         // Load necessary relationships
         $application->load([
@@ -1323,14 +1335,10 @@ class ApplicationController extends Controller
             'religionDetail',
         ]);
 
-        // Field Status Cache
-        $fieldStatusCache = [];
-        $data['fieldEnabled'] = function (string $slug) use (&$fieldStatusCache): bool {
-            if (!array_key_exists($slug, $fieldStatusCache)) {
-                $fieldStatusCache[$slug] = (int) optional(Field::field($slug))->status === 1;
-            }
-
-            return $fieldStatusCache[$slug];
+        // Field toggles resolved per degree type (matches the applicant portal)
+        $degreeType = $application->degreeType;
+        $data['fieldEnabled'] = function (string $slug) use ($degreeType): bool {
+            return DegreeTypeFormConfig::fieldEnabled($degreeType, $slug);
         };
 
         return view($this->view.'.preview', $data);
