@@ -85,3 +85,31 @@ if (!function_exists('site_subtitle')) {
         return trim((string) optional(\App\Models\Setting::first())->site_subtitle);
     }
 }
+
+if (!function_exists('avatar_url')) {
+    /**
+     * A portrait URL that always points at something that exists.
+     *
+     * Views used to build `asset('uploads/user/' . $photo)` unconditionally.
+     * When the column is null that resolves to the directory itself — the server
+     * answers 403 — and when it names a file that is no longer on disk, 404.
+     * Both fire a failed request on every page load, and an onerror fallback
+     * hides the picture without preventing the request.
+     *
+     * @param  string|null $photo     the stored filename, if any
+     * @param  string      $directory where that filename lives under uploads/
+     * @param  string|null $fallback  asset path to use instead; a neutral
+     *                                placeholder when not given
+     */
+    function avatar_url(?string $photo, string $directory = 'user', ?string $fallback = null): string
+    {
+        $fallback = $fallback ?: 'dashboard/images/user.jpg';
+        $photo = trim((string) $photo);
+
+        if ($photo !== '' && is_file(public_path('uploads/' . $directory . '/' . $photo))) {
+            return asset('uploads/' . $directory . '/' . $photo);
+        }
+
+        return asset($fallback);
+    }
+}

@@ -552,6 +552,13 @@
 
                 @can('payment-receipt-verify')
                 <li class="{{ Request::is('admin/payment-verification*') ? 'active' : '' }}"><a href="{{ route('admin.payment-verification.index') }}" class="">{{ trans_choice('module_payment_verification', 2) }}</a></li>
+                @endcan
+
+                {{-- Its own permission. This used to hang off payment-receipt-verify,
+                     which gates a different screen — so the report was granted to
+                     whoever could verify receipts and withheld from everyone else,
+                     with no way to say otherwise. --}}
+                @can('admission-fees-report-view')
                 <li class="{{ Request::is('admin/admission-fees-report*') ? 'active' : '' }}"><a href="{{ route('admin.admission-fees-report.index') }}" class="">{{ __('Admission Fees') }}</a></li>
                 @endcan
 

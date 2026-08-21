@@ -172,7 +172,7 @@
                                     </td>
                                     <td><small>{{ optional($fee->assign_date)->format('Y-m-d') }}</small></td>
                                     <td class="text-right">
-                                        @if($balance > 0)
+                                        @if($balance > 0 && auth()->user()->can('admission-fees-report-walk-in'))
                                             <button type="button" class="btn btn-sm btn-primary walkin-open"
                                                 data-bs-toggle="modal"
                                                 data-bs-target="#walkinModal"
@@ -199,7 +199,7 @@
                                                 ->where('verification_status', 'approved')->count();
                                             $removable = $settledPayments === 0 && (float) $fee->paid_amount <= 0;
                                         @endphp
-                                        @if($removable)
+                                        @if($removable && auth()->user()->can('admission-fees-report-delete'))
                                             <form action="{{ route($route.'.delete', $fee->id) }}" method="post" class="d-inline"
                                                   onsubmit="return confirm('{{ __('Remove this admission fee? The applicant will be charged again once they complete their application and continue to payment.') }}')">
                                                 @csrf

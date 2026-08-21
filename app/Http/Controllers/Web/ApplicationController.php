@@ -597,7 +597,9 @@ class ApplicationController extends Controller
             'email' => ['required', 'email', 'max:191'],
             'mother_tongue' => ['nullable', 'string', 'max:191'],
             'studied_in_english' => ['nullable', 'boolean'],
-            'photo' => [($application->photo ? 'nullable' : 'required'), 'image', 'max:5120'],
+            // Optional, like the identity document: a missing photograph must not
+            // be what stops an application being submitted and paid for.
+            'photo' => ['nullable', 'image', 'max:5120'],
             'signature' => ['nullable', 'image', 'max:2048'],
             'agree_terms' => [$declarationEnabled ? 'accepted' : 'nullable'],
         ];

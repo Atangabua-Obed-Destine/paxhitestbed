@@ -208,7 +208,7 @@
                         </a>
                         <div class="dropdown-menu dropdown-menu-right profile-notification">
                             <div class="pro-head">
-                                <img src="{{ asset('uploads/user/'.Auth::user()->photo) }}" class="img-radius" alt="User Profile" onerror="this.src='{{ asset('dashboard/images/user/avatar-2.jpg') }}';">
+                                <img src="{{ avatar_url(Auth::user()->photo, 'user', 'dashboard/images/user/avatar-2.jpg') }}" class="img-radius" alt="{{ __('User Profile') }}">
                                 <span>{{ Auth::user()->name }}</span>
 
                                 <a href="javascript:void(0);" class="dud-logout" href="{{ route('logout') }}"

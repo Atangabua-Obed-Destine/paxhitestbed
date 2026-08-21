@@ -300,9 +300,11 @@
                 </a>
                 <ul class="dropdown-menu dropdown-menu-end profile-dropdown">
                     <li class="dropdown-header text-center py-3">
-                        <img src="{{ asset('uploads/user/'.Auth::user()->photo) }}" class="rounded-circle mb-2" width="60" height="60" alt="User"
-                            @if(Auth::user()->gender == 1) onerror="this.src='{{ asset('dashboard/images/user/avatar-2.jpg') }}';"
-                            @else onerror="this.src='{{ asset('dashboard/images/user/avatar-1.jpg') }}';" @endif>
+                        {{-- Resolved before the browser asks for it: an absent photo used to be
+                             requested anyway, answering 403 for the bare directory or 404 for
+                             a file no longer on disk, on every page load. --}}
+                        <img src="{{ avatar_url(Auth::user()->photo, 'user', Auth::user()->gender == 1 ? 'dashboard/images/user/avatar-2.jpg' : 'dashboard/images/user/avatar-1.jpg') }}"
+                             class="rounded-circle mb-2" width="60" height="60" alt="{{ __('User') }}">
                         <div class="fw-bold">{{ Auth::user()->first_name }} {{ Auth::user()->last_name }}</div>
                         <small class="text-muted">{{ Auth::user()->email }}</small>
                     </li>
@@ -392,6 +394,16 @@
     </div>
 
 
+    {{-- The theme's pcoded.min.js initialises PerfectScrollbar on .main-friend-cont
+         and .main-chat-cont — panels from its chat demo that this application does
+         not render. With nothing to attach to it throws "no element is specified",
+         an uncaught error on every admin page load. These stubs give it the
+         elements it insists on; the application wizard already does the same. --}}
+    <div class="d-none" id="ps-placeholder" aria-hidden="true">
+        <div class="main-friend-cont"></div>
+        <div class="main-chat-cont"></div>
+    </div>
+
     @include('admin.layouts.common.footer_script')
 
     @yield('scripts')
@@ -400,8 +412,15 @@
     {{-- Dynamic Popup Component for Admin Portal --}}
     @include('components.dynamic-popup', ['area' => 'admin_portal'])
 
-    <!-- AI Support Chatbot -->
-    <script defer src="https://ai.innovakickstarter.com/vendor/chatbot/js/external-chatbot.js" data-chatbot-uuid="cb9eb69c-7a17-4bed-95b1-20cb70b0d125" data-iframe-width="420" data-iframe-height="745" data-language="en"></script>
+    {{-- Third-party support chatbot, loaded only when one is configured. The
+         host it used to point at unconditionally no longer resolves, so every
+         page load spent a failed DNS lookup on it. Set CHATBOT_SCRIPT_URL and
+         CHATBOT_UUID to switch it back on. --}}
+    @if(config('services.chatbot.script_url') && config('services.chatbot.uuid'))
+        <script defer src="{{ config('services.chatbot.script_url') }}"
+                data-chatbot-uuid="{{ config('services.chatbot.uuid') }}"
+                data-iframe-width="420" data-iframe-height="745" data-language="{{ app()->getLocale() }}"></script>
+    @endif
 
 
     @include('components.chat-widget')

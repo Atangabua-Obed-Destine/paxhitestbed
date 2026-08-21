@@ -72,7 +72,7 @@
                 <td class="temp-logo">
                   <div class="inner">
                     @if(is_file('uploads/user/'.$row->memberable->photo))
-                    <img src="{{ asset('uploads/user/'.$row->memberable->photo) }}" alt="Photo">
+                    <img src="{{ avatar_url($row->memberable->photo) }}" alt="Photo">
                     @else
                     <img src="{{ asset('dashboard/images/user.jpg') }}" alt="Photo">
                     @endif

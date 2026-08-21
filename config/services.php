@@ -60,4 +60,17 @@ return [
         'api_key' => env('GOOGLE_BOOKS_API_KEY'),
     ],
 
+    /*
+     * Third-party support chatbot embed.
+     *
+     * Left unset by default. The script tag used to be written into four
+     * layouts pointing at a host that no longer resolves, so every page load
+     * spent a failed DNS lookup on it and logged an error. Setting both values
+     * switches the embed back on wherever it is included.
+     */
+    'chatbot' => [
+        'script_url' => env('CHATBOT_SCRIPT_URL'),
+        'uuid' => env('CHATBOT_UUID'),
+    ],
+
 ];

@@ -61,7 +61,8 @@ class ApplicationCompleteness
             'present_district' => __('Division / district of residence'),
             'phone' => __('Phone number'),
             'email' => __('Email address'),
-            'photo' => __('Passport photograph'),
+            // Not listed: the passport photograph and the identity document are
+            // optional, so neither may hold up payment or submission.
         ];
         foreach ($always as $column => $label) {
             if ($blank($column)) {

@@ -186,6 +186,39 @@ check(
 DB::rollBack();
 
 // ---------------------------------------------------------------------------
+echo "\nThe reverse dialog can actually open\n";
+// ---------------------------------------------------------------------------
+
+// A Bootstrap modal inside an ancestor with display:none never appears: the
+// backdrop dims the screen and the dialog stays hidden. These modals were first
+// written inside a <tr class="d-none"> to keep the table markup valid, which
+// produced exactly that — a button that did nothing.
+Auth::guard('web')->login(User::whereHas('roles', fn ($q) => $q->where('name', 'Super Admin'))->first() ?: User::first());
+
+$listRequest = Illuminate\Http\Request::create('/admin/payment-verification?payment_type=all&status=approved', 'GET');
+$listRequest->setLaravelSession(app('session.store'));
+$list = $kernel->handle($listRequest)->getContent();
+
+$buttons = preg_match_all('~data-bs-target="#reverseModal~', $list);
+$modals = preg_match_all('~id="reverseModal~', $list);
+
+check("every reverse button has a dialog ($buttons)", $buttons > 0 && $buttons === $modals, "$buttons buttons, $modals modals");
+check('no dialog sits inside a hidden row', strpos($list, '<tr class="d-none"><td>') === false);
+
+$firstModal = strpos($list, 'id="reverseModal');
+check(
+    'the dialog is outside the table',
+    $firstModal !== false && $firstModal > strrpos(substr($list, 0, $firstModal), '</table>'),
+);
+check(
+    'and outside the scrolling container that would clip it',
+    $firstModal !== false && strpos(substr($list, 0, $firstModal), 'table-responsive') !== false
+        && $firstModal > strrpos(substr($list, 0, $firstModal), '</table>')
+);
+check('the dialog still posts to the reverse route', (bool) preg_match('~<form action="[^"]*/reverse"~', $list));
+check('and still demands a reason', (bool) preg_match('~name="reason"[^>]*required~', $list));
+
+// ---------------------------------------------------------------------------
 echo "\nA fee is raised only when the applicant is ready to pay\n";
 // ---------------------------------------------------------------------------
 

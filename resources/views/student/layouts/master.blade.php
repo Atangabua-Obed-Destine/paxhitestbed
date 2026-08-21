@@ -1607,7 +1607,15 @@
     {{-- Dynamic Popup Component for Student Portal --}}
     @include('components.dynamic-popup', ['area' => 'student_portal'])
     
-    <script defer src="https://ai.innovakickstarter.com/vendor/chatbot/js/external-chatbot.js" data-chatbot-uuid="1e603773-8c6f-4275-ac48-f63bf9a9844d" data-iframe-width="420" data-iframe-height="745" data-language="en" ></script>
+    {{-- Support chatbot, loaded only when one is configured. The host this
+         pointed at unconditionally no longer resolves, so every page load
+         spent a failed DNS lookup on it. This portal's own chatbot id is
+         kept as the default; set CHATBOT_SCRIPT_URL to switch it back on. --}}
+    @if(config('services.chatbot.script_url'))
+        <script defer src="{{ config('services.chatbot.script_url') }}"
+                data-chatbot-uuid="{{ config('services.chatbot.uuid', '1e603773-8c6f-4275-ac48-f63bf9a9844d') }}"
+                data-iframe-width="420" data-iframe-height="745" data-language="{{ app()->getLocale() }}"></script>
+    @endif
 
 
     @include('components.chat-widget')

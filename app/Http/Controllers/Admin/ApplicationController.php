@@ -188,8 +188,19 @@ class ApplicationController extends Controller
                                   });
                             });
                         }
-                        if(!empty($request->status) || $request->status != null){
-                            $applications->where('status', $status);
+                        // An unsubmitted draft is not an application yet — it is a form
+                        // somebody may still be filling in. Admissions acts on what has
+                        // been submitted, so drafts stay out unless asked for.
+                        //
+                        // They only became visible here at all when the date filter began
+                        // falling back to created_at; before that a null apply_date
+                        // excluded them by accident rather than by intent.
+                        if ($status === 'draft') {
+                            $applications->where('stage', 'draft');
+                        } elseif (!empty($request->status) || $request->status != null) {
+                            $applications->where('status', $status)->where('stage', '!=', 'draft');
+                        } else {
+                            $applications->where('stage', '!=', 'draft');
                         }
             $data['rows'] = $applications->orderBy('registration_no', 'desc')->get();
         }

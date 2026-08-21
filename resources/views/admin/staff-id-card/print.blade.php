@@ -158,7 +158,7 @@
             <!-- Staff Photo -->
             <div class="photo">
                 @if($row->photo && file_exists(public_path('uploads/user/'.$row->photo)))
-                    <img src="{{ asset('uploads/user/'.$row->photo) }}" alt="Photo">
+                    <img src="{{ avatar_url($row->photo) }}" alt="Photo">
                 @else
                     <img src="{{ asset('dashboard/images/user.jpg') }}" alt="Photo">
                 @endif
@@ -196,7 +196,7 @@
         <!-- Staff Photo -->
         <div class="photo">
             @if($row->photo && file_exists(public_path('uploads/user/'.$row->photo)))
-                <img src="{{ asset('uploads/user/'.$row->photo) }}" alt="Photo">
+                <img src="{{ avatar_url($row->photo) }}" alt="Photo">
             @else
                 <img src="{{ asset('dashboard/images/user.jpg') }}" alt="Photo">
             @endif

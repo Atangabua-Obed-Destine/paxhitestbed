@@ -194,16 +194,29 @@ try {
      |=================================================================*/
     section('The payment gate');
 
-    // Take one required item away again and confirm the gate closes.
-    $savedPhoto = $draft->photo;
-    $draft->photo = null;
+    // Take one required item away again and confirm the gate closes. The phone
+    // number, not the photograph: the photograph and the identity document are
+    // optional now, so neither can close the gate — which is the point of them
+    // being optional, and would make this a test that could never fail.
+    $savedPhone = $draft->phone;
+    $draft->phone = null;
     $draft->save();
     check('removing a required field closes the gate',
         ApplicationCompleteness::missingLabels($draft->fresh()) !== []);
-    $draft->photo = $savedPhoto;
+    $draft->phone = $savedPhone;
     $draft->save();
     check('restoring it opens the gate again',
         ApplicationCompleteness::missingLabels($draft->fresh()) === []);
+
+    // And the two that are now optional must not close it.
+    $savedPhoto = $draft->photo;
+    $draft->photo = null;
+    $draft->save();
+    check('a missing photograph does not hold up payment',
+        ApplicationCompleteness::missingLabels($draft->fresh()) === [],
+        implode(', ', ApplicationCompleteness::missingLabels($draft->fresh())));
+    $draft->photo = $savedPhoto;
+    $draft->save();
 
     /* =================================================================
      | 4. Auto-submission

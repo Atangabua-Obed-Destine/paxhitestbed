@@ -23,7 +23,12 @@ class ApplicationDocumentRequirements
             'national_id_card' => [
                 'label' => __('National ID Card or Passport'),
                 'description' => __('Upload a single PDF containing both sides of the ID or the information page of the passport.'),
-                'required' => true,
+                // Optional by default. Many applicants have no national ID or
+                // passport in hand when they apply, and demanding one up front
+                // stopped them reaching the payment step at all. A degree type
+                // that does need it can still mark it required in its form
+                // configuration.
+                'required' => false,
             ],
             'national_id_card_back' => [
                 'label' => __('Back of Identification Document'),

@@ -135,6 +135,16 @@
                                                            class="btn btn-sm btn-primary mt-2 mt-md-0">
                                                             <i class="fas fa-arrow-right me-1"></i>{{ __('Continue and pay') }}
                                                         </a>
+                                                    @elseif($app->stage === 'draft')
+                                                        {{-- Paid, but back in draft — an admissions officer sent it
+                                                             back for something to be corrected. There is nothing to
+                                                             pay, so "Continue and pay" would be wrong; the applicant
+                                                             fixes what was asked and it submits itself again once
+                                                             complete. Without this they saw no action at all. --}}
+                                                        <a href="{{ route('application.edit', $app) }}"
+                                                           class="btn btn-sm btn-warning mt-2 mt-md-0">
+                                                            <i class="fas fa-rotate-left me-1"></i>{{ __('Update and resubmit') }}
+                                                        </a>
                                                     @endif
                                                 </div>
                                             </td>

@@ -657,10 +657,12 @@
                 <h4 class="form-section-title">{{ __('Applicant photograph') }}</h4>
                 <div class="row">
                     <div class="form-group col-md-6">
-                        <label for="photo">{{ __('Recent Passport Photograph (max 5MB)') }} <span>*</span></label>
-                        {{-- data-has-existing mirrors the server rule: the photo is only
-                             mandatory when none has been uploaded on a previous save. --}}
-                        <input type="file" class="form-control size-guard" data-max-size-mb="5" data-has-existing="{{ $application->photo ? '1' : '0' }}" name="photo" id="photo" accept="image/jpeg,image/png,image/*" @if(!$application->photo) required @endif>
+                        <label for="photo">{{ __('Recent Passport Photograph (max 5MB)') }}</label>
+                        {{-- Optional: an applicant without a photograph to hand could not
+                             otherwise finish the form, and so could not reach the payment
+                             step at all. It can still be supplied later, and admissions
+                             can ask for it before a decision. --}}
+                        <input type="file" class="form-control size-guard" data-max-size-mb="5" data-has-existing="{{ $application->photo ? '1' : '0' }}" name="photo" id="photo" accept="image/jpeg,image/png,image/*">
                         <div class="invalid-feedback">{{ __('Upload a recent passport style photograph.') }}</div>
                         <small class="document-help">{{ __('Use a clear, recent colour photograph with the applicant facing the camera. Avoid selfies, filters and group photographs.') }}</small>
                         @if($application->photo)

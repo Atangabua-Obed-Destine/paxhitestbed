@@ -49,10 +49,13 @@
                                 <div class="form-group col-md-2">
                                     <label for="status">{{ __('field_status') }}</label>
                                     <select class="form-control" name="status" id="status">
-                                        <option value="">{{ __('all') }}</option>
-                                        <option value="1" @if( $selected_status == 1 ) selected @endif>{{ __('status_pending') }}</option>
-                                        <option value="2" @if( $selected_status == 2 ) selected @endif>{{ __('status_approved') }}</option>
-                                        <option value="0" @if( $selected_status == 0 ) selected @endif>{{ __('status_rejected') }}</option>
+                                        <option value="">{{ __('All submitted') }}</option>
+                                        <option value="1" @if( $selected_status === '1' ) selected @endif>{{ __('status_pending') }}</option>
+                                        <option value="2" @if( $selected_status === '2' ) selected @endif>{{ __('status_approved') }}</option>
+                                        <option value="0" @if( $selected_status === '0' ) selected @endif>{{ __('status_rejected') }}</option>
+                                        {{-- Opt in: a draft is a form still being filled in, not
+                                             something admissions has been asked to act on. --}}
+                                        <option value="draft" @if( $selected_status === 'draft' ) selected @endif>{{ __('Not yet submitted') }}</option>
                                     </select>
 
                                     <div class="invalid-feedback">
@@ -190,13 +193,21 @@
                                             </div>
                                             <small class="text-muted">{{ (int) $row->progress }}%</small>
                                             <div class="mt-1">
-                                                @if( $row->status == 1 )
-                                                <span class="badge badge-pill badge-primary">{{ __('status_pending') }}</span>
-                                                @elseif( $row->status == 2 )
-                                                <span class="badge badge-pill badge-success">{{ __('status_approved') }}</span>
-                                                @else
-                                                <span class="badge badge-pill badge-danger">{{ __('status_rejected') }}</span>
-                                                @endif
+                                                {{-- Read from stage, not status. The portal writes
+                                                     status = 0 to mean "not submitted yet", while this
+                                                     screen read anything other than 1 or 2 as rejected —
+                                                     so every draft appeared here in red as though it had
+                                                     been turned down. --}}
+                                                @php
+                                                    $stageBadge = [
+                                                        'draft' => ['secondary', __('Not yet submitted')],
+                                                        'submitted' => ['primary', __('status_pending')],
+                                                        'under_review' => ['info', __('Under review')],
+                                                        'decision_approved' => ['success', __('status_approved')],
+                                                        'decision_rejected' => ['danger', __('status_rejected')],
+                                                    ][$row->stage] ?? ['secondary', ucfirst(str_replace('_', ' ', (string) $row->stage))];
+                                                @endphp
+                                                <span class="badge badge-pill badge-{{ $stageBadge[0] }}">{{ $stageBadge[1] }}</span>
                                             </div>
                                         </td>
                                         <td>

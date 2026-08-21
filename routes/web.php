@@ -510,10 +510,17 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
     // Admission Fees Report (applicant-scoped; separate from student fees report)
     Route::prefix('admission-fees-report')->name('admission-fees-report.')->group(function () {
-        Route::get('/', 'AdmissionFeesReportController@index')->name('index');
-        Route::post('{fee}/walk-in', 'AdmissionFeesReportController@recordWalkIn')->name('walk-in');
-        Route::get('receipt/{receipt}', 'AdmissionFeesReportController@receipt')->name('receipt');
-        Route::post('{fee}/delete', 'AdmissionFeesReportController@destroyFee')->name('delete');
+        // Reading the report, taking money and removing a charge are separate
+        // acts and are granted separately. Until these existed the screen had no
+        // permission check at all.
+        Route::get('/', 'AdmissionFeesReportController@index')
+            ->middleware('permission:admission-fees-report-view')->name('index');
+        Route::get('receipt/{receipt}', 'AdmissionFeesReportController@receipt')
+            ->middleware('permission:admission-fees-report-view')->name('receipt');
+        Route::post('{fee}/walk-in', 'AdmissionFeesReportController@recordWalkIn')
+            ->middleware('permission:admission-fees-report-walk-in')->name('walk-in');
+        Route::post('{fee}/delete', 'AdmissionFeesReportController@destroyFee')
+            ->middleware('permission:admission-fees-report-delete')->name('delete');
     });
     Route::get('fees-student-multiprint', 'FeesStudentController@multiPrint')->name('fees-student.multiprint');
 

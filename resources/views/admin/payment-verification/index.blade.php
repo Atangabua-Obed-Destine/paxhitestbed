@@ -261,42 +261,6 @@
                                         </td>
                                     </tr>
 
-                                    @if($status == 'approved')
-                                        <tr class="d-none"><td>
-                                        <div class="modal fade" id="reverseModal{{ $row->id }}" tabindex="-1" aria-hidden="true">
-                                            <div class="modal-dialog">
-                                                <form action="{{ route($route.'.reverse', [$row->payment_type, $row->id]) }}" method="post">
-                                                    @csrf
-                                                    <div class="modal-content">
-                                                        <div class="modal-header">
-                                                            <h5 class="modal-title">{{ __('Reverse this payment?') }}</h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                            <p class="mb-2">{{ __('This will put back everything the approval changed:') }}</p>
-                                                            <ul class="small mb-3">
-                                                                <li>{{ __('the fee returns to what the remaining payments say it is') }}</li>
-                                                                <li>{{ __('any amount credited to a payment account is debited back') }}</li>
-                                                                <li>{{ __('the ledger entry is reversed by an opposing entry') }}</li>
-                                                                <li>{{ __('an application submitted because of this payment returns to draft') }}</li>
-                                                            </ul>
-                                                            <p class="small text-muted">{{ __('Nothing is deleted — the receipt is kept and marked reversed.') }}</p>
-                                                            <div class="form-group">
-                                                                <label for="reverse-reason-{{ $row->id }}">{{ __('Reason') }} <span class="text-danger">*</span></label>
-                                                                <textarea class="form-control" id="reverse-reason-{{ $row->id }}" name="reason" rows="2" required minlength="5"
-                                                                          placeholder="{{ __('e.g. recorded against the wrong applicant') }}"></textarea>
-                                                            </div>
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_cancel') }}</button>
-                                                            <button type="submit" class="btn btn-danger">{{ __('Reverse payment') }}</button>
-                                                        </div>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                        </td></tr>
-                                    @endif
                                   @empty
                                     <tr>
                                         <td colspan="11" class="text-center">{{ __('no_payment_receipts_found') }}</td>
@@ -318,5 +282,46 @@
     </div>
 </div>
 <!-- End Content-->
+
+{{-- Rendered outside the table on purpose. These previously sat in
+     a <tr class="d-none"> so the markup stayed valid, but an ancestor
+     with display:none keeps a Bootstrap modal hidden however it is
+     opened — the backdrop appeared and the dialog never did. --}}
+@foreach($rows as $row)
+    @if(($row->verification_status ?? null) === 'approved')
+                    <div class="modal fade" id="reverseModal{{ $row->id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <form action="{{ route($route.'.reverse', [$row->payment_type, $row->id]) }}" method="post">
+                                @csrf
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">{{ __('Reverse this payment?') }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p class="mb-2">{{ __('This will put back everything the approval changed:') }}</p>
+                                        <ul class="small mb-3">
+                                            <li>{{ __('the fee returns to what the remaining payments say it is') }}</li>
+                                            <li>{{ __('any amount credited to a payment account is debited back') }}</li>
+                                            <li>{{ __('the ledger entry is reversed by an opposing entry') }}</li>
+                                            <li>{{ __('an application submitted because of this payment returns to draft') }}</li>
+                                        </ul>
+                                        <p class="small text-muted">{{ __('Nothing is deleted — the receipt is kept and marked reversed.') }}</p>
+                                        <div class="form-group">
+                                            <label for="reverse-reason-{{ $row->id }}">{{ __('Reason') }} <span class="text-danger">*</span></label>
+                                            <textarea class="form-control" id="reverse-reason-{{ $row->id }}" name="reason" rows="2" required minlength="5"
+                                                      placeholder="{{ __('e.g. recorded against the wrong applicant') }}"></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_cancel') }}</button>
+                                        <button type="submit" class="btn btn-danger">{{ __('Reverse payment') }}</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+    @endif
+@endforeach
 
 @endsection

@@ -586,6 +586,14 @@
     </script>
 
     <!-- AI Support Chatbot -->
-    <script defer src="https://ai.innovakickstarter.com/vendor/chatbot/js/external-chatbot.js" data-chatbot-uuid="cb9eb69c-7a17-4bed-95b1-20cb70b0d125" data-iframe-width="420" data-iframe-height="745" data-language="en"></script>
+    {{-- Support chatbot, loaded only when one is configured. The host this
+         pointed at unconditionally no longer resolves, so every page load
+         spent a failed DNS lookup on it. This portal's own chatbot id is
+         kept as the default; set CHATBOT_SCRIPT_URL to switch it back on. --}}
+    @if(config('services.chatbot.script_url'))
+        <script defer src="{{ config('services.chatbot.script_url') }}"
+                data-chatbot-uuid="{{ config('services.chatbot.uuid', 'cb9eb69c-7a17-4bed-95b1-20cb70b0d125') }}"
+                data-iframe-width="420" data-iframe-height="745" data-language="{{ app()->getLocale() }}"></script>
+    @endif
 </body>
 </html>
