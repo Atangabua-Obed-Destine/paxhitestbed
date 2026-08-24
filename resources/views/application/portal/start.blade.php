@@ -68,11 +68,61 @@
     .btn-continue { border: 1.5px solid #cbd5e1; color: #334155; background: #fff; }
     .btn-continue:hover, .btn-continue:focus { border-color: #182b49; color: #182b49; background: #f8fafc; }
 
+    .section-title {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #182b49;
+        margin-bottom: 1.25rem;
+        letter-spacing: -.2px;
+    }
+
+    /* One tab per degree type, each carrying its own fee so the choice can be
+       made before opening the panel. Hidden entirely when only one exists. */
+    .degree-tabs { list-style: none; padding: 0; gap: .6rem; flex-wrap: wrap; }
+    .degree-tab {
+        background: #fff;
+        border: 1px solid rgba(24,43,73,.12);
+        border-radius: 11px;
+        padding: .8rem 1.2rem;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .degree-tab:hover { border-color: #9db4dd; }
+    .degree-tab.active { border-color: #182b49; box-shadow: 0 0 0 1px #182b49 inset; }
+    .degree-tab-title { display: block; font-weight: 700; font-size: .93rem; color: #182b49; }
+    .degree-tab-fee { display: block; font-size: .8rem; color: #64748b; margin-top: .15rem; }
+
     .prep-panel { background: #fff; border: 1px solid rgba(24,43,73,.08); border-radius: 14px; padding: 2rem; }
     .prep-panel h3 { font-size: 1.08rem; font-weight: 700; color: #182b49; margin-bottom: 1.25rem; }
+    .degree-name { font-size: 1.15rem !important; margin-bottom: .5rem !important; }
+    .degree-intro { color: #64748b; font-size: .94rem; }
+    .degree-intro p:last-child { margin-bottom: 0; }
+
     .prep-list { list-style: none; padding: 0; margin: 0; }
     .prep-list li { display: flex; gap: .7rem; align-items: flex-start; padding: .5rem 0; color: #475569; font-size: .93rem; }
     .prep-list li i { color: #0f7a45; margin-top: .2rem; flex-shrink: 0; }
+    .doc-note { display: block; font-style: normal; font-size: .84rem; color: #94a3b8; margin-top: .1rem; }
+
+    .optional-note { margin-top: 1rem; font-size: .87rem; color: #64748b; }
+    .optional-note strong { color: #475569; }
+
+    .fee-window {
+        font-size: .88rem;
+        color: #a2560d;
+        background: #fdf6ee;
+        border-radius: 8px;
+        padding: .6rem .85rem;
+    }
+    .auto-submit {
+        font-size: .88rem;
+        color: #0f7a45;
+        background: #eefaf3;
+        border-radius: 8px;
+        padding: .6rem .85rem;
+    }
+    .fee-notes { font-size: .86rem; color: #64748b; }
+    .fee-notes p:last-child { margin-bottom: 0; }
 
     .fact-row { display: flex; flex-wrap: wrap; gap: 2.25rem; }
     .fact .label {
@@ -188,57 +238,147 @@
                 </div>
             </section>
 
-            <section class="prep-panel mb-5">
-                <div class="row g-4">
-                    <div class="col-lg-7">
-                        <h3><i class="far fa-check-circle text-success me-2"></i>{{ __('Before you begin, have these ready') }}</h3>
-                        <ul class="prep-list">
-                            @forelse($requirements as $requirement)
-                                <li>
-                                    <i class="fas fa-check"></i>
-                                    <span>{{ $requirement['label'] }}</span>
+            {{-- What you need and what it costs is configured per degree type
+                 under Academic > Degree Type > Form Configuration, so it is
+                 read from there rather than restated here. Add a degree type
+                 and it appears; change its checklist and this follows. --}}
+            @if($degreeTypes->isNotEmpty())
+                @php $currency = optional($setting)->currency_symbol ?: optional($setting)->currency; @endphp
+
+                <section class="mb-5">
+                    <h2 class="section-title">{{ __('What you can apply for') }}</h2>
+
+                    @if($degreeTypes->count() > 1)
+                        <ul class="nav degree-tabs mb-4" role="tablist">
+                            @foreach($degreeTypes as $index => $degree)
+                                <li class="nav-item" role="presentation">
+                                    <button class="degree-tab {{ $index === 0 ? 'active' : '' }}"
+                                            id="degree-tab-{{ $degree['id'] }}"
+                                            data-bs-toggle="tab"
+                                            data-bs-target="#degree-pane-{{ $degree['id'] }}"
+                                            type="button"
+                                            role="tab"
+                                            aria-controls="degree-pane-{{ $degree['id'] }}"
+                                            aria-selected="{{ $index === 0 ? 'true' : 'false' }}">
+                                        <span class="degree-tab-title">{{ $degree['title'] }}</span>
+                                        @if($degree['fee'])
+                                            <span class="degree-tab-fee">{{ number_format($degree['fee'], 0) }} {{ $currency }}</span>
+                                        @endif
+                                    </button>
                                 </li>
-                            @empty
-                                <li>
-                                    <i class="fas fa-check"></i>
-                                    <span>{{ __('Your academic certificates and transcripts.') }}</span>
-                                </li>
-                            @endforelse
-                            <li>
-                                <i class="fas fa-check"></i>
-                                <span>{{ __('A recent passport photograph and an identity document, if you have them. Both are optional and will not hold up your application.') }}</span>
-                            </li>
+                            @endforeach
                         </ul>
-                    </div>
+                    @endif
 
-                    <div class="col-lg-5">
-                        <h3><i class="far fa-clock text-primary me-2"></i>{{ __('What to expect') }}</h3>
+                    <div class="tab-content">
+                        @foreach($degreeTypes as $index => $degree)
+                            <div class="tab-pane fade {{ $index === 0 ? 'show active' : '' }}"
+                                 id="degree-pane-{{ $degree['id'] }}"
+                                 role="tabpanel"
+                                 aria-labelledby="degree-tab-{{ $degree['id'] }}">
 
-                        <div class="fact-row mb-4">
-                            <div class="fact">
-                                <div class="label">{{ __('Time needed') }}</div>
-                                <div class="value">{{ __('About 15 minutes') }}</div>
-                            </div>
+                                <div class="prep-panel">
+                                    @if($degreeTypes->count() === 1)
+                                        <h3 class="degree-name">{{ $degree['title'] }}</h3>
+                                    @endif
 
-                            @if(!empty($applicationSetting) && !empty($applicationSetting->fee_amount))
-                                <div class="fact">
-                                    <div class="label">{{ __('Application fee') }}</div>
-                                    <div class="value">
-                                        {{ number_format((float) $applicationSetting->fee_amount, 0) }}
-                                        {{ optional($setting)->currency_symbol ?: optional($setting)->currency }}
+                                    @if(!empty($degree['intro']))
+                                        <div class="degree-intro">{!! $degree['intro'] !!}</div>
+                                    @endif
+                                    @if(!empty($degree['blurb']))
+                                        <div class="degree-intro">{!! $degree['blurb'] !!}</div>
+                                    @endif
+
+                                    <div class="row g-4 mt-1">
+                                        <div class="col-lg-7">
+                                            <h3><i class="far fa-check-circle text-success me-2"></i>{{ __('Before you begin, have these ready') }}</h3>
+
+                                            <ul class="prep-list">
+                                                @forelse($degree['required'] as $document)
+                                                    <li>
+                                                        <i class="fas fa-check"></i>
+                                                        <span>
+                                                            {{ $document['label'] }}
+                                                            @if(!empty($document['description']))
+                                                                <em class="doc-note">{{ $document['description'] }}</em>
+                                                            @endif
+                                                        </span>
+                                                    </li>
+                                                @empty
+                                                    <li>
+                                                        <i class="fas fa-check"></i>
+                                                        <span>{{ __('No documents are required upfront for this programme type.') }}</span>
+                                                    </li>
+                                                @endforelse
+                                            </ul>
+
+                                            @if($degree['optional']->isNotEmpty())
+                                                <p class="optional-note mb-0">
+                                                    <strong>{{ __('Optional, and never a reason to wait:') }}</strong>
+                                                    {{ $degree['optional']->pluck('label')->implode(', ') }}.
+                                                </p>
+                                            @endif
+                                        </div>
+
+                                        <div class="col-lg-5">
+                                            <h3><i class="far fa-clock text-primary me-2"></i>{{ __('What to expect') }}</h3>
+
+                                            <div class="fact-row mb-4">
+                                                <div class="fact">
+                                                    <div class="label">{{ __('Time needed') }}</div>
+                                                    <div class="value">{{ __('About 15 minutes') }}</div>
+                                                </div>
+
+                                                <div class="fact">
+                                                    <div class="label">{{ __('Application fee') }}</div>
+                                                    <div class="value">
+                                                        @if($degree['fee'])
+                                                            {{ number_format($degree['fee'], 0) }} {{ $currency }}
+                                                        @else
+                                                            {{ __('None') }}
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            @if($degree['fee'])
+                                                {{-- The fee is raised when the form is finished and the
+                                                     applicant reaches the payment step, not at intake, so
+                                                     the window is counted from there. Approval then submits
+                                                     the application on its own. --}}
+                                                <div class="fee-window mb-3">
+                                                    <i class="fas fa-hourglass-half me-1"></i>
+                                                    {{ __('You pay once your form is complete.') }}
+                                                    @if($degree['feeDays'] > 0)
+                                                        {{ __('From that point you have') }}
+                                                        <strong>{{ trans_choice(':count day|:count days', $degree['feeDays'], ['count' => $degree['feeDays']]) }}</strong>
+                                                        {{ __('to settle it.') }}
+                                                    @endif
+                                                </div>
+
+                                                <div class="auto-submit mb-3">
+                                                    <i class="fas fa-paper-plane me-1"></i>
+                                                    {{ __('Once your payment is approved, your application is submitted automatically — there is nothing further for you to do.') }}
+                                                </div>
+                                            @endif
+
+                                            @if(!empty($degree['feeNotes']))
+                                                <div class="fee-notes mb-3">{!! $degree['feeNotes'] !!}</div>
+                                            @endif
+
+                                            <div class="reassure">
+                                                <i class="fas fa-save me-1"></i>
+                                                <strong>{{ __('You do not have to finish in one sitting.') }}</strong>
+                                                {{ __('Your answers are saved as you go, so you can close the page and return to complete the rest later.') }}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            @endif
-                        </div>
-
-                        <div class="reassure">
-                            <i class="fas fa-save me-1"></i>
-                            <strong>{{ __('You do not have to finish in one sitting.') }}</strong>
-                            {{ __('Your answers are saved as you go, so you can close the page and return to complete the rest later.') }}
-                        </div>
+                            </div>
+                        @endforeach
                     </div>
-                </div>
-            </section>
+                </section>
+            @endif
         @else
             {{-- Applications are closed. Offer the admissions page, never a form
                  that would only turn the applicant away. --}}

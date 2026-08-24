@@ -13,7 +13,6 @@ use App\Models\Session;
 use App\Models\Setting;
 use App\Models\MailSetting;
 use App\Services\DegreeTypeFormConfig;
-use App\Support\ApplicationDocumentRequirements;
 use App\Support\ApplicationQualificationCards;
 use App\Traits\FileUploader;
 use Carbon\Carbon;
@@ -1555,9 +1554,31 @@ class ApplicationController extends Controller
 
         $applicationSetting = ApplicationSetting::status();
 
-        $requirements = collect(ApplicationDocumentRequirements::all())
-            ->filter(function ($item) {
-                return !empty($item['required']);
+        // What an applicant must bring, and what it costs, is configured per
+        // degree type under Academic > Degree Type > Form Configuration. Read
+        // it through DegreeTypeFormConfig, the same service the wizard and the
+        // admin preview use, so this page cannot become a third answer that
+        // drifts from the other two.
+        $degreeTypes = DegreeType::where('status', 1)
+            ->orderBy('sort_order')
+            ->orderBy('title')
+            ->get()
+            ->map(function (DegreeType $degreeType) {
+                $documents = collect(DegreeTypeFormConfig::documents($degreeType));
+                $settings  = DegreeTypeFormConfig::settings($degreeType);
+
+                return [
+                    'id'        => $degreeType->id,
+                    'title'     => $degreeType->title,
+                    'slug'      => $degreeType->slug,
+                    'intro'     => $settings['intro_html'],
+                    'blurb'     => $settings['requirements_html'],
+                    'required'  => $documents->filter(fn ($d) => !empty($d['required']))->values(),
+                    'optional'  => $documents->filter(fn ($d) => empty($d['required']))->values(),
+                    'fee'       => $settings['fee_enabled'] ? (float) $settings['fee_amount'] : null,
+                    'feeDays'   => (int) $settings['fee_due_days'],
+                    'feeNotes'  => $settings['fee_instructions'],
+                ];
             });
 
         return view('application.portal.start', [
@@ -1566,7 +1587,7 @@ class ApplicationController extends Controller
             'applicationSetting' => $applicationSetting,
             'openSessions' => $openSessions,
             'isOpen' => $applicationSetting && $openSessions->isNotEmpty(),
-            'requirements' => $requirements,
+            'degreeTypes' => $degreeTypes,
         ]);
     }
 

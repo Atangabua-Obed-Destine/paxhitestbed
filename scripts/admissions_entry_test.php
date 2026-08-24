@@ -27,9 +27,12 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Models\Applicant;
 use App\Models\ApplicationSetting;
+use App\Models\DegreeType;
 use App\Models\Session as AcademicSession;
+use App\Services\DegreeTypeFormConfig;
 use App\Support\ApplicationDocumentRequirements;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 $passed = 0;
@@ -149,21 +152,76 @@ if ($isOpen) {
         'expected session "' . $openSessions->first()->title . '"'
     );
 
-    if (!empty($applicationSetting->fee_amount)) {
-        check(
-            'it states the application fee from settings',
-            strpos($html, number_format((float) $applicationSetting->fee_amount, 0)) !== false,
-            'expected ' . number_format((float) $applicationSetting->fee_amount, 0)
-        );
-    }
+    // What an applicant must bring, and what it costs, is configured per degree
+    // type under Academic > Degree Type > Form Configuration. The page must
+    // read that, not the static global catalog: the two genuinely disagree
+    // (the catalog demands transcripts HND does not, and says "Probatoire"
+    // where the configured checklist says "BEPC"), so getting this wrong tells
+    // applicants to gather documents nobody asked them for.
+    $degreeTypes = DegreeType::where('status', 1)->orderBy('sort_order')->orderBy('title')->get();
+    check('there is at least one active degree type to advertise', $degreeTypes->isNotEmpty());
 
-    $required = collect(ApplicationDocumentRequirements::all())->filter(fn ($d) => !empty($d['required']));
-    $missing  = $required->filter(fn ($d) => stripos($html, $d['label']) === false);
-    check(
-        'it lists every required document (' . $required->count() . ')',
-        $missing->isEmpty(),
-        'missing: ' . $missing->pluck('label')->implode('; ')
-    );
+    foreach ($degreeTypes as $degreeType) {
+        $label     = $degreeType->title;
+        $documents = collect(DegreeTypeFormConfig::documents($degreeType));
+        $settings  = DegreeTypeFormConfig::settings($degreeType);
+
+        check("[$label] the degree type is named", stripos($html, $degreeType->title) !== false);
+
+        $required = $documents->filter(fn ($d) => !empty($d['required']));
+        $missing  = $required->filter(fn ($d) => stripos($html, $d['label']) === false);
+        check(
+            "[$label] every configured required document is listed (" . $required->count() . ')',
+            $missing->isEmpty(),
+            'missing: ' . $missing->pluck('label')->implode('; ')
+        );
+
+        // The inverse matters just as much: a document the school did NOT
+        // configure must not be demanded. This is what the static catalog got
+        // wrong, and it is the check that keeps the page honest.
+        $notConfigured = collect(ApplicationDocumentRequirements::all())
+            ->reject(fn ($d, $k) => $documents->has($k))
+            ->filter(fn ($d) => stripos($html, $d['label']) !== false);
+        check(
+            "[$label] it demands nothing the school did not configure",
+            $notConfigured->isEmpty(),
+            'wrongly listed: ' . $notConfigured->pluck('label')->implode('; ')
+        );
+
+        if ($settings['fee_enabled'] && $settings['fee_amount'] > 0) {
+            check(
+                "[$label] it states the real application fee (" . number_format((float) $settings['fee_amount'], 0) . ')',
+                strpos($html, number_format((float) $settings['fee_amount'], 0)) !== false
+            );
+
+            // The fee is raised when the form is finished and the applicant
+            // reaches the payment step, not at intake, so the page must not
+            // describe the window as running from the moment they start.
+            check(
+                "[$label] it says payment comes after the form is complete",
+                stripos($html, 'You pay once your form is complete') !== false
+            );
+            check(
+                "[$label] it does not date the window from starting",
+                stripos($html, 'of starting your application') === false
+            );
+
+            if ($settings['fee_due_days'] > 0) {
+                check(
+                    "[$label] it states the payment window (" . $settings['fee_due_days'] . ' day/s)',
+                    stripos($html, 'From that point you have') !== false
+                );
+            }
+
+            // Approval submits the application on its own (FeeObserver), which
+            // is worth saying: it is the difference between "pay and wait" and
+            // "pay and worry you missed a final step".
+            check(
+                "[$label] it says approval submits the application automatically",
+                stripos($html, 'submitted automatically') !== false
+            );
+        }
+    }
 
     check(
         'it says progress is saved, so the form is not one long sitting',
@@ -182,6 +240,60 @@ check(
     'the hero pulls no image from an external host',
     stripos($html, 'unsplash.com') === false
 );
+
+echo "\n== More than one degree type ==\n";
+
+// This database carries a single degree type today, so the tab path would
+// otherwise never be exercised. Build a second one inside a transaction, with
+// a deliberately different checklist, and prove the panels do not share.
+if (!$isOpen) {
+    echo "  ..  applications are closed; skipping\n";
+} else {
+    DB::beginTransaction();
+    try {
+        $temp = DegreeType::create([
+            'title'      => 'ZZ TEST DEGREE TYPE',
+            'shortcode'  => 'ZZTEST',
+            'slug'       => 'zz-test-' . uniqid(),
+            'status'     => 1,
+            'sort_order' => 99,
+        ]);
+
+        foreach ([
+            ['medical_certificate', 'Medical Fitness Certificate', 1, 1],
+            ['baptism_certificate', 'Baptism Certificate (if applicable)', 0, 2],
+        ] as [$key, $docLabel, $isRequired, $order]) {
+            App\Models\DegreeTypeDocument::create([
+                'degree_type_id' => $temp->id,
+                'doc_key'        => $key,
+                'label'          => $docLabel,
+                'required'       => $isRequired,
+                'status'         => 1,
+                'sort_order'     => $order,
+            ]);
+        }
+
+        $multi = get('/application/start')->getContent();
+
+        check('both degree types are named', stripos($multi, 'ZZ TEST DEGREE TYPE') !== false
+            && stripos($multi, (string) $degreeTypes->first()->title) !== false);
+        check('tabs appear once there is a choice to make', stripos($multi, 'degree-tabs') !== false);
+        check('each tab carries its own fee', substr_count($multi, '<span class="degree-tab-fee">') === 2);
+        check('exactly one panel is open on load', substr_count($multi, 'show active') === 1);
+        check(
+            'the panels do not share a checklist',
+            stripos($multi, 'Medical Fitness Certificate') !== false
+                && stripos($multi, 'BEPC') !== false
+        );
+    } finally {
+        DB::rollBack();
+    }
+
+    check(
+        'the test degree type left nothing behind',
+        DegreeType::where('shortcode', 'ZZTEST')->doesntExist()
+    );
+}
 
 echo "\n== The login page is reframed ==\n";
 
