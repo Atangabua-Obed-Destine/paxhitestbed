@@ -1,5 +1,22 @@
 @extends('application.portal.layout')
 
+@push('styles')
+<style>
+    .new-applicant-callout {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid #cddcf7;
+        border-left: 3px solid #3b6fd4;
+        border-radius: 0 10px 10px 0;
+        background: #f4f8ff;
+    }
+    .new-applicant-callout strong { color: #182b49; font-size: .95rem; }
+</style>
+@endpush
+
 @section('content')
 <div class="auth-split-layout">
     <!-- Left Panel: Brand / Image -->
@@ -7,7 +24,7 @@
         <div class="auth-left-content">
             <div class="brand-header">
                 <i class="fas fa-graduation-cap fa-2x mb-3 text-white"></i>
-                <h2 class="fw-bold text-white mb-2">{{ config('app.name') }}</h2>
+                <h2 class="fw-bold text-white mb-2">{{ institution_name() }}</h2>
             </div>
             
             <div class="auth-hero-text">
@@ -16,7 +33,7 @@
             </div>
             
             <div class="auth-footer text-white-50 small">
-                &copy; {{ date('Y') }} {{ config('app.name') }}. All rights reserved.
+                &copy; {{ date('Y') }} {{ institution_name() }}. All rights reserved.
             </div>
         </div>
         <div class="auth-bg-overlay"></div>
@@ -27,12 +44,22 @@
         <div class="auth-form-container">
             <div class="text-center mb-5 d-md-none">
                 <i class="fas fa-graduation-cap fa-3x" style="color: #667eea;"></i>
-                <h3 class="fw-bold mt-2">{{ config('app.name') }}</h3>
+                <h3 class="fw-bold mt-2">{{ institution_name() }}</h3>
             </div>
 
             <div class="mb-5">
-                <h2 class="fw-bold text-dark mb-1">{{ __('Welcome Back') }}</h2>
-                <p class="text-muted">{{ __('Please enter your details to sign in.') }}</p>
+                <h2 class="fw-bold text-dark mb-1">{{ __('Continue your application') }}</h2>
+                <p class="text-muted">{{ __('Sign in to pick up where you left off.') }}</p>
+            </div>
+
+            <div class="new-applicant-callout mb-4">
+                <div>
+                    <strong class="d-block">{{ __('Applying for the first time?') }}</strong>
+                    <span class="text-muted small">{{ __('You do not need an account yet.') }}</span>
+                </div>
+                <a href="{{ route('application.start') }}" class="btn btn-sm btn-outline-primary flex-shrink-0">
+                    {{ __('Start your application') }} <i class="fas fa-arrow-right ms-1"></i>
+                </a>
             </div>
 
             @if(session('success'))
@@ -93,8 +120,8 @@
                 
                 <div class="text-center">
                     <p class="text-muted mb-0">
-                        {{ __("Don't have an account?") }} 
-                        <a href="{{ route('application.register') }}" class="text-primary fw-bold text-decoration-none ms-1">{{ __('Create one now') }}</a>
+                        {{ __('New to') }} {{ institution_name() }}?
+                        <a href="{{ route('application.start') }}" class="text-primary fw-bold text-decoration-none ms-1">{{ __('Start your application') }}</a>
                     </p>
                 </div>
             </form>

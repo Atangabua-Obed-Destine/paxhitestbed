@@ -344,7 +344,7 @@
                 $application = App\Models\ApplicationSetting::status(); 
                 @endphp
                 @isset($application)
-                <a href="{{ route('application.index') }}" target="_blank" class="btn btn-secondary btn-lg">Apply Now <i class="fas fa-arrow-right ml-10"></i></a>
+                <a href="{{ route('application.start') }}" class="btn btn-secondary btn-lg">Apply Now <i class="fas fa-arrow-right ml-10"></i></a>
                 @else
                 <a href="{{ route('about') }}" class="btn btn-secondary btn-lg">Contact Us <i class="fas fa-envelope ml-10"></i></a>
                 @endisset

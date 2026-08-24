@@ -74,7 +74,11 @@ class Handler extends ExceptionHandler
            break;
 
          case 'applicant':
-           $login = 'application.login';
+           // The start page, not the login form. A guest who reaches a
+           // protected applicant URL is far more often someone who has not
+           // begun than someone whose session expired, and the start page
+           // offers both paths where the login form offers only one.
+           $login = 'application.start';
            break;
 
          default:

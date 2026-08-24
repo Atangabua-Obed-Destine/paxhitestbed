@@ -7,7 +7,7 @@
         <div class="auth-left-content">
             <div class="brand-header">
                 <i class="fas fa-graduation-cap fa-2x mb-3 text-white"></i>
-                <h2 class="fw-bold text-white mb-2">{{ config('app.name') }}</h2>
+                <h2 class="fw-bold text-white mb-2">{{ institution_name() }}</h2>
             </div>
             
             <div class="auth-hero-text">
@@ -16,7 +16,7 @@
             </div>
             
             <div class="auth-footer text-white-50 small">
-                &copy; {{ date('Y') }} {{ config('app.name') }}. All rights reserved.
+                &copy; {{ date('Y') }} {{ institution_name() }}. All rights reserved.
             </div>
         </div>
         <div class="auth-bg-overlay"></div>
@@ -27,12 +27,12 @@
         <div class="auth-form-container">
             <div class="text-center mb-4 d-md-none">
                 <i class="fas fa-graduation-cap fa-3x" style="color: #667eea;"></i>
-                <h3 class="fw-bold mt-2">{{ config('app.name') }}</h3>
+                <h3 class="fw-bold mt-2">{{ institution_name() }}</h3>
             </div>
 
             <div class="mb-4">
-                <h2 class="fw-bold text-dark mb-1">{{ __('Create Account') }}</h2>
-                <p class="text-muted">{{ __('Fill in your details below to get started.') }}</p>
+                <h2 class="fw-bold text-dark mb-1">{{ __('Start your application') }}</h2>
+                <p class="text-muted">{{ __('First, create the account you will use to complete and track your application.') }}</p>
             </div>
 
             <form method="post" action="{{ route('application.register.store') }}" class="needs-validation modern-form" novalidate>
@@ -136,7 +136,11 @@
                 <div class="form-check custom-checkbox mb-4">
                     <input type="checkbox" class="form-check-input" id="agree_terms" name="agree_terms" required>
                     <label class="form-check-label text-muted" style="font-size: 14px;" for="agree_terms">
-                        {{ __('I agree to the') }} <a href="#" class="text-primary text-decoration-none">{{ __('Terms and Conditions') }}</a>
+                        @isset($termsPage)
+                            {{ __('I agree to the') }} <a href="{{ route('page.single', $termsPage->slug) }}" target="_blank" rel="noopener" class="text-primary text-decoration-none">{{ __('Terms and Conditions') }}</a>
+                        @else
+                            {{ __('I confirm the information I provide will be true and complete.') }}
+                        @endisset
                     </label>
                     <div class="invalid-feedback">{{ __('You must agree before submitting.') }}</div>
                 </div>
@@ -147,8 +151,8 @@
                 
                 <div class="text-center">
                     <p class="text-muted mb-0">
-                        {{ __('Already have an account?') }} 
-                        <a href="{{ route('application.login') }}" class="text-primary fw-bold text-decoration-none ms-1">{{ __('Sign In') }}</a>
+                        {{ __('Already started an application?') }}
+                        <a href="{{ route('application.login') }}" class="text-primary fw-bold text-decoration-none ms-1">{{ __('Sign in to continue') }}</a>
                     </p>
                 </div>
             </form>

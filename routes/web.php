@@ -72,6 +72,11 @@ Route::middleware(['XSS'])->namespace('Web')->group(function () {
 
     // Application Portal Routes
     Route::middleware('guest:applicant')->group(function () {
+        // The admissions front door. Every "Apply Online" button on the public
+        // site lands here, so it must serve the new applicant first and the
+        // returning one second.
+        Route::get('application/start', 'ApplicationController@startPage')->name('application.start');
+
         Route::get('application/login', 'ApplicationController@loginForm')->name('application.login');
         Route::post('application/login', 'ApplicationController@authenticate')->name('application.authenticate');
         Route::get('application/register', 'ApplicationController@registerForm')->name('application.register');

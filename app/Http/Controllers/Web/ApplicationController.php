@@ -13,6 +13,7 @@ use App\Models\Session;
 use App\Models\Setting;
 use App\Models\MailSetting;
 use App\Services\DegreeTypeFormConfig;
+use App\Support\ApplicationDocumentRequirements;
 use App\Support\ApplicationQualificationCards;
 use App\Traits\FileUploader;
 use Carbon\Carbon;
@@ -1532,6 +1533,43 @@ class ApplicationController extends Controller
      |  Auth (account = Applicant)
      |===================================================================*/
 
+    /**
+     * The admissions front door.
+     *
+     * Every "Apply Online" button on the public site lands here. Most people
+     * arriving have never applied before and have no account, so this page
+     * leads with starting an application and offers signing in second, rather
+     * than the other way round.
+     */
+    public function startPage()
+    {
+        if (Auth::guard('applicant')->check()) {
+            return redirect()->route('application.dashboard');
+        }
+
+        // The same query create() uses to populate its intake list, so this
+        // page can never advertise a session the application form would refuse.
+        $openSessions = Session::where('applications_open', 1)
+            ->orderBy('title', 'desc')
+            ->get();
+
+        $applicationSetting = ApplicationSetting::status();
+
+        $requirements = collect(ApplicationDocumentRequirements::all())
+            ->filter(function ($item) {
+                return !empty($item['required']);
+            });
+
+        return view('application.portal.start', [
+            'title' => __('Apply') . ' | ' . institution_name(),
+            'setting' => Setting::where('status', '1')->first(),
+            'applicationSetting' => $applicationSetting,
+            'openSessions' => $openSessions,
+            'isOpen' => $applicationSetting && $openSessions->isNotEmpty(),
+            'requirements' => $requirements,
+        ]);
+    }
+
     public function loginForm()
     {
         if (Auth::guard('applicant')->check()) {
@@ -1575,7 +1613,12 @@ class ApplicationController extends Controller
             return redirect()->route('application.dashboard');
         }
 
-        return view('application.portal.register', ['title' => __('Application Portal Registration')]);
+        return view('application.portal.register', [
+            'title' => __('Start your application') . ' | ' . institution_name(),
+            // Linked only when the page actually exists. A terms link that
+            // 404s is worse than no link at all on a form people must agree to.
+            'termsPage' => \App\Models\Web\Page::where('slug', 'terms-and-conditions')->first(),
+        ]);
     }
 
     public function register(Request $request)

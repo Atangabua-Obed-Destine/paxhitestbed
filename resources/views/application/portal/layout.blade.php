@@ -89,7 +89,13 @@
         body.application-portal { background-color: #f5f7fb; }
         .portal-auth-fullscreen { background-color: #fff; }
         .auth-split-layout { display: flex; min-height: 100vh; width: 100%; margin: 0; padding: 0; }
-        .auth-left { flex: 1; position: relative; background-color: #182b49; background-image: url('https://images.unsplash.com/photo-1541339907198-e08756dedf3f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80'); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: center; padding: 4rem; overflow: hidden; }
+        /* The hero image is the institution's own, never an external one: a
+           remote URL leaves this panel blank on a slow link or an offline
+           server, and a stock photograph of somebody else's campus is the
+           wrong first impression for an admissions page. Drop a photograph at
+           public/uploads/setting/admissions-hero.jpg to use one; without it
+           the brand colour alone is the deliberate fallback. */
+        .auth-left { flex: 1; position: relative; background-color: #182b49;@if(file_exists(public_path('uploads/setting/admissions-hero.jpg'))) background-image: url('{{ asset('uploads/setting/admissions-hero.jpg') }}');@endif background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: center; padding: 4rem; overflow: hidden; }
         .auth-bg-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, rgba(24, 43, 73, 0.9) 0%, rgba(102, 126, 234, 0.8) 100%); z-index: 1; }
         .auth-left-content { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; }
         .brand-header { margin-bottom: auto; }
@@ -118,7 +124,7 @@
 </head>
 <body class="application-portal">
     @php
-        $isAuthPage = in_array(Route::currentRouteName(), ['application.login', 'application.register', 'application.password.request', 'application.password.reset']);
+        $isAuthPage = in_array(Route::currentRouteName(), ['application.start', 'application.login', 'application.register', 'application.password.request', 'application.password.reset']);
     @endphp
 
     @if($isAuthPage)
@@ -129,7 +135,7 @@
         <header class="portal-nav d-flex align-items-center justify-content-between">
             <div class="brand-mark">
                 <i class="fas fa-graduation-cap fa-lg"></i>
-                <span class="h6 mb-0 d-none d-sm-inline">{{ config('app.name') }}</span>
+                <span class="h6 mb-0 d-none d-sm-inline">{{ institution_name() }}</span>
                 <span class="h6 mb-0 d-sm-none">{{ __('Admissions') }}</span>
             </div>
             <nav class="d-flex align-items-center">

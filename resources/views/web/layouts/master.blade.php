@@ -315,7 +315,7 @@
                                 <ul>
                                     <li>
                                         <div class="second-header-btn">
-                                           <a href="{{ route('application.index') }}" target="_blank" class="btn">{{ __('navbar_admission') }}</a>
+                                           <a href="{{ route('application.start') }}" class="btn">{{ __('navbar_admission') }}</a>
                                         </div>
                                     </li>
                                 </ul>
@@ -391,7 +391,7 @@
                                     $application = App\Models\ApplicationSetting::status(); 
                                     @endphp
                                     @isset($application)
-                                    <li><a href="{{ route('application.index') }}" target="_blank">{{ __('navbar_admission') }}</a></li>
+                                    <li><a href="{{ route('application.start') }}">{{ __('navbar_admission') }}</a></li>
                                     @endisset
 
                                     @foreach($footer_pages as $footer_page)
