@@ -197,7 +197,11 @@
                                         </div>
                                         <div class="form-group col-md-12">
                                             <label>{{ __('Payment Instructions') }}</label>
-                                            <textarea class="form-control" name="fee_instructions" rows="2">{{ optional($settings)->fee_instructions }}</textarea>
+                                            <textarea class="form-control" name="fee_instructions" rows="6"
+                                                      placeholder="{{ __("1. Pay into UBA account 0123456789, in the name of the institution.\n2. Quote your application number as the payment reference.\n3. Keep the teller slip and upload a photograph of it.") }}">{{ optional($settings)->fee_instructions }}</textarea>
+                                            <small class="form-text text-muted">
+                                                {{ __('Shown to the applicant on the payment step, under "How to pay". Put each instruction on its own line. Lines beginning 1. 2. 3. become a numbered list, lines beginning with a dash become bullet points, and anything else becomes paragraphs. Give the account name and number here — this is where applicants look for it.') }}
+                                            </small>
                                         </div>
                                     </div>
                                 </div>

@@ -123,6 +123,60 @@
         .wizard-step.active { display: block; }
         
         .step-header { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #e9ecef; }
+
+        /* The institution's configured payment instructions. Given real weight,
+           because an applicant on this tab has one question first - where do I
+           send the money - and everything below is unusable until it is answered. */
+        .pay-guide { border: 2px solid #0c7cd5; border-radius: 12px; overflow: hidden; background: #fff; }
+        .pay-guide-head {
+            background: #0c7cd5; color: #fff; padding: .8rem 1.15rem;
+            font-weight: 700; font-size: 1.02rem; letter-spacing: .2px;
+        }
+        .pay-guide-figures {
+            display: flex; flex-wrap: wrap; gap: 2.5rem;
+            padding: 1.1rem 1.15rem; background: #f2f8fe; border-bottom: 1px solid #dbeafe;
+        }
+        .pay-figure { display: flex; flex-direction: column; }
+        .pay-figure-label {
+            font-size: .72rem; font-weight: 800; letter-spacing: .9px;
+            text-transform: uppercase; color: #5b83b5; margin-bottom: .15rem;
+        }
+        .pay-figure-value {
+            font-size: 1.4rem; font-weight: 800; color: #0a2540;
+            font-variant-numeric: tabular-nums; letter-spacing: .3px;
+        }
+        .pay-guide-body { padding: 1.15rem; color: #2c3e56; font-size: .97rem; line-height: 1.6; }
+        .pay-guide-body p:last-child,
+        .pay-guide-body ul:last-child,
+        .pay-guide-body ol:last-child { margin-bottom: 0; }
+        .pay-guide-body ul, .pay-guide-body ol { padding-left: 1.3rem; margin-bottom: .5rem; }
+        .pay-guide-body li { padding: .18rem 0; }
+        .pay-guide-foot {
+            display: flex; align-items: flex-start; gap: .3rem;
+            background: #fff8ed; border-top: 1px solid #f6e2c4;
+            padding: .85rem 1.15rem; color: #8a5312; font-size: .89rem;
+        }
+        @media (max-width: 575.98px) {
+            .pay-guide-figures { gap: 1.25rem; }
+            .pay-figure-value { font-size: 1.2rem; }
+        }
+
+        /* Cash is not payable through this page, so the notice sits outside the
+           payment tabs where it cannot be missed. */
+        .cash-notice {
+            display: flex; gap: 1rem; align-items: flex-start;
+            background: #f1f8f4; border: 1px solid #bfe3cd;
+            border-left: 4px solid #1a8a4f; border-radius: 10px;
+            padding: 1.1rem 1.2rem; color: #235c3c;
+        }
+        .cash-notice-icon {
+            flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
+            background: #1a8a4f; color: #fff;
+            display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
+        }
+        .cash-notice strong { color: #14532d; font-size: 1rem; }
+        .cash-notice p { font-size: .93rem; line-height: 1.55; }
+
         /* Right-aligned status badge: "Profile · 1 of 3" on tabbed steps, "69% complete" elsewhere. */
         .step-header .step-status { float: right; }
         .step-header .step-status:empty { display: none; }
@@ -482,6 +536,14 @@
             <h2>Applicant's Information</h2>
             <p>Tell us about the applicant. Use information from official documents.</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep1',
+            'guideTime' => __('About 5 minutes'),
+            'guideIntro' => __('This is where you tell us who you are. Copy everything exactly as it appears on your birth certificate, because the school checks what you type against your documents.'),
+            'guideNeed' => [__('Your birth certificate'), __('Your National ID card or passport, if you have one'), __('A phone number that is answered')],
+            'guideSteps' => [__('Write your names exactly as they appear on your birth certificate. Do not shorten them or change their order.'), __('Choose your date of birth using the calendar. It must be a date in the past.'), __('Give a phone number and an email address you check often. This is how the school will reach you.'), __('If you have a passport photograph or an ID document, upload them here. Both are optional and will not hold up your application.'), __('Click Save and continue. If something is wrong the page will tell you what to fix and stay where it is, so nothing is lost.')],
+            'guideWarn' => __('A name spelled differently from your birth certificate is the most common reason an application is sent back. Check it letter by letter before you continue.'),
+        ])
         
         <ul class="nav nav-pills step-tabs mb-4" id="step1Tabs" role="tablist">
             <li class="nav-item" role="presentation">
@@ -867,6 +929,14 @@
             <h2>Family & Financial Support</h2>
             <p>Tell us about the applicant's parents and the people responsible for their care and school fees.</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep2',
+            'guideTime' => __('About 4 minutes'),
+            'guideIntro' => __('The school needs an adult it can contact about you, and needs to know who will be paying your fees.'),
+            'guideNeed' => [__("Your parents' or guardian's full names"), __('A phone number for each of them'), __('Their occupation')],
+            'guideSteps' => [__("Fill in your father's and mother's details as far as you know them."), __('If an adult other than your parents is responsible for you, enter them as your guardian.'), __('Say who will pay your fees. This may be a parent, a guardian, a sponsor, or yourself.'), __('Give at least one phone number that is actually answered. The school uses it if there is a question about your application.')],
+            'guideWarn' => __('If a parent has died, or you genuinely do not know a detail, leave that field empty rather than inventing something. An invented detail is much harder to correct later.'),
+        ])
         
                                 <p class="step-caption">{{ __('Provide details for your parents, legal guardians, or sponsors who can be contacted during the admission process.') }}</p>
                                 <div id="guardianRepeater">
@@ -965,6 +1035,14 @@
             <h2>Academic Qualifications</h2>
             <p>Schools attended, qualifications and supporting certificates.</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep3',
+            'guideTime' => __('About 10 minutes'),
+            'guideIntro' => __('List the schools you attended and the examinations you passed, then attach the certificates that prove them. This is the longest step, so give yourself time.'),
+            'guideNeed' => [__('Your GCE Ordinary Level or BEPC certificate'), __('Your GCE Advanced Level or Baccalaureate certificate'), __('The names of your schools and the years you attended')],
+            'guideSteps' => [__('Add each school you attended, with the years you started and finished.'), __('Enter your examination results subject by subject, with the grade you obtained in each.'), __('Upload a clear photograph or scan of every certificate.'), __('Check that the whole document is visible in the picture, with no fingers, shadows or cut-off corners.')],
+            'guideWarn' => __('A blurred or cut-off certificate cannot be verified and will be sent back to you. Lay the document flat on a table in good daylight and take the photo from directly above.'),
+        ])
         <div class="alert alert-info mb-4">
             <i class="fas fa-graduation-cap me-2"></i>
             <strong>{{ __('Complete each required qualification') }}</strong>
@@ -1034,6 +1112,12 @@
             <h2>Programme Choices</h2>
             <p>Review your preferred programmes.</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep4',
+            'guideTime' => __('About 1 minute'),
+            'guideIntro' => __('These are the programmes you selected when you started this application. This step is just to confirm them.'),
+            'guideSteps' => [__('Check that your first choice is the programme you most want to study.'), __('Your second and third choices are used only if your first choice is already full.'), __('If you want a different programme, return to My Account and start a new application. Choices cannot be changed here.')],
+        ])
         <div class="alert alert-warning mb-4">
             <i class="fas fa-exclamation-triangle me-2"></i> <strong>Choose carefully.</strong> These were chosen when you started this application. To apply for a different programme, start a new application from My Account.
         </div>
@@ -1110,6 +1194,12 @@
             <h2>Languages</h2>
             <p>Languages you studied and use.</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep5',
+            'guideTime' => __('About 2 minutes'),
+            'guideIntro' => __('Tell us which languages you can work in, so the school can place you in the right class.'),
+            'guideSteps' => [__('Tick each language you speak, read or write.'), __('For each one, say how well you use it.'), __('Answer honestly. This is used to place you correctly, not to judge you.')],
+        ])
         
                                 <p class="step-caption">{{ __('Indicate languages you speak or understand and your proficiency level.') }}</p>
                                 <div id="languageRepeater">
@@ -1157,6 +1247,14 @@
             <h2>Documents</h2>
             <p>Review uploaded files and provide remaining documents.</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep6',
+            'guideTime' => __('About 5 minutes'),
+            'guideIntro' => __('This is the final check on your files. Anything you uploaded in an earlier step already appears here, so you are not asked for it twice.'),
+            'guideNeed' => [__('Any certificate you have not yet uploaded')],
+            'guideSteps' => [__('Look down the list. A green tick means the school has received that file.'), __('Upload anything still shown as missing.'), __('Items marked optional may be left empty. They will not stop you continuing.'), __('A clear photograph is fine. PDF, JPG and PNG files all work.')],
+            'guideWarn' => __('Open each file and check it shows the document you meant to send. The right slot with the wrong file attached is the hardest mistake for anyone to notice.'),
+        ])
         <div id="documents-original-container">
 
                             @if(optional(field('application_document_checklist'))->status == 1)
@@ -1315,6 +1413,13 @@
             <h2>Review & Confirm</h2>
             <p>Check your application before submission.</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep7',
+            'guideTime' => __('About 5 minutes'),
+            'guideIntro' => __('Read your whole application once more. After you confirm it, you cannot change it yourself unless the school asks you to.'),
+            'guideSteps' => [__('Go through every section and check it against your documents.'), __('To correct something, click that step in the list on the left, fix it, then come back here.'), __('Tick the box confirming that the information you have given is true.'), __('Click Confirm to finish this part. You will then be taken to payment.')],
+            'guideWarn' => __('Once you confirm, only the Admissions Office can reopen your application for changes.'),
+        ])
         <div class="alert alert-info mb-4">
             <i class="fas fa-check-double me-2"></i> <strong>Check the details before you confirm.</strong> Unless resubmission is requested, you cannot change your information once you confirm.
         </div>
@@ -1395,6 +1500,14 @@
             <h2>{{ __('Payment') }}</h2>
             <p>{{ __('Application fee') }}: {{ number_format($admissionFeeSettings['fee_amount'], 0) }} FCFA</p>
         </div>
+        @include('application.partials.step-guide', [
+            'guideId' => 'guideStep8',
+            'guideTime' => __('About 5 minutes'),
+            'guideIntro' => __('The last step. Pay the application fee, tell us the reference, and upload your proof. The school checks it and your application is then submitted for you.'),
+            'guideNeed' => [__('The reference number from the bank or mobile money service'), __('A photograph of your receipt')],
+            'guideSteps' => [__('Pay the application fee using one of the methods shown on this page.'), __('Keep the reference number the bank or mobile money service gives you.'), __('Type that reference here and upload a photograph of the receipt.'), __('Wait for the school to check it. The status on this page changes when they do.')],
+            'guideWarn' => __('Your application is submitted automatically as soon as the payment is approved. There is nothing further for you to do after that.'),
+        ])
 
         @php
             $feePaid = empty($admissionFeeRequired);
@@ -1540,14 +1653,50 @@
                 @endif
 
                 <div class="tab-pane fade {{ !$anyMomoEnabled ? 'show active' : '' }}" id="payManual" role="tabpanel">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>{{ __('What to upload') }}</strong>
-                        <p class="mb-0 mt-1 small">{{ __('A clear PDF, JPG or PNG of the bank receipt or payment confirmation. Make sure the amount, date and payment reference are legible.') }}</p>
+
+                    {{-- The institution's own payment instructions, configured per
+                         degree type under Academic > Degree Type > Form Configuration.
+                         They used to render as a bare unstyled <div> wedged between the
+                         notice and the form, where an applicant looking for "which
+                         account do I pay into?" would not see them. They lead now,
+                         because nothing else on this tab can be done until the
+                         applicant has actually paid. --}}
+                    <div class="pay-guide mb-4">
+                        <div class="pay-guide-head">
+                            <i class="fas fa-university me-2"></i>{{ __('How to pay') }}
+                        </div>
+
+                        <div class="pay-guide-figures">
+                            <div class="pay-figure">
+                                <span class="pay-figure-label">{{ __('Amount to pay') }}</span>
+                                <span class="pay-figure-value">{{ number_format($admissionFeeBalance, 0) }} FCFA</span>
+                            </div>
+                            @if(!empty($application->registration_no))
+                                <div class="pay-figure">
+                                    <span class="pay-figure-label">{{ __('Quote this reference') }}</span>
+                                    <span class="pay-figure-value">{{ $application->registration_no }}</span>
+                                </div>
+                            @endif
+                        </div>
+
+                        @if(!empty($admissionFeeSettings['fee_instructions']))
+                            <div class="pay-guide-body">
+                                {!! admin_rich_text($admissionFeeSettings['fee_instructions']) !!}
+                            </div>
+                        @else
+                            <div class="pay-guide-body">
+                                <p>{{ __('Contact the Admissions Office for the payment details, then return here to upload your proof of payment.') }}</p>
+                            </div>
+                        @endif
+
+                        <div class="pay-guide-foot">
+                            <i class="fas fa-receipt me-2"></i>
+                            <span>
+                                <strong>{{ __('Keep your receipt.') }}</strong>
+                                {{ __('You must upload a photograph or scan of it below, showing the amount, the date and the payment reference clearly.') }}
+                            </span>
+                        </div>
                     </div>
-                    @if(!empty($admissionFeeSettings['fee_instructions']))
-                        <div class="mb-3">{!! $admissionFeeSettings['fee_instructions'] !!}</div>
-                    @endif
 
                     {{-- Not a nested <form>: these inputs are namespaced under pay_* and
                          posted over AJAX, so they never travel with the application. --}}
@@ -1568,9 +1717,16 @@
                         </div>
                         <div class="form-group col-md-4">
                             <label for="pay_payment_method">{{ __('Payment method') }} <span>*</span></label>
+                            {{-- Cash is deliberately absent. This form uploads proof of a
+                                 payment already made somewhere else, and a cash payment
+                                 produces no such proof: it is handed over at the Finance
+                                 Office, where the officer records it directly against the
+                                 fee (Admission Fees Report > Record payment). Offering it
+                                 here would invite an applicant to claim a cash payment
+                                 nobody has received. The notice below the tabs says where
+                                 to go instead. --}}
                             <select class="form-control" id="pay_payment_method" data-skip-autosave="1">
                                 <option value="4">{{ __('Bank Transfer') }}</option>
-                                <option value="2">{{ __('Cash') }}</option>
                                 <option value="3">{{ __('Cheque') }}</option>
                                 <option value="1">{{ __('Card') }}</option>
                                 <option value="5">{{ __('E-wallet') }}</option>
@@ -1601,6 +1757,22 @@
                     <button type="button" class="btn btn-primary" id="upload-receipt-btn">
                         <i class="fas fa-upload me-1"></i>{{ __('Upload proof of payment') }}
                     </button>
+                </div>
+            </div>
+
+            {{-- Outside the tabs on purpose: an applicant intending to pay cash must
+                 see this whichever payment method happens to be showing, and must not
+                 have to open a tab whose form they cannot complete. --}}
+            <div class="cash-notice mt-4">
+                <div class="cash-notice-icon"><i class="fas fa-money-bill-wave"></i></div>
+                <div>
+                    <strong class="d-block mb-1">{{ __('Paying in cash? Do not use this page.') }}</strong>
+                    <p class="mb-2">
+                        {{ __('Take your money to the Finance Office at the school and pay there. The finance officer records the payment against your application straight away and gives you a receipt.') }}
+                    </p>
+                    <p class="mb-0">
+                        {{ __('You do not need to upload anything here afterwards. Your application is submitted automatically once the payment is recorded, and you will see it change on this page.') }}
+                    </p>
                 </div>
             </div>
             </div>
@@ -1657,8 +1829,53 @@
         }
 
         var feeRequired = {{ !empty($admissionFeeRequired) ? 'true' : 'false' }};
-        var currentIndex = 0;
-        var highestIndexReached = 0;
+
+        /* ---- Where the applicant was, and how far they may jump ---------
+         |
+         | Both of these used to be hardcoded to 0 on every page load, which
+         | meant a refresh threw the applicant back to step 1 and then refused
+         | to let them click forward again ("complete the preceding steps"),
+         | even with a finished form.
+         |
+         | The ceiling comes from the SERVER, computed from saved data, so it
+         | is right on a new browser or a different device too. The position is
+         | remembered per application in localStorage, which is the correct
+         | place for a per-viewer convenience of this kind.
+         */
+        var STEP_STORAGE_KEY = 'paxApplicationStep:{{ $application->id }}';
+
+        var serverUnlockedIndex = Math.max(0, Math.min(
+            {{ (int) ($wizardUnlockedThrough ?? 1) }} - 1,
+            totalSteps - 1
+        ));
+
+        function readStoredIndex() {
+            try {
+                var raw = window.localStorage.getItem(STEP_STORAGE_KEY);
+                if (raw === null) {
+                    return null;
+                }
+                var value = parseInt(raw, 10);
+                return (isNaN(value) || value < 0 || value >= totalSteps) ? null : value;
+            } catch (e) {
+                // Private browsing, blocked site data, or an embedded webview.
+                return null;
+            }
+        }
+
+        function rememberIndex(index) {
+            try {
+                window.localStorage.setItem(STEP_STORAGE_KEY, String(index));
+            } catch (e) { /* storage is a convenience, never a requirement */ }
+        }
+
+        var highestIndexReached = serverUnlockedIndex;
+
+        // Never restore past what the server says is reachable: an applicant who
+        // was on payment and then had a document rejected must land on the step
+        // that now needs attention, not on a step they can no longer use.
+        var storedIndex = readStoredIndex();
+        var currentIndex = storedIndex === null ? 0 : Math.min(storedIndex, serverUnlockedIndex);
 
         function stepIdAt(index) {
             return stepIds[index];
@@ -1919,6 +2136,7 @@
                 return;
             }
             currentIndex = index;
+            rememberIndex(currentIndex);
             updateWizardUI();
         }
 

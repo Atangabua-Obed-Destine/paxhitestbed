@@ -328,6 +328,35 @@ class ApplicationController extends Controller
      |===================================================================*/
 
     /** The multi-step application form for one application (draft only). */
+    /**
+     * The furthest wizard step the applicant may jump straight to, 1-based.
+     *
+     * ApplicationCompleteness tags every unmet requirement with the step it
+     * belongs to, so the first step still missing something is the natural
+     * ceiling: everything before it is genuinely done and safe to revisit, and
+     * the applicant can open that step to finish it. With nothing missing the
+     * whole wizard opens, including payment.
+     *
+     * This is a navigation convenience, not a control: moving forward still
+     * validates and saves, and payment is gated independently in
+     * uploadAdmissionFeeReceipt() against the same service.
+     */
+    protected function wizardUnlockedThrough(Application $application): int
+    {
+        $totalSteps = 8;
+
+        $steps = array_column(\App\Services\ApplicationCompleteness::missing($application), 'step');
+        $steps = array_filter($steps, function ($step) {
+            return is_numeric($step) && $step > 0;
+        });
+
+        if ($steps === []) {
+            return $totalSteps;
+        }
+
+        return max(1, min((int) min($steps), $totalSteps));
+    }
+
     public function edit(Application $application)
     {
         $this->authorizeApplication($application);
@@ -422,6 +451,12 @@ class ApplicationController extends Controller
             'admissionFeeBalance' => $admissionFeeBalance,
             'admissionFeeSettings' => $feeSettings,
             'latestPaymentReceipt' => $latestReceipt,
+            // How far the sidebar may be clicked, from what is actually SAVED.
+            // The wizard used to track this in a JavaScript variable that reset
+            // to zero on every page load, so a returning applicant with a
+            // finished form was told to "complete the preceding steps" and had
+            // to walk through all eight again to reach payment.
+            'wizardUnlockedThrough' => $this->wizardUnlockedThrough($application),
         ];
 
         $data['districtOptions'] = $provinces
@@ -1485,7 +1520,14 @@ class ApplicationController extends Controller
         $request->validate([
             'payment_date' => 'required|date|before_or_equal:today',
             'payment_reference' => 'required|string|max:255',
-            'payment_method' => 'required|in:1,2,3,4,5,6',
+            // Every method the applicant is offered, except cash (2). This form
+            // records proof of a payment made elsewhere; cash is handed over at
+            // the Finance Office, which records it directly against the fee, so
+            // a cash receipt uploaded here would be a claim nobody can verify.
+            // 7 (Orange Money) and 8 (Other) were previously missing from this
+            // rule while being offered in the form, so choosing either failed
+            // validation with no explanation.
+            'payment_method' => 'required|in:1,3,4,5,6,7,8',
             'receipt_file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
             'student_note' => 'nullable|string|max:500',
         ]);

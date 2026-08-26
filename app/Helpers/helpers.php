@@ -113,3 +113,77 @@ if (!function_exists('avatar_url')) {
         return asset($fallback);
     }
 }
+
+if (!function_exists('admin_rich_text')) {
+    /**
+     * Render text an administrator typed into a plain textarea as decent HTML.
+     *
+     * Fields like a degree type's payment instructions are captured in a bare
+     * <textarea> and were being echoed straight into the page, so an admin who
+     * pressed Enter between two instructions got one run-on paragraph, and a
+     * list typed as "- do this" stayed literal dashes. This keeps the raw
+     * escape hatch for an admin who genuinely pastes markup, and otherwise
+     * turns what they typed into paragraphs and lists.
+     *
+     *  - already contains markup  -> returned untouched (trusted admin input)
+     *  - lines starting - or *    -> unordered list
+     *  - lines starting 1. 2)     -> ordered list
+     *  - anything else            -> one paragraph per block, escaped
+     */
+    function admin_rich_text(?string $value): string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return '';
+        }
+
+        // An admin who pasted real HTML gets it back as-is.
+        if (preg_match('/<(p|ul|ol|li|br|div|strong|em|b|i|a|h[1-6]|table)\b/i', $value)) {
+            return $value;
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', $value);
+        $lines = array_values(array_filter(array_map('trim', $lines), function ($l) {
+            return $l !== '';
+        }));
+
+        if ($lines === []) {
+            return '';
+        }
+
+        $bullet  = 0;
+        $ordered = 0;
+        foreach ($lines as $line) {
+            if (preg_match('/^[-*\x{2022}]\s+/u', $line)) {
+                $bullet++;
+            } elseif (preg_match('/^\d+[.)]\s+/', $line)) {
+                $ordered++;
+            }
+        }
+
+        $half = max(1, (int) ceil(count($lines) / 2));
+
+        if ($ordered >= $half) {
+            $html = '<ol>';
+            foreach ($lines as $line) {
+                $html .= '<li>' . e(preg_replace('/^\d+[.)]\s+/', '', $line)) . '</li>';
+            }
+            return $html . '</ol>';
+        }
+
+        if ($bullet >= $half) {
+            $html = '<ul>';
+            foreach ($lines as $line) {
+                $html .= '<li>' . e(preg_replace('/^[-*\x{2022}]\s+/u', '', $line)) . '</li>';
+            }
+            return $html . '</ul>';
+        }
+
+        $html = '';
+        foreach ($lines as $line) {
+            $html .= '<p>' . e($line) . '</p>';
+        }
+
+        return $html;
+    }
+}

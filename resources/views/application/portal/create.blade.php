@@ -28,6 +28,20 @@
                     {{ __('Applications are not open at the moment. Please check back later or contact the Admissions Office.') }}
                 </div>
             @else
+            @include('application.partials.step-guide', [
+                'guideId' => 'guideIntake',
+                'guideTime' => __('About 2 minutes'),
+                'guideIntro' => __('This short page decides which application form you are given. Your answers here set the questions, the documents and the fee for the rest of the process, so take a moment over them.'),
+                'guideSteps' => [
+                    __('Choose the type of programme you want to study. The panel on the right then shows what that programme requires and what the fee is.'),
+                    __('Choose the academic year you want to start. Only years that are open for applications are listed.'),
+                    __('Choose your first-choice programme. This is the one you most want to study.'),
+                    __('You may add a second and third choice. These are used only if your first choice is already full, and they are optional.'),
+                    __('Click Start Application. Your form is then created and you can fill it in over as many sittings as you need.'),
+                ],
+                'guideWarn' => __('The programme type cannot be changed once the application is created. If you pick the wrong one you will have to start a new application, so check the panel on the right before you continue.'),
+            ])
+
             <form action="{{ route('application.store') }}" method="post" class="needs-validation" novalidate>
                 @csrf
 
