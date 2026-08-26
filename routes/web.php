@@ -581,6 +581,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('budget-line', 'BudgetLineController@index')->name('budget-line.index');
     Route::post('budget-line/store', 'BudgetLineController@store')->name('budget-line.store');
     Route::post('budget-line/{id}/update', 'BudgetLineController@update')->name('budget-line.update');
+    Route::post('budget-line/reorder', 'BudgetLineController@reorder')->name('budget-line.reorder');
+    Route::post('budget-line/auto-sort', 'BudgetLineController@autoSort')->name('budget-line.auto-sort');
     Route::post('budget-line/{id}/toggle', 'BudgetLineController@toggle')->name('budget-line.toggle');
     Route::post('budget-line/{id}/delete', 'BudgetLineController@destroy')->name('budget-line.delete');
 

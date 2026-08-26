@@ -39,7 +39,7 @@ class BudgetLineController extends Controller
 
         $this->middleware('permission:budget-line-view', ['only' => ['index']]);
         $this->middleware('permission:budget-line-create', ['only' => ['store']]);
-        $this->middleware('permission:budget-line-edit', ['only' => ['update', 'toggle']]);
+        $this->middleware('permission:budget-line-edit', ['only' => ['update', 'toggle', 'reorder', 'autoSort']]);
         $this->middleware('permission:budget-line-delete', ['only' => ['destroy']]);
     }
 
@@ -51,15 +51,200 @@ class BudgetLineController extends Controller
             ->orderBy('code')
             ->get();
 
+        // Grouped as a tree, not a flat list. sort_order alone is a single run
+        // of numbers across a whole section, so a line typed in with the wrong
+        // number could sit above its own heading. Ordering by the tree makes
+        // the heading structure the thing that decides position, and the
+        // numbers merely the order within it.
+        $grouped = collect(['income', 'expenditure', 'capital'])
+            ->mapWithKeys(function (string $section) use ($lines) {
+                return [$section => $this->treeOrdered($lines->where('section', $section))];
+            });
+
         return view('admin.budget-line.index', [
             'title' => __('Budget Lines'),
             'lines' => $lines,
-            'grouped' => $lines->groupBy('section'),
+            'grouped' => $grouped,
             'headers' => $lines->where('is_header', true),
             'faculties' => Faculty::orderBy('title')->get(),
             'accountsByLine' => $this->reconciliation->accountsByLine(),
             'usage' => $this->usage(),
         ]);
+    }
+
+    /**
+     * One section's lines as a heading-first tree.
+     *
+     * Returns ['line' => BudgetLine, 'children' => Collection] rather than
+     * decorating the models: an attribute set on an Eloquent model becomes a
+     * column it will try to write on the next save, and these models are handed
+     * straight to a view that also offers an edit form.
+     *
+     * A line whose heading is missing surfaces at the top level rather than
+     * dropping off the screen — invisible is worse than out of place.
+     *
+     * @param  \Illuminate\Support\Collection<int, BudgetLine> $lines
+     * @return \Illuminate\Support\Collection<int, array{line: BudgetLine, children: \Illuminate\Support\Collection}>
+     */
+    protected function treeOrdered($lines)
+    {
+        $lines = $lines->values();
+        $ids = $lines->pluck('id')->all();
+
+        $childrenOf = $lines
+            ->filter(function (BudgetLine $line) use ($ids) {
+                return $line->parent_id && in_array($line->parent_id, $ids, true);
+            })
+            ->sortBy([['sort_order', 'asc'], ['code', 'asc']])
+            ->groupBy('parent_id');
+
+        return $lines
+            ->filter(function (BudgetLine $line) use ($ids) {
+                return !$line->parent_id || !in_array($line->parent_id, $ids, true);
+            })
+            ->sortBy([['sort_order', 'asc'], ['code', 'asc']])
+            ->map(function (BudgetLine $line) use ($childrenOf) {
+                return [
+                    'line' => $line,
+                    'children' => $childrenOf->get($line->id, collect())->values(),
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Persist a new running order, as dragged.
+     *
+     * The browser posts the lines of one section in the order they now appear,
+     * each with the heading it now sits under. Both facts are written together
+     * because they are one fact: where a line is on the sheet.
+     */
+    public function reorder(Request $request)
+    {
+        $validated = $request->validate([
+            'section' => ['required', Rule::in([
+                BudgetLine::SECTION_INCOME,
+                BudgetLine::SECTION_EXPENDITURE,
+                BudgetLine::SECTION_CAPITAL,
+            ])],
+            'order' => ['required', 'array', 'min:1'],
+            'order.*.id' => ['required', 'integer', 'exists:budget_lines,id'],
+            'order.*.parent_id' => ['nullable', 'integer', 'exists:budget_lines,id'],
+        ]);
+
+        $section = $validated['section'];
+
+        // Only ever reorder within the section that was dragged. A payload
+        // naming a line from another section is a bug or a forged request, and
+        // silently moving it would corrupt a sheet nobody was looking at.
+        $lines = BudgetLine::where('section', $section)
+            ->get()
+            ->keyBy('id');
+
+        $seen = [];
+        $position = 0;
+        $errors = [];
+
+        DB::transaction(function () use ($validated, $lines, &$seen, &$position, &$errors) {
+            foreach ($validated['order'] as $entry) {
+                $id = (int) $entry['id'];
+                $parentId = isset($entry['parent_id']) && $entry['parent_id'] !== null
+                    ? (int) $entry['parent_id']
+                    : null;
+
+                $line = $lines->get($id);
+                if (!$line || in_array($id, $seen, true)) {
+                    $errors[] = $id;
+                    continue;
+                }
+                $seen[] = $id;
+
+                if ($parentId !== null) {
+                    $parent = $lines->get($parentId);
+
+                    // A heading is a top-level thing; nothing files under a
+                    // line that is not one, and nothing files under itself.
+                    if (!$parent || !$parent->is_header || $parentId === $id) {
+                        $parentId = null;
+                    }
+                }
+
+                // A heading never files under another heading: the sheet is two
+                // levels deep, and the Income & Expenditure statement is built
+                // on that assumption.
+                if ($line->is_header) {
+                    $parentId = null;
+                }
+
+                $position += 10;
+
+                if ((int) $line->sort_order !== $position || $line->parent_id !== $parentId) {
+                    $line->sort_order = $position;
+                    $line->parent_id = $parentId;
+                    $line->save();
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => __('Order saved.'),
+            'reordered' => count($seen),
+            'skipped' => $errors,
+        ]);
+    }
+
+    /**
+     * Renumber a section by code, keeping the heading structure.
+     *
+     * The diocesan codes already encode the intended order (401 sits under the
+     * 400 heading), so for a sheet that has drifted this restores the form's
+     * own sequence without anyone dragging seventy lines by hand.
+     */
+    public function autoSort(Request $request)
+    {
+        $validated = $request->validate([
+            'section' => ['required', Rule::in([
+                BudgetLine::SECTION_INCOME,
+                BudgetLine::SECTION_EXPENDITURE,
+                BudgetLine::SECTION_CAPITAL,
+            ])],
+        ]);
+
+        $lines = BudgetLine::where('section', $validated['section'])->get();
+
+        $childrenOf = $lines
+            ->filter(function (BudgetLine $line) {
+                return (bool) $line->parent_id;
+            })
+            ->sortBy('code', SORT_NATURAL)
+            ->groupBy('parent_id');
+
+        $topLevel = $lines
+            ->filter(function (BudgetLine $line) {
+                return !$line->parent_id;
+            })
+            ->sortBy('code', SORT_NATURAL);
+
+        $position = 0;
+
+        DB::transaction(function () use ($topLevel, $childrenOf, &$position) {
+            foreach ($topLevel as $line) {
+                $position += 10;
+                $line->sort_order = $position;
+                $line->save();
+
+                foreach ($childrenOf->get($line->id, collect()) as $child) {
+                    $position += 10;
+                    $child->sort_order = $position;
+                    $child->save();
+                }
+            }
+        });
+
+        Flasher::addSuccess(__('Section sorted by code.'), __('msg_success'));
+
+        return redirect()->route('admin.budget-line.index');
     }
 
     public function store(Request $request)
