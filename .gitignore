@@ -21,3 +21,6 @@ yarn-error.log
 production-quick-fix.php
 production-quick-fix.sh
 test-db.php
+
+# Ignore user uploads
+/public/uploads
