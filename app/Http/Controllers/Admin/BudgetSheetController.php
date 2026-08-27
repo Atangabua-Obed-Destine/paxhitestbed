@@ -380,6 +380,9 @@ class BudgetSheetController extends Controller
             'priorTotals' => $priorTotals,
             'reconciliation' => $reconciliation,
             'accountsByLine' => $this->reconciliation->accountsByLine(),
+            // Where to draw a subtotal, decided once so the screen, the PDF and
+            // the workbook cannot disagree about where a group ends.
+            'groupEnds' => BudgetLine::groupEnds($lines),
         ];
     }
 

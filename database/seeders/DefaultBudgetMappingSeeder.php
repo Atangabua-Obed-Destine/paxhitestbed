@@ -104,6 +104,31 @@ class DefaultBudgetMappingSeeder extends Seeder
             $mapped++;
         }
 
+        // --- payroll ------------------------------------------------------
+        //
+        // Payroll never becomes an expense row: it lives in `payrolls` with its
+        // own journal entry, so the three loops above cannot see it and the
+        // sheet was short by every salary ever paid. These rows are keyed by
+        // the ACCOUNT the payroll entry debits rather than by a category,
+        // because payroll has no category to key on.
+        foreach ($this->payrollMap() as $type => [$code, $account]) {
+            if (!isset($lines[$code], $accounts[$account])) {
+                $skipped[] = "payroll/{$type}";
+                continue;
+            }
+            DefaultAccountMapping::updateOrCreate(
+                ['mapping_type' => $type, 'category_id' => null],
+                [
+                    'budget_line_id' => $lines[$code],
+                    'debit_account_id' => $accounts[$account],
+                    'credit_account_id' => $cash,
+                    'description' => $type . ' → ' . $code,
+                    'status' => 'active',
+                ]
+            );
+            $mapped++;
+        }
+
         $this->command?->info("Default mappings written: {$mapped}.");
         if ($skipped) {
             $this->command?->warn('Not mapped: ' . implode(', ', $skipped));
@@ -175,6 +200,23 @@ class DefaultBudgetMappingSeeder extends Seeder
             'First Instalment' => ['610', '711'],
             'Second Installment' => ['610', '711'],
             'Resit Fee' => ['614', '713'],
+        ];
+    }
+
+    /**
+     * mapping type => [budget line code, the OHADA account the payroll entry debits]
+     *
+     * Only the two sides a payroll run actually charges the institution: the
+     * salary itself, and the employer's social contribution. Tax withheld from
+     * the employee and the net paid over are not costs — they are the same
+     * salary money on its way out, and counting them again would double the
+     * wage bill on the sheet.
+     */
+    protected function payrollMap(): array
+    {
+        return [
+            'payroll' => ['444', '661'],       // Salaires
+            'payroll_tax' => ['445', '664'],   // Charges Sociales (employer)
         ];
     }
 }

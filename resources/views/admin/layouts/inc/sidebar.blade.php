@@ -798,6 +798,16 @@
                     </a>
                 </li>
 
+                @can('daybook-view')
+                {{-- Sits directly beneath the sheet: it is the same money, one
+                     itemised and one summed. --}}
+                <li class="{{ Request::is('admin/daybook*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.daybook.index') }}" class="">
+                        <i class="fas fa-book-open"></i> {{ __('Daybook') }}
+                    </a>
+                </li>
+                @endcan
+
                 <li class="{{ Request::is('admin/budget') && !Request::is('admin/budget-*') ? 'active' : '' }}">
                     <a href="{{ route('admin.budget.index') }}" class="">
                         {{-- Named explicitly: sitting beside the institutional

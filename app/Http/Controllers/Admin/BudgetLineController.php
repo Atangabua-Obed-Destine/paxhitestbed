@@ -4,11 +4,17 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\BudgetLine;
+use App\Models\ChartOfAccount;
+use App\Models\DefaultAccountMapping;
+use App\Models\ExpenseCategory;
 use App\Models\Faculty;
+use App\Models\IncomeCategory;
 use App\Services\BudgetReconciliationService;
 use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -68,8 +74,97 @@ class BudgetLineController extends Controller
             'headers' => $lines->where('is_header', true),
             'faculties' => Faculty::orderBy('title')->get(),
             'accountsByLine' => $this->reconciliation->accountsByLine(),
+            'categoriesByLine' => $this->reconciliation->categoriesByLine(),
             'usage' => $this->usage(),
+
+            // Everything the mapping modal needs, gathered once rather than
+            // queried per row: 66 lines would otherwise mean 66 lookups.
+            'accountOptions' => $this->accountOptions(),
+            // Existing activity names, so a second line joins one by picking
+            // it rather than by retyping it and silently making a new one.
+            'profitCentres' => BudgetLine::whereNotNull('profit_centre')
+                ->where('profit_centre', '!=', '')
+                ->distinct()->orderBy('profit_centre')->pluck('profit_centre'),
+            'linkableMappings' => $this->linkableMappings(),
+            'suggestions' => $lines->reject->is_header->mapWithKeys(function (BudgetLine $line) {
+                return [$line->id => $this->suggestedAccountsFor($line)];
+            }),
         ]);
+    }
+
+    /**
+     * Chart accounts to choose from, grouped by OHADA class.
+     *
+     * Only the classes a sheet line can legitimately post to: 7 for income, 6
+     * for expenditure, 2 for capital, and 5 for the cash side of either.
+     *
+     * @return array<int, array<int, array{id: int, label: string}>>
+     */
+    protected function accountOptions(): array
+    {
+        return ChartOfAccount::whereIn('class_number', [2, 5, 6, 7])
+            ->where('is_active', 1)
+            ->orderBy('account_code')
+            ->get(['id', 'account_code', 'account_name', 'class_number'])
+            ->groupBy('class_number')
+            ->map(function ($accounts) {
+                return $accounts->map(function (ChartOfAccount $account) {
+                    return [
+                        'id' => $account->id,
+                        'label' => $account->account_code . ' ' . $account->account_name,
+                    ];
+                })->values()->all();
+            })
+            ->all();
+    }
+
+    /**
+     * Existing categories that could be pointed at a line, with the line each
+     * one feeds today.
+     *
+     * Every category in this installation is already mapped somewhere, so
+     * "where is it now" is the fact that matters: linking moves the money.
+     *
+     * @return array<int, array>
+     */
+    protected function linkableMappings(): array
+    {
+        $current = $this->reconciliation->lineByCategory();
+
+        $tables = [
+            'fee_category' => \App\Models\FeesCategory::class,
+            'income_category' => IncomeCategory::class,
+            'expense_category' => ExpenseCategory::class,
+        ];
+
+        $rows = [];
+
+        foreach ($tables as $type => $model) {
+            $titles = $model::pluck('title', 'id');
+
+            $mappings = DefaultAccountMapping::where('mapping_type', $type)
+                ->whereNotNull('category_id')
+                ->get(['id', 'category_id', 'mapping_type']);
+
+            foreach ($mappings as $mapping) {
+                $title = $titles[$mapping->category_id] ?? null;
+                if (!$title) {
+                    continue;
+                }
+
+                $now = $current[$type . ':' . $mapping->category_id] ?? null;
+
+                $rows[] = [
+                    'mapping_id' => $mapping->id,
+                    'type' => $type,
+                    'name' => $title,
+                    'current_line_id' => $now['line_id'] ?? null,
+                    'current_line' => $now ? ($now['code'] . ' ' . $now['name']) : null,
+                ];
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -405,6 +500,7 @@ class BudgetLineController extends Controller
             ])],
             'parent_id' => ['nullable', 'exists:budget_lines,id'],
             'faculty_id' => ['nullable', 'exists:faculties,id'],
+            'profit_centre' => ['nullable', 'string', 'max:80'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'is_header' => ['nullable', 'boolean'],
         ]);
@@ -420,4 +516,230 @@ class BudgetLineController extends Controller
 
         return $data;
     }
+
+    /* ===================================================================
+     |  Mapping a line to a category
+     |
+     |  A budget line stays at zero until a transaction category points at it,
+     |  and that link could previously only be made at Accounting > Mapping
+     |  Settings, with the category itself created on a third screen. Since the
+     |  lines are already named the way the category would be ("401 Travelling",
+     |  "621 Donations / Grants"), both can be done from here in one action.
+     |===================================================================*/
+
+    /** Which kind of category belongs on a line, from the half of the sheet it sits in. */
+    protected function categoryTypeFor(BudgetLine $line): string
+    {
+        // Income lines create a plain income category, never a fee category: a
+        // new active FeesCategory appears in Fees Master immediately and becomes
+        // billable to students, which is not a side effect this screen should
+        // have. An existing fee category can still be LINKED here.
+        return $line->section === BudgetLine::SECTION_INCOME
+            ? 'income_category'
+            : 'expense_category';
+    }
+
+    /** The OHADA class the non-cash side of the entry should come from. */
+    protected function accountClassFor(BudgetLine $line): int
+    {
+        switch ($line->section) {
+            case BudgetLine::SECTION_INCOME:
+                return 7;
+            case BudgetLine::SECTION_CAPITAL:
+                return 2;
+            default:
+                return 6;
+        }
+    }
+
+    /**
+     * Sensible debit and credit accounts for a line that has none yet.
+     *
+     * Every existing mapping follows one rule: one side is always cash — the
+     * debit for income, the credit for expenditure — and only the other side
+     * varies. So the operator has to choose one account, not two.
+     *
+     * For that varying side, a sibling under the same heading is the best
+     * available guess, because a heading groups like with like. Where no
+     * sibling is mapped the caller gets null and must choose; a wrong default
+     * silently posts money to the wrong account, which is worse than an empty
+     * picker.
+     *
+     * @return array{debit_account_id: ?int, credit_account_id: ?int, from_sibling: bool}
+     */
+    protected function suggestedAccountsFor(BudgetLine $line): array
+    {
+        $isIncome = $line->section === BudgetLine::SECTION_INCOME;
+        $cashId = $this->defaultCashAccountId();
+
+        $siblingAccountId = null;
+        $siblingLine = null;
+
+        if ($line->parent_id) {
+            $siblingIds = BudgetLine::where('parent_id', $line->parent_id)
+                ->where('id', '!=', $line->id)
+                ->pluck('id');
+
+            $sibling = DefaultAccountMapping::whereIn('budget_line_id', $siblingIds)
+                ->whereNotNull('budget_line_id')
+                ->latest('id')
+                ->first();
+
+            if ($sibling) {
+                $siblingAccountId = $isIncome
+                    ? $sibling->credit_account_id
+                    : $sibling->debit_account_id;
+
+                $siblingLine = BudgetLine::find($sibling->budget_line_id);
+            }
+        }
+
+        return [
+            'debit_account_id' => $isIncome ? $cashId : $siblingAccountId,
+            'credit_account_id' => $isIncome ? $siblingAccountId : $cashId,
+            // Where the guess came from, so the modal can show its working. A
+            // sibling under the same heading is a starting point, not an
+            // answer: "Meetings and Seminars" borrowing the account from
+            // "Telephone / Postage" looks reasonable and is wrong. Naming the
+            // source is what turns a silent default into a prompt to check.
+            'from_sibling' => $siblingAccountId !== null,
+            'sibling_label' => isset($siblingLine) && $siblingLine ? $siblingLine->label : null,
+        ];
+    }
+
+    /**
+     * The cash account the institution actually posts through.
+     *
+     * Taken from what the existing mappings use rather than a hardcoded code,
+     * so an institution whose cash account is not 571 is not quietly given the
+     * wrong one.
+     */
+    protected function defaultCashAccountId(): ?int
+    {
+        $mostUsed = DB::table('default_account_mappings')
+            ->where('mapping_type', 'expense_category')
+            ->whereNotNull('credit_account_id')
+            ->selectRaw('credit_account_id, COUNT(*) as uses')
+            ->groupBy('credit_account_id')
+            ->orderByDesc('uses')
+            ->value('credit_account_id');
+
+        if ($mostUsed) {
+            return (int) $mostUsed;
+        }
+
+        return ChartOfAccount::where('class_number', 5)
+            ->where('is_active', 1)
+            ->orderBy('account_code')
+            ->value('id');
+    }
+
+    /** Create a category named after this line, and point it at the line. */
+    public function storeCategory(Request $request, $id)
+    {
+        $line = BudgetLine::findOrFail($id);
+
+        if ($line->is_header) {
+            Flasher::addError(__('A heading totals the lines beneath it and carries no money of its own, so nothing maps to it.'), __('msg_error'));
+            return redirect()->route('admin.budget-line.index');
+        }
+
+        $type = $this->categoryTypeFor($line);
+
+        // This route must not become a way round the permissions on the
+        // category screens themselves.
+        $permission = $type === 'income_category' ? 'income-category-create' : 'expense-category-create';
+        if (!Auth::user() || !Auth::user()->can($permission)) {
+            Flasher::addError(__('You do not have permission to create that kind of category.'), __('msg_error'));
+            return redirect()->route('admin.budget-line.index');
+        }
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:191'],
+            'debit_account_id' => ['required', 'exists:chart_of_accounts,id'],
+            'credit_account_id' => ['required', 'exists:chart_of_accounts,id', 'different:debit_account_id'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $model = $type === 'income_category' ? IncomeCategory::class : ExpenseCategory::class;
+
+        if ($model::where('title', $data['title'])->exists()) {
+            Flasher::addError(__('A category called ":title" already exists. Use "Link an existing category" instead.', [
+                'title' => $data['title'],
+            ]), __('msg_error'));
+
+            return redirect()->route('admin.budget-line.index');
+        }
+
+        DB::transaction(function () use ($model, $type, $data, $line) {
+            $category = new $model();
+            $category->title = $data['title'];
+            $category->slug = Str::slug($data['title'], '-');
+            $category->description = $data['description'] ?? null;
+            $category->status = '1';
+            $category->save();
+
+            // Keyed the same way Mapping Settings keys it, so the two screens
+            // write the same row rather than two competing ones.
+            DefaultAccountMapping::updateOrCreate(
+                ['mapping_type' => $type, 'category_id' => $category->id],
+                [
+                    'debit_account_id' => $data['debit_account_id'],
+                    'credit_account_id' => $data['credit_account_id'],
+                    'budget_line_id' => $line->id,
+                    'description' => $data['description'] ?? null,
+                    'status' => 'active',
+                    'created_by' => Auth::id(),
+                    'updated_by' => Auth::id(),
+                ]
+            );
+        });
+
+        Flasher::addSuccess(__('":title" created and pointed at :line. Money coded to it will now appear on that line.', [
+            'title' => $data['title'],
+            'line' => $line->label,
+        ]), __('msg_success'));
+
+        return redirect()->route('admin.budget-line.index');
+    }
+
+    /** Point a category that already exists at this line. */
+    public function linkCategory(Request $request, $id)
+    {
+        $line = BudgetLine::findOrFail($id);
+
+        if ($line->is_header) {
+            Flasher::addError(__('A heading totals the lines beneath it and carries no money of its own, so nothing maps to it.'), __('msg_error'));
+            return redirect()->route('admin.budget-line.index');
+        }
+
+        $data = $request->validate([
+            'mapping_id' => ['required', 'exists:default_account_mappings,id'],
+        ]);
+
+        $mapping = DefaultAccountMapping::findOrFail($data['mapping_id']);
+
+        $previous = $mapping->budget_line_id
+            ? BudgetLine::find($mapping->budget_line_id)
+            : null;
+
+        $mapping->budget_line_id = $line->id;
+        $mapping->updated_by = Auth::id();
+        $mapping->save();
+
+        // Say what moved. Repointing a category takes its money OFF whatever
+        // line it fed before, and that line will drop to zero on the next
+        // sheet without anything else announcing it.
+        $message = $previous && $previous->id !== $line->id
+            ? __('Category moved from :from to :to. Figures follow it, so :from will now read zero.', [
+                'from' => $previous->label,
+                'to' => $line->label,
+            ])
+            : __('Category pointed at :to.', ['to' => $line->label]);
+
+        Flasher::addSuccess($message, __('msg_success'));
+
+        return redirect()->route('admin.budget-line.index');
+    }
+
 }

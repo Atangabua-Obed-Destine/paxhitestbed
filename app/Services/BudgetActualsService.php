@@ -12,9 +12,11 @@ use Illuminate\Support\Facades\DB;
  * the figure a report shows and the figure a reconciliation check sums are the
  * same figure by construction.
  *
- * Actuals are read from expenses / incomes / fees directly, not from journal
- * entries. The sheet therefore works whether or not the double-entry ledger has
- * been switched on.
+ * Expenses, incomes and fees are read directly from their own tables, so the
+ * sheet works whether or not the double-entry ledger has been switched on.
+ * Payroll is the exception and is read FROM the ledger: it has no expense row
+ * to read, and taking it from the ledger is what makes the sheet agree with the
+ * ledger on salaries rather than merely resemble it.
  *
  * Two rules matter more than the rest:
  *   - a transaction is counted once, against exactly one line;
@@ -35,6 +37,7 @@ class BudgetActualsService
         $this->addExpenses($lines, $unallocated, $from, $to);
         $this->addIncomes($lines, $unallocated, $from, $to);
         $this->addFees($lines, $unallocated, $from, $to);
+        $this->addPayroll($lines, $unallocated, $from, $to);
 
         return ['lines' => $lines, 'unallocated' => $unallocated];
     }
@@ -142,6 +145,68 @@ class BudgetActualsService
             }
 
             $lines[$lineId] = ($lines[$lineId] ?? 0) + $amount;
+        }
+    }
+
+
+    /**
+     * Salaries and the employer's social charges.
+     *
+     * Payroll never becomes an expense row — it lives in `payrolls` with a
+     * journal entry of its own — so the three sources above could not see it
+     * and the sheet was short by every salary ever paid.
+     *
+     * Read from the ledger rather than from the payroll table, for one reason
+     * that matters: the reconciliation asks whether the sheet agrees with the
+     * ledger, and a source read from the ledger cannot disagree with it. A run
+     * that has not been posted is not a cost yet, and does not appear here
+     * either — which is why an unpaid payroll row does not quietly inflate the
+     * wage bill.
+     *
+     * Only the DEBIT side is taken, and only on classes 6 and 2. Tax withheld
+     * from the employee and the net paid over are credits: the same salary
+     * money on its way out, and counting them would double the wage bill.
+     */
+    protected function addPayroll(array &$lines, array &$unallocated, ?string $from, ?string $to): void
+    {
+        $payrollTypes = [
+            'payroll',
+            'payroll_tax',
+            'payroll_allowance',
+            'payroll_deduction',
+            'payroll_staff_payable',
+        ];
+
+        $rows = DB::table('journal_entries as je')
+            ->join('journal_entry_lines as jl', 'jl.journal_entry_id', '=', 'je.id')
+            ->join('chart_of_accounts as coa', 'coa.id', '=', 'jl.account_id')
+            ->leftJoin('default_account_mappings as m', function ($join) use ($payrollTypes) {
+                $join->on('m.debit_account_id', '=', 'jl.account_id')
+                    ->whereIn('m.mapping_type', $payrollTypes);
+            })
+            ->where('je.reference_type', 'payroll')
+            ->where('je.is_posted', 1)
+            ->where('jl.debit', '>', 0)
+            ->whereIn('coa.class_number', [2, 6])
+            ->selectRaw('m.budget_line_id as line_id, SUM(jl.debit) as total')
+            ->when($from, fn ($q) => $q->whereDate('je.entry_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('je.entry_date', '<=', $to))
+            ->groupBy('line_id')
+            ->get();
+
+        foreach ($rows as $row) {
+            $amount = (float) $row->total;
+            if ($amount == 0.0) {
+                continue;
+            }
+
+            if ($row->line_id === null) {
+                $unallocated['payroll'] = ($unallocated['payroll'] ?? 0) + $amount;
+                continue;
+            }
+
+            $id = (int) $row->line_id;
+            $lines[$id] = ($lines[$id] ?? 0) + $amount;
         }
     }
 

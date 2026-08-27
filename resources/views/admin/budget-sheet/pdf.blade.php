@@ -20,6 +20,10 @@
         .header td { background: #eef1f6; font-weight: bold; }
         .child .name { padding-left: 10px; }
         .total td { border-top: 1.2px solid #333; font-weight: bold; }
+        /* Lighter rule than a section total: a subtotal closes a group, not a
+           half of the sheet. */
+        .subtotal td { border-top: 0.5px solid #999; border-bottom: 0.5px solid #999; font-weight: bold; background: #f7f9fb; }
+        .subtotal .name { padding-left: 10px; font-style: italic; }
         .prior { color: #555; }
 
         /* Repeat the column headings on every page — a budget runs to several
@@ -91,6 +95,27 @@
                 <td class="num">{{ $money($a) }}</td>
                 <td class="num">{{ $b ? number_format($v) : '—' }}</td>
             </tr>
+
+            {{-- The group's own total, ruled off at its foot. On paper this is
+                 where the reader's eye stops, and it is what the diocesan form
+                 shows, so the signed document must carry it too. --}}
+            @if(isset($groupEnds[$line->id]))
+                @php
+                    $gh = $groupEnds[$line->id];
+                    $gb = $budgeted[$gh->id] ?? 0;
+                    $ga = $actual[$gh->id] ?? 0;
+                    $gp = $priorActual[$gh->id] ?? 0;
+                    $gv = $ga - $gb;
+                @endphp
+                <tr class="subtotal">
+                    <td></td>
+                    <td class="name">{{ __('Total') }} {{ $gh->name }}</td>
+                    <td class="num prior">{{ $money($gp) }}</td>
+                    <td class="num">{{ $money($gb) }}</td>
+                    <td class="num">{{ $money($ga) }}</td>
+                    <td class="num">{{ $gb ? number_format($gv) : '—' }}</td>
+                </tr>
+            @endif
         @endforeach
 
         <tr class="total">

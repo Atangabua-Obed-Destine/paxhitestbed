@@ -28,6 +28,7 @@ class BudgetSheetExport implements FromArray, WithTitle, WithColumnWidths, WithE
     protected array $sectionRows = [];
     protected array $headerRows = [];
     protected array $totalRows = [];
+    protected array $subtotalRows = [];
     protected int $headingRow = 0;
     protected int $lastRow = 0;
 
@@ -98,6 +99,27 @@ class BudgetSheetExport implements FromArray, WithTitle, WithColumnWidths, WithE
 
             if ($line->is_header) {
                 $this->headerRows[] = count($rows);
+            }
+
+            // The group's own total, at its foot. The workbook is the copy that
+            // gets re-cut and re-totalled by hand, so the subtotals have to be
+            // real rows in it rather than something only the screen draws.
+            $end = $this->data['groupEnds'][$line->id] ?? null;
+            if ($end) {
+                $gb = $this->data['budgeted'][$end->id] ?? 0;
+                $ga = $this->data['actual'][$end->id] ?? 0;
+                $gp = $this->data['priorActual'][$end->id] ?? 0;
+
+                $rows[] = $this->line(
+                    '',
+                    '  Total ' . $end->name,
+                    '',
+                    $gp,
+                    $gb,
+                    $ga,
+                    $gb ? $ga - $gb : null
+                );
+                $this->subtotalRows[] = count($rows);
             }
         }
 
@@ -239,6 +261,18 @@ class BudgetSheetExport implements FromArray, WithTitle, WithColumnWidths, WithE
                     $sheet->getStyle("A{$row}:G{$row}")->getFont()->setBold(true);
                     $sheet->getStyle("A{$row}:G{$row}")->getBorders()->getTop()
                         ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('34495E');
+                }
+
+                // A group subtotal is ruled off, but more lightly than a
+                // section total: it closes a group, not a half of the sheet.
+                foreach ($this->subtotalRows as $row) {
+                    $sheet->getStyle("A{$row}:G{$row}")->getFont()->setBold(true)->setItalic(true);
+                    $sheet->getStyle("A{$row}:G{$row}")->getFill()
+                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F7F9FB');
+                    $sheet->getStyle("A{$row}:G{$row}")->getBorders()->getTop()
+                        ->setBorderStyle(Border::BORDER_HAIR)->getColor()->setRGB('9AA7B4');
+                    $sheet->getStyle("A{$row}:G{$row}")->getBorders()->getBottom()
+                        ->setBorderStyle(Border::BORDER_HAIR)->getColor()->setRGB('9AA7B4');
                 }
 
                 // The account reference is supporting detail, not a figure.

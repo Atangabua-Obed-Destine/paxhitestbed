@@ -58,6 +58,48 @@
     .dd-item.bl-is-header .bl-name { font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
     .bl-account { font-size: .72rem; color: #6c757d; display: block; }
     .bl-unmapped { font-size: .72rem; color: #b3701a; display: block; }
+    .bl-faculty-fed { color: #2b6a4a; }
+
+    /* Whether a mapping shipped with the system or somebody here chose it. */
+    .bl-origin {
+        font-size: .6rem; text-transform: uppercase; letter-spacing: .4px;
+        padding: 0 .25rem; border-radius: 3px; margin-left: .2rem; border: 1px solid;
+        vertical-align: middle;
+    }
+    .bl-origin-system { color: #64748b; border-color: #d7dee7; background: #f4f6f9; }
+    .bl-origin-set { color: #0b6b3a; border-color: #b7e0c6; background: #eefaf2; }
+    .bl-feeder { font-weight: 600; }
+
+    .bl-change-btn {
+        display: inline-block; margin-top: .15rem;
+        background: transparent; border: 0; padding: 0;
+        font-size: .72rem; color: #5b7bab; cursor: pointer;
+        text-decoration: underline dotted; text-underline-offset: 2px;
+    }
+    .bl-change-btn:hover { color: #14396e; }
+
+    .map-current {
+        font-size: .85rem; color: #33507d; background: #f2f7ff;
+        border-left: 3px solid #6d97d8; border-radius: 0 6px 6px 0;
+        padding: .6rem .85rem; margin-bottom: 1rem;
+    }
+    .bl-unmapped-btn {
+        background: transparent; border: 0; padding: 0; text-align: left;
+        cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px;
+    }
+    .bl-unmapped-btn:hover { color: #8a5312; }
+    .bl-unmapped-cta { font-weight: 700; margin-left: .35rem; text-decoration: none; }
+
+    .map-suggestion {
+        font-size: .82rem; color: #6a5a2a; background: #fdf8e6;
+        border-left: 3px solid #e0b84a; border-radius: 0 6px 6px 0;
+        padding: .55rem .8rem; margin-top: .35rem;
+    }
+    .map-warn {
+        font-size: .85rem; color: #8a2020; background: #fdecec;
+        border-left: 3px solid #d05353; border-radius: 0 6px 6px 0;
+        padding: .6rem .85rem;
+    }
 
     .bl-meta { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
     .bl-flag { font-size: .66rem; padding: .1rem .35rem; border-radius: 3px; border: 1px solid; white-space: nowrap; }
@@ -125,8 +167,16 @@
                             </ul>
 
                             <h6>{{ __('Before a line will show any money') }}</h6>
+                            <p class="mb-2">
+                                {{ __('A line only fills in once a transaction category points at it. A line marked "no category maps here yet" will print on the sheet as a permanent zero, however much is actually spent.') }}
+                            </p>
+                            <p class="mb-2">
+                                <strong>{{ __('The link runs one way:') }}</strong>
+                                {{ __('a category names one budget line, not the other way round. A line can be fed by several categories; a category feeds exactly one line. Click the warning on any empty line to create a category for it — named after the line — or to point an existing one at it.') }}
+                            </p>
                             <p class="mb-0">
-                                {{ __('A line only fills in once a transaction category points at it. A line marked "no category maps to this line yet" will print on the sheet as a permanent zero, however much is actually spent. Map it under Accounting > Default Account Mappings, where a category is given both its ledger account and its budget line.') }}
+                                <strong>{{ __('Tuition is the exception.') }}</strong>
+                                {{ __('The sheet splits tuition by school, which a fee category cannot decide — there is one "First Instalment" category but four tuition lines. Those lines are tagged with a faculty instead, and each student\'s payment follows their programme to the right school\'s line. They need no category and never show the warning above.') }}
                             </p>
 
                             <h6>{{ __('Retiring rather than deleting') }}</h6>
@@ -191,6 +241,7 @@
                                                     'line' => $node['line'],
                                                     'children' => $node['children'],
                                                     'accountsByLine' => $accountsByLine,
+                                                    'categoriesByLine' => $categoriesByLine,
                                                     'usage' => $usage,
                                                 ])
                                             @endforeach
@@ -261,6 +312,20 @@
                         </div>
 
                         <div class="col-md-6 mb-3">
+                            <label for="bl_profit_centre">{{ __('Trading activity') }}</label>
+                            <input type="text" class="form-control" name="profit_centre" id="bl_profit_centre"
+                                   placeholder="{{ __('e.g. Canteen') }}" list="blProfitCentres">
+                            <datalist id="blProfitCentres">
+                                @foreach($profitCentres ?? [] as $pc)
+                                    <option value="{{ $pc }}"></option>
+                                @endforeach
+                            </datalist>
+                            <small class="text-muted">
+                                {{ __('Give an income line and an expenditure line the SAME name to pair them, and the Daybook reports what that activity earned, cost and made.') }}
+                            </small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
                             <label for="bl_faculty">{{ __('Faculty') }}</label>
                             <select class="form-control" name="faculty_id" id="bl_faculty">
                                 <option value="">{{ __('All faculties') }}</option>
@@ -307,6 +372,116 @@
     </div>
 </div>
 
+
+{{-- Mapping a line to a category, without leaving this screen. --}}
+<div class="modal fade" id="mapModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    {{ __('Give this line a category') }}
+                    <small class="d-block text-muted" id="mapLineLabel"></small>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <p class="text-muted small">
+                    {{ __('Money reaches a budget line through a category. Create one named after this line, or point an existing category at it.') }}
+                </p>
+
+                {{-- Shown when the line already has categories. A mapping marked
+                     "supplied" is not fixed — it shipped with the system and can
+                     be changed like any other, which the badge on its own failed
+                     to convey. --}}
+                <div class="map-current d-none" id="mapCurrent"></div>
+
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#mapCreate" type="button">{{ __('Create a new category') }}</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#mapLink" type="button">{{ __('Link an existing one') }}</button></li>
+                </ul>
+
+                <div class="tab-content">
+                    {{-- CREATE ------------------------------------------------ --}}
+                    <div class="tab-pane fade show active" id="mapCreate" role="tabpanel">
+                        <form method="post" id="mapCreateForm">
+                            @csrf
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label for="map_title">{{ __('Category name') }} <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="title" id="map_title" required>
+                                    <small class="text-muted" id="mapKindNote"></small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="map_debit">{{ __('Debit account') }} <span class="text-danger">*</span></label>
+                                    <select class="form-control" name="debit_account_id" id="map_debit" required></select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="map_credit">{{ __('Credit account') }} <span class="text-danger">*</span></label>
+                                    <select class="form-control" name="credit_account_id" id="map_credit" required></select>
+                                </div>
+
+                                <div class="col-12">
+                                    {{-- Shown only when a guess was borrowed from a sibling, and
+                                         it names the sibling. A suggestion that hides its source
+                                         gets accepted; one that shows its working gets checked. --}}
+                                    <div class="map-suggestion d-none" id="mapSuggestion"></div>
+                                </div>
+
+                                <div class="col-12 mt-3">
+                                    <label for="map_description">{{ __('Description') }}</label>
+                                    <textarea class="form-control" name="description" id="map_description" rows="2"
+                                              placeholder="{{ __('What belongs in this category, in your own words.') }}"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="text-end mt-3">
+                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                                <button type="submit" class="btn btn-primary">{{ __('Create and link') }}</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {{-- LINK -------------------------------------------------- --}}
+                    <div class="tab-pane fade" id="mapLink" role="tabpanel">
+                        <form method="post" id="mapLinkForm">
+                            @csrf
+                            <div class="mb-3">
+                                <label for="map_existing">{{ __('Category') }} <span class="text-danger">*</span></label>
+                                <select class="form-control" name="mapping_id" id="map_existing" required>
+                                    <option value="">{{ __('Choose a category') }}</option>
+                                    @foreach($linkableMappings as $m)
+                                        <option value="{{ $m['mapping_id'] }}"
+                                                data-current="{{ $m['current_line'] }}">
+                                            {{ $m['name'] }}
+                                            @if($m['current_line'])
+                                                — {{ __('now feeds') }} {{ $m['current_line'] }}
+                                            @else
+                                                — {{ __('not on the sheet yet') }}
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            {{-- Every category here is already mapped, so this warning is the
+                                 ordinary case. Linking is a MOVE, and the line it leaves drops
+                                 to zero on the next sheet without anything else saying so. --}}
+                            <div class="map-warn d-none" id="mapLinkWarn"></div>
+
+                            <div class="text-end mt-3">
+                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                                <button type="submit" class="btn btn-primary">{{ __('Point it at this line') }}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -337,6 +512,7 @@
         set('bl_sort_order', isEdit ? line.sort_order : 0);
         set('bl_parent', isEdit ? (line.parent_id || '') : '');
         set('bl_faculty', isEdit ? (line.faculty_id || '') : '');
+        set('bl_profit_centre', isEdit ? (line.profit_centre || '') : '');
 
         document.getElementById('bl_is_header').checked = isEdit ? !!line.is_header : false;
         document.getElementById('bl_status').checked = isEdit ? !!line.status : true;
@@ -352,6 +528,106 @@
         parent.disabled = isHeader;
         if (isHeader) { parent.value = ''; }
     }
+
+
+    /* ---- Mapping a line to a category ------------------------------- */
+
+    var ACCOUNTS = @json($accountOptions);
+    var SUGGESTIONS = @json($suggestions);
+
+    function fillAccounts(select, classNumber, selectedId) {
+        select.innerHTML = '';
+
+        var blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = '{{ __('Choose an account') }}';
+        select.appendChild(blank);
+
+        (ACCOUNTS[classNumber] || []).forEach(function (account) {
+            var option = document.createElement('option');
+            option.value = account.id;
+            option.textContent = account.label;
+            if (selectedId && String(account.id) === String(selectedId)) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+    }
+
+    window.budgetLineMap = function (line) {
+        var isIncome = line.section === 'income';
+        var isCapital = line.section === 'capital';
+        var varyingClass = isIncome ? 7 : (isCapital ? 2 : 6);
+
+        document.getElementById('mapLineLabel').textContent = line.code + ' — ' + line.name;
+        document.getElementById('map_title').value = line.name;
+
+        document.getElementById('mapCreateForm').action =
+            '{{ url('admin/budget-line') }}/' + line.id + '/category';
+        document.getElementById('mapLinkForm').action =
+            '{{ url('admin/budget-line') }}/' + line.id + '/link';
+
+        document.getElementById('mapKindNote').textContent = isIncome
+            ? '{{ __('Creates an income category. Fee categories are billable to students and are created on the Fees screen — use "Link an existing one" for those.') }}'
+            : '{{ __('Creates an expense category.') }}';
+
+        var suggestion = SUGGESTIONS[line.id] || {};
+
+        // One side of the entry is always cash; only the other is a real choice.
+        fillAccounts(document.getElementById('map_debit'),
+                     isIncome ? 5 : varyingClass,
+                     suggestion.debit_account_id);
+        fillAccounts(document.getElementById('map_credit'),
+                     isIncome ? varyingClass : 5,
+                     suggestion.credit_account_id);
+
+        var note = document.getElementById('mapSuggestion');
+        if (suggestion.from_sibling && suggestion.sibling_label) {
+            note.classList.remove('d-none');
+            note.innerHTML = '<strong>{{ __('Suggested from') }} '
+                + suggestion.sibling_label
+                + '</strong>, {{ __('which sits under the same heading. It is a starting point, not an answer — check it names the right account before you save.') }}';
+        } else {
+            note.classList.add('d-none');
+            note.textContent = '';
+        }
+
+        var warn = document.getElementById('mapLinkWarn');
+        warn.classList.add('d-none');
+        document.getElementById('map_existing').value = '';
+
+        var current = document.getElementById('mapCurrent');
+        if (line.fed && line.fed.length) {
+            current.classList.remove('d-none');
+            current.innerHTML = '<strong>{{ __('This line is already fed by') }} '
+                + line.fed.join(', ')
+                + '.</strong> '
+                + '{{ __('Adding another category here means both feed this line. A mapping marked "supplied" came with the system and can be changed like any other — to move one somewhere else, open the line you want it on and use "Link an existing one".') }}';
+        } else {
+            current.classList.add('d-none');
+            current.innerHTML = '';
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var existing = document.getElementById('map_existing');
+        if (!existing) { return; }
+
+        existing.addEventListener('change', function () {
+            var option = this.options[this.selectedIndex];
+            var current = option ? option.getAttribute('data-current') : '';
+            var warn = document.getElementById('mapLinkWarn');
+
+            if (current) {
+                warn.classList.remove('d-none');
+                warn.innerHTML = '<strong>{{ __('This moves money.') }}</strong> '
+                    + '{{ __('That category currently feeds') }} <strong>' + current + '</strong>. '
+                    + '{{ __('Pointing it here takes its figures off that line, which will then read zero.') }}';
+            } else {
+                warn.classList.add('d-none');
+            }
+        });
+    });
 
     document.addEventListener('DOMContentLoaded', function () {
         var headerBox = document.getElementById('bl_is_header');

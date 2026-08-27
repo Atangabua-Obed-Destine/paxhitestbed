@@ -47,6 +47,17 @@
     .sheet-table tbody tr.sheet-header:hover td { background-color: #e7edf3; }
     .sheet-child .name { padding-left: 1.6rem; }
 
+    /* A group's own total, at its foot. Lighter than a section total, which
+       closes a whole half of the sheet, but ruled off like one so the eye can
+       tell a subtotal from another line of spending. */
+    .sheet-subtotal td {
+        background: #f7f9fb;
+        font-weight: 600;
+        border-top: 1px solid #c8d3e0;
+        border-bottom: 1px solid #c8d3e0;
+    }
+    .sheet-subtotal .subtotal-name { padding-left: 1.6rem; font-style: italic; }
+
     .sheet-total td {
         border-top: 2px solid #34495e; border-bottom: none;
         font-weight: 700; background: #fbfcfd;
@@ -531,6 +542,38 @@
                                                         @endif
                                                     </td>
                                                 </tr>
+
+                                                {{-- The group's own total, at its foot. The heading row carries
+                                                     the same figure at the top, but a reader following a column
+                                                     of numbers downwards needs it where the group actually ends
+                                                     — that is where the eye stops and where a paper sheet rules
+                                                     a line. --}}
+                                                @if(isset($groupEnds[$line->id]))
+                                                    @php
+                                                        $gh = $groupEnds[$line->id];
+                                                        $gb = $budgeted[$gh->id] ?? 0;
+                                                        $ga = $actual[$gh->id] ?? 0;
+                                                        $gp = $priorActual[$gh->id] ?? 0;
+                                                        $gv = $ga - $gb;
+                                                        $gFavourable = $gh->section === 'income' ? $gv >= 0 : $gv <= 0;
+                                                    @endphp
+                                                    <tr class="sheet-subtotal">
+                                                        <td></td>
+                                                        <td class="subtotal-name">
+                                                            {{ __('Total') }} {{ $gh->name }}
+                                                        </td>
+                                                        <td class="num prior-col">{{ $gp ? $money($gp) : '—' }}</td>
+                                                        <td class="num">{{ $money($gb) }}</td>
+                                                        <td class="num">{{ $money($ga) }}</td>
+                                                        <td class="num {{ $gb ? ($gv == 0 ? '' : ($gFavourable ? 'variance-good' : 'variance-bad')) : '' }}">
+                                                            @if($gb)
+                                                                {{ number_format($gv) }}
+                                                            @else
+                                                                <span class="text-muted">—</span>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endif
                                             @endforeach
 
                                             <tr class="sheet-total">

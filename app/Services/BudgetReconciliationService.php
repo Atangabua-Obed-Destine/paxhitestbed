@@ -235,4 +235,84 @@ class BudgetReconciliationService
 
         return $map;
     }
+
+    /**
+     * The categories that reach each budget line, keyed by budget line id.
+     *
+     * The screen already shows which ACCOUNT a line posts to, which answers
+     * "where does this sit in the ledger" but not "what actually feeds this
+     * line" — and the second is the question someone looking at an empty line
+     * is asking. Read from the same bridge, so the two views cannot disagree.
+     *
+     * `seeded` distinguishes a mapping that shipped with the system from one
+     * somebody here decided on. DefaultBudgetMappingSeeder runs unauthenticated
+     * so leaves created_by null, while Mapping Settings and the budget line
+     * screen both write Auth::id(). Editing a seeded mapping through Mapping
+     * Settings therefore flips it to configured — which is the honest reading:
+     * the flag records "still as shipped", not original authorship.
+     *
+     * @return array<int, array<int, array{type: string, name: string, seeded: bool}>>
+     */
+    public function categoriesByLine(): array
+    {
+        $tables = [
+            'fee_category' => 'fees_categories',
+            'income_category' => 'income_categories',
+            'expense_category' => 'expense_categories',
+        ];
+
+        $map = [];
+
+        foreach ($tables as $type => $table) {
+            $rows = DB::table('default_account_mappings as m')
+                ->where('m.mapping_type', $type)
+                ->whereNotNull('m.budget_line_id')
+                ->join($table . ' as c', 'c.id', '=', 'm.category_id')
+                ->selectRaw('m.budget_line_id, c.id as category_id, c.title, m.created_by')
+                ->get();
+
+            foreach ($rows as $row) {
+                $map[(int) $row->budget_line_id][] = [
+                    'type' => $type,
+                    'id' => (int) $row->category_id,
+                    'name' => $row->title,
+                    'seeded' => $row->created_by === null,
+                ];
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Which budget line each category currently feeds, keyed by
+     * "type:category_id".
+     *
+     * Pointing a category at a new line silently takes its money off whatever
+     * line it fed before. Every category in this installation is already
+     * mapped, so that is the ordinary case rather than an edge one, and the
+     * screen has to be able to name the line it is about to empty.
+     *
+     * @return array<string, array{line_id: int, code: string, name: string}>
+     */
+    public function lineByCategory(): array
+    {
+        $rows = DB::table('default_account_mappings as m')
+            ->whereNotNull('m.budget_line_id')
+            ->whereNotNull('m.category_id')
+            ->join('budget_lines as b', 'b.id', '=', 'm.budget_line_id')
+            ->selectRaw('m.mapping_type, m.category_id, b.id as line_id, b.code, b.name')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row->mapping_type . ':' . $row->category_id] = [
+                'line_id' => (int) $row->line_id,
+                'code' => $row->code,
+                'name' => $row->name,
+            ];
+        }
+
+        return $map;
+    }
 }

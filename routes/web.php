@@ -578,11 +578,20 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
     // The rows of the Income & Expenditure sheet. Declared before budget/{id}
     // for the same reason as budget-sheet below.
+    // The Bursar's cash analysis book, generated from money already recorded.
+    Route::get('daybook', 'DaybookController@index')->name('daybook.index');
+    Route::get('daybook/summary', 'DaybookController@summary')->name('daybook.summary');
+    Route::get('daybook/analysis', 'DaybookController@analysis')->name('daybook.analysis');
+    Route::get('daybook/pdf', 'DaybookController@pdf')->name('daybook.pdf');
+    Route::get('daybook/excel', 'DaybookController@excel')->name('daybook.excel');
+
     Route::get('budget-line', 'BudgetLineController@index')->name('budget-line.index');
     Route::post('budget-line/store', 'BudgetLineController@store')->name('budget-line.store');
     Route::post('budget-line/{id}/update', 'BudgetLineController@update')->name('budget-line.update');
     Route::post('budget-line/reorder', 'BudgetLineController@reorder')->name('budget-line.reorder');
     Route::post('budget-line/auto-sort', 'BudgetLineController@autoSort')->name('budget-line.auto-sort');
+    Route::post('budget-line/{id}/category', 'BudgetLineController@storeCategory')->name('budget-line.category');
+    Route::post('budget-line/{id}/link', 'BudgetLineController@linkCategory')->name('budget-line.link');
     Route::post('budget-line/{id}/toggle', 'BudgetLineController@toggle')->name('budget-line.toggle');
     Route::post('budget-line/{id}/delete', 'BudgetLineController@destroy')->name('budget-line.delete');
 

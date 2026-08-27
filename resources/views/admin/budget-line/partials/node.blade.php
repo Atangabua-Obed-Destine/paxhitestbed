@@ -15,11 +15,31 @@
     // attribute is more than Blade's parser can read.
     $payload = $line->only([
         'id', 'code', 'name', 'name_fr', 'description', 'section',
-        'parent_id', 'faculty_id', 'sort_order', 'is_header', 'is_local', 'status',
+        'parent_id', 'faculty_id', 'profit_centre', 'sort_order',
+        'is_header', 'is_local', 'status',
     ]);
 
-    $mapped = !$line->is_header && !empty($accountsByLine[$line->id]);
     $inUse = $usage[$line->id] ?? null;
+    $feeders = $categoriesByLine[$line->id] ?? [];
+
+    // There are TWO ways money reaches a line, and judging only the first is
+    // what made three tuition lines report themselves as broken while filling
+    // perfectly well:
+    //
+    //   1. a category points at it (default_account_mappings), or
+    //   2. it is tagged with a faculty, and BudgetActualsService::addFees()
+    //      routes tuition to it by fee -> enrolment -> programme -> faculty.
+    //
+    // A line can be fed both ways; only a line fed neither way is empty.
+    $mapped = !$line->is_header && !empty($accountsByLine[$line->id]);
+    $facultyFed = !$line->is_header && $line->faculty_id;
+    $unfed = !$line->is_header && !$mapped && !$facultyFed;
+
+    // Same reason as $payload above: an array literal inside @json() in an
+    // attribute is more than Blade's parser can read, and it fails at render
+    // rather than at compile.
+    $mapPayload = $line->only(['id', 'code', 'name', 'section']);
+    $mapPayload['fed'] = array_column($feeders, 'name');
 @endphp
 
 <li class="dd-item {{ $line->is_header ? 'bl-is-header' : '' }}" data-id="{{ $line->id }}">
@@ -43,14 +63,72 @@
                     {{ trans_choice(':count line filed here|:count lines filed here', $children->count(), ['count' => $children->count()]) }}
                     · {{ __('subtotalled, holds no money of its own') }}
                 </span>
-            @elseif($mapped)
-                <span class="bl-account">{{ implode(' · ', $accountsByLine[$line->id]) }}</span>
             @else
-                {{-- Said plainly: an unmapped line is not merely unconfigured,
-                     it will print a zero on the sheet whatever is spent. --}}
-                <span class="bl-unmapped">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ __('no category maps here yet — this line will show zero on the sheet') }}
-                </span>
+                @if($mapped)
+                    <span class="bl-account">
+                        {{-- What FEEDS the line, then where it posts. The account
+                             alone answered "where does this sit in the ledger" but
+                             not "what fills this", which is the question someone
+                             looking at a line is actually asking. --}}
+                        <strong>{{ __('Fed by') }}</strong>
+                        @foreach($feeders as $feeder)
+                            {{-- The badge sits in its own element with real
+                                 whitespace before it: run together it read as
+                                 part of the category's name ("Capital
+                                 contributionsystem"), and worse, as though the
+                                 mapping were locked. It is a note about where
+                                 the mapping came from, nothing more. --}}
+                            <span class="bl-feeder">{{ $feeder['name'] }}</span>
+                            <span class="bl-origin bl-origin-{{ $feeder['seeded'] ? 'system' : 'set' }}"
+                                  title="{{ $feeder['seeded']
+                                        ? __('Supplied with the system. You can change it freely — this only says nobody has yet.')
+                                        : __('Someone set this here. A supplied mapping also reads this way once it has been edited.') }}">{{ $feeder['seeded'] ? __('supplied') : __('set here') }}</span>{{ !$loop->last ? ',' : '' }}
+                        @endforeach
+                        &nbsp;·&nbsp;{{ implode(' · ', $accountsByLine[$line->id]) }}
+                    </span>
+                @endif
+
+                {{-- Tuition never carries a category: one "First Instalment"
+                     cannot name four school lines, so the money follows the
+                     student's programme to the faculty tagged here instead.
+                     Saying so stops this reading as an unconfigured line. --}}
+                @if($facultyFed)
+                    <span class="bl-account bl-faculty-fed">
+                        <i class="fas fa-route me-1"></i>{{ __('Fed by tuition for') }}
+                        <strong>{{ optional($line->faculty)->title }}</strong>
+                        — {{ __('each student\'s payment follows their programme here. No category needed.') }}
+                    </span>
+                @endif
+
+                @if($unfed)
+                    {{-- Genuinely empty: it will print a zero on the sheet
+                         whatever is spent. Said plainly, and with somewhere to
+                         go about it. --}}
+                    @can('budget-line-edit')
+                        <button type="button" class="bl-unmapped bl-unmapped-btn"
+                                data-bs-toggle="modal" data-bs-target="#mapModal"
+                                onclick='budgetLineMap(@json($mapPayload))'>
+                            <i class="fas fa-exclamation-triangle me-1"></i>{{ __('no category maps here yet — this line will show zero on the sheet') }}
+                            <span class="bl-unmapped-cta">{{ __('Fix this') }} &rarr;</span>
+                        </button>
+                    @else
+                        <span class="bl-unmapped">
+                            <i class="fas fa-exclamation-triangle me-1"></i>{{ __('no category maps here yet — this line will show zero on the sheet') }}
+                        </span>
+                    @endcan
+                @elseif($mapped)
+                    {{-- A line that is already fed was offered nothing at all,
+                         which made a supplied mapping look fixed. Nothing here
+                         is fixed: the same modal adds another category to this
+                         line, or moves one here from somewhere else. --}}
+                    @can('budget-line-edit')
+                        <button type="button" class="bl-change-btn"
+                                data-bs-toggle="modal" data-bs-target="#mapModal"
+                                onclick='budgetLineMap(@json($mapPayload))'>
+                            <i class="fas fa-pen me-1"></i>{{ __('add or change what feeds this line') }}
+                        </button>
+                    @endcan
+                @endif
             @endif
         </span>
 
@@ -118,6 +196,7 @@
                     'line' => $child,
                     'children' => collect(),
                     'accountsByLine' => $accountsByLine,
+                    'categoriesByLine' => $categoriesByLine,
                     'usage' => $usage,
                 ])
             @endforeach
