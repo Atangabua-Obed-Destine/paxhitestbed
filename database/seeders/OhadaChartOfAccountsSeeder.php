@@ -3,12 +3,15 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Database\Seeders\Concerns\SeedsWithoutOverwriting;
 use Illuminate\Database\Seeder;
 use App\Models\ChartOfAccount;
 use Illuminate\Support\Facades\DB;
 
 class OhadaChartOfAccountsSeeder extends Seeder
 {
+    use SeedsWithoutOverwriting;
+
     /**
      * Run the database seeds - OHADA Chart of Accounts for Cameroon Schools
      */
@@ -16,37 +19,65 @@ class OhadaChartOfAccountsSeeder extends Seeder
     {
         // Never truncate. Once the ledger is live, wiping the chart would orphan
         // every journal line, mapping and budget-line link that points at it.
-        // Re-running is now safe and only refreshes names.
-        if (ChartOfAccount::whereHas('journalEntryLines')->exists()) {
-            $this->command?->warn('Chart of accounts already carries postings — refreshing names only.');
-        }
-
         $accounts = $this->getOhadaAccounts();
 
-        // First pass: create or refresh all accounts.
+        // First pass: create the accounts that are missing. An account that is
+        // already there is not touched at all — not its name, not its category,
+        // not is_active. Overwriting account_category in particular used to
+        // turn headings back into postable accounts, which strands postings on
+        // a parent where no leaf-summing report can see them.
         $accountMap = [];
+        $freshlyCreated = [];
+
         foreach ($accounts as $account) {
+            $code = $account['account_code'];
             unset($account['parent_code']);
 
-            $created = ChartOfAccount::updateOrCreate(
-                ['account_code' => $account['account_code']],
-                $account
+            $row = $this->createIfAbsent(
+                ChartOfAccount::class,
+                ['account_code' => $code],
+                $account,
+                $code . ' ' . ($account['account_name'] ?? '')
             );
-            $accountMap[$created->account_code] = $created->id;
-        }
 
-        // Second pass: Update parent relationships
-        foreach ($accounts as $account) {
-            if (isset($account['parent_code'])) {
-                $parentCode = $account['parent_code'];
-                if (isset($accountMap[$parentCode])) {
-                    ChartOfAccount::where('account_code', $account['account_code'])
-                        ->update(['parent_id' => $accountMap[$parentCode]]);
-                }
+            $accountMap[$row->account_code] = $row->id;
+
+            if ($row->wasRecentlyCreated) {
+                $freshlyCreated[$code] = true;
             }
         }
 
-        $this->command->info('OHADA Chart of Accounts seeded successfully with ' . count($accounts) . ' accounts!');
+        // Second pass: link parents — but only for accounts this run created.
+        // Re-pointing an existing account's parent would move it in the tree,
+        // and the tree is what every subtotal on the sheet is built from.
+        foreach ($accounts as $account) {
+            $code = $account['account_code'];
+
+            if (!isset($freshlyCreated[$code], $account['parent_code'])) {
+                continue;
+            }
+
+            if (isset($accountMap[$account['parent_code']])) {
+                ChartOfAccount::where('account_code', $code)
+                    ->update(['parent_id' => $accountMap[$account['parent_code']]]);
+            }
+        }
+
+        $this->command?->info(sprintf(
+            'OHADA chart: %d created, %d already present, %d defined.',
+            $this->createdCount,
+            $this->skippedCount,
+            count($accounts)
+        ));
+    }
+
+    /**
+     * The account definitions, for callers that need the labels without
+     * seeding — `defaults:install --refresh-names` corrects names from these.
+     */
+    public function definedAccounts(): array
+    {
+        return $this->getOhadaAccounts();
     }
 
     private function getOhadaAccounts()

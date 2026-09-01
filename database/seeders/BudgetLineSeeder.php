@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\BudgetLine;
+use Database\Seeders\Concerns\SeedsWithoutOverwriting;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -15,12 +16,15 @@ use Illuminate\Support\Facades\DB;
  * "tidy up": renumbering here would break continuity with every printed sheet
  * the finance office already holds.
  *
- * Idempotent by design (updateOrCreate on code, never truncate) so it can be
- * re-run against a live system without disturbing figures already entered.
+ * Create-only: a line that already exists is left exactly as it is, including
+ * its sort_order. The ordering is dragged into place by hand on the budget-line
+ * screen, so rewriting it here would undo that work every time the seeder ran.
  * Lines an administrator adds later are left untouched.
  */
 class BudgetLineSeeder extends Seeder
 {
+    use SeedsWithoutOverwriting;
+
     public function run(): void
     {
         $order = 0;
@@ -36,7 +40,8 @@ class BudgetLineSeeder extends Seeder
 
             $order += 10;
 
-            $row = BudgetLine::updateOrCreate(
+            $row = $this->createIfAbsent(
+                BudgetLine::class,
                 ['code' => $code],
                 [
                     'name' => $name,
@@ -44,11 +49,14 @@ class BudgetLineSeeder extends Seeder
                     'is_header' => $isHeader,
                     'is_local' => $isLocal,
                     // A header opens a group; the lines after it belong to it
-                    // until the next header appears.
+                    // until the next header appears. Only ever applied to a
+                    // line being created — an existing line's placement is
+                    // whatever the finance office arranged.
                     'parent_id' => ($isHeader || $isTopLevel) ? null : $parentId,
                     'sort_order' => $order,
                     'status' => true,
-                ]
+                ],
+                $code . ' ' . $name
             );
 
             if ($isHeader) {
@@ -58,9 +66,12 @@ class BudgetLineSeeder extends Seeder
 
         $this->linkTuitionToFaculties();
 
-        if ($this->command) {
-            $this->command->info('Budget lines seeded: ' . BudgetLine::count() . ' total.');
-        }
+        $this->command?->info(sprintf(
+            'Budget lines: %d created, %d already present, %d total.',
+            $this->createdCount,
+            $this->skippedCount,
+            BudgetLine::count()
+        ));
     }
 
     /**
@@ -98,7 +109,12 @@ class BudgetLineSeeder extends Seeder
                 return false;
             });
 
-            $line->update(['faculty_id' => $match->id ?? null]);
+            // Only ever fills a blank. This is a keyword guess, and a line
+            // that already names a faculty may have been pointed there by hand
+            // at a school whose title contains none of these words — writing
+            // over it, or nulling it when nothing matches, would silently
+            // unlink that school's tuition.
+            $this->fillIfBlank($line, 'faculty_id', $match->id ?? null);
         }
     }
 

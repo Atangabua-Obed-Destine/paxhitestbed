@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\ChartOfAccount;
+use Database\Seeders\Concerns\SeedsWithoutOverwriting;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Accounts the chart was missing.
@@ -24,13 +26,16 @@ use Illuminate\Database\Seeder;
  * before its children. Follows OhadaDetailAccountsSeeder, including demoting a
  * parent to a heading once it has children, so postings only reach leaves.
  *
- * Idempotent: safe to re-run.
+ * Create-only: an account that already exists is left completely alone, name,
+ * category and is_active included. Re-running must never reactivate an account
+ * somebody switched off, nor make a heading postable again.
  */
 class OhadaMissingAccountsSeeder extends Seeder
 {
+    use SeedsWithoutOverwriting;
+
     public function run(): void
     {
-        $added = 0;
 
         foreach ($this->accounts() as [$code, $name, $nameFr, $parentCode, $type, $normal]) {
             $parent = ChartOfAccount::where('account_code', $parentCode)->first();
@@ -40,7 +45,8 @@ class OhadaMissingAccountsSeeder extends Seeder
                 continue;
             }
 
-            $account = ChartOfAccount::updateOrCreate(
+            $this->createIfAbsent(
+                ChartOfAccount::class,
                 ['account_code' => $code],
                 [
                     'account_name' => $name,
@@ -52,23 +58,51 @@ class OhadaMissingAccountsSeeder extends Seeder
                     'normal_balance' => $normal,
                     'is_system' => false,
                     'is_active' => true,
-                ]
+                ],
+                $code . ' ' . $name
             );
 
-            if ($account->wasRecentlyCreated) {
-                $added++;
-            }
-
-            // A parent that now has children must not accept postings itself,
-            // or the same figure could sit on both the summary and the detail
-            // and be counted twice by anything that sums leaves.
-            if ($parent->account_category !== 'heading') {
-                $parent->update(['account_category' => 'heading']);
-            }
+            $this->demoteParent($parent);
         }
 
-        $this->command?->info("Missing accounts: {$added} added, "
-            . ChartOfAccount::postable()->count() . ' postable accounts now available.');
+        $this->command?->info(sprintf(
+            'Missing accounts: %d created, %d already present, %d postable in total.',
+            $this->createdCount,
+            $this->skippedCount,
+            ChartOfAccount::postable()->count()
+        ));
+    }
+
+    /**
+     * An account with children must not accept postings itself.
+     *
+     * Otherwise the same figure sits on both the summary and the detail and is
+     * counted twice by anything that adds a heading to its children — or, worse,
+     * a posting left on the parent vanishes from anything that sums leaves.
+     *
+     * Guarded, because this is the one place the seeder is allowed to change an
+     * existing row: a parent that already holds postings or a mapping is left
+     * alone. Demoting it would hide real money, and moving those postings is a
+     * decision for whoever knows what they were, not for a seeder.
+     */
+    protected function demoteParent(ChartOfAccount $parent): void
+    {
+        if ($parent->account_category === 'heading') {
+            return;
+        }
+
+        $inUse = DB::table('journal_entry_lines')->where('account_id', $parent->id)->exists()
+            || DB::table('default_account_mappings')
+                ->where('debit_account_id', $parent->id)
+                ->orWhere('credit_account_id', $parent->id)
+                ->exists();
+
+        if ($inUse) {
+            $this->noteUnresolved($parent->account_code . ' still holds postings — left postable');
+            return;
+        }
+
+        $parent->update(['account_category' => 'heading']);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\DefaultAccountMapping;
 use App\Models\ExpenseCategory;
 use App\Models\FeesCategory;
 use App\Models\IncomeCategory;
+use Database\Seeders\Concerns\SeedsWithoutOverwriting;
 use Illuminate\Database\Seeder;
 
 /**
@@ -23,10 +24,15 @@ use Illuminate\Database\Seeder;
  * Where the honest answer is "we cannot know", the mapping points at a line
  * that says so rather than inventing a split.
  *
- * Idempotent: safe to re-run.
+ * Create-only: a category that already has a mapping is left exactly as it is.
+ * Mappings get repointed by hand from the budget-line screen — that is the
+ * whole purpose of that screen — so rewriting them here would silently drag
+ * money back onto the line this file happens to name.
  */
 class DefaultBudgetMappingSeeder extends Seeder
 {
+    use SeedsWithoutOverwriting;
+
     /** Money leaves here unless a payment account says otherwise. */
     protected const CASH_ACCOUNT = '571';
 
@@ -37,11 +43,15 @@ class DefaultBudgetMappingSeeder extends Seeder
         $cash = $accounts[self::CASH_ACCOUNT] ?? null;
 
         if (!$cash) {
+            // Reported rather than thrown: on a fresh database the chart simply
+            // has not been seeded yet, and every mapping below needs this
+            // account for one side of its entry.
+            $this->noteUnresolved('all mappings — cash account 571 is missing, seed the chart first');
             $this->command?->error('Cash account 571 missing — run the chart seeders first.');
+
             return;
         }
 
-        $mapped = 0;
         $skipped = [];
 
         // --- expenses: debit the expense account, credit cash -------------
@@ -51,7 +61,8 @@ class DefaultBudgetMappingSeeder extends Seeder
                 $skipped[] = "expense/{$category}";
                 continue;
             }
-            DefaultAccountMapping::updateOrCreate(
+            $this->createIfAbsent(
+                DefaultAccountMapping::class,
                 ['mapping_type' => 'expense_category', 'category_id' => $model->id],
                 [
                     'budget_line_id' => $lines[$code],
@@ -59,9 +70,9 @@ class DefaultBudgetMappingSeeder extends Seeder
                     'credit_account_id' => $cash,
                     'description' => $category . ' → ' . $code,
                     'status' => 'active',
-                ]
+                ],
+                $category . ' → ' . $code
             );
-            $mapped++;
         }
 
         // --- income: debit cash, credit the revenue account ---------------
@@ -71,7 +82,8 @@ class DefaultBudgetMappingSeeder extends Seeder
                 $skipped[] = "income/{$category}";
                 continue;
             }
-            DefaultAccountMapping::updateOrCreate(
+            $this->createIfAbsent(
+                DefaultAccountMapping::class,
                 ['mapping_type' => 'income_category', 'category_id' => $model->id],
                 [
                     'budget_line_id' => $lines[$code],
@@ -79,9 +91,9 @@ class DefaultBudgetMappingSeeder extends Seeder
                     'credit_account_id' => $accounts[$account],
                     'description' => $category . ' → ' . $code,
                     'status' => 'active',
-                ]
+                ],
+                $category . ' → ' . $code
             );
-            $mapped++;
         }
 
         // --- student fees -------------------------------------------------
@@ -91,7 +103,8 @@ class DefaultBudgetMappingSeeder extends Seeder
                 $skipped[] = "fee/{$category}";
                 continue;
             }
-            DefaultAccountMapping::updateOrCreate(
+            $this->createIfAbsent(
+                DefaultAccountMapping::class,
                 ['mapping_type' => 'fee_category', 'category_id' => $model->id],
                 [
                     'budget_line_id' => $lines[$code],
@@ -99,9 +112,9 @@ class DefaultBudgetMappingSeeder extends Seeder
                     'credit_account_id' => $accounts[$account],
                     'description' => $category . ' → ' . $code,
                     'status' => 'active',
-                ]
+                ],
+                $category . ' → ' . $code
             );
-            $mapped++;
         }
 
         // --- payroll ------------------------------------------------------
@@ -116,7 +129,8 @@ class DefaultBudgetMappingSeeder extends Seeder
                 $skipped[] = "payroll/{$type}";
                 continue;
             }
-            DefaultAccountMapping::updateOrCreate(
+            $this->createIfAbsent(
+                DefaultAccountMapping::class,
                 ['mapping_type' => $type, 'category_id' => null],
                 [
                     'budget_line_id' => $lines[$code],
@@ -124,12 +138,23 @@ class DefaultBudgetMappingSeeder extends Seeder
                     'credit_account_id' => $cash,
                     'description' => $type . ' → ' . $code,
                     'status' => 'active',
-                ]
+                ],
+                $type . ' → ' . $code
             );
-            $mapped++;
         }
 
-        $this->command?->info("Default mappings written: {$mapped}.");
+        $this->command?->info(sprintf(
+            'Default mappings: %d created, %d already present.',
+            $this->createdCount,
+            $this->skippedCount
+        ));
+
+        // Not the same thing as "already mapped": these are defaults that had
+        // nowhere to attach because the category, line or account is absent.
+        foreach ($skipped as $label) {
+            $this->noteUnresolved($label);
+        }
+
         if ($skipped) {
             $this->command?->warn('Not mapped: ' . implode(', ', $skipped));
         }

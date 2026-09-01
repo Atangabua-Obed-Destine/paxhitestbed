@@ -50,6 +50,25 @@ class PaymentAccountTypeSeeder extends Seeder
             ],
         ];
 
-        DB::table('payment_account_types')->insert($types);
+        // A bare insert duplicated every type on each re-run, and a duplicated
+        // account type splits the payment accounts filed under it. Keyed on
+        // slug, and create-only: a type that exists keeps whatever title and
+        // status it was given.
+        $created = 0;
+
+        foreach ($types as $type) {
+            $exists = DB::table('payment_account_types')
+                ->where('slug', $type['slug'])->exists();
+
+            if ($exists) {
+                continue;
+            }
+
+            DB::table('payment_account_types')->insert($type);
+            $created++;
+        }
+
+        $this->command?->info("Payment account types: {$created} created, "
+            . (count($types) - $created) . ' already present.');
     }
 }
