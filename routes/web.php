@@ -603,6 +603,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('budget-sheet/{id}/excel', 'BudgetSheetController@exportExcel')->name('budget-sheet.excel');
     Route::get('budget-sheet/{id}', 'BudgetSheetController@show')->name('budget-sheet.show');
     Route::post('budget-sheet/{id}/figures', 'BudgetSheetController@saveFigures')->name('budget-sheet.figures');
+    Route::post('budget-sheet/{id}/forecast', 'BudgetSheetController@forecast')->name('budget-sheet.forecast');
     Route::post('budget-sheet/{id}/period', 'BudgetSheetController@updatePeriod')->name('budget-sheet.period');
     Route::post('budget-sheet/{id}/delete', 'BudgetSheetController@destroy')->name('budget-sheet.delete');
     Route::post('budget-sheet/{id}/submit', 'BudgetSheetController@submit')->name('budget-sheet.submit');

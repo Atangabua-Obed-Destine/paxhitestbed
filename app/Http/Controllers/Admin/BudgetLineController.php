@@ -45,7 +45,15 @@ class BudgetLineController extends Controller
 
         $this->middleware('permission:budget-line-view', ['only' => ['index']]);
         $this->middleware('permission:budget-line-create', ['only' => ['store']]);
-        $this->middleware('permission:budget-line-edit', ['only' => ['update', 'toggle', 'reorder', 'autoSort']]);
+        // storeCategory and linkCategory change where money lands on the sheet,
+        // so they are edits like any other. They were reachable with only
+        // budget-line-view, which let a read-only user repoint a category from
+        // one budget line to another. storeCategory additionally checks the
+        // category-create permission inside, so this route cannot be used to
+        // get round the permissions on the category screens themselves.
+        $this->middleware('permission:budget-line-edit', ['only' => [
+            'update', 'toggle', 'reorder', 'autoSort', 'storeCategory', 'linkCategory',
+        ]]);
         $this->middleware('permission:budget-line-delete', ['only' => ['destroy']]);
     }
 
@@ -85,7 +93,7 @@ class BudgetLineController extends Controller
             'profitCentres' => BudgetLine::whereNotNull('profit_centre')
                 ->where('profit_centre', '!=', '')
                 ->distinct()->orderBy('profit_centre')->pluck('profit_centre'),
-            'linkableMappings' => $this->linkableMappings(),
+            'linkableCategories' => $this->linkableCategories(),
             'suggestions' => $lines->reject->is_header->mapWithKeys(function (BudgetLine $line) {
                 return [$line->id => $this->suggestedAccountsFor($line)];
             }),
@@ -119,45 +127,48 @@ class BudgetLineController extends Controller
     }
 
     /**
-     * Existing categories that could be pointed at a line, with the line each
-     * one feeds today.
+     * Every category that could be pointed at a line.
      *
-     * Every category in this installation is already mapped somewhere, so
-     * "where is it now" is the fact that matters: linking moves the money.
+     * Built from the CATEGORY tables, not from the mappings. Looping over
+     * mappings meant a category appeared only once it already had one — so a
+     * category created on the Expense or Income Category screen was invisible
+     * here, which is precisely when somebody comes looking for it.
+     *
+     * A category with no mapping is a first-class row with a null mapping_id;
+     * linking it creates the mapping, which is why that case has to ask for the
+     * accounts.
      *
      * @return array<int, array>
      */
-    protected function linkableMappings(): array
+    protected function linkableCategories(): array
     {
         $current = $this->reconciliation->lineByCategory();
 
         $tables = [
-            'fee_category' => \App\Models\FeesCategory::class,
-            'income_category' => IncomeCategory::class,
-            'expense_category' => ExpenseCategory::class,
+            'fee_category' => 'fees_categories',
+            'income_category' => 'income_categories',
+            'expense_category' => 'expense_categories',
         ];
 
         $rows = [];
 
-        foreach ($tables as $type => $model) {
-            $titles = $model::pluck('title', 'id');
+        foreach ($tables as $type => $table) {
+            $records = DB::table($table . ' as c')
+                ->leftJoin('default_account_mappings as m', function ($join) use ($type) {
+                    $join->on('m.category_id', '=', 'c.id')
+                        ->where('m.mapping_type', '=', $type);
+                })
+                ->orderBy('c.title')
+                ->get(['c.id', 'c.title', 'm.id as mapping_id']);
 
-            $mappings = DefaultAccountMapping::where('mapping_type', $type)
-                ->whereNotNull('category_id')
-                ->get(['id', 'category_id', 'mapping_type']);
-
-            foreach ($mappings as $mapping) {
-                $title = $titles[$mapping->category_id] ?? null;
-                if (!$title) {
-                    continue;
-                }
-
-                $now = $current[$type . ':' . $mapping->category_id] ?? null;
+            foreach ($records as $record) {
+                $now = $current[$type . ':' . $record->id] ?? null;
 
                 $rows[] = [
-                    'mapping_id' => $mapping->id,
+                    'mapping_id' => $record->mapping_id ? (int) $record->mapping_id : null,
                     'type' => $type,
-                    'name' => $title,
+                    'id' => (int) $record->id,
+                    'name' => $record->title,
                     'current_line_id' => $now['line_id'] ?? null,
                     'current_line' => $now ? ($now['code'] . ' ' . $now['name']) : null,
                 ];
@@ -165,6 +176,35 @@ class BudgetLineController extends Controller
         }
 
         return $rows;
+    }
+
+    /** Does a category of this type and id still exist? */
+    protected function categoryExists(string $type, int $id): bool
+    {
+        $table = [
+            'fee_category' => 'fees_categories',
+            'income_category' => 'income_categories',
+            'expense_category' => 'expense_categories',
+        ][$type] ?? null;
+
+        return $table ? DB::table($table)->where('id', $id)->exists() : false;
+    }
+
+    /**
+     * Which kinds of category may feed a line, by the half of the sheet it sits in.
+     *
+     * An expense category on an income line would post spending into the income
+     * total — the sheet would report money arriving that had actually left. The
+     * income side takes fee categories too, because line 610 is genuinely fed by
+     * the fee category "First Instalment".
+     *
+     * @return array<int, string>
+     */
+    public static function categoryTypesForSection(string $section): array
+    {
+        return $section === BudgetLine::SECTION_INCOME
+            ? ['fee_category', 'income_category']
+            : ['expense_category'];
     }
 
     /**
@@ -714,10 +754,78 @@ class BudgetLineController extends Controller
         }
 
         $data = $request->validate([
-            'mapping_id' => ['required', 'exists:default_account_mappings,id'],
+            // Either an existing mapping to repoint, or a category that has
+            // never been mapped and therefore needs one making.
+            'mapping_id' => ['nullable', 'exists:default_account_mappings,id'],
+            'category_type' => ['nullable', 'in:fee_category,income_category,expense_category'],
+            'category_id' => ['nullable', 'integer'],
+            'debit_account_id' => ['nullable', 'exists:chart_of_accounts,id'],
+            'credit_account_id' => ['nullable', 'exists:chart_of_accounts,id', 'different:debit_account_id'],
         ]);
 
-        $mapping = DefaultAccountMapping::findOrFail($data['mapping_id']);
+        $mapping = !empty($data['mapping_id'])
+            ? DefaultAccountMapping::find($data['mapping_id'])
+            : null;
+
+        if (!$mapping) {
+            // A category with no mapping cannot simply be repointed — there is
+            // nothing to point. One has to be made, and it needs accounts:
+            // debit_account_id and credit_account_id are NOT NULL, and the
+            // ledger posting is built from them, so a mapping without accounts
+            // would let money reach the sheet and never the books.
+            if (empty($data['category_type']) || empty($data['category_id'])) {
+                Flasher::addError(__('Choose a category to point at this line.'), __('msg_error'));
+
+                return redirect()->route('admin.budget-line.index');
+            }
+
+            if (!$this->categoryExists($data['category_type'], (int) $data['category_id'])) {
+                Flasher::addError(__('That category no longer exists.'), __('msg_error'));
+
+                return redirect()->route('admin.budget-line.index');
+            }
+
+            if (empty($data['debit_account_id']) || empty($data['credit_account_id'])) {
+                Flasher::addError(
+                    __('That category has never been mapped, so it needs a debit and a credit account before it can feed a line.'),
+                    __('msg_error')
+                );
+
+                return redirect()->route('admin.budget-line.index');
+            }
+
+            // Only a category type that suits this half of the sheet. An expense
+            // category on an income line would post spending into income.
+            if (!in_array($data['category_type'], static::categoryTypesForSection($line->section), true)) {
+                Flasher::addError(
+                    __('A :type cannot feed a :section line.', [
+                        'type' => str_replace('_', ' ', $data['category_type']),
+                        'section' => $line->section,
+                    ]),
+                    __('msg_error')
+                );
+
+                return redirect()->route('admin.budget-line.index');
+            }
+
+            $mapping = new DefaultAccountMapping();
+            $mapping->mapping_type = $data['category_type'];
+            $mapping->category_id = (int) $data['category_id'];
+            $mapping->debit_account_id = (int) $data['debit_account_id'];
+            $mapping->credit_account_id = (int) $data['credit_account_id'];
+            $mapping->status = 'active';
+            $mapping->created_by = Auth::id();
+        } elseif (!in_array($mapping->mapping_type, static::categoryTypesForSection($line->section), true)) {
+            Flasher::addError(
+                __('A :type cannot feed a :section line.', [
+                    'type' => str_replace('_', ' ', $mapping->mapping_type),
+                    'section' => $line->section,
+                ]),
+                __('msg_error')
+            );
+
+            return redirect()->route('admin.budget-line.index');
+        }
 
         $previous = $mapping->budget_line_id
             ? BudgetLine::find($mapping->budget_line_id)

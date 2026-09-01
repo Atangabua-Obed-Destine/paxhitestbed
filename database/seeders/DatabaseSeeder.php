@@ -31,5 +31,13 @@ class DatabaseSeeder extends Seeder
         
         $this->call(FieldSeeder::class);
         $this->call(SocialSeeder::class);
+
+        // The chart of accounts. Order matters: the classes and headings come
+        // first, then the detail accounts that hang off them, then the ones
+        // added later. Each is idempotent, so a re-seed of an existing
+        // installation only fills gaps.
+        $this->call(OhadaChartOfAccountsSeeder::class);
+        $this->call(OhadaDetailAccountsSeeder::class);
+        $this->call(OhadaMissingAccountsSeeder::class);
     }
 }

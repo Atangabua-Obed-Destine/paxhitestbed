@@ -101,6 +101,37 @@
     }
     .account-missing { color: #b9770e; }
 
+    /* The assumption behind a forecast figure, printed under it so a reader can
+       tell a reasoned number from a typed one at a glance. */
+    .forecast-basis {
+        display: block; font-size: .68rem; line-height: 1.35;
+        color: #1c5cab; margin-top: .15rem;
+    }
+    .forecast-stale { color: #b9770e; }
+    .forecast-btn {
+        background: transparent; border: 0; padding: 0; margin-top: .15rem;
+        font-size: .68rem; color: #1c5cab; cursor: pointer;
+        text-decoration: underline dotted; text-underline-offset: 2px;
+    }
+    .forecast-btn:hover { color: #0d366b; }
+
+    .fc-prog { width: 100%; font-size: .84rem; }
+    .fc-prog th {
+        font-size: .64rem; text-transform: uppercase; letter-spacing: .6px;
+        color: #8a969c; font-weight: 700; padding: .25rem .4rem; text-align: left;
+    }
+    .fc-prog td { padding: .25rem .4rem; border-top: 1px solid #eef1f5; }
+    .fc-prog .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .fc-result {
+        background: #f2f7ff; border-left: 3px solid #2a78d6; border-radius: 0 8px 8px 0;
+        padding: .75rem 1rem; margin-top: 1rem;
+    }
+    .fc-result .value { font-size: 1.45rem; font-weight: 800; color: #0a2540; font-variant-numeric: tabular-nums; }
+    .fc-warn {
+        background: #fdf6ea; border-left: 3px solid #c98b2e; border-radius: 0 8px 8px 0;
+        padding: .6rem .85rem; margin-top: .75rem; font-size: .82rem; color: #7a5312;
+    }
+
     .local-flag {
         font-size: .62rem; color: #b9770e; background: #fdf3e3;
         border: 1px solid #f0d9ac; border-radius: 3px;
@@ -514,6 +545,42 @@
                                                             @else
                                                                 {{ $money($b) }}
                                                             @endif
+                                                            {{-- Tuition can be reasoned from expected enrolment instead
+                                                                 of typed. The assumption is printed under the figure so a
+                                                                 reader can tell which lines were worked out. --}}
+                                                            @php
+                                                                $fc = $forecasts[$line->id] ?? null;
+                                                                $fcRate = $forecastRates[$line->id] ?? null;
+
+                                                                // Built here, not inline: an array literal inside
+                                                                // @json() in an attribute is more than Blade's
+                                                                // parser can read.
+                                                                $fcPayload = [
+                                                                    'line_id' => $line->id,
+                                                                    'code' => $line->code,
+                                                                    'name' => $line->name,
+                                                                ];
+                                                            @endphp
+
+                                                            @if($fcRate)
+                                                                <button type="button" class="forecast-btn"
+                                                                        data-bs-toggle="modal" data-bs-target="#forecastModal"
+                                                                        onclick='budgetForecast(@json($fcPayload))'>
+                                                                    <i class="fas fa-users me-1"></i>{{ $fc ? __('Edit forecast') : __('Forecast from students') }}
+                                                                </button>
+                                                            @endif
+
+                                                            @if($fc)
+                                                                @php $stale = $fcRate && $fc->isStaleAgainst((float) $fcRate['rate']); @endphp
+                                                                <span class="forecast-basis {{ $stale ? 'forecast-stale' : '' }}">
+                                                                    {{ trans_choice(':count student|:count students', $fc->student_count, ['count' => number_format($fc->student_count)]) }}
+                                                                    &times; {{ number_format($fc->rate) }}
+                                                                    @if($stale)
+                                                                        <br><i class="fas fa-exclamation-triangle me-1"></i>{{ __('fees have changed since — now') }} {{ number_format($fcRate['rate']) }}
+                                                                    @endif
+                                                                </span>
+                                                            @endif
+
                                                             @if(($delegated[$line->id] ?? 0) > 0)
                                                                 {{-- Part of this line has been handed to a
                                                                      department to spend; the rest is central. --}}
@@ -652,4 +719,165 @@
         </div>
     </div>
 </div>
+
+{{-- Budgeting tuition from expected enrolment. --}}
+@if($editable && !empty($forecastRates))
+@php
+    $savedForecasts = $forecasts->map(fn ($f) => [
+        'student_count' => $f->student_count,
+        'rate' => (float) $f->rate,
+        'rate_basis' => $f->rate_basis,
+        'note' => $f->note,
+    ]);
+@endphp
+<div class="modal fade" id="forecastModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{{ route('admin.budget-sheet.forecast', $budget->id) }}">
+                @csrf
+                <input type="hidden" name="budget_line_id" id="fc_line_id">
+                <input type="hidden" name="rate_basis" id="fc_basis" value="weighted">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        {{ __('Forecast from student numbers') }}
+                        <small class="d-block text-muted" id="fc_line_label"></small>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        {{ __('Budget this line by saying how many students you expect and what they pay, rather than by typing an amount. The rate comes from the fees configured for each programme, weighted by how many students are on each — so it is right for the mix you actually have.') }}
+                    </p>
+
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label for="fc_students">{{ __('Expected students') }} <span class="text-danger">*</span></label>
+                            <input type="number" min="0" step="1" class="form-control" name="student_count" id="fc_students" required>
+                            <small class="text-muted" id="fc_students_note"></small>
+                        </div>
+
+                        <div class="col-md-7 mb-3">
+                            <label for="fc_rate">{{ __('Fee per student, per year') }} <span class="text-danger">*</span></label>
+                            <input type="number" min="0" step="0.01" class="form-control" name="rate" id="fc_rate" required>
+                            <small class="text-muted" id="fc_rate_note"></small>
+                        </div>
+                    </div>
+
+                    {{-- The working, not just the answer. A rate asserted without
+                         its basis gets accepted; one that shows the programme mix
+                         behind it gets checked. --}}
+                    <table class="fc-prog">
+                        <thead>
+                            <tr>
+                                <th>{{ __('Programme') }}</th>
+                                <th class="num">{{ __('Students now') }}</th>
+                                <th class="num">{{ __('Fee per year') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fc_programmes"></tbody>
+                    </table>
+
+                    <div class="fc-warn d-none" id="fc_warnings"></div>
+
+                    <div class="fc-result">
+                        <div class="text-muted small">{{ __('This line would be budgeted at') }}</div>
+                        <div class="value" id="fc_amount">0</div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label for="fc_note">{{ __('Note') }}</label>
+                        <input type="text" class="form-control" name="note" id="fc_note"
+                               placeholder="{{ __('Why this number — an expected intake, a known cohort leaving') }}">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                    <button type="submit" class="btn btn-primary">{{ __('Use this figure') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+(function () {
+    'use strict';
+
+    var RATES = @json($forecastRates);
+    var SAVED = @json($savedForecasts);
+
+    var fmt = new Intl.NumberFormat();
+
+    function recalc() {
+        var students = parseFloat(document.getElementById('fc_students').value) || 0;
+        var rate = parseFloat(document.getElementById('fc_rate').value) || 0;
+        document.getElementById('fc_amount').textContent = fmt.format(Math.round(students * rate));
+    }
+
+    window.budgetForecast = function (line) {
+        var info = RATES[line.line_id] || {};
+        var saved = SAVED[line.line_id] || null;
+
+        document.getElementById('fc_line_id').value = line.line_id;
+        document.getElementById('fc_line_label').textContent = line.code + ' — ' + line.name;
+
+        // Seeded from what is already on record, so the starting point is a
+        // fact rather than a blank box.
+        document.getElementById('fc_students').value = saved ? saved.student_count : (info.students || 0);
+        document.getElementById('fc_rate').value = saved ? saved.rate : Math.round(info.rate || 0);
+        document.getElementById('fc_note').value = saved && saved.note ? saved.note : '';
+        document.getElementById('fc_basis').value = saved ? saved.rate_basis : 'weighted';
+
+        document.getElementById('fc_students_note').textContent =
+            '{{ __('Currently enrolled in this faculty:') }} ' + fmt.format(info.students || 0);
+        document.getElementById('fc_rate_note').textContent =
+            '{{ __('Weighted by current enrolment across the programmes below.') }}';
+
+        var body = document.getElementById('fc_programmes');
+        body.innerHTML = '';
+        (info.programmes || []).forEach(function (p) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + p.title + (p.incomplete
+                    ? ' <span class="local-flag">{{ __('part-configured') }}</span>' : '')
+                + '</td><td class="num">' + fmt.format(p.students)
+                + '</td><td class="num">' + (p.fee > 0 ? fmt.format(p.fee) : '—') + '</td>';
+            body.appendChild(tr);
+        });
+
+        var warn = document.getElementById('fc_warnings');
+        if ((info.warnings || []).length) {
+            warn.classList.remove('d-none');
+            warn.innerHTML = '<strong>{{ __('Check the fee configuration:') }}</strong><br>' + info.warnings.join('<br>');
+        } else {
+            warn.classList.add('d-none');
+            warn.innerHTML = '';
+        }
+
+        recalc();
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        ['fc_students', 'fc_rate'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.addEventListener('input', recalc); }
+        });
+
+        // Typing over the derived rate makes it a decision, not a derivation —
+        // and a later change to the configured fees must not then flag it stale.
+        var rate = document.getElementById('fc_rate');
+        if (rate) {
+            rate.addEventListener('change', function () {
+                document.getElementById('fc_basis').value = 'manual';
+            });
+        }
+    });
+})();
+</script>
+@endpush
+@endif
+
 @endsection

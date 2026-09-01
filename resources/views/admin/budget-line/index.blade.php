@@ -90,6 +90,18 @@
     .bl-unmapped-btn:hover { color: #8a5312; }
     .bl-unmapped-cta { font-weight: 700; margin-left: .35rem; text-decoration: none; }
 
+    .map-posting {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        background: #f4f6f9; border: 1px solid #e3e7ee; border-radius: 8px;
+        padding: .6rem .85rem; font-size: .88rem; color: #33507d;
+    }
+    .map-posting-summary { color: #55637a; }
+    .map-posting-toggle {
+        background: transparent; border: 0; padding: 0; font-size: .8rem; color: #1c5cab;
+        cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px;
+    }
+    .map-posting-fields { margin-top: .6rem; }
+
     .map-suggestion {
         font-size: .82rem; color: #6a5a2a; background: #fdf8e6;
         border-left: 3px solid #e0b84a; border-radius: 0 6px 6px 0;
@@ -413,20 +425,37 @@
                                     <small class="text-muted" id="mapKindNote"></small>
                                 </div>
 
-                                <div class="col-md-6 mb-3">
-                                    <label for="map_debit">{{ __('Debit account') }} <span class="text-danger">*</span></label>
-                                    <select class="form-control" name="debit_account_id" id="map_debit" required></select>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="map_credit">{{ __('Credit account') }} <span class="text-danger">*</span></label>
-                                    <select class="form-control" name="credit_account_id" id="map_credit" required></select>
-                                </div>
+                                {{-- The ledger accounts are required — both columns are NOT
+                                     NULL and the journal posting is built from them — but they
+                                     are already chosen, so they are summarised rather than put
+                                     in the way. This screen is about the sheet; Mapping Settings
+                                     is where accounting is edited in earnest. --}}
+                                <div class="col-12 mb-3">
+                                    <div class="map-posting">
+                                        <span>
+                                            <strong>{{ __('Posts to') }}</strong>
+                                            <span id="mapPostingSummary" class="map-posting-summary"></span>
+                                        </span>
+                                        <button type="button" class="map-posting-toggle" id="mapPostingToggle">{{ __('change') }}</button>
+                                    </div>
 
-                                <div class="col-12">
-                                    {{-- Shown only when a guess was borrowed from a sibling, and
-                                         it names the sibling. A suggestion that hides its source
-                                         gets accepted; one that shows its working gets checked. --}}
-                                    <div class="map-suggestion d-none" id="mapSuggestion"></div>
+                                    <div class="map-posting-fields d-none" id="mapPostingFields">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-2">
+                                                <label for="map_debit">{{ __('Debit account') }} <span class="text-danger">*</span></label>
+                                                <select class="form-control" name="debit_account_id" id="map_debit" required></select>
+                                            </div>
+                                            <div class="col-md-6 mb-2">
+                                                <label for="map_credit">{{ __('Credit account') }} <span class="text-danger">*</span></label>
+                                                <select class="form-control" name="credit_account_id" id="map_credit" required></select>
+                                            </div>
+                                        </div>
+
+                                        {{-- Named source, not a bare default: a suggestion that
+                                             hides where it came from gets accepted; one that
+                                             shows its working gets checked. --}}
+                                        <div class="map-suggestion d-none" id="mapSuggestion"></div>
+                                    </div>
                                 </div>
 
                                 <div class="col-12 mt-3">
@@ -449,20 +478,31 @@
                             @csrf
                             <div class="mb-3">
                                 <label for="map_existing">{{ __('Category') }} <span class="text-danger">*</span></label>
-                                <select class="form-control" name="mapping_id" id="map_existing" required>
-                                    <option value="">{{ __('Choose a category') }}</option>
-                                    @foreach($linkableMappings as $m)
-                                        <option value="{{ $m['mapping_id'] }}"
-                                                data-current="{{ $m['current_line'] }}">
-                                            {{ $m['name'] }}
-                                            @if($m['current_line'])
-                                                — {{ __('now feeds') }} {{ $m['current_line'] }}
-                                            @else
-                                                — {{ __('not on the sheet yet') }}
-                                            @endif
-                                        </option>
-                                    @endforeach
-                                </select>
+                                {{-- Filled per line, because which categories may feed a line
+                                     depends on which half of the sheet it sits in. --}}
+                                <select class="form-control" id="map_existing" required></select>
+                                <input type="hidden" name="mapping_id" id="map_mapping_id">
+                                <input type="hidden" name="category_type" id="map_category_type">
+                                <input type="hidden" name="category_id" id="map_category_id">
+                                <small class="text-muted" id="map_existing_note"></small>
+
+                                {{-- Only for a category that has never been mapped: it has no
+                                     accounts yet, and one cannot be made without them. --}}
+                                <div class="map-posting-fields d-none mt-3" id="mapLinkAccounts">
+                                    <div class="map-suggestion mb-2">
+                                        {{ __('This category has never been mapped, so it needs a debit and a credit account before it can feed a line.') }}
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-2">
+                                            <label for="map_link_debit">{{ __('Debit account') }} <span class="text-danger">*</span></label>
+                                            <select class="form-control" name="debit_account_id" id="map_link_debit"></select>
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <label for="map_link_credit">{{ __('Credit account') }} <span class="text-danger">*</span></label>
+                                            <select class="form-control" name="credit_account_id" id="map_link_credit"></select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             {{-- Every category here is already mapped, so this warning is the
@@ -534,8 +574,19 @@
 
     var ACCOUNTS = @json($accountOptions);
     var SUGGESTIONS = @json($suggestions);
+    var CATEGORIES = @json($linkableCategories);
+
+    // Which kinds of category may feed a line. An expense category on an income
+    // line would post spending into the income total — the sheet would report
+    // money arriving that had actually left.
+    var TYPES_FOR = {
+        income: ['fee_category', 'income_category'],
+        expenditure: ['expense_category'],
+        capital: ['expense_category']
+    };
 
     function fillAccounts(select, classNumber, selectedId) {
+        if (!select) { return; }
         select.innerHTML = '';
 
         var blank = document.createElement('option');
@@ -554,13 +605,92 @@
         });
     }
 
+    function accountLabel(classNumber, id) {
+        var found = (ACCOUNTS[classNumber] || []).filter(function (a) {
+            return String(a.id) === String(id);
+        })[0];
+
+        return found ? found.label : '{{ __('not chosen') }}';
+    }
+
+    /** Only the categories that can legitimately feed this line, grouped. */
+    function fillCategories(select, line) {
+        select.innerHTML = '';
+
+        var blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = '{{ __('Choose a category') }}';
+        select.appendChild(blank);
+
+        var allowed = TYPES_FOR[line.section] || [];
+        var mapped = [];
+        var unmapped = [];
+
+        CATEGORIES.forEach(function (c) {
+            if (allowed.indexOf(c.type) === -1) { return; }
+            (c.mapping_id ? mapped : unmapped).push(c);
+        });
+
+        function addGroup(label, rows, showsCurrent) {
+            if (!rows.length) { return; }
+
+            var group = document.createElement('optgroup');
+            group.label = label;
+
+            rows.forEach(function (c) {
+                var option = document.createElement('option');
+                // The value carries what the server needs: an existing mapping
+                // to repoint, or a category that still needs one made.
+                option.value = c.mapping_id ? ('m:' + c.mapping_id) : ('c:' + c.type + ':' + c.id);
+                option.textContent = c.name + (showsCurrent && c.current_line
+                    ? ' — {{ __('now feeds') }} ' + c.current_line
+                    : '');
+                option.setAttribute('data-current', c.current_line || '');
+                group.appendChild(option);
+            });
+
+            select.appendChild(group);
+        }
+
+        addGroup('{{ __('Already on the sheet') }}', mapped, true);
+        addGroup('{{ __('Not on the sheet yet') }}', unmapped, false);
+
+        document.getElementById('map_existing_note').textContent = allowed.indexOf('fee_category') > -1
+            ? '{{ __('Income lines can be fed by a fee category or an income category.') }}'
+            : '{{ __('Expenditure lines can be fed by an expense category.') }}';
+    }
+
+    // Remembered so the summary line can be redrawn without re-deriving which
+    // side of the entry is cash.
+    var currentIsIncome = false;
+    var currentVaryingClass = 6;
+
+    function refreshPostingSummary() {
+        var debit = document.getElementById('map_debit');
+        var credit = document.getElementById('map_credit');
+        var summary = document.getElementById('mapPostingSummary');
+        if (!debit || !credit || !summary) { return; }
+
+        summary.textContent =
+            'Dr ' + accountLabel(currentIsIncome ? 5 : currentVaryingClass, debit.value)
+            + '  ·  Cr ' + accountLabel(currentIsIncome ? currentVaryingClass : 5, credit.value);
+    }
+
     window.budgetLineMap = function (line) {
         var isIncome = line.section === 'income';
         var isCapital = line.section === 'capital';
         var varyingClass = isIncome ? 7 : (isCapital ? 2 : 6);
 
+        currentIsIncome = isIncome;
+        currentVaryingClass = varyingClass;
+
         document.getElementById('mapLineLabel').textContent = line.code + ' — ' + line.name;
         document.getElementById('map_title').value = line.name;
+
+        // Cleared explicitly. This used to survive between lines, so a note
+        // typed for one line and abandoned was saved onto another line's
+        // category.
+        document.getElementById('map_description').value = '';
 
         document.getElementById('mapCreateForm').action =
             '{{ url('admin/budget-line') }}/' + line.id + '/category';
@@ -574,12 +704,13 @@
         var suggestion = SUGGESTIONS[line.id] || {};
 
         // One side of the entry is always cash; only the other is a real choice.
-        fillAccounts(document.getElementById('map_debit'),
-                     isIncome ? 5 : varyingClass,
-                     suggestion.debit_account_id);
-        fillAccounts(document.getElementById('map_credit'),
-                     isIncome ? varyingClass : 5,
-                     suggestion.credit_account_id);
+        fillAccounts(document.getElementById('map_debit'), isIncome ? 5 : varyingClass, suggestion.debit_account_id);
+        fillAccounts(document.getElementById('map_credit'), isIncome ? varyingClass : 5, suggestion.credit_account_id);
+        fillAccounts(document.getElementById('map_link_debit'), isIncome ? 5 : varyingClass, suggestion.debit_account_id);
+        fillAccounts(document.getElementById('map_link_credit'), isIncome ? varyingClass : 5, suggestion.credit_account_id);
+
+        refreshPostingSummary();
+        document.getElementById('mapPostingFields').classList.add('d-none');
 
         var note = document.getElementById('mapSuggestion');
         if (suggestion.from_sibling && suggestion.sibling_label) {
@@ -592,9 +723,8 @@
             note.textContent = '';
         }
 
-        var warn = document.getElementById('mapLinkWarn');
-        warn.classList.add('d-none');
-        document.getElementById('map_existing').value = '';
+        fillCategories(document.getElementById('map_existing'), line);
+        resetLinkTab();
 
         var current = document.getElementById('mapCurrent');
         if (line.fed && line.fed.length) {
@@ -607,26 +737,84 @@
             current.classList.add('d-none');
             current.innerHTML = '';
         }
+
+        // Always open on Create. Leaving whichever tab was last used meant the
+        // modal opened wherever the previous line had left it.
+        var createTab = document.querySelector('[data-bs-target="#mapCreate"]');
+        if (createTab && window.bootstrap && window.bootstrap.Tab) {
+            window.bootstrap.Tab.getOrCreateInstance(createTab).show();
+        }
     };
+
+    function resetLinkTab() {
+        document.getElementById('map_existing').value = '';
+        document.getElementById('map_mapping_id').value = '';
+        document.getElementById('map_category_type').value = '';
+        document.getElementById('map_category_id').value = '';
+        document.getElementById('mapLinkWarn').classList.add('d-none');
+        document.getElementById('mapLinkAccounts').classList.add('d-none');
+
+        var d = document.getElementById('map_link_debit');
+        var c = document.getElementById('map_link_credit');
+        if (d) { d.required = false; }
+        if (c) { c.required = false; }
+    }
 
     document.addEventListener('DOMContentLoaded', function () {
         var existing = document.getElementById('map_existing');
-        if (!existing) { return; }
 
-        existing.addEventListener('change', function () {
-            var option = this.options[this.selectedIndex];
-            var current = option ? option.getAttribute('data-current') : '';
-            var warn = document.getElementById('mapLinkWarn');
+        if (existing) {
+            existing.addEventListener('change', function () {
+                var option = this.options[this.selectedIndex];
+                var current = option ? option.getAttribute('data-current') : '';
+                var warn = document.getElementById('mapLinkWarn');
+                var accounts = document.getElementById('mapLinkAccounts');
 
-            if (current) {
-                warn.classList.remove('d-none');
-                warn.innerHTML = '<strong>{{ __('This moves money.') }}</strong> '
-                    + '{{ __('That category currently feeds') }} <strong>' + current + '</strong>. '
-                    + '{{ __('Pointing it here takes its figures off that line, which will then read zero.') }}';
-            } else {
-                warn.classList.add('d-none');
-            }
+                // "m:12" repoints an existing mapping; "c:expense_category:7" is
+                // a category that has never had one, so one must be made — and
+                // a mapping cannot exist without its two accounts.
+                var parts = (this.value || '').split(':');
+                document.getElementById('map_mapping_id').value = parts[0] === 'm' ? parts[1] : '';
+                document.getElementById('map_category_type').value = parts[0] === 'c' ? parts[1] : '';
+                document.getElementById('map_category_id').value = parts[0] === 'c' ? parts[2] : '';
+
+                var needsAccounts = parts[0] === 'c';
+                accounts.classList.toggle('d-none', !needsAccounts);
+                document.getElementById('map_link_debit').required = needsAccounts;
+                document.getElementById('map_link_credit').required = needsAccounts;
+
+                if (current) {
+                    warn.classList.remove('d-none');
+                    warn.innerHTML = '<strong>{{ __('This moves money.') }}</strong> '
+                        + '{{ __('That category currently feeds') }} <strong>' + current + '</strong>. '
+                        + '{{ __('Pointing it here takes its figures off that line, which will then read zero.') }}';
+                } else {
+                    warn.classList.add('d-none');
+                }
+            });
+        }
+
+        var toggle = document.getElementById('mapPostingToggle');
+        if (toggle) {
+            toggle.addEventListener('click', function () {
+                document.getElementById('mapPostingFields').classList.toggle('d-none');
+            });
+        }
+
+        ['map_debit', 'map_credit'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.addEventListener('change', refreshPostingSummary); }
         });
+
+        // A cancelled edit must not survive into the next line either.
+        var modal = document.getElementById('mapModal');
+        if (modal) {
+            modal.addEventListener('hidden.bs.modal', function () {
+                document.getElementById('map_description').value = '';
+                document.getElementById('mapPostingFields').classList.add('d-none');
+                resetLinkTab();
+            });
+        }
     });
 
     document.addEventListener('DOMContentLoaded', function () {

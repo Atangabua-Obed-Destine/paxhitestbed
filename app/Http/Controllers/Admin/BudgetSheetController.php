@@ -41,7 +41,7 @@ class BudgetSheetController extends Controller
         $this->letterhead = $letterhead;
 
         $this->middleware('permission:budget-view', ['only' => ['index', 'show', 'exportPdf', 'exportExcel']]);
-        $this->middleware('permission:budget-edit', ['only' => ['store', 'saveFigures', 'updatePeriod', 'submit']]);
+        $this->middleware('permission:budget-edit', ['only' => ['store', 'saveFigures', 'forecast', 'updatePeriod', 'submit']]);
         $this->middleware('permission:budget-approve', ['only' => ['approve']]);
         $this->middleware('permission:budget-activate', ['only' => ['activate']]);
         $this->middleware('permission:budget-close', ['only' => ['close']]);
@@ -380,6 +380,14 @@ class BudgetSheetController extends Controller
             'priorTotals' => $priorTotals,
             'reconciliation' => $reconciliation,
             'accountsByLine' => $this->reconciliation->accountsByLine(),
+
+            // Tuition can be budgeted from expected enrolment rather than by
+            // typing a number. Both the stored assumption and the rate the
+            // configured fees imply today are passed, so the sheet can show a
+            // figure AND say whether the fees behind it have since moved.
+            'forecasts' => \App\Models\BudgetLineForecast::where('budget_id', $budget->id)
+                ->get()->keyBy('budget_line_id'),
+            'forecastRates' => app(\App\Services\TuitionForecastService::class)->ratesByLine(),
             // Where to draw a subtotal, decided once so the screen, the PDF and
             // the workbook cannot disagree about where a group ends.
             'groupEnds' => BudgetLine::groupEnds($lines),
@@ -498,6 +506,97 @@ class BudgetSheetController extends Controller
             DB::rollBack();
             report($e);
             Flasher::addError(__('Could not save the figures.'), __('msg_error'));
+        }
+
+        return redirect()->route('admin.budget-sheet.show', $budget->id);
+    }
+
+    /**
+     * Budget a tuition line from expected student numbers.
+     *
+     * The figure is the product; the assumption is what is worth keeping. Both
+     * are written together so the sheet can report "9,450,000 · 37 students at
+     * 255,405" rather than a bare number nobody can argue with.
+     */
+    public function forecast(Request $request, $id)
+    {
+        $budget = Budget::where('is_institutional', true)->findOrFail($id);
+
+        // The same guard the figures form enforces. A sheet under review must
+        // not have its numbers moved by a different form.
+        if (!static::isEditable($budget)) {
+            Flasher::addError(
+                __('This sheet is :status, so its figures can no longer be changed. Use a revision instead.',
+                    ['status' => str_replace('_', ' ', $budget->status)]),
+                __('msg_error')
+            );
+
+            return redirect()->route('admin.budget-sheet.show', $budget->id);
+        }
+
+        $data = $request->validate([
+            'budget_line_id' => ['required', 'exists:budget_lines,id'],
+            'student_count' => ['required', 'integer', 'min:0', 'max:100000'],
+            'rate' => ['required', 'numeric', 'min:0'],
+            'rate_basis' => ['nullable', 'in:weighted,manual'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $line = BudgetLine::find($data['budget_line_id']);
+
+        // Only a faculty-tagged income line has a student basis at all. A
+        // stationery line forecast from headcount would be nonsense.
+        if (!$line || $line->is_header || !$line->faculty_id || $line->section !== BudgetLine::SECTION_INCOME) {
+            Flasher::addError(__('That line cannot be forecast from student numbers.'), __('msg_error'));
+
+            return redirect()->route('admin.budget-sheet.show', $budget->id);
+        }
+
+        $forecastService = app(\App\Services\TuitionForecastService::class);
+        $amount = $forecastService->forecast((int) $data['student_count'], (float) $data['rate']);
+
+        DB::beginTransaction();
+        try {
+            \App\Models\BudgetLineForecast::updateOrCreate(
+                ['budget_id' => $budget->id, 'budget_line_id' => $line->id],
+                [
+                    'student_count' => (int) $data['student_count'],
+                    'rate' => (float) $data['rate'],
+                    'rate_basis' => $data['rate_basis'] ?? 'weighted',
+                    'computed_amount' => $amount,
+                    'note' => $data['note'] ?? null,
+                    'updated_by' => Auth::id(),
+                    'created_by' => Auth::id(),
+                ]
+            );
+
+            if ($amount > 0) {
+                BudgetAllocation::updateOrCreate(
+                    ['budget_id' => $budget->id, 'budget_line_id' => $line->id],
+                    [
+                        'allocated_amount' => $amount,
+                        'title' => $line->name,
+                        'is_active' => true,
+                        'updated_by' => Auth::id(),
+                    ]
+                );
+            } else {
+                BudgetAllocation::where('budget_id', $budget->id)
+                    ->where('budget_line_id', $line->id)->delete();
+            }
+
+            DB::commit();
+
+            Flasher::addSuccess(__(':line budgeted at :amount — :students students at :rate.', [
+                'line' => $line->label,
+                'amount' => number_format($amount),
+                'students' => number_format((int) $data['student_count']),
+                'rate' => number_format((float) $data['rate']),
+            ]), __('msg_success'));
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+            Flasher::addError(__('Could not save the forecast.'), __('msg_error'));
         }
 
         return redirect()->route('admin.budget-sheet.show', $budget->id);

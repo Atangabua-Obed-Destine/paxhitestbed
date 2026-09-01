@@ -216,9 +216,17 @@ if ($incomeTarget) {
 
 echo "\n== Linking an existing category moves it ==\n";
 
-$mapping = DefaultAccountMapping::whereNotNull('budget_line_id')->whereNotNull('category_id')->first();
-$moveTo = BudgetLine::where('is_header', false)->where('id', '!=', $mapping->budget_line_id)
-    ->whereNotIn('id', $reached)->first();
+// The destination has to be a line the category may legitimately feed. Moving
+// an expense category onto an income line is now refused on purpose, so a test
+// that picked any line at all was asserting something the rule forbids.
+$mapping = DefaultAccountMapping::where('mapping_type', 'expense_category')
+    ->whereNotNull('budget_line_id')->whereNotNull('category_id')->first();
+
+$moveTo = BudgetLine::where('is_header', false)
+    ->where('section', 'expenditure')
+    ->where('id', '!=', $mapping->budget_line_id)
+    ->whereNotIn('id', $reached)
+    ->first();
 
 if ($mapping && $moveTo) {
     DB::beginTransaction();
@@ -427,6 +435,218 @@ try {
 } finally {
     DB::rollBack();
 }
+
+echo "\n== Only categories that suit the line ==\n";
+
+$rc = new ReflectionMethod(BudgetLineController::class, 'linkableCategories');
+$rc->setAccessible(true);
+$allCategories = $rc->invoke($controller);
+
+check('categories are listed', $allCategories !== [], count($allCategories) . ' categories');
+
+// Built from the category tables now, not from the mappings — a category with
+// no mapping used to be invisible here, which is exactly when someone comes
+// looking for it.
+check(
+    'the list covers every category, mapped or not',
+    count($allCategories) === (\App\Models\FeesCategory::count()
+        + IncomeCategory::count() + ExpenseCategory::count()),
+    count($allCategories) . ' listed'
+);
+
+$incomeTypes = BudgetLineController::categoryTypesForSection('income');
+$expenseTypes = BudgetLineController::categoryTypesForSection('expenditure');
+
+// Line 610 is genuinely fed by the fee category "First Instalment", so income
+// takes both kinds.
+check('income lines accept fee and income categories', $incomeTypes === ['fee_category', 'income_category']);
+check('expenditure lines accept expense categories only', $expenseTypes === ['expense_category']);
+check('capital is treated as expenditure', BudgetLineController::categoryTypesForSection('capital') === ['expense_category']);
+
+// An expense category on an income line would post spending into the income
+// total: the sheet would report money arriving that had actually left.
+$offeredOnIncome = array_filter($allCategories, fn ($c) => in_array($c['type'], $incomeTypes, true));
+$expenseNames = array_column(array_filter($allCategories, fn ($c) => $c['type'] === 'expense_category'), 'name');
+
+check(
+    'no expense category is offered on an income line',
+    array_filter($offeredOnIncome, fn ($c) => $c['type'] === 'expense_category') === []
+);
+check(
+    'the rule reaches the browser',
+    strpos($html, 'var TYPES_FOR') !== false && strpos($html, 'var CATEGORIES = [') !== false
+);
+
+echo "\n== A category that was never mapped ==\n";
+
+DB::beginTransaction();
+try {
+    $fresh = ExpenseCategory::create([
+        'title' => 'ZZ Never Mapped',
+        'slug' => 'zz-never-mapped',
+        'status' => '1',
+    ]);
+
+    $listed = collect($rc->invoke($controller))->firstWhere('id', $fresh->id);
+
+    check('it appears in the list', $listed !== null);
+    check('marked as having no mapping', $listed && $listed['mapping_id'] === null);
+
+    $target = BudgetLine::where('section', 'expenditure')->where('is_header', false)->first();
+    $account = ChartOfAccount::where('class_number', 6)->where('is_active', 1)->first();
+    $cash = ChartOfAccount::where('class_number', 5)->where('is_active', 1)->first();
+
+    // Without accounts there is nothing to write: both columns are NOT NULL and
+    // the ledger posting is built from them.
+    $before = DefaultAccountMapping::count();
+    $controller->linkCategory(Illuminate\Http\Request::create('/x', 'POST', [
+        'category_type' => 'expense_category',
+        'category_id' => $fresh->id,
+    ]), $target->id);
+
+    check('linking it without accounts is refused', DefaultAccountMapping::count() === $before);
+
+    $controller->linkCategory(Illuminate\Http\Request::create('/x', 'POST', [
+        'category_type' => 'expense_category',
+        'category_id' => $fresh->id,
+        'debit_account_id' => $account->id,
+        'credit_account_id' => $cash->id,
+    ]), $target->id);
+
+    $made = DefaultAccountMapping::where('mapping_type', 'expense_category')
+        ->where('category_id', $fresh->id)->first();
+
+    check('linking it with accounts creates the mapping', $made !== null);
+    check('and points it at the line', $made && (int) $made->budget_line_id === $target->id);
+    check('with both accounts set, never null', $made && $made->debit_account_id && $made->credit_account_id);
+} finally {
+    DB::rollBack();
+}
+
+check('the test category left nothing behind', ExpenseCategory::where('title', 'ZZ Never Mapped')->doesntExist());
+
+echo "\n== The section rule is enforced on the server ==\n";
+
+DB::beginTransaction();
+try {
+    $incomeLine = BudgetLine::where('section', 'income')->where('is_header', false)
+        ->whereNull('faculty_id')->first();
+    $expenseMapping = DefaultAccountMapping::where('mapping_type', 'expense_category')
+        ->whereNotNull('budget_line_id')->first();
+    $wasOn = (int) $expenseMapping->budget_line_id;
+
+    // Hiding it in the dropdown is not enough: a posted form must be refused too.
+    $controller->linkCategory(Illuminate\Http\Request::create('/x', 'POST', [
+        'mapping_id' => $expenseMapping->id,
+    ]), $incomeLine->id);
+
+    $expenseMapping->refresh();
+    check(
+        'an expense category posted at an income line is refused',
+        (int) $expenseMapping->budget_line_id === $wasOn,
+        'moved to ' . $expenseMapping->budget_line_id
+    );
+} finally {
+    DB::rollBack();
+}
+
+echo "\n== The modal starts clean ==\n";
+
+// A description typed for one line and abandoned used to be saved onto the next
+// line's category.
+check(
+    'the description is cleared when the modal opens',
+    strpos($html, "getElementById('map_description').value = ''") !== false
+);
+check('and again when it closes', strpos($html, 'hidden.bs.modal') !== false);
+check('the Create tab is reselected', strpos($html, 'bootstrap.Tab') !== false);
+check('the link tab resets through one function', strpos($html, 'function resetLinkTab()') !== false);
+
+echo "\n== The accounts stay out of the way, but stay ==\n";
+
+check('a posting summary is shown', strpos($html, 'mapPostingSummary') !== false);
+check('the pickers are behind it', strpos($html, 'mapPostingFields') !== false);
+check('and are still submitted', strpos($html, 'name="debit_account_id"') !== false);
+
+echo "\n== Only someone who may edit the sheet can change what feeds it ==\n";
+
+// storeCategory and linkCategory were in no permission list, so a user with
+// only budget-line-view could repoint a category from one budget line to
+// another — moving money on the sheet without the right to edit it. Proven
+// through the HTTP kernel, because calling a controller method directly skips
+// middleware entirely and would pass either way.
+DB::beginTransaction();
+try {
+    $viewerRole = \Spatie\Permission\Models\Role::firstOrCreate(
+        ['name' => 'ZZ Viewer', 'guard_name' => 'web']
+    );
+    $viewerRole->syncPermissions(['budget-line-view']);
+
+    $viewer = User::first()->replicate();
+    $viewer->email = 'zzviewer' . random_int(1000, 9999) . '@example.test';
+    // AuthServiceProvider grants every ability to is_admin == 1, so a fixture
+    // that keeps the flag would pass this test without proving anything.
+    $viewer->is_admin = 0;
+    if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'staff_id')) {
+        $viewer->staff_id = 'ZZ' . random_int(100000, 999999);
+    }
+    if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'username')) {
+        $viewer->username = 'zzviewer' . random_int(1000, 9999);
+    }
+    $viewer->save();
+    $viewer->syncRoles([$viewerRole]);
+
+    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+    $viewer = User::find($viewer->id);
+
+    check('the fixture really lacks edit rights', !$viewer->can('budget-line-edit') && $viewer->can('budget-line-view'));
+
+    Auth::guard('web')->login($viewer);
+
+    $get = Illuminate\Http\Request::create('/admin/budget-line', 'GET');
+    $get->setLaravelSession(app('session.store'));
+    $kernel->handle($get);
+    $token = app('session.store')->token();
+
+    $post = function (string $uri, array $payload) use ($kernel, $token) {
+        $r = Illuminate\Http\Request::create($uri, 'POST', $payload + ['_token' => $token]);
+        $r->setLaravelSession(app('session.store'));
+
+        try {
+            return $kernel->handle($r)->getStatusCode();
+        } catch (\Throwable $e) {
+            return 500;
+        }
+    };
+
+    $victim = DefaultAccountMapping::where('mapping_type', 'expense_category')
+        ->whereNotNull('budget_line_id')->first();
+    $wasOn = (int) $victim->budget_line_id;
+    $elsewhere = BudgetLine::where('section', 'expenditure')->where('is_header', false)
+        ->where('id', '!=', $wasOn)->first();
+
+    $status = $post('/admin/budget-line/' . $elsewhere->id . '/link', ['mapping_id' => $victim->id]);
+    $victim->refresh();
+
+    check('linking is refused without budget-line-edit', $status === 403, 'HTTP ' . $status);
+    check('and the category did not move', (int) $victim->budget_line_id === $wasOn);
+
+    $before = ExpenseCategory::count();
+    $status = $post('/admin/budget-line/' . $elsewhere->id . '/category', [
+        'title' => 'ZZ Unauthorised',
+        'debit_account_id' => ChartOfAccount::where('class_number', 6)->value('id'),
+        'credit_account_id' => ChartOfAccount::where('class_number', 5)->value('id'),
+    ]);
+
+    check('creating a category is refused too', $status === 403, 'HTTP ' . $status);
+    check('and no category was created', ExpenseCategory::count() === $before);
+} finally {
+    DB::rollBack();
+    Auth::guard('web')->login($admin);
+    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+}
+
+check('the fixture user left nothing behind', User::where('email', 'like', 'zzviewer%')->doesntExist());
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed === 0 ? 0 : 1);
