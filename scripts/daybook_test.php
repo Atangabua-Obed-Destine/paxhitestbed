@@ -110,7 +110,10 @@ check(
 
 // The sum of the rows must be the sum of the columns, or something was dropped
 // between itemising and totalling.
-$rowSum = array_sum(array_column($rows, 'amount'));
+// Signed, the same way the columns are totalled: a reversal is listed as its
+// own inbound row but takes money back off the line, so comparing raw amounts
+// against netted totals would differ by twice every reversal.
+$rowSum = array_sum(array_map(fn ($r) => $r['signed_amount'] ?? $r['amount'], $rows));
 $lineSum = array_sum($book['lines']) + $book['unallocated'];
 check(
     'the rows sum to the columns',

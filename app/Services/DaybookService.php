@@ -70,12 +70,20 @@ class DaybookService
         $unallocated = 0.0;
 
         foreach ($this->rows($from, $to) as $row) {
+            // Almost every row adds to its line: a payment is spending on an
+            // expenditure line, a receipt is income on an income line. A
+            // reversal is the exception — it belongs in the book on the day it
+            // happened, but it takes money back off the line rather than
+            // putting more on. Builders that produce such a row say so with
+            // signed_amount; everything else contributes its amount as before.
+            $contribution = $row['signed_amount'] ?? $row['amount'];
+
             if ($row['line_id'] === null) {
-                $unallocated += $row['amount'];
+                $unallocated += $contribution;
                 continue;
             }
 
-            $lines[$row['line_id']] = ($lines[$row['line_id']] ?? 0) + $row['amount'];
+            $lines[$row['line_id']] = ($lines[$row['line_id']] ?? 0) + $contribution;
         }
 
         return ['lines' => $lines, 'unallocated' => $unallocated];
@@ -611,26 +619,43 @@ class DaybookService
                 $join->on('m.debit_account_id', '=', 'jl.account_id')
                     ->whereIn('m.mapping_type', $payrollTypes);
             })
-            ->where('je.reference_type', 'payroll')
+            // Reversals belong in the book. Unpaying a payroll credits the same
+            // expense accounts, and reading only 'payroll' left the original
+            // standing — so a payroll reversed and re-posted was counted twice
+            // here while the ledger held it once. A reversal is also a real
+            // event on the day it happened, so it earns its own row rather than
+            // being netted away silently.
+            ->whereIn('je.reference_type', ['payroll', 'payroll_reversal'])
             ->where('je.is_posted', 1)
-            ->where('jl.debit', '>', 0)
             ->whereIn('coa.class_number', [2, 6])
             ->when($from, fn ($q) => $q->whereDate('je.entry_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('je.entry_date', '<=', $to))
             ->selectRaw('jl.id, je.entry_date, je.entry_number, je.description,
-                         jl.debit as amount, m.budget_line_id as line_id,
+                         jl.debit, jl.credit, m.budget_line_id as line_id,
                          coa.account_code, coa.account_name')
             ->get();
 
         $rows = [];
 
         foreach ($records as $r) {
+            // A debit on an expense account is money spent; the credit that
+            // reverses it is money coming back. Both are real days in the book.
+            $isReversal = (float) $r->credit > 0;
+            $amount = $isReversal ? (float) $r->credit : (float) $r->debit;
+
+            if ($amount == 0.0) {
+                continue;
+            }
+
             $rows[] = [
                 'date' => substr((string) $r->entry_date, 0, 10),
                 'ref' => (string) ($r->entry_number ?: 'JE-' . $r->id),
                 'description' => trim(($r->description ?: __('Payroll')) . ' — ' . $r->account_code . ' ' . $r->account_name),
-                'direction' => self::OUT,
-                'amount' => (float) $r->amount,
+                'direction' => $isReversal ? self::IN : self::OUT,
+                'amount' => $amount,
+                // Shown as its own inbound row, but it removes spending from
+                // the line rather than adding to it.
+                'signed_amount' => $isReversal ? -$amount : $amount,
                 'line_id' => $r->line_id ? (int) $r->line_id : null,
                 'source' => 'payroll',
                 'source_id' => (int) $r->id,

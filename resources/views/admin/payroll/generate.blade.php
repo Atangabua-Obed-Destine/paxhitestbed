@@ -865,6 +865,45 @@
                                     <div class="field-desc">{{ __('Total employee tax deductions (groups + standalone + dependent). Effective rate:') }} <strong>{{ $effective_rate }}%</strong></div>
                                     <div class="invalid-feedback">{{ __('required_field') }} {{ __('field_tax') }}</div>
 
+                                    {{-- Two things about this figure are not
+                                         visible from the number itself, so they are
+                                         stated rather than left to be discovered. --}}
+                                    <div class="field-desc text-muted">
+                                        <i class="fas fa-info-circle"></i>
+                                        {{ __('Calculated on basic salary. Allowances and bonuses are paid but not taxed.') }}
+                                    </div>
+
+                                    @php
+                                        // A salary in an uncovered range is charged the
+                                        // band below it and the payslip looks normal, so
+                                        // the only way to know is to say so here.
+                                        $salary_gaps = [];
+                                        foreach($tax_groups as $g) {
+                                            $gap = $g->gapFor($total_earning);
+                                            if ($gap) { $salary_gaps[] = ['group' => $g->title] + $gap; }
+                                        }
+                                    @endphp
+
+                                    @if(count($salary_gaps) > 0)
+                                    <div class="alert alert-warning py-2 px-2 mt-2 mb-0" style="font-size: 12px;">
+                                        <strong><i class="fas fa-exclamation-triangle"></i> {{ __('This salary has no band of its own') }}</strong>
+                                        <ul class="mb-0 pl-3 mt-1">
+                                            @foreach($salary_gaps as $gap)
+                                            <li>
+                                                <strong>{{ $gap['group'] }}</strong>:
+                                                {{ number_format($total_earning) }}
+                                                @if($gap['to'])
+                                                    {{ __('falls between bands') }} ({{ number_format($gap['from']) }} – {{ number_format($gap['to']) }})
+                                                @else
+                                                    {{ __('is above the highest band') }} ({{ __('from') }} {{ number_format($gap['from']) }})
+                                                @endif
+                                                — {{ __('charged as') }} <em>{{ $gap['charged_as'] }}</em>
+                                            </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                    @endif
+
                                     {{-- Tax Breakdown Panel --}}
                                     <div class="tax-breakdown-panel" id="taxBreakdownPanel">
 

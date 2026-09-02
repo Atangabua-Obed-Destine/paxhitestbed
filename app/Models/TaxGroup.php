@@ -203,6 +203,86 @@ class TaxGroup extends Model
     }
 
     /**
+     * The salary ranges this group's bands do not cover.
+     *
+     * Selection is a step-lookup: the band with the highest min_amount at or
+     * below the salary, with max_amount never consulted. That is deliberate —
+     * each band states the tax due at that level — but it means an incomplete
+     * table fails silently rather than loudly: a salary that falls in a hole
+     * is quietly charged the band below it, and any salary above the last band
+     * is charged the last band's figure forever.
+     *
+     * So the gaps cannot be seen in the numbers; they have to be reported.
+     *
+     * @return array{gaps: array<int,array{from:float,to:float,charged_as:string}>, open_top: ?array{from:float,band:string}}
+     */
+    public function coverageGaps(): array
+    {
+        $bands = $this->brackets()->where('status', 1)->get()
+            ->sortBy('min_amount')->values();
+
+        if ($bands->isEmpty()) {
+            return ['gaps' => [], 'open_top' => null];
+        }
+
+        $gaps = [];
+
+        foreach ($bands as $i => $band) {
+            $next = $bands->get($i + 1);
+
+            if (!$next) {
+                break;
+            }
+
+            // A hole between one band's ceiling and the next one's floor.
+            // Salaries in it are charged this band's figure, not nothing.
+            if ($next->min_amount > $band->max_amount + 1) {
+                $gaps[] = [
+                    'from' => (float) $band->max_amount + 1,
+                    'to' => (float) $next->min_amount - 1,
+                    'charged_as' => $band->title,
+                ];
+            }
+        }
+
+        $top = $bands->last();
+
+        // Every band has a ceiling, and step-lookup ignores it, so there is
+        // always a range above the last band charged at the last band's rate.
+        // Whether that matters depends on what people actually earn, which is
+        // the caller's business — a ceiling of 50,000,000 is harmless, one of
+        // 180,000 is not. So the ceiling is reported plainly rather than
+        // judged against a magic number here.
+        $openTop = $top->max_amount > 0
+            ? ['from' => (float) $top->max_amount + 1, 'band' => $top->title]
+            : null;
+
+        return ['gaps' => $gaps, 'open_top' => $openTop];
+    }
+
+    /** Does this salary fall in one of the group's uncovered ranges? */
+    public function gapFor($salary): ?array
+    {
+        $coverage = $this->coverageGaps();
+
+        foreach ($coverage['gaps'] as $gap) {
+            if ($salary >= $gap['from'] && $salary <= $gap['to']) {
+                return $gap;
+            }
+        }
+
+        if ($coverage['open_top'] && $salary >= $coverage['open_top']['from']) {
+            return [
+                'from' => $coverage['open_top']['from'],
+                'to' => null,
+                'charged_as' => $coverage['open_top']['band'],
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * Get the single applicable bracket for a salary using step-lookup
      * (highest active min_amount ≤ salary), or null if salary is below all bands.
      * Shared so employer-side calculation selects the same bracket as calculateTax().

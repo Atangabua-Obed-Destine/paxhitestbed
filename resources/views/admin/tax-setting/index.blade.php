@@ -215,6 +215,74 @@
             </div>
             @endcan
             <div class="col-md-8">
+
+                {{-- A bracket is chosen by step-lookup: the band with the highest
+                     minimum at or below the salary. max_amount is never read. That
+                     makes an incomplete table silent — a salary in a hole is charged
+                     the band below it, and nothing on the payslip says so. --}}
+                @if(!empty($misfiled_dependents) && count($misfiled_dependents) > 0)
+                <div class="alert alert-danger">
+                    <h6 class="mb-2"><i class="fas fa-exclamation-triangle"></i> {{ __('These taxes will be calculated wrongly') }}</h6>
+                    <p class="mb-2">
+                        {{ __('A tax that depends on another tax is only calculated that way when it belongs to no tax group. Inside a group it is calculated from salary instead, and the dependency is ignored without any warning on the payslip.') }}
+                    </p>
+                    <ul class="mb-0">
+                        @foreach($misfiled_dependents as $bad)
+                        <li>
+                            <strong>{{ $bad->title }}</strong>
+                            — {{ __('depends on another tax but sits in the group') }}
+                            <strong>{{ optional($bad->taxGroup)->title ?? $bad->tax_group_id }}</strong>.
+                            {{ __('Clear its tax group to fix it.') }}
+                        </li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
+
+                @php
+                    $groupsWithProblems = collect($tax_groups)->filter(function ($g) use ($coverage) {
+                        $c = $coverage[$g->id] ?? null;
+                        return $c && (count($c['biting_gaps'] ?? []) > 0 || ($c['top_exceeded'] ?? false));
+                    });
+                @endphp
+
+                @if($groupsWithProblems->count() > 0)
+                <div class="alert alert-warning">
+                    <h6 class="mb-2"><i class="fas fa-layer-group"></i> {{ __('Salary ranges with no band of their own') }}</h6>
+                    <p class="mb-2">
+                        {{ __('A salary is taxed by the band with the highest minimum at or below it. Where no band covers a salary it is charged the band beneath instead — the payroll still produces a figure, so this is not visible anywhere else.') }}
+                        {{ __('Only ranges reaching the highest current salary are listed') }}
+                        ({{ number_format($highest_salary) }}).
+                    </p>
+
+                    @foreach($groupsWithProblems as $g)
+                    @php $c = $coverage[$g->id]; @endphp
+                    <div class="mb-2">
+                        <strong>{{ $g->title }}</strong>
+                        <ul class="mb-0">
+                            @foreach($c['biting_gaps'] as $gap)
+                            <li>
+                                {{ number_format($gap['from']) }} – {{ number_format($gap['to']) }}
+                                — {{ __('charged as') }} <em>{{ $gap['charged_as'] }}</em>
+                            </li>
+                            @endforeach
+                            @if($c['top_exceeded'])
+                            <li>
+                                {{ __('above') }} {{ number_format($c['open_top']['from'] - 1) }}
+                                — {{ __('every salary is charged as') }} <em>{{ $c['open_top']['band'] }}</em>,
+                                {{ __('however high it goes') }}
+                            </li>
+                            @endif
+                        </ul>
+                    </div>
+                    @endforeach
+
+                    <p class="mb-0 small text-muted">
+                        {{ __('Add a band covering each range to fix this. The amounts must come from the official tax table.') }}
+                    </p>
+                </div>
+                @endif
+
                 <div class="card">
                     <div class="card-header">
                         <h5>{{ $title }} {{ __('list') }}</h5>

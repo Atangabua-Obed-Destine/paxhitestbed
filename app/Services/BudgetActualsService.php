@@ -184,11 +184,18 @@ class BudgetActualsService
                 $join->on('m.debit_account_id', '=', 'jl.account_id')
                     ->whereIn('m.mapping_type', $payrollTypes);
             })
-            ->where('je.reference_type', 'payroll')
+            // Reversals have to be counted too. Unpaying a payroll posts a
+            // payroll_reversal that credits the same expense accounts, and
+            // reading only 'payroll' left the original standing — so a payroll
+            // reversed and re-posted was counted twice on the sheet while the
+            // ledger held it once.
+            ->whereIn('je.reference_type', ['payroll', 'payroll_reversal'])
             ->where('je.is_posted', 1)
-            ->where('jl.debit', '>', 0)
             ->whereIn('coa.class_number', [2, 6])
-            ->selectRaw('m.budget_line_id as line_id, SUM(jl.debit) as total')
+            // Net, not just debits: the reversal's credits are what cancel the
+            // original. Filtering to debit > 0 discarded exactly the half that
+            // does the cancelling.
+            ->selectRaw('m.budget_line_id as line_id, SUM(jl.debit - jl.credit) as total')
             ->when($from, fn ($q) => $q->whereDate('je.entry_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('je.entry_date', '<=', $to))
             ->groupBy('line_id')

@@ -497,7 +497,16 @@ class PayrollAccountingService
     private function findTaxPayableAccount(): ?ChartOfAccount
     {
         // Try to find account by common tax payable codes
-        $taxCodes = ['4424', '4425', '4426', '4421', '442', '44'];
+        // Tax withheld from staff pay, owed to the State. 443 "Etat - Retenue"
+        // is exactly that and already exists; it simply was never tried, so the
+        // search fell through to the bare '44' and matched 441 Etat - TVA —
+        // crediting every franc of payroll withholding to the VAT liability.
+        //
+        // '44' is deliberately NOT in this list. A prefix that broad matches
+        // whichever class-4 State account happens to sort first, and posting
+        // withheld income tax as VAT is worse than posting nothing: returning
+        // null makes checkConfiguration() report the gap instead.
+        $taxCodes = ['447', '443', '4424', '4425', '4426', '4421', '442'];
         
         foreach ($taxCodes as $code) {
             $account = ChartOfAccount::where('account_code', 'LIKE', $code . '%')
@@ -512,7 +521,9 @@ class PayrollAccountingService
 
         // Try to find by name containing 'tax' or 'impot'
         $account = ChartOfAccount::where(function($q) {
-                $q->where('account_name', 'LIKE', '%tax%')
+                $q->where('account_name', 'LIKE', '%retenue%')
+                  ->orWhere('account_name_fr', 'LIKE', '%retenue%')
+                  ->orWhere('account_name', 'LIKE', '%tax%')
                   ->orWhere('account_name', 'LIKE', '%impot%')
                   ->orWhere('account_name', 'LIKE', '%impôt%')
                   ->orWhere('account_name', 'LIKE', '%IRPP%')
@@ -520,6 +531,10 @@ class PayrollAccountingService
             })
             ->where('is_active', true)
             ->where('account_category', 'detail')
+            // "%tax%" also matches "Etat - TVA", so VAT is excluded by name as
+            // well as by code.
+            ->where('account_name', 'NOT LIKE', '%TVA%')
+            ->where('account_name', 'NOT LIKE', '%VAT%')
             ->where('account_code', 'LIKE', '4%') // Class 4 - Liabilities
             ->first();
 

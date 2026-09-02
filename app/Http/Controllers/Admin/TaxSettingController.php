@@ -50,6 +50,35 @@ class TaxSettingController extends Controller
         $data['tax_groups'] = TaxGroup::active()->ordered()->get();
         $data['standalone_taxes'] = TaxSetting::active()->standalone()->ordered()->get();
 
+        // Bracket selection is a step-lookup that never reads max_amount, so a
+        // hole in a group's bands cannot be seen in the figures it produces: a
+        // salary falling in one is quietly charged the band below. The only way
+        // anyone finds out is if this screen says so.
+        //
+        // Measured against the highest actual salary, because a ceiling of
+        // 50,000,000 is harmless while one of 180,000 is not.
+        $highestSalary = (float) (\App\User::where('status', '1')->max('basic_salary') ?? 0);
+        $data['highest_salary'] = $highestSalary;
+        $data['coverage'] = [];
+
+        foreach ($data['tax_groups'] as $group) {
+            $coverage = $group->coverageGaps();
+
+            $coverage['biting_gaps'] = array_values(array_filter(
+                $coverage['gaps'],
+                fn ($gap) => $gap['from'] <= $highestSalary
+            ));
+            $coverage['top_exceeded'] = $coverage['open_top']
+                && $coverage['open_top']['from'] <= $highestSalary;
+
+            $data['coverage'][$group->id] = $coverage;
+        }
+
+        // A dependent tax filed inside a group has its dependency ignored,
+        // which is how the council surcharge came to be charged on salary.
+        $data['misfiled_dependents'] = TaxSetting::active()
+            ->where('is_dependent', true)->whereNotNull('tax_group_id')->get();
+
         return view($this->view.'.index', $data);
     }
 
@@ -100,6 +129,22 @@ class TaxSettingController extends Controller
             'effective_to' => 'nullable|date|after_or_equal:effective_from',
         ]);
 
+        // A dependent tax takes a percentage of ANOTHER tax rather than of
+        // salary. That logic runs only for taxes with no group: the group path
+        // is handed the salary and never reads is_dependent. Saving both
+        // together therefore produces a silently wrong figure — the Additional
+        // Council Tax was charging 10% of salary instead of 10% of the income
+        // tax exactly this way — so the combination is refused rather than
+        // accepted and ignored.
+        if ($request->is_dependent && $request->tax_group_id) {
+            Flasher::addError(
+                __('A tax that depends on another tax cannot also belong to a tax group. Taxes inside a group are always calculated from salary, so the dependency would be ignored and the amount would be wrong. Leave the tax group empty.'),
+                __('msg_error')
+            );
+
+            return redirect()->back()->withInput();
+        }
+
 
         // Duplicate/Overlap Checking - ONLY check within the same tax group
         // Standalone taxes (no group) can have any range - no overlap check needed
@@ -115,7 +160,11 @@ class TaxSettingController extends Controller
                 $existingMin = (float) $pretax->min_amount;
                 $existingMax = (float) $pretax->max_amount;
                 
-                if ($newMin < $existingMax && $newMax > $existingMin) {
+                // <= / >= , not < / > : a band ending at 500,000 and the next
+                // starting at 500,000 both claim that exact salary, which the
+                // strict comparison let through — which is how Local
+                // Development Tax B9 and B10 came to share a boundary.
+                if ($newMin <= $existingMax && $newMax >= $existingMin) {
                     Flasher::addError(__('msg_data_already_exists') . ' - Overlaps with: ' . ($pretax->title ?? 'Tax ID ' . $pretax->id) . ' (' . number_format($existingMin) . ' - ' . number_format($existingMax) . ')', __('msg_error'));
                     return redirect()->back()->withInput();
                 }
@@ -214,6 +263,22 @@ class TaxSettingController extends Controller
             'effective_to' => 'nullable|date|after_or_equal:effective_from',
         ]);
 
+        // A dependent tax takes a percentage of ANOTHER tax rather than of
+        // salary. That logic runs only for taxes with no group: the group path
+        // is handed the salary and never reads is_dependent. Saving both
+        // together therefore produces a silently wrong figure — the Additional
+        // Council Tax was charging 10% of salary instead of 10% of the income
+        // tax exactly this way — so the combination is refused rather than
+        // accepted and ignored.
+        if ($request->is_dependent && $request->tax_group_id) {
+            Flasher::addError(
+                __('A tax that depends on another tax cannot also belong to a tax group. Taxes inside a group are always calculated from salary, so the dependency would be ignored and the amount would be wrong. Leave the tax group empty.'),
+                __('msg_error')
+            );
+
+            return redirect()->back()->withInput();
+        }
+
 
         // Duplicate/Overlap Checking - ONLY check within the same tax group
         // Standalone taxes (no group) can have any range - no overlap check needed
@@ -230,7 +295,11 @@ class TaxSettingController extends Controller
                 $existingMin = (float) $pretax->min_amount;
                 $existingMax = (float) $pretax->max_amount;
                 
-                if ($newMin < $existingMax && $newMax > $existingMin) {
+                // <= / >= , not < / > : a band ending at 500,000 and the next
+                // starting at 500,000 both claim that exact salary, which the
+                // strict comparison let through — which is how Local
+                // Development Tax B9 and B10 came to share a boundary.
+                if ($newMin <= $existingMax && $newMax >= $existingMin) {
                     Flasher::addError(__('msg_data_already_exists') . ' - Overlaps with: ' . ($pretax->title ?? 'Tax ID ' . $pretax->id) . ' (' . number_format($existingMin) . ' - ' . number_format($existingMax) . ')', __('msg_error'));
                     return redirect()->back()->withInput();
                 }

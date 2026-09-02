@@ -61,6 +61,7 @@ function snapshot(): string
 echo "\n== A run without --commit writes nothing ==\n";
 
 $before = snapshot();
+$ledgerAtStart = (float) DB::table('journal_entry_lines')->sum('debit');
 Artisan::call('defaults:install');
 $output = Artisan::output();
 
@@ -278,7 +279,12 @@ echo "\n== The ledger is untouched throughout ==\n";
 $t = DB::table('journal_entry_lines')->selectRaw('SUM(debit) d, SUM(credit) c')->first();
 check('debits still equal credits', abs($t->d - $t->c) < 0.01,
     number_format($t->d, 2) . ' vs ' . number_format($t->c, 2));
-check('the trial balance is unmoved', abs($t->d - 109222820) < 0.01, number_format($t->d, 2));
+// Compared against where this run started, not against a number written down
+// when the suite was first passing. Seeding must not move the ledger; other
+// work legitimately does, and pinning a constant made this fail for the wrong
+// reason the first time a payroll was corrected.
+check('seeding did not move the trial balance', abs($t->d - $ledgerAtStart) < 0.01,
+    number_format($ledgerAtStart, 2) . ' -> ' . number_format($t->d, 2));
 check('the database is exactly as it started', snapshot() === $before);
 
 echo "\n$passed passed, $failed failed\n";
