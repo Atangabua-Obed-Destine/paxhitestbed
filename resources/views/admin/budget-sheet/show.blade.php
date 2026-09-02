@@ -19,14 +19,20 @@
     }
 
     /* Column headings survive scrolling — a column of bare figures is
-       unreadable once "Budget" and "Actual" have scrolled away. */
+       unreadable once "Budget" and "Actual" have scrolled away.
+
+       The theme sets `.table thead th { background: #3ea1e4; color: #fff
+       !important }`. Overriding the background here without also forcing the
+       colour left white text on a near-white band — headings that were there
+       but invisible. The !important is not decoration: it is the only way to
+       beat the theme's own !important. */
     .sheet-table thead th {
         position: sticky; top: 0; z-index: 3;
-        background: #f7f9fa;
+        background: #f7f9fa !important;
         border-bottom: 2px solid #cfd8dc;
         font-size: .7rem; font-weight: 600;
         text-transform: uppercase; letter-spacing: .07em;
-        color: #55636b; white-space: nowrap;
+        color: #55636b !important; white-space: nowrap;
     }
 
     .sheet-table tbody tr:hover td { background-color: #f4f9f8; }
