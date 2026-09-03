@@ -14,6 +14,7 @@ use App\Models\Grade;
 use App\Models\Setting;
 use App\Models\TranscriptRecord;
 use App\Services\TranscriptSnapshotService;
+use Flasher\Laravel\Facade\Flasher;
 
 class MarksheetController extends Controller
 {
@@ -328,6 +329,95 @@ class MarksheetController extends Controller
             ->record($data['row'], $data['currentEnroll'] ?? null);
 
         return view($this->view.'.print', $data);
+    }
+
+    /**
+     * Every selected transcript in one document, ready for the printer.
+     *
+     * Takes enrolment ids rather than student ids: a student who has moved
+     * programme has more than one transcript, and the row the operator ticked
+     * on the list is the one they mean.
+     *
+     * Each is recorded as issued exactly as a single download is, so a
+     * transcript printed in a batch of eighty carries the same verifiable code
+     * as one printed on its own.
+     */
+    public function bulk(Request $request)
+    {
+        $data['title'] = $this->title;
+        $data['route'] = $this->route;
+        $data['view'] = $this->view;
+        $data['path'] = $this->path;
+
+        $ids = collect(explode(',', (string) $request->students))
+            ->map(fn ($id) => (int) trim($id))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            Flasher::addError(__('Select at least one student first.'), __('msg_error'));
+
+            return redirect()->route($this->route . '.index');
+        }
+
+        $data['setting'] = Setting::first() ?? (object) ['title' => 'School Name', 'date_format' => 'd-m-Y'];
+        $data['grades'] = Grade::where('status', '1')->orderBy('min_mark', 'desc')->get();
+        $data['marksheet'] = MarksheetSetting::where('status', '1')->firstOrFail();
+
+        $enrollments = StudentEnroll::with(['program', 'session', 'semester', 'section'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        $snapshots = app(TranscriptSnapshotService::class);
+
+        $transcripts = [];
+        $skipped = [];
+
+        // Ordered as the operator selected them, so the printed stack matches
+        // the list they were working from.
+        foreach ($ids as $id) {
+            $enroll = $enrollments->get($id);
+
+            if (!$enroll) {
+                $skipped[] = __('enrolment') . ' #' . $id;
+                continue;
+            }
+
+            // Loaded per student rather than in one query: the transcript needs
+            // every enrolment this student has on the programme, not just the
+            // one that was ticked.
+            $student = Student::with([
+                'studentEnrolls' => function ($query) {
+                    $query->whereNotNull('session_id')
+                        ->whereNotNull('semester_id')
+                        ->whereNotNull('section_id');
+                },
+                'studentEnrolls.session',
+                'studentEnrolls.semester',
+                'studentEnrolls.section',
+                'studentEnrolls.subjects',
+                'studentEnrolls.subjectMarks.subject',
+            ])->find($enroll->student_id);
+
+            if (!$student) {
+                $skipped[] = __('enrolment') . ' #' . $id;
+                continue;
+            }
+
+            $transcripts[] = [
+                'student' => $student,
+                'enroll' => $enroll,
+                'program_id' => $enroll->program_id,
+                'record' => $snapshots->record($student, $enroll),
+            ];
+        }
+
+        $data['transcripts'] = $transcripts;
+        $data['skipped'] = $skipped;
+
+        return view($this->view . '.bulk', $data);
     }
 
     /**

@@ -992,6 +992,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('transcript/marksheet-semester-print/{id}/{session}', 'MarksheetController@semesterPrint')->name('marksheet.semester.print');
     Route::get('transcript/marksheet-semester-download/{id}/{session}', 'MarksheetController@semesterDownload')->name('marksheet.semester.download');
     Route::get('transcript/marksheet-semester-multiprint', 'MarksheetController@multiPrint')->name('marksheet.semester.multiprint');
+    Route::get('transcript/marksheet-bulk', 'MarksheetController@bulk')->name('marksheet.bulk');
     Route::resource('transcript/marksheet-setting', 'MarksheetSettingController');
 
     // Certificate Routes

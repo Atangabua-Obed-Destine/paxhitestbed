@@ -10,7 +10,22 @@
             <div class="col-sm-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5>{{ $title }}</h5>
+                        <h5 class="d-inline">{{ $title }}</h5>
+
+                        {{-- Enrolment ids, not student ids: a student who has
+                             moved programme has more than one transcript, and
+                             the ticked row says which one is meant. --}}
+                        @can($access.'-print')
+                        @if(isset($rows) && count($rows) > 0)
+                        <form class="needs-validation d-inline float-end" novalidate method="get"
+                              action="{{ route($route.'.bulk') }}" target="_blank">
+                            <input type="hidden" name="students" class="students" value="">
+                            <button type="submit" class="btn btn-sm btn-dark bulk-print-btn">
+                                <i class="fas fa-print"></i> {{ __('btn_print') }} {{ __('field_selected') }}
+                            </button>
+                        </form>
+                        @endif
+                        @endcan
                     </div>
                     <div class="card-block">
                         <form class="needs-validation" novalidate method="get" action="{{ route($route.'.index') }}">
@@ -80,6 +95,12 @@
                             <table id="basic-table" class="display table nowrap table-striped table-hover" style="width:100%">
                                 <thead>
                                     <tr>
+                                        <th style="width: 34px;">
+                                            <div class="checkbox checkbox-success d-inline">
+                                                <input type="checkbox" id="checkbox_all" class="all_select">
+                                                <label for="checkbox_all" class="cr" style="margin-bottom: 0px;"></label>
+                                            </div>
+                                        </th>
                                         <th>{{ __('field_matricule') }}</th>
                                         <th>{{ __('field_name') }}</th>
                                         <th>{{ __('field_batch') }}</th>
@@ -92,6 +113,12 @@
                                 <tbody>
                                   @foreach( $rows as $key => $row )
                                     <tr>
+                                        <td>
+                                            <div class="checkbox checkbox-primary d-inline">
+                                                <input type="checkbox" data_id="{{ $row->id }}" id="checkbox-{{ $row->id }}" value="{{ $row->id }}">
+                                                <label for="checkbox-{{ $row->id }}" class="cr"></label>
+                                            </div>
+                                        </td>
                                         <td>
                                             @if($row->student)
                                             <a href="{{ route('admin.student.show', $row->student->id) }}?enrollment_id={{ $row->id }}">
@@ -145,3 +172,44 @@
 <!-- End Content-->
 
 @endsection
+
+@push('scripts')
+<script type="text/javascript">
+    "use strict";
+
+    $(document).ready(function () {
+
+        // The ticked enrolment ids travel to the bulk view as one comma
+        // separated field, the same way the ID card list does it.
+        $(".bulk-print-btn").on('click', function (e) {
+            var picked = $("input[data_id]:checked");
+
+            if (picked.length === 0) {
+                e.preventDefault();
+                alert("{{ __('Select at least one student first.') }}");
+                return;
+            }
+
+            var ids = [];
+            picked.each(function () {
+                ids.push($(this).val());
+            });
+
+            $(".students").val(ids.join(','));
+        });
+
+        // Scoped to the row checkboxes: a blanket "input:checkbox" would also
+        // tick anything else on the page that happens to be a checkbox.
+        $(".all_select").on('click', function () {
+            $("input[data_id]").prop('checked', $(this).is(":checked"));
+        });
+
+        // Ticking every row by hand should leave the header box ticked too.
+        $(document).on('change', "input[data_id]", function () {
+            var total = $("input[data_id]").length;
+            var checked = $("input[data_id]:checked").length;
+            $(".all_select").prop('checked', total > 0 && total === checked);
+        });
+    });
+</script>
+@endpush

@@ -139,6 +139,58 @@ check('an unknown reference is refused', str_contains($unknown->getContent(), 'N
 check('and it does not leak anyone\'s name',
     !str_contains($unknown->getContent(), (string) $record->student_name));
 
+echo "\n== Printing a batch ==\n";
+
+Auth::guard('web')->login(App\User::where('is_admin', 1)->firstOrFail());
+
+$batch = StudentEnroll::whereHas('subjectMarks')->whereNotNull('session_id')
+    ->limit(3)->pluck('id');
+
+$bulk = $get('/admin/transcript/marksheet-bulk', ['students' => $batch->implode(',')]);
+$bulkHtml = $bulk->getContent();
+
+check('the batch renders', $bulk->getStatusCode() === 200, 'status ' . $bulk->getStatusCode());
+check('one page per selection',
+    substr_count($bulkHtml, 'class="tp-page') === $batch->count(),
+    substr_count($bulkHtml, 'class="tp-page') . ' pages for ' . $batch->count() . ' selected');
+
+// Without this every transcript after the first continues down the previous
+// student's sheet, and the whole batch comes out of the printer unusable.
+check('each transcript starts a new sheet',
+    str_contains($bulkHtml, 'page-break-after: always'));
+
+preg_match_all('/TRN-[A-Z0-9]{16}/', $bulkHtml, $codes);
+check('every transcript in the batch carries its own code',
+    count(array_unique($codes[0] ?? [])) === $batch->count(),
+    count(array_unique($codes[0] ?? [])) . ' distinct codes');
+
+check('a batch-printed transcript is recorded like a single one',
+    TranscriptRecord::whereIn('student_enroll_id', $batch)->count() === $batch->count());
+
+// Selecting nothing must not silently produce an empty document to print.
+$none = $get('/admin/transcript/marksheet-bulk', ['students' => '']);
+check('an empty selection is refused', $none->getStatusCode() === 302,
+    'status ' . $none->getStatusCode());
+
+// A row that cannot be printed has to be named. A batch that quietly comes out
+// short is how an incomplete set gets handed over.
+$mixed = $get('/admin/transcript/marksheet-bulk', ['students' => $batch->first() . ',99999999']);
+check('an unusable selection is reported, not dropped',
+    str_contains($mixed->getContent(), 'Not included'));
+
+echo "\n== The list offers the selection ==\n";
+
+$index = $get('/admin/transcript/marksheet', ['batch' => '0', 'program' => '0', 'session' => '0']);
+$indexHtml = $index->getContent();
+
+check('the list renders', $index->getStatusCode() === 200);
+check('it has a print-selected button', str_contains($indexHtml, 'bulk-print-btn'));
+check('it has a select-all box', str_contains($indexHtml, 'all_select'));
+check('and a checkbox on each row', substr_count($indexHtml, 'data_id=') > 0,
+    substr_count($indexHtml, 'data_id=') . ' found');
+
+Auth::guard('web')->logout();
+
 echo "\n== A mark changed afterwards does not rewrite the issued transcript ==\n";
 
 // This is the whole point of the snapshot: the document says what it said on
