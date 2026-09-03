@@ -53,11 +53,85 @@
       pointer-events: none;
     }
 
+    /* --- Verification QR ---
+       Generated locally, not fetched from an image service: a transcript has
+       to verify in an office with no internet, and the address of every
+       document issued should not be handed to a third party. */
+    .tp-verify {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px solid #ccc;
+    }
+    .tp-verify-qr {
+      width: 82px;
+      height: 82px;
+      flex: 0 0 82px;
+    }
+    .tp-verify-qr svg { width: 100%; height: 100%; display: block; }
+    .tp-verify-text {
+      font-size: 8.5px;
+      color: #444;
+      line-height: 1.5;
+    }
+    .tp-verify-text strong {
+      display: block;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #1a1a1a;
+      margin-bottom: 2px;
+    }
+    .tp-verify-code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      letter-spacing: 0.6px;
+      color: #1a1a1a;
+      font-weight: 700;
+    }
+
+    /* --- Watermark ---
+       The institution's name, from Settings, laid diagonally behind the record.
+       It sits at z-index 0 while .tp-content is z-index 1, so it is genuinely
+       behind the text rather than over it, and .tp-page already clips overflow.
+       Light enough to read straight through: a transcript has to stay legible
+       when photocopied, and a watermark that fights the marks defeats itself. */
+    .tp-watermark {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .tp-watermark span {
+      transform: rotate(-32deg);
+      font-family: 'Merriweather', Georgia, serif;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 6px;
+      text-align: center;
+      line-height: 1.15;
+      /* Wraps rather than scaling to fit, so a long diocesan name stays
+         readable instead of shrinking to nothing on a wide page. */
+      width: 150mm;
+      color: rgba(26, 26, 26, 0.055);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
     /* --- Content overlay --- */
     .tp-content {
       position: relative;
       z-index: 1;
-      padding: 190px 42px 40px 42px;
+      /* Was 190px, reserving room for a letterhead that used to be
+         absolutely positioned at the top of the page. The letterhead is
+         now normal flow content rendered above this block, so that
+         reservation became an empty band sitting under it. */
+      padding: 24px 42px 40px 42px;
     }
 
     /* --- Document title --- */
@@ -102,24 +176,37 @@
       font-size: 11px;
       vertical-align: top;
     }
+    /* The label column shrinks to its widest label rather than taking a fixed
+       22%, so the colon sits against the word instead of stranded across the
+       page after a short one like SEX - and every colon still lines up, because
+       a table column is one width for all its rows. */
     .tp-info-label {
-      width: 22%;
+      width: 1%;
+      white-space: nowrap;
       font-weight: 700;
       color: #333;
       text-transform: uppercase;
       font-size: 9.5px;
       letter-spacing: 0.4px;
-      padding-right: 4px;
+      padding-right: 8px;
+    }
+    /* The colon belongs to the label. On the value it pushed the first line in
+       by two characters, so a wrapping programme title had its second line
+       hanging out to the left of its own first line. */
+    .tp-info-label::after {
+      content: ':';
+      color: #555;
+      font-weight: 400;
+      margin-left: 6px;
     }
     .tp-info-value {
-      width: 28%;
       font-weight: 600;
       color: #1a1a1a;
-      padding-left: 2px;
+      padding-right: 26px;
     }
-    .tp-info-value::before {
-      content: ': ';
-      color: #555;
+    /* Nothing to separate from on the right-hand pair. */
+    .tp-info-row .tp-info-value:last-child {
+      padding-right: 0;
     }
     .tp-info-divider {
       height: 1px;
@@ -386,7 +473,7 @@
         box-shadow: none;
         page-break-after: always;
       }
-      .tp-content { padding-top: 190px; }
+      .tp-content { padding-top: 24px; }
       .tp-letterhead { display: block; }
       .tp-summary-bar { border-color: #1a1a1a !important; }
       .tp-records-table thead th { border-color: #1a1a1a !important; }
@@ -408,8 +495,13 @@
 <style type="text/css">
 .tp-page { direction: rtl; }
 .tp-info-label { text-align: right; }
-.tp-info-value { text-align: right; }
-.tp-info-value::before { content: ' :'; }
+.tp-info-value { text-align: right; padding-right: 0; padding-left: 26px; }
+.tp-info-row .tp-info-value:last-child { padding-left: 0; }
+/* The colon moved onto the label, so the right-to-left sheet has to space it
+   on the other side too. Leaving the old rule here would have printed a second
+   colon on the value. */
+.tp-info-label { padding-right: 0; padding-left: 8px; }
+.tp-info-label::after { margin-left: 0; margin-right: 6px; }
 .tp-records-table thead th.tp-col-left,
 .tp-col-headers th.tp-col-left,
 .tp-records-table tbody td.tp-td-left,
@@ -501,7 +593,25 @@
 <div class="tp-page printable">
     {{-- Letterhead, configured under Academic → Letterhead. Was a hardcoded
          filename, so changing it meant editing this view. --}}
-    @include('partials.letterhead', ['forPdf' => true])
+    {{-- forPdf must stay false: this page is rendered by the browser, not by
+         dompdf. With it true the letterhead's image src becomes a local
+         filesystem path (C:\xampp\...), which dompdf can read and a browser
+         cannot — so the logo silently failed to load. --}}
+    @include('partials.letterhead', ['forPdf' => false])
+
+    @php
+        // The site title from Settings, so the watermark follows the
+        // institution rather than being written into the markup. Sized down for
+        // longer names, which otherwise fill the page corner to corner.
+        $watermark = trim((string) institution_name());
+        $watermarkSize = mb_strlen($watermark) > 34 ? 34 : (mb_strlen($watermark) > 22 ? 44 : 56);
+    @endphp
+
+    @if($watermark !== '')
+    <div class="tp-watermark" aria-hidden="true">
+        <span style="font-size: {{ $watermarkSize }}px;">{{ $watermark }}</span>
+    </div>
+    @endif
 
     <div class="tp-content">
 
@@ -540,15 +650,22 @@
                 <div class="tp-info-row">
                     <div class="tp-info-cell tp-info-label">{{ __('field_dob') }}</div>
                     <div class="tp-info-cell tp-info-value">{{ date($setting->date_format ?? 'd-m-Y', strtotime($row->dob)) }}</div>
-                    <div class="tp-info-cell tp-info-label">{{ __('field_ending_year') }}</div>
-                    <div class="tp-info-cell tp-info-value">{{ $ending_year }}</div>
+                    {{-- Ending year removed: it repeated the starting year on
+                         every record here, and a transcript is issued against a
+                         date rather than a closed period. The date it was
+                         issued takes the slot so the row is not left half
+                         empty. --}}
+                    <div class="tp-info-cell tp-info-label">Date Issued</div>
+                    <div class="tp-info-cell tp-info-value">{{ date('F d, Y') }}</div>
                 </div>
                 @if($row->nationality)
                 <div class="tp-info-row">
                     <div class="tp-info-cell tp-info-label">Nationality</div>
                     <div class="tp-info-cell tp-info-value">{{ $row->nationality }}</div>
-                    <div class="tp-info-cell tp-info-label">Date Issued</div>
-                    <div class="tp-info-cell tp-info-value">{{ date('F d, Y') }}</div>
+                    {{-- Empty, not absent: the cells hold the column widths so
+                         this row lines up with the ones above it. --}}
+                    <div class="tp-info-cell"></div>
+                    <div class="tp-info-cell"></div>
                 </div>
                 @endif
             </div>
@@ -723,6 +840,29 @@
                 </div>
             </div>
         </div>
+
+        {{-- Verification --}}
+        @if(!empty($transcriptRecord))
+        <div class="tp-verify">
+            <div class="tp-verify-qr">
+                {{-- SVG, because the PNG back end needs the imagick extension
+                     and this has to work on any server. --}}
+                {!! SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
+                        ->size(220)->margin(0)
+                        ->errorCorrection('M')
+                        ->generate($transcriptRecord->verification_url) !!}
+            </div>
+            <div class="tp-verify-text">
+                <strong>{{ __('Verify this transcript') }}</strong>
+                {{ __('Scan the code, or visit') }}
+                {{ $transcriptRecord->verification_url }}<br>
+                {{ __('Reference') }}:
+                <span class="tp-verify-code">{{ $transcriptRecord->verification_code }}</span>
+                &middot; {{ __('Issued') }}
+                {{ $transcriptRecord->issued_at?->format('d/m/Y') }}
+            </div>
+        </div>
+        @endif
 
         {{-- End marker --}}
         <div class="tp-end-marker">End of Transcript</div>

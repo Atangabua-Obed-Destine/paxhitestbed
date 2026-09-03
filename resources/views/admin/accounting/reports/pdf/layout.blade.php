@@ -223,8 +223,17 @@
         @endif
         
         {{-- The configured letterhead, exactly as authored, in place of a
-             company name assembled here. --}}
-        @include('partials.document-header', ['forPdf' => true, 'rule' => false])
+             company name assembled here.
+
+             forPdf follows how this view is actually being rendered. The
+             controller sends it to dompdf when dompdf is installed and falls
+             back to a printable HTML page when it is not, and the two need
+             different image paths: dompdf reads a local filesystem path, a
+             browser needs a URL and shows a broken image if given a path. --}}
+        @include('partials.document-header', [
+            'forPdf' => !($printable ?? false),
+            'rule' => false,
+        ])
 
         <div class="report-header">
             <div class="report-title">@yield('report_title')</div>

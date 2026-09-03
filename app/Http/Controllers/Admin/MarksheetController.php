@@ -12,6 +12,8 @@ use App\Models\Session;
 use App\Models\Batch;
 use App\Models\Grade;
 use App\Models\Setting;
+use App\Models\TranscriptRecord;
+use App\Services\TranscriptSnapshotService;
 
 class MarksheetController extends Controller
 {
@@ -320,7 +322,34 @@ class MarksheetController extends Controller
             $data['selectedProgramId'] = $data['row']->program_id;
         }
 
+        // Same record as the downloaded copy: printing and downloading the same
+        // transcript must not mint two verification codes for one document.
+        $data['transcriptRecord'] = app(TranscriptSnapshotService::class)
+            ->record($data['row'], $data['currentEnroll'] ?? null);
+
         return view($this->view.'.print', $data);
+    }
+
+    /**
+     * The public page a transcript's QR code leads to.
+     *
+     * Deliberately outside the permission middleware above: an employer
+     * checking a transcript has no account here. It shows the figures as they
+     * were issued, so a document altered after printing fails to match.
+     */
+    public function verify($code)
+    {
+        $record = TranscriptRecord::with(['student', 'enrollment.program.faculty'])
+            ->where('verification_code', $code)
+            ->first();
+
+        return view('verify-transcript', [
+            'title' => __('Verify Transcript'),
+            'found' => $record !== null,
+            'record' => $record,
+            'code' => $code,
+            'setting' => Setting::first(),
+        ]);
     }
 
     /**
@@ -362,6 +391,11 @@ class MarksheetController extends Controller
             // Fallback to latest enrollment
             $data['selectedProgramId'] = $data['row']->program_id;
         }
+
+        // Recorded as issued, so the QR code can be checked against the marks
+        // that were printed rather than against whatever the record says later.
+        $data['transcriptRecord'] = app(TranscriptSnapshotService::class)
+            ->record($data['row'], $data['currentEnroll'] ?? null);
 
         return view($this->view.'.download', $data);
     }

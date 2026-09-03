@@ -115,6 +115,20 @@ class DocumentHtml
         $html = preg_replace('/<\/?o:p[^>]*>/i', '', $html);
         $html = preg_replace('/mso-[^:;"\']+:[^;"\']*;?/i', '', $html);
 
+        // Images are set aside before the dimension strips below and restored
+        // afterwards. Everywhere else a fixed width is Word overflowing the
+        // page, but on an image it is the size the author chose in the editor:
+        // a letterhead logo sized to 56px was rendering at its natural 495px,
+        // pushing the whole document down the page. Overflow is still prevented
+        // — the letterhead's own stylesheet caps images at max-width:100%.
+        $images = [];
+
+        $html = preg_replace_callback('/<img\b[^>]*>/i', function ($match) use (&$images) {
+            $images[] = $match[0];
+
+            return '<!--dochtml-img-' . (count($images) - 1) . '-->';
+        }, $html);
+
         // Keep line-height and font-size; drop fixed dimensions.
         $html = preg_replace('/(?<![a-z-])(?:min-|max-)?width\s*:\s*[^;"\']*;?/i', '', $html);
         $html = preg_replace('/(?<!font-)(?<!line-)(?<![a-z])(?:min-|max-)?height\s*:\s*[^;"\']*;?/i', '', $html);
@@ -124,7 +138,11 @@ class DocumentHtml
         $html = preg_replace("/\s(?:width|height)\s*=\s*'[^']*'/i", '', $html);
         $html = preg_replace('/\s(?:width|height)\s*=\s*[0-9.]+%?/i', '', $html);
 
-        return $html;
+        return preg_replace_callback(
+            '/<!--dochtml-img-(\d+)-->/',
+            fn ($match) => $images[(int) $match[1]] ?? '',
+            $html
+        );
     }
 
     /** Both passes, in the order they need to run. */

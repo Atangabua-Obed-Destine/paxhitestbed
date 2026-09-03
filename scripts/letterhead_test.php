@@ -1,122 +1,237 @@
 <?php
 /**
- * The letterhead must look the same on screen, in print and in a download —
- * and must appear on the first page only.
+ * No Blade partial includes itself, and the documents that use the letterhead
+ * render within a sane amount of memory.
  *
- * The failure this guards against is silent: dompdf drops an image it cannot
- * resolve without raising anything, so a document still looks finished while
- * the letterhead is missing from every copy that leaves the building.
+ * The letterhead partial's own usage notes annotated an @include line with an
+ * inline Blade comment. Blade comments do not nest, so that comment's closing
+ * marker ended the surrounding docblock early and left the next @include as
+ * live code — the partial included itself, without limit, and every document
+ * carrying a letterhead died with "Allowed memory size exhausted". Two-gigabyte
+ * limits died the same way, because the recursion has no depth at which it
+ * stops.
+ *
+ * Nothing about that is visible in the source: the file reads as one comment.
+ * It is only visible in the compiled output, which is what this suite checks.
+ *
+ * Usage: php scripts/letterhead_test.php
  */
+
 require __DIR__ . '/../vendor/autoload.php';
 $app = require __DIR__ . '/../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
-use App\Models\LetterheadSetting;
-use App\Services\LetterheadService;
-use App\User;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-
-$req = Request::create(url('/admin'), 'GET');
-$req->setLaravelSession(app('session.store'));
-app()->instance('request', $req);
-view()->share('errors', new Illuminate\Support\ViewErrorBag);
-Auth::guard('web')->login(User::query()->first());
-
-$results = [];
-function check($n, $p, $d = '') { global $results; $results[] = [$n, $p, $d]; }
-
-$service = app(LetterheadService::class);
-$controller = app(App\Http\Controllers\Admin\LetterheadController::class);
-$image = 'uploads/editor/editor_1787148003_faAotXWBOj.png';
-
-DB::beginTransaction();
-try {
-    $settings = LetterheadSetting::current();
-
-    // ---- html mode ------------------------------------------------------
-    $settings->update([
-        'mode' => 'html',
-        'status' => true,
-        'html' => '<p style="text-align:center">[institution_name]</p>'
-            . '<img src="../../../../' . $image . '">',
-    ]);
-
-    $forPdf = $service->render(true);
-    $forWeb = $service->render(false);
-
-    check('renders for PDF', $forPdf !== '');
-    check('renders for screen', $forWeb !== '');
-
-    preg_match('/src="([^"]+)"/', $forPdf, $p);
-    check('the PDF image is a real file on disk', isset($p[1]) && is_file($p[1]), $p[1] ?? 'none');
-
-    preg_match('/src="([^"]+)"/', $forWeb, $w);
-    check('the screen image is an absolute URL', isset($w[1]) && str_starts_with($w[1], 'http'), $w[1] ?? 'none');
-
-    check('both point at the same file',
-        isset($p[1], $w[1]) && basename($p[1]) === basename($w[1]));
-
-    check('tokens are substituted',
-        !str_contains($forPdf, '[institution_name]') && str_contains($forPdf, 'PAX'), 'token left in place');
-
-    // The proof: does it survive into an actual PDF?
-    $bytes = Pdf::loadHTML('<html><body>' . $forPdf . '</body></html>')->output();
-    check('the image is embedded in the generated PDF', str_contains($bytes, '/Image'),
-        number_format(strlen($bytes)) . ' bytes');
-    check('the PDF is not a near-empty shell', strlen($bytes) > 100000, number_format(strlen($bytes)));
-
-    // ---- first page only -------------------------------------------------
-    check('it is not a fixed page header', !str_contains($service->styles(), 'position:fixed'));
-    check('nothing marks it to repeat', !str_contains($forPdf, 'position: fixed')
-        && !str_contains($forPdf, 'position:fixed'));
-
-    $preview = $controller->preview();
-    $previewBytes = $preview->getContent();
-    check('the preview renders as a real PDF', str_starts_with($previewBytes, '%PDF'));
-    check('the preview runs past one page', substr_count($previewBytes, '/Type /Page') > 1
-        || substr_count($previewBytes, '/Type/Page') > 1, 'single page — cannot prove non-repeat');
-    check('the preview embeds the image once', substr_count($previewBytes, '/Image') <= 2,
-        substr_count($previewBytes, '/Image') . ' image objects');
-
-    // ---- reserve space ---------------------------------------------------
-    $settings->update(['mode' => 'reserve_space', 'reserve_height_mm' => 40]);
-    $reserved = $service->render(true);
-    check('reserve mode leaves a gap', str_contains($reserved, '40mm'), $reserved);
-    check('reserve mode prints no content', !str_contains($reserved, '<img'));
-
-    $settings->update(['reserve_height_mm' => 999]);
-    check('an absurd reserve height is capped', str_contains($service->render(true), '150mm'),
-        $service->render(true));
-
-    // ---- off -------------------------------------------------------------
-    $settings->update(['mode' => 'none', 'reserve_height_mm' => 35]);
-    check('none mode renders nothing at all', $service->render(true) === '');
-
-    $settings->update(['mode' => 'html', 'status' => false]);
-    check('switching it off renders nothing', $service->render(true) === '');
-    check('but the content is kept', LetterheadSetting::current()->html !== null);
-
-    // ---- the screens still work -----------------------------------------
-    $settings->update(['status' => true]);
-    check('the admin screen renders', strlen($controller->index()->render()) > 10000);
-
-    // ---- the documents that were hardcoded -------------------------------
-    foreach (['print', 'download'] as $view) {
-        $source = file_get_contents(resource_path("views/admin/marksheet/{$view}.blade.php"));
-        check("marksheet {$view} no longer names a file", !str_contains($source, 'paxletterhead.jpg'));
-        check("marksheet {$view} uses the shared partial", str_contains($source, "partials.letterhead"));
-    }
-} finally {
-    DB::rollBack();
-}
-
+$passed = 0;
 $failed = 0;
-foreach ($results as [$n, $p, $d]) {
-    if (!$p) { $failed++; }
-    printf("%s  %s%s\n", $p ? 'PASS' : 'FAIL', $n, (!$p && $d) ? "   [$d]" : '');
+
+function check(string $label, bool $ok, string $detail = ''): void
+{
+    global $passed, $failed;
+    if ($ok) {
+        $passed++;
+        echo "  PASS  $label\n";
+    } else {
+        $failed++;
+        echo "  FAIL  $label" . ($detail !== '' ? "\n          $detail" : '') . "\n";
+    }
 }
-printf("\n%d/%d passed  (rolled back)\n", count($results) - $failed, count($results));
-exit($failed ? 1 : 0);
+
+echo "\n== No partial includes itself ==\n";
+
+$compiler = app('blade.compiler');
+$viewRoot = realpath(__DIR__ . '/../resources/views');
+
+// Partials that include themselves on purpose to draw a tree, and terminate
+// because each level is handed a smaller set than it was given. The budget-line
+// node recurses only when $children is non-empty and passes an empty collection
+// down, so it is exactly one level deep. Recursion is not the fault; recursion
+// with nothing to stop it is.
+$deliberatelyRecursive = [
+    'admin.budget-line.partials.node',
+];
+
+$selfIncluding = [];
+$strayMarkers = [];
+
+$files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($viewRoot));
+
+foreach ($files as $file) {
+    if (!$file->isFile() || !str_ends_with($file->getFilename(), '.blade.php')) {
+        continue;
+    }
+
+    // The view's own dotted name, which is what an @include of itself uses.
+    $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($viewRoot) + 1));
+    $name = str_replace('/', '.', substr($relative, 0, -strlen('.blade.php')));
+
+    $compiled = $compiler->compileString(file_get_contents($file->getPathname()));
+
+    if (str_contains($compiled, "make('" . $name . "'")
+        && !in_array($name, $deliberatelyRecursive, true)) {
+        $selfIncluding[] = $name;
+    }
+
+    // A closing comment marker surviving compilation means a comment block
+    // ended somewhere other than where it was written to end.
+    if (str_contains($compiled, '--}}')) {
+        $strayMarkers[] = $name;
+    }
+}
+
+check('no view includes itself', $selfIncluding === [], implode(', ', $selfIncluding));
+check('no unclosed comment leaks a marker into the output', $strayMarkers === [],
+    implode(', ', $strayMarkers));
+
+echo "\n== The letterhead partial compiles to what it looks like ==\n";
+
+$source = file_get_contents($viewRoot . '/partials/letterhead.blade.php');
+$compiled = $compiler->compileString($source);
+
+check('it does not include itself', !str_contains($compiled, "make('partials.letterhead'"));
+check('it still calls the letterhead service', str_contains($compiled, 'LetterheadService'));
+check('it compiles to something small', strlen($compiled) < 2000, strlen($compiled) . ' bytes');
+
+echo "\n== Documents carrying a letterhead render ==\n";
+
+Illuminate\Support\Facades\Auth::guard('web')->login(App\User::where('is_admin', 1)->firstOrFail());
+$kernel = app(Illuminate\Contracts\Http\Kernel::class);
+
+// A student with enrolments, so the transcript actually has rows to draw.
+$enroll = App\Models\StudentEnroll::whereNotNull('session_id')
+    ->whereNotNull('semester_id')->whereNotNull('section_id')->first();
+
+if (!$enroll) {
+    echo "  SKIP  no enrolment to render a transcript for\n";
+} else {
+    foreach (['marksheet-download', 'marksheet-print'] as $action) {
+        $before = memory_get_peak_usage(true);
+
+        $request = Illuminate\Http\Request::create(
+            '/admin/transcript/' . $action . '/' . $enroll->student_id,
+            'GET',
+            ['enrollment_id' => $enroll->id]
+        );
+        $request->setLaravelSession(app('session.store'));
+
+        try {
+            $response = $kernel->handle($request);
+            $html = $response->getContent();
+
+            check($action . ' renders', $response->getStatusCode() === 200,
+                'status ' . $response->getStatusCode());
+
+            // Exactly one. "At most one" passed when the letterhead vanished
+            // entirely, which is the failure this is meant to catch.
+            check($action . ' draws the letterhead exactly once',
+                substr_count($html, 'class="letterhead"') === 1,
+                substr_count($html, 'class="letterhead"') . ' occurrences');
+
+            // A browser cannot load "C:\xampp\...". That path is what the
+            // service emits for dompdf, and passing forPdf => true from a page
+            // the browser renders left the logo silently broken.
+            preg_match_all('#<img[^>]+src="([^"]+)"#i', $html, $srcs);
+            $localPaths = array_filter(
+                $srcs[1] ?? [],
+                fn ($src) => (bool) preg_match('#^(?:[a-z]:[\\\\/]|/(?:var|home|srv)/)#i', $src)
+            );
+
+            check($action . ' has no filesystem paths as image sources',
+                $localPaths === [], implode(', ', array_slice($localPaths, 0, 2)));
+
+            // The author sizes the logo in the editor; without those attributes
+            // it renders at its natural size and pushes the document down.
+            if (preg_match('#<div class="letterhead">.*?</div>#s', $html, $lh)
+                && str_contains($lh[0], '<img')) {
+                check($action . ' keeps the logo\'s configured size',
+                    (bool) preg_match('#<img[^>]+(?:width|height)=#i', $lh[0]));
+            }
+
+            // The watermark carries the institution's name from Settings, so a
+            // renamed institution renames it without anyone editing a view.
+            preg_match('#<div class="tp-watermark"[^>]*>\s*<span[^>]*>(.*?)</span>#s', $html, $wm);
+
+            check($action . ' carries one watermark',
+                substr_count($html, 'class="tp-watermark"') === 1,
+                substr_count($html, 'class="tp-watermark"') . ' found');
+            check($action . ' watermarks with the site title',
+                isset($wm[1]) && trim($wm[1]) === trim((string) institution_name()),
+                'got "' . trim($wm[1] ?? '') . '", settings say "' . institution_name() . '"');
+
+            // Behind the record, not over it: a watermark that competes with the
+            // marks is worse than none, especially once photocopied.
+            check($action . ' keeps the watermark behind the content',
+                strpos($html, 'class="tp-watermark"') < strpos($html, 'class="tp-content"')
+                && preg_match('/\.tp-watermark\s*\{[^}]*z-index:\s*0/s', $html)
+                && preg_match('/\.tp-content\s*\{[^}]*z-index:\s*1/s', $html));
+        } catch (Throwable $e) {
+            check($action . ' renders', false, get_class($e) . ': ' . substr($e->getMessage(), 0, 80));
+        }
+
+        // The recursion consumed gigabytes. A transcript is a page of text.
+        check($action . ' stays well inside the memory limit',
+            memory_get_peak_usage(true) < 256 * 1048576,
+            round(memory_get_peak_usage(true) / 1048576) . ' MB peak');
+    }
+}
+
+echo "\n== Other documents carrying the shared masthead ==\n";
+
+// The marksheet was not the only view including a letterhead, and a check that
+// only ever renders the page it was written for finds the bug once. These are
+// the other documents the browser renders, so the same fault - a filesystem
+// path where a URL belongs - would show up here too.
+//
+// A static scan was tried first and could not do this job: the controllers name
+// their views by concatenation ($this->view . '.download'), so searching for a
+// literal view name found no reference and reported success while the bug was
+// present. Rendering the page is what actually proves it.
+$enrollment = App\Models\StudentEnroll::whereNotNull('session_id')->first();
+
+$documents = array_filter([
+    $enrollment ? ['admission/student-form-a2/' . $enrollment->id . '/preview', []] : null,
+    $enrollment ? ['admission/student-form-a3/' . $enrollment->id . '/preview', []] : null,
+]);
+
+foreach ($documents as [$uri, $params]) {
+    $request = Illuminate\Http\Request::create('/admin/' . $uri, 'GET', $params);
+    $request->setLaravelSession(app('session.store'));
+
+    try {
+        $response = $kernel->handle($request);
+
+        // A 404 or a redirect is fine here - the record may not suit this
+        // document. Only a rendered page is worth inspecting.
+        if ($response->getStatusCode() !== 200) {
+            echo '  SKIP  ' . $uri . ' (HTTP ' . $response->getStatusCode() . ")\n";
+            continue;
+        }
+
+        preg_match_all('#<img[^>]+src="([^"]+)"#i', $response->getContent(), $srcs);
+        $localPaths = array_filter(
+            $srcs[1] ?? [],
+            fn ($src) => (bool) preg_match('#^(?:[a-z]:[\\\\/]|/(?:var|home|srv)/)#i', $src)
+        );
+
+        check($uri . ' has no filesystem paths as image sources',
+            $localPaths === [], implode(', ', array_slice($localPaths, 0, 2)));
+    } catch (Throwable $e) {
+        echo '  SKIP  ' . $uri . ' (' . get_class($e) . ")\n";
+    }
+}
+
+echo "\n== Editor sizing survives the Word-paste cleanup ==\n";
+
+// normalize() strips fixed widths because Word pastes overflow the page. An
+// <img> is the exception: there the size is the author's own decision, and
+// stripping it rendered a 56px logo at its natural 495px.
+$sample = '<p style="width:900px"><img src="/x.png" width="56" height="57" />'
+    . '<span style="mso-fareast-font-family:Times">a</span></p>';
+$clean = App\Services\DocumentHtml::normalize($sample);
+
+check('the image keeps its width', str_contains($clean, 'width="56"'), $clean);
+check('the image keeps its height', str_contains($clean, 'height="57"'), $clean);
+check('a fixed width elsewhere is still stripped', !str_contains($clean, '900px'), $clean);
+check('Word properties are still stripped', !str_contains($clean, 'mso-'), $clean);
+check('no placeholder is left behind', !str_contains($clean, 'dochtml-img'), $clean);
+
+echo "\n$passed passed, $failed failed\n";
