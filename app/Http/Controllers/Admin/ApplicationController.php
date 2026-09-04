@@ -882,7 +882,18 @@ class ApplicationController extends Controller
             'postal_address_line2' => ['nullable', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:191'],
             'alternate_phone' => ['nullable', 'string', 'max:191'],
-            'email' => ['required', 'email', 'max:191', Rule::unique('applications', 'email')->ignore($application->id)],
+            // Not unique. One person legitimately applies more than once — for a
+            // different intake, or a different programme — and the applicants'
+            // own form has never enforced uniqueness either, which is why those
+            // records exist. The column's index is deliberately non-unique to
+            // match.
+            //
+            // Ignoring only the row being edited was not enough: the moment
+            // somebody had applied twice, every one of their applications became
+            // unsaveable from this screen, because each collided with the
+            // others. Correcting an applicant's details is exactly what this
+            // page is for.
+            'email' => ['required', 'email', 'max:191'],
             'mother_tongue' => ['nullable', 'string', 'max:191'],
             'studied_in_english' => ['nullable', 'boolean'],
             'photo' => ['nullable', 'image', 'max:5120'],
