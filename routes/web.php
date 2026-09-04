@@ -367,6 +367,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
     // Academic Routes
     Route::get('academic/health-status', 'AcademicHealthController@index')->name('academic-health.index');
+    Route::get('academic/health-status/excel', 'AcademicHealthController@export')->name('academic-health.excel');
     Route::resource('academic/faculty', 'FacultyController');
     Route::resource('academic/sector', 'SectorController');
     Route::resource('academic/academic-department', 'AcademicDepartmentController');

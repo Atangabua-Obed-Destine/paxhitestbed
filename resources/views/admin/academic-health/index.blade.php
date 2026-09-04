@@ -109,6 +109,11 @@
                 </div>
             </div>
             <div class="col-md-6 text-right no-print">
+                {{-- The workbook is what gets sent to the school; the printed
+                     page is for the office. --}}
+                <a href="{{ route('admin.academic-health.excel') }}" class="btn btn-success btn-sm">
+                    <i class="fas fa-file-excel"></i> Download Excel Report
+                </a>
                 <button class="btn btn-outline-dark btn-sm" onclick="window.print()">
                     <i class="fas fa-print"></i> Print Report
                 </button>
@@ -174,6 +179,14 @@
         </li>
         <li class="nav-item">
             <a class="nav-link" data-bs-toggle="tab" href="#tab-staff" role="tab"><i class="fas fa-chalkboard-teacher"></i> Staff & Teaching</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#tab-results" role="tab">
+                <i class="fas fa-clipboard-check"></i> Results
+                @if($results_readiness['draft_marks'] > 0 || $results_readiness['enrolments_without_marks'] > 0)
+                <span class="badge badge-warning">{{ $results_readiness['draft_marks'] + $results_readiness['enrolments_without_marks'] }}</span>
+                @endif
+            </a>
         </li>
         <li class="nav-item">
             <a class="nav-link" data-bs-toggle="tab" href="#tab-financial" role="tab"><i class="fas fa-money-bill-wave"></i> Financial</a>
@@ -313,7 +326,7 @@
                                 <th>Dean</th>
                                 <th class="text-center">Depts</th>
                                 <th class="text-center">Programs</th>
-                                <th class="text-center">Subjects</th>
+                                <th class="text-center">{{ trans_choice('module_subject', 2) }}</th>
                                 <th class="text-center">Students</th>
                                 <th class="text-center">Fee Configs</th>
                                 <th class="text-center">Routines</th>
@@ -389,7 +402,7 @@
                                                     <th>Program</th>
                                                     <th>Degree</th>
                                                     <th class="text-center">Students</th>
-                                                    <th class="text-center">Subjects</th>
+                                                    <th class="text-center">{{ trans_choice('module_subject', 2) }}</th>
                                                     <th class="text-center">Offerings</th>
                                                     <th class="text-center">Fees</th>
                                                     <th class="text-center">Routines</th>
@@ -678,10 +691,144 @@
     {{-- ═══════════════════════════════════════════════════════
          TAB 5: FINANCIAL
        ═══════════════════════════════════════════════════════ --}}
+    {{-- Configuration being right does not mean the semester can close. This
+         is what actually holds a session open. --}}
+    <div class="tab-pane fade" id="tab-results" role="tabpanel">
+        <div class="card" style="border-top:0;border-top-left-radius:0;border-top-right-radius:0;">
+            <div class="card-block">
+
+                <div class="row mb-4">
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0 text-success">{{ number_format($results_readiness['published_marks']) }}</h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Marks Published</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0 {{ $results_readiness['draft_marks'] > 0 ? 'text-warning' : 'text-muted' }}">
+                                {{ number_format($results_readiness['draft_marks']) }}
+                            </h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Still Draft</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0 {{ $results_readiness['enrolments_without_marks'] > 0 ? 'text-danger' : 'text-muted' }}">
+                                {{ $results_readiness['enrolments_without_marks'] }}
+                            </h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Enrolments With No Marks</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0">{{ $results_readiness['published_percent'] }}%</h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Published</small>
+                        </div>
+                    </div>
+                </div>
+
+                @if($results_readiness['draft_marks'] > 0)
+                <div class="alert alert-warning">
+                    <strong>{{ $results_readiness['draft_marks'] }} marks are entered but not published.</strong>
+                    They do not appear on any transcript or result sheet, and the students cannot see them.
+                </div>
+                @endif
+
+                @if($results_readiness['enrolments_without_marks'] > 0)
+                <div class="alert alert-danger">
+                    <strong>{{ $results_readiness['enrolments_without_marks'] }} of
+                    {{ $results_readiness['total_enrolments'] }} enrolments have no mark recorded at all.</strong>
+                    The semester cannot be closed until these are entered, or the enrolments withdrawn.
+                </div>
+                @endif
+
+                @if($results_readiness['draft_marks'] == 0 && $results_readiness['enrolments_without_marks'] == 0)
+                <div class="alert alert-success mb-0">
+                    <strong>Every enrolment has marks, and all of them are published.</strong>
+                    Nothing is outstanding for results.
+                </div>
+                @endif
+
+            </div>
+        </div>
+    </div>
+
     <div class="tab-pane fade" id="tab-financial" role="tabpanel">
         <div class="card" style="border-top:0;border-top-left-radius:0;border-top-right-radius:0;">
             <div class="card-block">
 
+                {{-- What has actually been collected. The tab previously showed
+                     only how fees were configured, which says nothing about
+                     whether the school has been paid. --}}
+                <h6 class="text-uppercase text-muted mb-3" style="letter-spacing:.5px;">Collections</h6>
+                <div class="row mb-4">
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0">{{ number_format($financial['fees_raised']) }}</h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Fees Billed</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0 text-success">{{ number_format($financial['fees_paid']) }}</h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Received</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0 {{ $financial['outstanding'] > 0 ? 'text-danger' : 'text-muted' }}">
+                                {{ number_format($financial['outstanding']) }}
+                            </h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Outstanding</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <div class="card border text-center p-3">
+                            <h3 class="mb-0 {{ $financial['students_owing'] > 0 ? 'text-warning' : 'text-success' }}">
+                                {{ $financial['students_owing'] }}
+                            </h3>
+                            <small class="text-muted text-uppercase font-weight-bold">Students Owing</small>
+                        </div>
+                    </div>
+                </div>
+
+                @if($financial['fees_paid'] > $financial['fees_raised'])
+                <div class="alert alert-danger">
+                    <strong>More has been received than was ever billed.</strong>
+                    {{ number_format($financial['fees_paid'] - $financial['fees_raised']) }} more.
+                    This is not overpayment &mdash; fee instalments are missing from the assignment,
+                    so a student can be short on one instalment while their total still looks settled.
+                    Arrears above cannot be relied on until this is corrected.
+                </div>
+                @endif
+
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-2">
+                        <div class="card border p-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-uppercase font-weight-bold small text-muted">Active Budget Sheet</span>
+                                <span class="badge {{ $financial['active_budget'] > 0 ? 'badge-success' : 'badge-warning' }}">
+                                    {{ $financial['active_budget'] > 0 ? 'Yes' : 'None' }}
+                                </span>
+                            </div>
+                            <small class="text-muted mt-1">Without one, nothing is measured against a plan.</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <div class="card border p-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-uppercase font-weight-bold small text-muted">Unposted Payroll</span>
+                                <span class="badge {{ $financial['unposted_payroll'] > 0 ? 'badge-warning' : 'badge-success' }}">
+                                    {{ $financial['unposted_payroll'] }}
+                                </span>
+                            </div>
+                            <small class="text-muted mt-1">Payroll not yet posted does not reach the ledger.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <h6 class="text-uppercase text-muted mb-3" style="letter-spacing:.5px;">Fee Configuration</h6>
                 <div class="row mb-4">
                     <div class="col-md-4 mb-2">
                         <div class="card border text-center p-3">

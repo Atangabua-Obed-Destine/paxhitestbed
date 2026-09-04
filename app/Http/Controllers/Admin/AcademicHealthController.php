@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Exports\AcademicHealthExport;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 use App\Models\Sector;
 use App\Models\Faculty;
 use App\Models\AcademicDepartment;
@@ -34,9 +37,36 @@ class AcademicHealthController extends Controller
     public function __construct()
     {
         $this->middleware('auth:web');
+        // The report exposes staffing gaps, fee coverage and enrolment
+        // figures for the whole school. auth:web alone let any account read
+        // it, which no other admin module allows.
+        $this->middleware('permission:academic-health-view');
     }
 
     public function index()
+    {
+        return view('admin.academic-health.index', $this->report());
+    }
+
+    /**
+     * The same report as a workbook.
+     *
+     * Built from report() rather than re-querying, so what is sent to the
+     * school cannot disagree with what the screen showed.
+     */
+    public function export()
+    {
+        $data = $this->report();
+
+        $filename = 'academic-health-'
+            . str_replace(['/', ' '], '-', strtolower($data['current_session']->title ?? 'no-session'))
+            . '-' . now()->format('Y-m-d') . '.xlsx';
+
+        return Excel::download(new AcademicHealthExport($data), $filename);
+    }
+
+    /** Everything both the screen and the workbook are built from. */
+    protected function report(): array
     {
         $data['title'] = 'Academic Configuration Health Report';
 
@@ -72,18 +102,44 @@ class AcademicHealthController extends Controller
         $programsWithFees = ProgramSemesterFee::distinct('program_id')->pluck('program_id')->count();
         $feeCoverage = $totalPrograms > 0 ? round(($programsWithFees / $totalPrograms) * 100) : 0;
         
-        // Overall readiness score (weighted)
-        $checks = [];
-        $checks[] = $currentSession ? 1 : 0;  // Has current session
-        $checks[] = $activeSemesters->count() > 0 ? 1 : 0;  // Has semesters
-        $checks[] = $totalFaculties > 0 ? 1 : 0;
-        $checks[] = $totalPrograms > 0 ? 1 : 0;
-        $checks[] = $totalSubjects > 0 ? 1 : 0;
-        $checks[] = EnrollSubject::count() > 0 ? 1 : 0;
-        $checks[] = $feeCoverage >= 80 ? 1 : ($feeCoverage >= 50 ? 0.5 : 0);
-        $checks[] = Grade::where('status', '1')->count() > 0 ? 1 : 0;
-        $checks[] = ExamType::where('status', '1')->sum('contribution') == 100 ? 1 : 0;
-        $overallScore = count($checks) > 0 ? round((array_sum($checks) / count($checks)) * 100) : 0;
+        // Overall readiness score.
+        //
+        // Weighted by consequence, not counted equally. Every check used to be
+        // worth the same ninth of the score, so a school that could not compute
+        // a single mark still scored 89% — a number that cannot tell "cosmetic"
+        // from "results cannot be published" is not a health score.
+        //
+        // The weights say what breaks if the check fails:
+        //   4  nothing can run at all — no session, no semester, no grading
+        //   2  a whole area is unusable — no programmes, no subjects, no fees
+        //   1  incomplete, but the year still runs
+        $activeSubjectCount = Subject::where('status', '1')->count();
+        $subjectsWithDistribution = DB::table('result_contributions')
+            ->where('status', 1)->distinct()->count('subject_id');
+
+        $weightedChecks = [
+            ['weight' => 4, 'score' => $currentSession ? 1 : 0],
+            ['weight' => 4, 'score' => $activeSemesters->count() > 0 ? 1 : 0],
+            // Marks cannot be computed without a distribution, so a partial
+            // configuration scores partially rather than passing outright.
+            ['weight' => 4, 'score' => $activeSubjectCount > 0
+                ? min(1, $subjectsWithDistribution / $activeSubjectCount) : 0],
+            ['weight' => 4, 'score' => Grade::where('status', '1')->count() > 0 ? 1 : 0],
+            ['weight' => 2, 'score' => $totalFaculties > 0 ? 1 : 0],
+            ['weight' => 2, 'score' => $totalPrograms > 0 ? 1 : 0],
+            ['weight' => 2, 'score' => $totalSubjects > 0 ? 1 : 0],
+            ['weight' => 2, 'score' => EnrollSubject::count() > 0 ? 1 : 0],
+            ['weight' => 2, 'score' => $feeCoverage >= 80 ? 1 : ($feeCoverage >= 50 ? 0.5 : 0)],
+            ['weight' => 1, 'score' => ClassRoom::where('status', '1')->count() > 0 ? 1 : 0],
+        ];
+
+        $weightTotal = array_sum(array_column($weightedChecks, 'weight'));
+        $weightEarned = array_sum(array_map(
+            fn ($c) => $c['weight'] * $c['score'],
+            $weightedChecks
+        ));
+
+        $overallScore = $weightTotal > 0 ? round(($weightEarned / $weightTotal) * 100) : 0;
 
         $data['kpis'] = [
             'total_faculties' => $totalFaculties,
@@ -100,15 +156,27 @@ class AcademicHealthController extends Controller
         // ═══════════════════════════════════════════════════
         // CONFIGURATION PIPELINE
         // ═══════════════════════════════════════════════════
+        // Counted once each rather than twice per row: every entry below used to
+        // run its count() a second time to decide 'ok'.
+        $sectorCount = Sector::count();
+        $offeringCount = EnrollSubject::count();
+        $feeConfigCount = ProgramSemesterFee::count();
+        $gradeCountPipeline = Grade::where('status', '1')->count();
+
         $data['pipeline'] = [
-            ['label' => 'Sectors', 'count' => Sector::count(), 'ok' => Sector::count() > 0, 'route' => route('admin.sector.index')],
+            // Optional, not failed. Sectors sit above faculties for
+            // institutions that group them; this one does not use them, and
+            // marking that "NOT OK" put a permanent red step in the pipeline
+            // that raised no warning and cost no score — a signal that means
+            // nothing teaches people to skip the ones that do.
+            ['label' => 'Sectors', 'count' => $sectorCount, 'ok' => true, 'optional' => true, 'route' => route('admin.sector.index')],
             ['label' => 'Faculties', 'count' => $totalFaculties, 'ok' => $totalFaculties > 0, 'route' => route('admin.faculty.index')],
             ['label' => 'Departments', 'count' => $totalDepartments, 'ok' => $totalDepartments > 0, 'route' => route('admin.academic-department.index')],
             ['label' => 'Programs', 'count' => $totalPrograms, 'ok' => $totalPrograms > 0, 'route' => route('admin.program.index')],
-            ['label' => 'Subjects', 'count' => $totalSubjects, 'ok' => $totalSubjects > 0, 'route' => route('admin.subject.index')],
-            ['label' => 'Course Offerings', 'count' => EnrollSubject::count(), 'ok' => EnrollSubject::count() > 0, 'route' => route('admin.enroll-subject.index')],
-            ['label' => 'Fee Configs', 'count' => ProgramSemesterFee::count(), 'ok' => ProgramSemesterFee::count() > 0, 'route' => route('admin.program-semester-fee.index')],
-            ['label' => 'Grades', 'count' => Grade::where('status', '1')->count(), 'ok' => Grade::where('status', '1')->count() > 0, 'route' => route('admin.grade.index')],
+            ['label' => trans_choice('module_subject', 2), 'count' => $totalSubjects, 'ok' => $totalSubjects > 0, 'route' => route('admin.subject.index')],
+            ['label' => 'Course Offerings', 'count' => $offeringCount, 'ok' => $offeringCount > 0, 'route' => route('admin.enroll-subject.index')],
+            ['label' => 'Fee Configs', 'count' => $feeConfigCount, 'ok' => $feeConfigCount > 0, 'route' => route('admin.program-semester-fee.index')],
+            ['label' => 'Grades', 'count' => $gradeCountPipeline, 'ok' => $gradeCountPipeline > 0, 'route' => route('admin.grade.index')],
         ];
 
         // ═══════════════════════════════════════════════════
@@ -120,6 +188,13 @@ class AcademicHealthController extends Controller
             ->get();
 
         $facultyReport = [];
+        // Every offering, with its semester and subjects, fetched once. The
+        // loop below asked per programme, and each ask re-ran the eager load —
+        // the same "select * from semesters" ran twenty-two times drawing one
+        // report.
+        $offeringsByProgram = EnrollSubject::with(['semester', 'subjects'])
+            ->get()->groupBy('program_id');
+
         foreach ($faculties as $faculty) {
             $fData = [
                 'id' => $faculty->id,
@@ -157,12 +232,8 @@ class AcademicHealthController extends Controller
                     $subjectCount = $program->subjects()->where('status', '1')->count();
                     
                     // Enroll subjects (course offerings)
-                    $offeringsCount = EnrollSubject::where('program_id', $program->id)->count();
-                    
-                    // Enrolled subjects details per semester
-                    $enrollSubjects = EnrollSubject::where('program_id', $program->id)
-                        ->with(['semester', 'subjects'])
-                        ->get();
+                    $enrollSubjects = $offeringsByProgram->get($program->id) ?? collect();
+                    $offeringsCount = $enrollSubjects->count();
 
                     $semesterOfferings = [];
                     foreach ($enrollSubjects as $es) {
@@ -296,6 +367,30 @@ class AcademicHealthController extends Controller
         // TAB 3: SEMESTER CONFIGURATION MATRIX
         // ═══════════════════════════════════════════════════
         $allPrograms = Program::where('status', '1')->with(['faculty', 'degreeType'])->orderBy('title')->get();
+
+        // Three lookups for every programme-and-semester cell ran a query each,
+        // so a twelve-programme school with two semesters spent 72 queries
+        // drawing one table. Fetched once and indexed by programme:semester
+        // instead, which is three queries however large the school grows.
+        $offeringCourseCounts = DB::table('enroll_subjects as es')
+            ->leftJoin('enroll_subject_subject as ess', 'ess.enroll_subject_id', '=', 'es.id')
+            ->selectRaw('es.program_id, es.semester_id, COUNT(ess.subject_id) as course_count')
+            ->groupBy('es.program_id', 'es.semester_id')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->program_id . ':' . $r->semester_id => (int) $r->course_count])
+            ->all();
+
+        $feeConfigured = ProgramSemesterFee::select('program_id', 'semester_id')->distinct()->get()
+            ->mapWithKeys(fn ($r) => [$r->program_id . ':' . $r->semester_id => true])
+            ->all();
+
+        $routineConfigured = $currentSession
+            ? ClassRoutine::where('session_id', $currentSession->id)
+                ->select('program_id', 'semester_id')->distinct()->get()
+                ->mapWithKeys(fn ($r) => [$r->program_id . ':' . $r->semester_id => true])
+                ->all()
+            : [];
+
         $semesterMatrix = [];
         foreach ($allPrograms as $prog) {
             $row = [
@@ -306,24 +401,12 @@ class AcademicHealthController extends Controller
                 'semesters' => [],
             ];
             foreach ($activeSemesters as $sem) {
-                $es = EnrollSubject::where('program_id', $prog->id)
-                    ->where('semester_id', $sem->id)
-                    ->with('subjects')
-                    ->first();
-                $hasFee = ProgramSemesterFee::where('program_id', $prog->id)
-                    ->where('semester_id', $sem->id)
-                    ->exists();
-                $hasRoutine = false;
-                if ($currentSession) {
-                    $hasRoutine = ClassRoutine::where('program_id', $prog->id)
-                        ->where('semester_id', $sem->id)
-                        ->where('session_id', $currentSession->id)
-                        ->exists();
-                }
+                $key = $prog->id . ':' . $sem->id;
+
                 $row['semesters'][$sem->id] = [
-                    'courses' => $es ? $es->subjects->count() : 0,
-                    'has_fee' => $hasFee,
-                    'has_routine' => $hasRoutine,
+                    'courses' => $offeringCourseCounts[$key] ?? 0,
+                    'has_fee' => isset($feeConfigured[$key]),
+                    'has_routine' => isset($routineConfigured[$key]),
                 ];
             }
             $semesterMatrix[] = $row;
@@ -342,14 +425,22 @@ class AcademicHealthController extends Controller
             ->with(['department', 'designation'])
             ->get();
         
+        // One query for every teacher's routines, grouped in memory, rather than
+        // one query per teacher plus its eager loads. Each teacher's slice is
+        // then just an array lookup.
+        $routineQuery = ClassRoutine::whereIn('teacher_id', $teachers->pluck('id'))
+            ->with(['subject', 'program']);
+
+        if ($currentSession) {
+            $routineQuery->where('session_id', $currentSession->id);
+        }
+
+        $routinesByTeacher = $routineQuery->get()->groupBy('teacher_id');
+
         $teacherReport = [];
         foreach ($teachers as $teacher) {
-            $routines = ClassRoutine::where('teacher_id', $teacher->id);
-            if ($currentSession) {
-                $routines = $routines->where('session_id', $currentSession->id);
-            }
-            $routines = $routines->with(['subject', 'program', 'semester'])->get();
-            
+            $routines = $routinesByTeacher->get($teacher->id) ?? collect();
+
             $teacherReport[] = [
                 'id' => $teacher->id,
                 'name' => $teacher->first_name . ' ' . $teacher->last_name,
@@ -436,7 +527,7 @@ class AcademicHealthController extends Controller
             ->whereDoesntHave('subjects')
             ->count();
         if ($progsNoOfferings > 0) {
-            $warnings[] = ['category' => 'Programs', 'title' => "{$progsNoOfferings} Programs Without Subjects", 'message' => 'These programs have no subjects assigned.', 'action_link' => route('admin.subject.index'), 'action_text' => 'Manage Subjects'];
+            $warnings[] = ['category' => 'Programs', 'title' => "{$progsNoOfferings} Programs Without " . trans_choice('module_subject', 2), 'message' => 'These programs have no courses assigned.', 'action_link' => route('admin.subject.index'), 'action_text' => __('Manage') . ' ' . trans_choice('module_subject', 2)];
         }
 
         // Fee coverage
@@ -446,12 +537,38 @@ class AcademicHealthController extends Controller
             $healthy[] = ['category' => 'Financial', 'title' => 'All Programs Have Fees', 'message' => 'Every active program has at least one fee config.'];
         }
 
-        // Exam types
-        $examContribution = ExamType::where('status', '1')->sum('contribution');
-        if ($examContribution != 100) {
-            $diagnostic_errors[] = ['category' => 'Grading', 'title' => 'Invalid Exam Contributions', 'message' => "Sum is {$examContribution}%, must be 100%.", 'action_link' => route('admin.exam-type.index'), 'action_text' => 'Fix Exam Types'];
+        // Grading weights
+        //
+        // Checked per subject, because that is what actually grades. The global
+        // ExamType.contribution column is not used to compute a mark — marks
+        // resolve through AssessmentWeightService and the per-subject rows in
+        // exam_type_contributions — so testing that column reported a permanent
+        // error against a correctly configured school. A red flag that is always
+        // red teaches everyone to ignore it, and the day grading really breaks
+        // it looks exactly the same.
+        $activeSubjectIds = Subject::where('status', '1')->pluck('id');
+        $configuredSubjectIds = DB::table('result_contributions')
+            ->where('status', 1)->whereIn('subject_id', $activeSubjectIds)
+            ->distinct()->pluck('subject_id');
+
+        $unconfiguredSubjects = $activeSubjectIds->diff($configuredSubjectIds);
+
+        if ($activeSubjectIds->isEmpty()) {
+            // Nothing to grade yet; the structural checks above already say so.
+        } elseif ($unconfiguredSubjects->isNotEmpty()) {
+            $diagnostic_errors[] = [
+                'category' => 'Grading',
+                'title' => $unconfiguredSubjects->count() . ' ' . trans_choice('module_subject', 2) . ' Without Mark Distribution',
+                'message' => 'Marks for these subjects cannot be computed until their distribution is set.',
+                'action_link' => route('admin.subject.index'),
+                'action_text' => 'Configure Distribution',
+            ];
         } else {
-            $healthy[] = ['category' => 'Grading', 'title' => 'Exam Contributions Valid', 'message' => 'Sum is exactly 100%.'];
+            $healthy[] = [
+                'category' => 'Grading',
+                'title' => 'Mark Distribution Configured',
+                'message' => 'All ' . $activeSubjectIds->count() . ' active courses have a mark distribution.',
+            ];
         }
 
         // Grades
@@ -487,10 +604,188 @@ class AcademicHealthController extends Controller
             $healthy[] = ['category' => 'Infrastructure', 'title' => 'Classrooms OK', 'message' => "{$classrooms} active classrooms."];
         }
 
+        // Programme-and-semester combinations with no courses.
+        //
+        // The counts elsewhere hide this: a programme showing "31 courses" can
+        // still have a semester with none, and nobody can be taught in it. Only
+        // combinations that actually have students are raised, because an
+        // unused semester on a programme nobody is enrolled in is not urgent.
+        $enrolledCombinations = StudentEnroll::whereNotNull('semester_id')
+            ->select('program_id', 'semester_id')->distinct()->get()
+            ->map(fn ($e) => $e->program_id . ':' . $e->semester_id)
+            ->flip();
+
+        $semestersWithoutCourses = [];
+
+        foreach ($semesterMatrix as $matrixRow) {
+            foreach ($matrixRow['semesters'] as $semesterId => $cell) {
+                if ($cell['courses'] > 0) {
+                    continue;
+                }
+
+                $programId = collect($allPrograms)->firstWhere('title', $matrixRow['program'])->id ?? null;
+
+                if ($programId && $enrolledCombinations->has($programId . ':' . $semesterId)) {
+                    $semestersWithoutCourses[] = $matrixRow['program'] . ' — '
+                        . ($activeSemesters->firstWhere('id', $semesterId)->title ?? 'semester ' . $semesterId);
+                }
+            }
+        }
+
+        if ($semestersWithoutCourses !== []) {
+            $diagnostic_errors[] = [
+                'category' => 'Courses',
+                'title' => count($semestersWithoutCourses) . ' Semester(s) With No Courses',
+                'message' => 'Students are enrolled in these but no course is assigned, so they cannot be taught or graded: '
+                    . implode('; ', $semestersWithoutCourses) . '.',
+                'action_link' => route('admin.enroll-subject.index'),
+                'action_text' => 'Assign Courses',
+            ];
+        }
+
+        // ═══════════════════════════════════════════════════
+        // RESULTS READINESS
+        // ═══════════════════════════════════════════════════
+        //
+        // Configuration being right does not mean the semester can close. These
+        // are the things that actually hold a session open, and none of them
+        // were reported: an administrator could read a clean health page while
+        // sixteen enrolments had no marks at all.
+        $draftMarks = DB::table('subject_markings')->where('workflow_state', 'draft')->count();
+        $publishedMarks = DB::table('subject_markings')->where('workflow_state', 'published')->count();
+        $enrolmentsWithoutMarks = StudentEnroll::whereDoesntHave('subjectMarks')->count();
+        $totalEnrolments = StudentEnroll::count();
+
+        $data['results_readiness'] = [
+            'draft_marks' => $draftMarks,
+            'published_marks' => $publishedMarks,
+            'enrolments_without_marks' => $enrolmentsWithoutMarks,
+            'total_enrolments' => $totalEnrolments,
+            'published_percent' => ($draftMarks + $publishedMarks) > 0
+                ? round(($publishedMarks / ($draftMarks + $publishedMarks)) * 100)
+                : 0,
+        ];
+
+        if ($draftMarks > 0) {
+            $warnings[] = [
+                'category' => 'Results',
+                'title' => "{$draftMarks} Marks Still Unpublished",
+                'message' => 'These marks are entered but not published, so they do not appear on any transcript or result sheet.',
+                'action_link' => route('admin.subject-marking.index'),
+                'action_text' => 'Review Marks',
+            ];
+        }
+
+        if ($enrolmentsWithoutMarks > 0) {
+            $warnings[] = [
+                'category' => 'Results',
+                'title' => "{$enrolmentsWithoutMarks} Enrolments With No Marks",
+                'message' => 'No mark has been recorded against these enrolments at all. The semester cannot be closed until they are entered or the enrolments withdrawn.',
+                'action_link' => route('admin.subject-marking.index'),
+                'action_text' => 'Enter Marks',
+            ];
+        }
+
+        if ($draftMarks === 0 && $enrolmentsWithoutMarks === 0 && $publishedMarks > 0) {
+            $healthy[] = [
+                'category' => 'Results',
+                'title' => 'All Marks Published',
+                'message' => "{$publishedMarks} marks published, none outstanding.",
+            ];
+        }
+
+        // ═══════════════════════════════════════════════════
+        // FINANCIAL POSITION
+        // ═══════════════════════════════════════════════════
+        //
+        // The report is read by administrators asking whether the school is in
+        // good order, and money is half that answer. It was absent entirely.
+        $feeTotals = DB::table('fees')
+            ->selectRaw('SUM(fee_amount + fine_amount - discount_amount) raised, SUM(paid_amount) paid')
+            ->first();
+
+        $raised = (float) ($feeTotals->raised ?? 0);
+        $paid = (float) ($feeTotals->paid ?? 0);
+
+        $studentsOwing = DB::table('fees')
+            ->whereRaw('paid_amount < (fee_amount + fine_amount - discount_amount)')
+            ->distinct()->count('student_enroll_id');
+
+        $activeBudget = DB::table('budgets')->where('is_institutional', 1)->where('status', 'active')->count();
+        $unpostedPayroll = DB::table('payrolls')->where('status', 0)->count();
+
+        $data['financial'] = [
+            'fees_raised' => $raised,
+            'fees_paid' => $paid,
+            'outstanding' => $raised - $paid,
+            'collection_percent' => $raised > 0 ? round(($paid / $raised) * 100) : 0,
+            'students_owing' => $studentsOwing,
+            'active_budget' => $activeBudget,
+            'unposted_payroll' => $unpostedPayroll,
+        ];
+
+        if ($studentsOwing > 0) {
+            $warnings[] = [
+                'category' => 'Financial',
+                'title' => "{$studentsOwing} Students With Outstanding Fees",
+                'message' => 'Fees raised against these students are not fully paid.',
+                'action_link' => route('admin.fees-student.index'),
+                'action_text' => 'View Fees',
+            ];
+        }
+
+        // More money received than was ever billed means instalments are missing
+        // from the fee assignment, not that students overpaid. It hides real
+        // arrears, because a student can be short on one instalment while the
+        // total still looks settled.
+        if ($paid > $raised) {
+            $diagnostic_errors[] = [
+                'category' => 'Financial',
+                'title' => 'More Collected Than Billed',
+                'message' => number_format($paid - $raised) . ' more has been received than was ever raised. Fee instalments are missing from the assignment, so arrears cannot be trusted.',
+                'action_link' => route('admin.fees-master.index'),
+                'action_text' => 'Check Fee Assignment',
+            ];
+        }
+
+        if ($activeBudget === 0) {
+            $warnings[] = [
+                'category' => 'Financial',
+                'title' => 'No Active Budget',
+                'message' => 'No institutional budget sheet is active, so nothing is being measured against a plan.',
+                'action_link' => route('admin.budget-sheet.index'),
+                'action_text' => 'Open Budget Sheets',
+            ];
+        }
+
+        $data['generated_at'] = now();
+
+        // The headline number has to account for what was actually found.
+        // Configuration alone scored 100% while a financial integrity error and
+        // four warnings sat directly beneath it — a score that ignores the
+        // findings on its own page tells the reader to ignore the findings.
+        //
+        // Kept separate so the view can explain the number rather than just
+        // showing it: configuration is what is set up, the deductions are what
+        // is currently wrong.
+        $errorPenalty = count($diagnostic_errors) * 10;
+        $warningPenalty = count($warnings) * 3;
+
+        $data['score_breakdown'] = [
+            'configuration' => $overallScore,
+            'error_penalty' => $errorPenalty,
+            'warning_penalty' => $warningPenalty,
+            'errors' => count($diagnostic_errors),
+            'warnings' => count($warnings),
+        ];
+
+        $data['kpis']['configuration_score'] = $overallScore;
+        $data['kpis']['overall_score'] = max(0, $overallScore - $errorPenalty - $warningPenalty);
+
         $data['diagnostic_errors'] = $diagnostic_errors;
         $data['warnings'] = $warnings;
         $data['healthy'] = $healthy;
 
-        return view('admin.academic-health.index', $data);
+        return $data;
     }
 }
