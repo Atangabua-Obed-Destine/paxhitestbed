@@ -118,6 +118,10 @@ class TaxSettingController extends Controller
             'bracket_order' => 'nullable|integer|min:0',
             'tax_type' => 'required|in:1,2',
             'paid_by' => 'required|in:employee,employer,both',
+            // Which body the tax is owed to. Optional: left empty, the posting
+            // code falls back to the configured payroll tax account, which is
+            // what it did before liability accounts existed.
+            'liability_account_id' => 'nullable|exists:chart_of_accounts,id',
             'min_amount' => 'required|numeric|min:0',
             'max_amount' => 'required|numeric|gt:min_amount',
             'percentange'           => [\Illuminate\Validation\Rule::requiredIf($isPercent && $employeePays), 'nullable', 'numeric', 'min:0', 'max:100'],
@@ -189,6 +193,7 @@ class TaxSettingController extends Controller
         $taxSetting->tax_type = $request->tax_type;
         $taxSetting->paid_by = $request->paid_by;
         $taxSetting->is_shared = $request->paid_by === 'both';
+        $taxSetting->liability_account_id = $request->liability_account_id ?: null;
         $taxSetting->min_amount = $request->min_amount;
         $taxSetting->max_amount = $request->max_amount;
         $taxSetting->percentange = $request->tax_type == 1 ? ($request->percentange ?? 0) : 0;
@@ -252,6 +257,10 @@ class TaxSettingController extends Controller
             'bracket_order' => 'nullable|integer|min:0',
             'tax_type' => 'required|in:1,2',
             'paid_by' => 'required|in:employee,employer,both',
+            // Which body the tax is owed to. Optional: left empty, the posting
+            // code falls back to the configured payroll tax account, which is
+            // what it did before liability accounts existed.
+            'liability_account_id' => 'nullable|exists:chart_of_accounts,id',
             'min_amount' => 'required|numeric|min:0',
             'max_amount' => 'required|numeric|gt:min_amount',
             'percentange'           => [\Illuminate\Validation\Rule::requiredIf($isPercent && $employeePays), 'nullable', 'numeric', 'min:0', 'max:100'],
@@ -316,6 +325,7 @@ class TaxSettingController extends Controller
         $taxSetting->tax_type = $request->tax_type;
         $taxSetting->paid_by = $request->paid_by;
         $taxSetting->is_shared = $request->paid_by === 'both';
+        $taxSetting->liability_account_id = $request->liability_account_id ?: null;
         $taxSetting->min_amount = $request->min_amount;
         $taxSetting->max_amount = $request->max_amount;
         $taxSetting->percentange = $request->tax_type == 1 ? ($request->percentange ?? 0) : 0;

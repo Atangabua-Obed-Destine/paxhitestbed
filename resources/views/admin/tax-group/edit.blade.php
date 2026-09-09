@@ -57,6 +57,26 @@
                                         <input type="number" class="form-control" name="display_order" id="display_order" value="{{ $row->display_order }}" min="0">
                                     </div>
                                 </div>
+
+                                {{--
+                                    Which body this group's taxes are owed to.
+                                    An individual bracket may override it; the
+                                    tax remittance screen groups by whichever
+                                    account applies.
+                                --}}
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label for="liability_account_id" class="form-label">{{ __('Owed to') }}</label>
+                                        <select class="form-control" name="liability_account_id" id="liability_account_id">
+                                            <option value="">{{ __('Use the default payroll tax account') }}</option>
+                                            @foreach(\App\Models\ChartOfAccount::where('class_number', 4)->where('account_category', 'detail')->where('is_active', 1)->orderBy('account_code')->get() as $account)
+                                                <option value="{{ $account->id }}" {{ $row->liability_account_id == $account->id ? 'selected' : '' }}>
+                                                    {{ $account->account_code }} — {{ $account->account_name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
                                 <div class="col-md-4">
                                     <div class="form-group">
                                         <label for="status" class="form-label">{{ __('field_status') }}</label>

@@ -253,8 +253,25 @@ check('payroll leaves the VAT account square', $net('441') == 0.0,
     number_format($net('441'), 2));
 check('withheld tax sits in the withholding account', $net('443') < 0,
     number_format($net('443'), 2));
-check('and it equals the tax actually deducted',
-    abs(abs($net('443')) - App\Models\Payroll::where('status', 1)->sum('tax')) < 1,
-    number_format(abs($net('443')), 2) . ' vs ' . number_format(App\Models\Payroll::where('status', 1)->sum('tax'), 2));
+// This used to assert that 443 held the WHOLE of the employee tax, which was
+// true only while every withholding was credited to one account. It no longer
+// should be: the employee's CNPS share is owed to CNPS, not to the State, and
+// now accrues to 431 with the employer's. So the rule that holds is about the
+// pair — everything withheld, from both sides, sits across the two liability
+// accounts and nowhere else.
+$withheld = App\Models\Payroll::where('status', 1)->sum('tax')
+          + App\Models\Payroll::where('status', 1)->sum('employer_tax');
+
+check('the two liability accounts together hold everything withheld',
+    abs(abs($net('443') + $net('431')) - $withheld) < 1,
+    number_format(abs($net('443') + $net('431')), 2) . ' vs ' . number_format($withheld, 2));
+
+// And the split is real, not everything piled on one side.
+check('the social account carries the social contributions', $net('431') < 0,
+    number_format($net('431'), 2));
+
+check('the State account holds less than the whole employee tax',
+    abs($net('443')) < App\Models\Payroll::where('status', 1)->sum('tax'),
+    'if these are equal, the CNPS share is still being credited to the State');
 
 echo "\n$passed passed, $failed failed\n";

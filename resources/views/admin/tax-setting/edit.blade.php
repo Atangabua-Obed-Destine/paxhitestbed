@@ -114,6 +114,28 @@
                         <small class="form-text text-muted">{{ __('paid_by_help') }}</small>
                     </div>
 
+                    {{--
+                        Which body this tax is owed to. The account is the
+                        authority: 431 for the social bodies, 443 for the
+                        State. The tax remittance screen groups by it, so a tax
+                        pointed at the wrong one is declared to the wrong
+                        office.
+                    --}}
+                    <div class="form-group">
+                        <label for="edit_liability_account_{{ $row->id }}" class="form-label">{{ __('Owed to') }}</label>
+                        <select class="form-control" name="liability_account_id" id="edit_liability_account_{{ $row->id }}">
+                            <option value="">{{ __('Use the default payroll tax account') }}</option>
+                            @foreach(\App\Models\ChartOfAccount::where('class_number', 4)->where('account_category', 'detail')->where('is_active', 1)->orderBy('account_code')->get() as $account)
+                                <option value="{{ $account->id }}" {{ $row->liability_account_id == $account->id ? 'selected' : '' }}>
+                                    {{ $account->account_code }} — {{ $account->account_name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <small class="form-text text-muted">
+                            {{ __('The liability account this accrues to, and the authority it is declared to on the tax remittance screen.') }}
+                        </small>
+                    </div>
+
                     <div class="form-group">
                         <label for="min_amount" class="form-label">{{ __('field_min_amount') }} ({!! $setting->currency_symbol !!}) <span>*</span></label>
                         <input type="text" class="form-control" name="min_amount" id="min_amount" value="{{ round($row->min_amount, 2) }}" required>

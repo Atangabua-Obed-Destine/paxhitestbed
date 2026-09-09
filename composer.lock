@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b7c90c039c1603deaeeb2f4d2ccbc556",
+    "content-hash": "2b03b137c5f3c256a078cf06b0cf48f0",
     "packages": [
         {
             "name": "africastalking/africastalking",
@@ -1296,6 +1296,43 @@
                 }
             ],
             "time": "2024-10-09T13:47:03+00:00"
+        },
+        {
+            "name": "edutrustpay/reporting-contract",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "../edutrustpay/packages/reporting-contract",
+                "reference": "b204ca2cbeb09e96fc46eec2c2896b6537b7ee2b"
+            },
+            "require": {
+                "ext-bcmath": "*",
+                "ext-json": "*",
+                "php": "^8.0"
+            },
+            "require-dev": {
+                "opis/json-schema": "^2.6",
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "EdutrustPay\\Contract\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "EdutrustPay\\Contract\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "The EdutrustPay Reporting Contract - the shared, versioned agreement by which institutions push signed monthly figures to a body.",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "egulias/email-validator",
@@ -11691,7 +11728,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "edutrustpay/reporting-contract": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

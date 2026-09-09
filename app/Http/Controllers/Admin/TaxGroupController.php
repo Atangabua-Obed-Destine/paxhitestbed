@@ -83,6 +83,10 @@ class TaxGroupController extends Controller
             'effective_from' => 'nullable|date',
             'effective_to' => 'nullable|date|after_or_equal:effective_from',
             'display_order' => 'nullable|integer|min:0',
+            // Which body this group's taxes are owed to. Individual brackets
+            // may override it; left empty here and there, the posting code
+            // falls back to the configured payroll tax account.
+            'liability_account_id' => 'nullable|exists:chart_of_accounts,id',
         ]);
 
         // Auto-assign display order if not provided
@@ -101,6 +105,7 @@ class TaxGroupController extends Controller
             'effective_from' => $request->effective_from,
             'effective_to' => $request->effective_to,
             'display_order' => $displayOrder,
+            'liability_account_id' => $request->liability_account_id ?: null,
             'status' => 1,
         ]);
 
@@ -180,6 +185,7 @@ class TaxGroupController extends Controller
             'effective_from' => $request->effective_from,
             'effective_to' => $request->effective_to,
             'display_order' => $request->display_order ?? $taxGroup->display_order,
+            'liability_account_id' => $request->liability_account_id ?: null,
             'status' => $request->status,
         ]);
 

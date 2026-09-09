@@ -21,6 +21,7 @@ use App\Models\TaxGroup;
 use App\Models\Department;
 use App\Models\Payroll;
 use App\Services\PayrollAccountingService;
+use App\Services\PayrollTaxBreakdownService;
 use Carbon\Carbon;
 use App\User;
 
@@ -420,12 +421,28 @@ class PayrollController extends Controller
             $transaction->created_by = Auth::guard('web')->user()->id;
             $payroll->user->transactions()->save($transaction);
 
+            // Record what each individual tax took, before the journal entry
+            // is built — the entry reads these lines to decide which liability
+            // account each withholding accrues to.
+            //
+            // A breakdown that does not add up to the payroll's own total is
+            // refused rather than written (see PayrollTaxBreakdownService),
+            // and the payroll still goes through: the money has moved, and a
+            // missing breakdown can be backfilled while a wrong one recorded
+            // as fact cannot be told from a right one.
+            $breakdown = app(PayrollTaxBreakdownService::class)->record($payroll);
+
+            if (!$breakdown['reconciled']) {
+                Log::warning('PayrollController::pay — itemised taxes for payroll #' . $payroll->id
+                    . ' did not reconcile to the payroll total; no breakdown recorded.');
+            }
+
             // Create journal entry for accounting integration
             $journalEntry = $this->payrollAccountingService->createPayrollJournalEntry(
-                $payroll, 
+                $payroll,
                 Auth::guard('web')->user()->id
             );
-            
+
             DB::commit();
 
             if ($journalEntry) {
@@ -477,6 +494,12 @@ class PayrollController extends Controller
                 Log::warning('Could not reverse payroll journal entry: ' . $e->getMessage());
             }
             
+            // An unpaid payroll withheld nothing, so it owes nothing. Leaving
+            // the lines behind would keep the month showing tax due to DGI and
+            // CNPS that the ledger no longer carries, and the remittance
+            // screen would invite someone to pay it.
+            app(PayrollTaxBreakdownService::class)->clear($payroll);
+
             // Update payroll status
             $payroll->pay_date = null;
             $payroll->payment_method = null;

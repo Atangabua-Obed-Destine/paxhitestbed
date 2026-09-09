@@ -16,8 +16,8 @@ class TaxSetting extends Model
         'tax_group_id', 'is_dependent', 'depends_on_type', 'depends_on_id',
         'title', 'bracket_order', 'tax_type', 'is_shared', 'paid_by',
         'min_amount', 'max_amount', 'percentange', 'employer_percentage', 
-        'fixed_amount', 'employer_fixed_amount', 'max_no_taxable_amount', 
-        'status', 'effective_from', 'effective_to',
+        'fixed_amount', 'employer_fixed_amount', 'max_no_taxable_amount',
+        'status', 'effective_from', 'effective_to', 'liability_account_id',
     ];
 
     /**

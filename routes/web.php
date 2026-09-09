@@ -854,6 +854,12 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::delete('staff/tax-exemptions/destroy/{tax_setting_id}/{user_id}', 'TaxSettingController@destroyExemption')->name('tax-exemptions.destroy');
 
     // Staff Tax Distribution Report
+    // Paying withheld tax over to DGI and CNPS. Declared before tax-report so
+    // neither shadows the other on the staff/tax-* prefix.
+    Route::get('staff/tax-remittance', 'TaxRemittanceController@index')->name('tax-remittance.index');
+    Route::post('staff/tax-remittance', 'TaxRemittanceController@store')->name('tax-remittance.store');
+    Route::post('staff/tax-remittance/{id}/void', 'TaxRemittanceController@void')->name('tax-remittance.void');
+
     Route::get('staff/tax-report', 'StaffTaxReportController@index')->name('staff-tax-report.index');
     Route::get('staff/tax-report/pdf', 'StaffTaxReportController@exportPdf')->name('staff-tax-report.pdf');
     Route::get('staff/tax-report/excel', 'StaffTaxReportController@exportExcel')->name('staff-tax-report.excel');

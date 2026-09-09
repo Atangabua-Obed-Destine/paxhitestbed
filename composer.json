@@ -36,7 +36,8 @@
         "twilio/sdk": "^8.2",
         "unicodeveloper/laravel-paystack": "^1.2",
         "vonage/client": "^4.0",
-        "yajra/laravel-datatables-oracle": "*"
+        "yajra/laravel-datatables-oracle": "*",
+        "edutrustpay/reporting-contract": "@dev"
     },
     "require-dev": {
         "spatie/ignition": "^1.0",
@@ -88,5 +89,14 @@
         "post-create-project-cmd": [
             "@php artisan key:generate --ansi"
         ]
-    }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../edutrustpay/packages/reporting-contract",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
 }

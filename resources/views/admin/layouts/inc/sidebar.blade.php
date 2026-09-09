@@ -667,8 +667,8 @@
                 <li class="{{ Request::is('admin/staff/deduction-type*') ? 'active' : '' }}"><a href="{{ route('admin.deduction-type.index') }}" class="">{{ trans_choice('module_deduction_type', 2) }}</a></li>
                 @endcanany
 
-                @canany(['tax-setting-create', 'tax-setting-view', 'pay-slip-setting-view'])
-                <li class="nav-item pcoded-hasmenu {{ Request::is('admin/staff/tax-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-group*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/pay-slip-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-report*') ? 'pcoded-trigger active' : '' }}">
+                @canany(['tax-setting-create', 'tax-setting-view', 'pay-slip-setting-view', 'tax-remittance-view'])
+                <li class="nav-item pcoded-hasmenu {{ Request::is('admin/staff/tax-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-group*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/pay-slip-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-report*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-remittance*') ? 'pcoded-trigger active' : '' }}">
                     <a href="#!" class="nav-link">
                         <span class="pcoded-mtext">{{ trans_choice('module_setting', 2) }}</span>
                     </a>
@@ -685,6 +685,10 @@
                         @canany(['tax-setting-view', 'payroll-report'])
                         <li class="{{ Request::is('admin/staff/tax-report*') ? 'active' : '' }}"><a href="{{ route('admin.staff-tax-report.index') }}" class=""><i class="fas fa-chart-bar mr-1"></i> Tax Distribution Report</a></li>
                         @endcanany
+
+                        @can('tax-remittance-view')
+                        <li class="{{ Request::is('admin/staff/tax-remittance*') ? 'active' : '' }}"><a href="{{ route('admin.tax-remittance.index') }}" class=""><i class="fas fa-hand-holding-usd mr-1"></i> {{ __('Tax Remittance') }}</a></li>
+                        @endcan
 
                         @can('pay-slip-setting-view')
                         <li class="{{ Request::is('admin/staff/pay-slip-setting*') ? 'active' : '' }}"><a href="{{ route('admin.pay-slip-setting.index') }}" class="">{{ trans_choice('module_pay_slip_setting', 1) }}</a></li>

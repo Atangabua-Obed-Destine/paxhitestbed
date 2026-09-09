@@ -13,8 +13,8 @@ class TaxGroup extends Model
      * @var array
      */
     protected $fillable = [
-        'title', 'code', 'description', 'is_progressive', 'status', 
-        'effective_from', 'effective_to', 'display_order',
+        'title', 'code', 'description', 'is_progressive', 'status',
+        'effective_from', 'effective_to', 'display_order', 'liability_account_id',
     ];
 
     /**

@@ -158,23 +158,40 @@ class PayrollAccountingService
                 }
             }
 
-            // CREDIT: Tax Payable Account (employee tax withheld)
+            // CREDIT: what was withheld, split by the body it is owed to.
+            //
+            // Every franc used to be credited to one account — whichever
+            // findTaxPayableAccount() returned — including the employee's CNPS
+            // share, which is owed to CNPS and not to the State. On a 180,000
+            // salary that put 7,560 in the wrong liability, and it made "what
+            // do we owe CNPS?" unanswerable from the ledger.
+            //
+            // The itemised lines recorded when the payroll was paid say which
+            // account each tax accrues to, so the entry now carries one credit
+            // per authority. When there are no recorded lines — an older
+            // payroll, or a breakdown that did not reconcile — this falls back
+            // to the single-lump behaviour below rather than posting nothing.
+            $taxPayableAccount = $this->resolveTaxPayableAccount();
+            $splitCredits = $this->withholdingsByAccount($payroll, $taxPayableAccount);
+
+            if ($splitCredits !== null) {
+                foreach ($splitCredits as $accountId => $credit) {
+                    JournalEntryLine::create([
+                        'journal_entry_id' => $journalEntry->id,
+                        'line_number' => $lineNumber++,
+                        'account_id' => $accountId,
+                        'description' => trim($credit['label']) . " - {$staffName}",
+                        'debit' => 0,
+                        'credit' => round($credit['amount'], 2),
+                    ]);
+                }
+            } else {
+
+            // --- Fallback: the original single-lump posting ------------------
+            // Kept intact for payrolls with no recorded breakdown, so nothing
+            // that worked before this change stops working.
+
             if ($payroll->tax > 0) {
-                // First try to get tax mapping from configuration
-                $taxMapping = DefaultAccountMapping::where('mapping_type', 'payroll_tax')
-                    ->where('status', 'active')
-                    ->first();
-                
-                $taxPayableAccount = null;
-                if ($taxMapping) {
-                    $taxPayableAccount = ChartOfAccount::find($taxMapping->credit_account_id);
-                }
-                
-                // Fallback to auto-detection
-                if (!$taxPayableAccount) {
-                    $taxPayableAccount = $this->findTaxPayableAccount();
-                }
-                
                 if ($taxPayableAccount) {
                     JournalEntryLine::create([
                         'journal_entry_id' => $journalEntry->id,
@@ -195,7 +212,7 @@ class PayrollAccountingService
             if ($employerTax > 0) {
                 // Try to find social charges payable account
                 $socialChargesPayableAccount = $this->findSocialChargesPayableAccount();
-                
+
                 if ($socialChargesPayableAccount) {
                     JournalEntryLine::create([
                         'journal_entry_id' => $journalEntry->id,
@@ -221,6 +238,8 @@ class PayrollAccountingService
                 }
             }
 
+            } // end of the single-lump fallback
+
             // Handle deductions (if stored in payroll_details with status = 0)
             $deductions = $payroll->details->where('status', 0);
             $totalDeductions = $deductions->sum('amount');
@@ -232,12 +251,12 @@ class PayrollAccountingService
             $netPaymentAmount = $payroll->net_salary;
             
             // Check if tax was credited separately
-            $taxAccountConfigured = false;
-            if ($payroll->tax > 0) {
+            $taxAccountConfigured = $splitCredits !== null;
+            if ($payroll->tax > 0 && !$taxAccountConfigured) {
                 $taxMapping = DefaultAccountMapping::where('mapping_type', 'payroll_tax')
                     ->where('status', 'active')
                     ->first();
-                
+
                 if ($taxMapping || $this->findTaxPayableAccount()) {
                     $taxAccountConfigured = true;
                 }
@@ -489,9 +508,139 @@ class PayrollAccountingService
     }
 
     /**
+     * The account withheld tax falls back to when a tax names none of its own.
+     *
+     * The configured mapping wins over auto-detection, which is the order the
+     * single-lump posting always used.
+     */
+    private function resolveTaxPayableAccount(): ?ChartOfAccount
+    {
+        $mapping = DefaultAccountMapping::where('mapping_type', 'payroll_tax')
+            ->where('status', 'active')
+            ->first();
+
+        if ($mapping) {
+            $account = ChartOfAccount::find($mapping->credit_account_id);
+
+            if ($account) {
+                return $account;
+            }
+        }
+
+        return $this->findTaxPayableAccount();
+    }
+
+    /**
+     * The credits a payroll owes, grouped by the account each is owed to.
+     *
+     * Reads the itemised lines recorded when the payroll was paid, so this is
+     * a record of what was charged rather than a fresh calculation that could
+     * drift from it.
+     *
+     * Returns null — meaning "post it the old way" — whenever the split cannot
+     * be trusted: no recorded lines, or a total that disagrees with the
+     * payroll's own figures. Silence is not an option there; the entry has to
+     * balance, and a split that does not sum to the total would unbalance it.
+     *
+     * @return array<int, array{label:string, amount:float}>|null
+     */
+    private function withholdingsByAccount(Payroll $payroll, ?ChartOfAccount $fallback): ?array
+    {
+        $lines = \App\Models\PayrollTaxLine::where('payroll_id', $payroll->id)->get();
+
+        if ($lines->isEmpty()) {
+            return null;
+        }
+
+        $expected = round((float) $payroll->tax + (float) ($payroll->employer_tax ?? 0), 2);
+        $actual = round($lines->sum(fn ($l) => (float) $l->employee_amount + (float) $l->employer_amount), 2);
+
+        // A one-franc rounding difference is expected — the payroll rounds its
+        // total once, these are unrounded parts summed. Anything larger means
+        // the lines do not describe this payroll.
+        if (abs($expected - $actual) > 0.51) {
+            Log::warning('PayrollAccountingService: recorded tax lines for payroll #' . $payroll->id
+                . " total {$actual} but the payroll charged {$expected}; posting the undivided total instead.");
+
+            return null;
+        }
+
+        $byAccount = [];
+
+        foreach ($lines as $line) {
+            $accountId = $line->liability_account_id ?: ($fallback->id ?? null);
+
+            if (!$accountId) {
+                // Nowhere to put it. Falling back to the old posting is better
+                // than dropping a credit and unbalancing the entry.
+                return null;
+            }
+
+            if (!isset($byAccount[$accountId])) {
+                $byAccount[$accountId] = ['label' => 'Withheld', 'employee' => 0.0, 'employer' => 0.0];
+            }
+
+            $byAccount[$accountId]['employee'] += (float) $line->employee_amount;
+            $byAccount[$accountId]['employer'] += (float) $line->employer_amount;
+        }
+
+        // The rounding difference has to land somewhere or the entry will not
+        // balance. The two sides are reconciled separately, because a payroll
+        // rounds them separately: on a 180,000 salary the employee total is
+        // rounded (21,281.90 stored as 21,282) while the employer total is
+        // already exact. Adding the employee side's franc to whichever account
+        // happened to be largest overall would put it on the employer's CNPS
+        // balance, where it did not come from.
+        foreach (['employee' => (float) $payroll->tax, 'employer' => (float) ($payroll->employer_tax ?? 0)] as $side => $target) {
+            $posted = round(array_sum(array_column($byAccount, $side)), 2);
+
+            if (abs($posted - $target) <= 0.001) {
+                continue;
+            }
+
+            // Onto the largest balance on that side, where a franc is
+            // invisible, rather than a small one where it would show.
+            $largest = null;
+
+            foreach ($byAccount as $accountId => $credit) {
+                if ($credit[$side] > 0 && ($largest === null || $credit[$side] > $byAccount[$largest][$side])) {
+                    $largest = $accountId;
+                }
+            }
+
+            if ($largest === null) {
+                return null;
+            }
+
+            $byAccount[$largest][$side] += $target - $posted;
+        }
+
+        // Named after the accounts they land on, so the ledger reads as
+        // "Withheld: Etat - Retenue" rather than several identical lines.
+        $credits = [];
+
+        foreach ($byAccount as $accountId => $credit) {
+            $amount = round($credit['employee'] + $credit['employer'], 2);
+
+            if ($amount == 0.0) {
+                continue;
+            }
+
+            $account = ChartOfAccount::find($accountId);
+
+            $credits[$accountId] = [
+                'label' => 'Withheld: ' . ($account->account_name ?? 'Tax'),
+                'amount' => $amount,
+            ];
+        }
+
+        return $credits ?: null;
+    }
+
+    /**
      * Find a tax payable account (typically Class 4 - Liabilities)
      * Common OHADA accounts: 4424, 4425, 4426 for various taxes
-     * 
+     *
      * @return ChartOfAccount|null
      */
     private function findTaxPayableAccount(): ?ChartOfAccount

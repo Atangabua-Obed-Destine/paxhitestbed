@@ -48,6 +48,38 @@ class Kernel extends ConsoleKernel
         // Runs at 11:59 PM every day
         $schedule->command('class-sessions:end-expired')
                 ->dailyAt('23:59');
+
+        /*
+         * ---------------------------------------------------------------
+         * EdutrustPay reporting
+         * ---------------------------------------------------------------
+         *
+         * This institution PUSHES a signed monthly summary to its body's
+         * console. Nothing reaches in here: outbound HTTPS only, no inbound
+         * endpoint, no tunnel.
+         *
+         * Three separate jobs on purpose:
+         *
+         *   report     builds last month once the books have had time to settle
+         *   flush      delivers whatever is waiting, often, because this site's
+         *              connectivity comes and goes
+         *   heartbeat  says "still here" on the days there is nothing to send,
+         *              without which a quiet month and a dead server look
+         *              identical from the console
+         *
+         * All three are no-ops unless EDUTRUSTPAY_ENABLED is true, so leaving
+         * them scheduled on an unconfigured install costs nothing.
+         */
+        $schedule->command('edutrustpay:report')
+                ->monthlyOn(4, '03:00')
+                ->withoutOverlapping();
+
+        $schedule->command('edutrustpay:flush')
+                ->hourly()
+                ->withoutOverlapping();
+
+        $schedule->command('edutrustpay:heartbeat')
+                ->dailyAt('05:30');
     }
 
     /**
