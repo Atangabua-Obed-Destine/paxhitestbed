@@ -2,63 +2,32 @@
 
 namespace Database\Seeders;
 
+use App\Services\PermissionSync;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\PermissionRegistrar;
 
+/**
+ * Every permission seeder, in the right order.
+ *
+ * This used to be a hand-kept list of 30 seeders, and it had already fallen
+ * five behind — Daybook, Academic Health, Tax Remittance, Letterhead and
+ * EdutrustPay were missing from it. It now asks PermissionSync, the same place
+ * `php artisan permissions:sync` asks, so there is one definition of "all the
+ * permission seeders" and it cannot go stale.
+ *
+ * DatabaseSeeder calls this on a fresh install, after AdminSeeder has created
+ * the roles these seeders grant to.
+ */
 class SyncAllPermissionsSeeder extends Seeder
 {
     public function run()
     {
-        // Clear cached permissions
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // 1. Run main PermissionSeeder first
-        $this->call(PermissionSeeder::class);
-
-        // 2. Run all custom modules and converted root script seeders
-        $seeders = [
-            AccountingPermissionSeeder::class,
-            AdditionalMissingPermissionsSeeder::class,
-            AnnouncementPermissionSeeder::class,
-            AttendanceSettingPermissionSeeder::class,
-            AuditPermissionSeeder::class,
-            BudgetPermissionSeeder::class,
-            ClassHubPermissionSeeder::class,
-            ClassSessionPermissionSeeder::class,
-            CmsPermissionSeeder::class,
-            DynamicPopupPermissionSeeder::class,
-            ExamPublishingPermissionSeeder::class,
-            FeeAssignmentsHistoryPermissionSeeder::class,
-            PaymentPlanPermissionSeeder::class,
-            PaymentReceiptPermissionSeeder::class,
-            ProgramSemesterFeePermissionSeeder::class,
-            RemainingPermissionsSeeder::class,
-            ResitPermissionSeeder::class,
-            ResourcePermissionSeeder::class,
-            ResultsSummaryPermissionSeeder::class,
-            SectorPermissionSeeder::class,
-            SecurityPermissionSeeder::class,
-            SeederPermissionsSeeder::class,
-            SenateDeliberationPermissionSeeder::class,
-            SidebarPermissionSeeder::class,
-            StaffAssignmentPermissionsSeeder::class,
-            StudentArchivePermissionSeeder::class,
-            UndocumentedPermissionsSeeder::class,
-            WebCMSPermissionSeeder::class,
-            
-            // 3. Run fixers and consolidators last
-            MissingPermissionsSeeder::class,
-            FixPermissionNamesSeeder::class,
-        ];
-
-        foreach ($seeders as $seeder) {
-            if (class_exists($seeder)) {
-                $this->call($seeder);
-            } else {
-                $this->command->warn("Seeder not found: " . $seeder);
-            }
+        foreach (PermissionSync::seeders() as $seeder) {
+            $this->call($seeder);
         }
 
-        // Clear cache again to ensure system uses new permissions
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

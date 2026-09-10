@@ -106,6 +106,15 @@ return [
 
     'enable_wildcard_permission' => false,
 
+    /*
+     * Run `php artisan permissions:sync` automatically after every
+     * `php artisan migrate`, so a deploy or a new school's install always ends
+     * with every permission the code uses. See App\Providers\EventServiceProvider.
+     * Set PERMISSIONS_SYNC_ON_MIGRATE=false to turn it off.
+     */
+
+    'sync_on_migrate' => env('PERMISSIONS_SYNC_ON_MIGRATE', true),
+
     'cache' => [
 
         /*

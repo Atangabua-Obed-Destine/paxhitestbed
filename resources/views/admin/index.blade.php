@@ -643,7 +643,7 @@
         @endcanany
         
         <!-- Fees & Payments -->
-        @canany(['fees-student-view', 'fees-student-report'])
+        @canany(['fees-student-report'])
         <div class="row">
             <div class="col-xl-3 col-lg-6 col-md-6">
                 <div class="stat-card">
@@ -1302,7 +1302,7 @@
             @endcanany
             
             <!-- System Management -->
-            @canany(['role-view', 'permission-view', 'field-view', 'audit-log-view'])
+            @canany(['role-view', 'audit-log-view'])
             <div class="quick-actions-section">
                 <div class="section-title">
                     <i class="fas fa-cogs"></i>
