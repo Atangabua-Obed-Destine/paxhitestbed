@@ -28,11 +28,19 @@ class AccountMappingController extends Controller
      */
     public function __construct()
     {
-        // Apply permissions middleware
-        $this->middleware('permission:transaction-mapping-view', ['only' => ['transactions']]);
-        $this->middleware('permission:transaction-mapping-settings', ['only' => ['settings', 'saveDefault']]);
-        $this->middleware('permission:transaction-mapping-manage', ['only' => ['saveMapping', 'deleteMapping']]);
-        $this->middleware('permission:transaction-mapping-remap', ['only' => ['remapTransaction']]);
+        // These used to name methods that do not exist — transactions,
+        // saveDefault, saveMapping, deleteMapping, remapTransaction — so
+        // Laravel matched nothing and applied nothing. Every route except the
+        // settings page was open to any logged-in staff member, including
+        // save-default, which decides which account every franc posts to.
+        //
+        // The names below are the real ones, and scripts/ledger_sync_test.php
+        // checks each route is refused without its permission, so a rename
+        // that drifts from them again fails a test instead of opening a door.
+        $this->middleware('permission:transaction-mapping-view', ['only' => ['transactionsList']]);
+        $this->middleware('permission:transaction-mapping-settings', ['only' => ['settings', 'saveDefaultMappings']]);
+        $this->middleware('permission:transaction-mapping-manage', ['only' => ['mapTransaction', 'autoMap', 'bulkSync']]);
+        $this->middleware('permission:transaction-mapping-remap', ['only' => ['updateMapping']]);
     }
 
     /**
@@ -137,17 +145,52 @@ class AccountMappingController extends Controller
     }
 
     /**
-     * Display all transactions with mapping status
+     * Display all transactions with mapping status.
+     *
+     * Each row is also classified by the ledger sync rule, so the page offers a
+     * checkbox only where posting is actually possible and says why where it is
+     * not. The rule is LedgerSyncService::decide() — the same one the sync
+     * applies when it posts, not a second copy of it.
      */
-    public function transactionsList(Request $request)
+    public function transactionsList(Request $request, \App\Services\LedgerSyncService $sync)
     {
         $type = $request->get('type', 'all');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
         $status = $request->get('status', 'all'); // all, mapped, unmapped
 
-        // Build transactions array
+        // Fetched once, not once per row — the page lists every transaction
+        // before paginating, so the per-row lookup ran hundreds of queries.
+        //
+        // Only an ACTIVE mapping means posted. A reversed one means the posting
+        // was undone; counting it as mapped hid it from the one screen that
+        // exists to post it again.
+        $active = TransactionMapping::where('status', 'active')->get()
+            ->keyBy(fn ($m) => $m->transaction_type . ':' . $m->transaction_id);
+
+        $defaults = $sync->defaultIndex();
+        $closed = $sync->closedPeriods();
+
         $transactions = [];
+
+        $add = function (string $txType, $model, array $row) use (&$transactions, $active, $sync, $defaults, $closed, $status) {
+            $mapping = $active->get($txType . ':' . $model->id);
+
+            if ($status === 'mapped' && !$mapping) {
+                return;
+            }
+            if ($status === 'unmapped' && $mapping) {
+                return;
+            }
+
+            $transactions[] = $row + [
+                'id' => $model->id,
+                'type' => $txType,
+                'is_mapped' => $mapping !== null,
+                'mapping' => $mapping,
+                'sync' => $sync->decide($txType, $model, $mapping !== null, $defaults, $closed),
+            ];
+        };
 
         // Fetch fees
         if ($type === 'all' || $type === 'fee') {
@@ -157,30 +200,18 @@ class AccountMappingController extends Controller
                 ->get();
 
             foreach ($fees as $fee) {
-                $mapping = TransactionMapping::where('transaction_type', 'fee')
-                    ->where('transaction_id', $fee->id)
-                    ->first();
-
-                if ($status === 'mapped' && !$mapping) continue;
-                if ($status === 'unmapped' && $mapping) continue;
-
-                // Get student name safely
                 $studentName = 'N/A';
                 if ($fee->studentEnroll && $fee->studentEnroll->student) {
                     $studentName = trim($fee->studentEnroll->student->first_name . ' ' . $fee->studentEnroll->student->last_name);
                 }
 
-                $transactions[] = [
-                    'id' => $fee->id,
-                    'type' => 'fee',
+                $add('fee', $fee, [
                     'type_label' => 'Student Fee',
                     'date' => $fee->pay_date,
-                    'description' => $fee->category->name ?? 'Fee Payment',
+                    'description' => $fee->category->title ?? $fee->category->name ?? 'Fee Payment',
                     'reference' => 'Student: ' . $studentName,
                     'amount' => $fee->paid_amount,
-                    'is_mapped' => !is_null($mapping),
-                    'mapping' => $mapping,
-                ];
+                ]);
             }
         }
 
@@ -192,24 +223,13 @@ class AccountMappingController extends Controller
                 ->get();
 
             foreach ($incomes as $income) {
-                $mapping = TransactionMapping::where('transaction_type', 'income')
-                    ->where('transaction_id', $income->id)
-                    ->first();
-
-                if ($status === 'mapped' && !$mapping) continue;
-                if ($status === 'unmapped' && $mapping) continue;
-
-                $transactions[] = [
-                    'id' => $income->id,
-                    'type' => 'income',
+                $add('income', $income, [
                     'type_label' => 'Income',
                     'date' => $income->date,
-                    'description' => $income->category->name ?? 'Income',
+                    'description' => $income->category->title ?? $income->category->name ?? 'Income',
                     'reference' => $income->description ?? '',
                     'amount' => $income->amount,
-                    'is_mapped' => !is_null($mapping),
-                    'mapping' => $mapping,
-                ];
+                ]);
             }
         }
 
@@ -221,24 +241,13 @@ class AccountMappingController extends Controller
                 ->get();
 
             foreach ($expenses as $expense) {
-                $mapping = TransactionMapping::where('transaction_type', 'expense')
-                    ->where('transaction_id', $expense->id)
-                    ->first();
-
-                if ($status === 'mapped' && !$mapping) continue;
-                if ($status === 'unmapped' && $mapping) continue;
-
-                $transactions[] = [
-                    'id' => $expense->id,
-                    'type' => 'expense',
+                $add('expense', $expense, [
                     'type_label' => 'Expense',
                     'date' => $expense->date,
-                    'description' => $expense->category->name ?? 'Expense',
+                    'description' => $expense->category->title ?? $expense->category->name ?? 'Expense',
                     'reference' => $expense->description ?? '',
                     'amount' => $expense->amount,
-                    'is_mapped' => !is_null($mapping),
-                    'mapping' => $mapping,
-                ];
+                ]);
             }
         }
 
@@ -252,33 +261,20 @@ class AccountMappingController extends Controller
                 ->get();
 
             foreach ($payrolls as $payroll) {
-                $mapping = TransactionMapping::where('transaction_type', 'payroll')
-                    ->where('transaction_id', $payroll->id)
-                    ->first();
-
-                if ($status === 'mapped' && !$mapping) continue;
-                if ($status === 'unmapped' && $mapping) continue;
-
-                // Get staff name safely
                 $staffName = 'N/A';
                 if ($payroll->user) {
                     $staffName = trim($payroll->user->name ?? ($payroll->user->first_name . ' ' . $payroll->user->last_name));
                 }
 
-                // Format salary month
                 $salaryMonth = $payroll->salary_month ? date('F Y', strtotime($payroll->salary_month)) : 'N/A';
 
-                $transactions[] = [
-                    'id' => $payroll->id,
-                    'type' => 'payroll',
+                $add('payroll', $payroll, [
                     'type_label' => 'Payroll',
                     'date' => $payroll->pay_date,
                     'description' => 'Salary Payment - ' . $salaryMonth,
                     'reference' => 'Staff: ' . $staffName . ' | Net: ' . number_format($payroll->net_salary, 0) . ' | Tax: ' . number_format($payroll->tax, 0),
                     'amount' => $payroll->net_salary,
-                    'is_mapped' => !is_null($mapping),
-                    'mapping' => $mapping,
-                ];
+                ]);
             }
         }
 
@@ -290,32 +286,21 @@ class AccountMappingController extends Controller
                 ->get();
 
             foreach ($payments as $payment) {
-                $mapping = TransactionMapping::where('transaction_type', 'payment_plan_payment')
-                    ->where('transaction_id', $payment->id)
-                    ->first();
-
-                if ($status === 'mapped' && !$mapping) continue;
-                if ($status === 'unmapped' && $mapping) continue;
-
                 $student = $payment->installment->paymentPlan->student ?? null;
                 $fee = $payment->installment->paymentPlan->fee ?? null;
                 $installmentNo = $payment->installment->installment_number ?? '?';
 
-                $transactions[] = [
-                    'id' => $payment->id,
-                    'type' => 'payment_plan_payment',
+                $add('payment_plan_payment', $payment, [
                     'type_label' => 'Payment Plan',
                     'date' => $payment->payment_date,
                     'description' => sprintf(
                         'Installment #%s - %s',
                         $installmentNo,
-                        $fee->category->name ?? 'Fee'
+                        $fee->category->title ?? $fee->category->name ?? 'Fee'
                     ),
                     'reference' => 'Student: ' . ($student ? ($student->first_name . ' ' . $student->last_name) : 'N/A'),
                     'amount' => $payment->amount,
-                    'is_mapped' => !is_null($mapping),
-                    'mapping' => $mapping,
-                ];
+                ]);
             }
         }
 
@@ -576,116 +561,85 @@ class AccountMappingController extends Controller
     }
 
     /**
-     * Auto-map a transaction using default mappings
+     * Post one transaction using its category's default mapping — the ✨ button.
+     *
+     * This used to build the posting itself, and read the category from
+     * fees_category_id, income_category_id and expense_category_id — columns
+     * that do not exist. Every fee, income and expense therefore looked
+     * uncategorised, no uncategorised mapping exists, and the button failed on
+     * every row it was shown on. It also refused payment-plan payments the
+     * page offered it for, and would have posted payroll as a net-only entry
+     * on top of the payroll screen's own.
+     *
+     * It now goes through the same rule and the same posting as the bulk sync
+     * and the observers, so all three post a transaction identically.
      */
-    public function autoMap(Request $request)
+    public function autoMap(Request $request, \App\Services\LedgerSyncService $sync)
     {
         $request->validate([
-            'transaction_type' => 'required|in:fee,income,expense,payroll',
-            'transaction_id' => 'required|integer',
+            'transaction_type' => 'required|in:' . implode(',', \App\Services\LedgerSyncService::TYPES),
+            'transaction_id' => 'required|integer|min:1',
         ]);
 
-        DB::beginTransaction();
+        $result = $sync->sync([[
+            'type' => $request->transaction_type,
+            'id' => (int) $request->transaction_id,
+        ]]);
 
-        try {
-            // Get the transaction
-            $transaction = $this->getTransaction($request->transaction_type, $request->transaction_id);
-            
-            if (!$transaction) {
-                throw new \Exception('Transaction not found');
-            }
-
-            // Get category ID based on transaction type
-            $categoryId = $this->getTransactionCategoryId($request->transaction_type, $request->transaction_id);
-
-            // Find default mapping
-            $mappingType = $request->transaction_type === 'fee' ? 'fee_category' : (
-                          $request->transaction_type === 'income' ? 'income_category' : (
-                          $request->transaction_type === 'expense' ? 'expense_category' : 
-                          'payroll'));
-
-            // Build the query - for payroll, category_id is null
-            $defaultMappingQuery = DefaultAccountMapping::where('mapping_type', $mappingType)
-                ->where('status', 'active');
-            
-            if ($categoryId !== null) {
-                $defaultMappingQuery->where('category_id', $categoryId);
-            } else {
-                $defaultMappingQuery->whereNull('category_id');
-            }
-            
-            $defaultMapping = $defaultMappingQuery->first();
-
-            if (!$defaultMapping) {
-                throw new \Exception('No default mapping found for this ' . $request->transaction_type . '. Please configure mappings in Settings.');
-            }
-
-            // Create the mapping using default accounts
-            $mapping = TransactionMapping::updateOrCreate(
-                [
-                    'transaction_type' => $request->transaction_type,
-                    'transaction_id' => $request->transaction_id,
-                ],
-                [
-                    'debit_account_id' => $defaultMapping->debit_account_id,
-                    'credit_account_id' => $defaultMapping->credit_account_id,
-                    'amount' => $transaction['amount'],
-                    'transaction_date' => $transaction['date'],
-                    'description' => $defaultMapping->description ?? $transaction['description'],
-                    'mapped_at' => now(),
-                    'mapped_by' => Auth::id(),
-                    'status' => 'active',
-                ]
-            );
-
-            // Create journal entry
-            $journalEntry = $this->createJournalEntry($mapping, $transaction);
-            
-            // Update mapping with journal entry id
-            $mapping->journal_entry_id = $journalEntry->id;
-            $mapping->save();
-
-            DB::commit();
-
+        if ($result['totals']['posted'] === 1) {
             return response()->json([
                 'success' => true,
-                'message' => 'Transaction auto-mapped successfully using default mapping!',
-                'journal_entry_id' => $journalEntry->id
+                'message' => __('Posted to the ledger using the default mapping.'),
+                'journal_entry_id' => $result['posted'][0]['journal_entry_id'],
             ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error auto-mapping transaction: ' . $e->getMessage()
-            ], 500);
         }
+
+        // A refusal names what to fix. 422 rather than 500: nothing broke, the
+        // transaction simply is not postable yet.
+        return response()->json([
+            'success' => false,
+            'message' => $result['refused'][0]['reason']
+                ?? $result['failed'][0]['reason']
+                ?? __('This transaction could not be posted.'),
+        ], 422);
     }
 
     /**
-     * Get category ID for a transaction
+     * Post a selection of transactions using their default mappings.
+     *
+     * Each row is judged again at the moment of posting and stands alone, so
+     * one refusal never blocks the rest. Nothing without a configured mapping
+     * is posted, and nothing is posted to a guessed account.
      */
-    private function getTransactionCategoryId($type, $id)
+    public function bulkSync(Request $request, \App\Services\LedgerSyncService $sync)
     {
-        switch ($type) {
-            case 'fee':
-                $fee = Fee::find($id);
-                return $fee->fees_category_id ?? null;
+        $request->validate([
+            'items' => 'required|array|min:1|max:500',
+            'items.*.type' => 'required|string|in:' . implode(',', \App\Services\LedgerSyncService::TYPES),
+            'items.*.id' => 'required|integer|min:1',
+        ]);
 
-            case 'income':
-                $income = Income::find($id);
-                return $income->income_category_id ?? null;
+        $result = $sync->sync($request->input('items'));
+        $t = $result['totals'];
 
-            case 'expense':
-                $expense = Expense::find($id);
-                return $expense->expense_category_id ?? null;
+        $message = trans_choice(':count transaction posted|:count transactions posted', $t['posted'], ['count' => $t['posted']]);
 
-            case 'payroll':
-                return null; // Payroll doesn't have a category
-
-            default:
-                return null;
+        if ($t['refused']) {
+            $message .= '. ' . trans_choice(':count refused|:count refused', $t['refused'], ['count' => $t['refused']]);
         }
+
+        if ($t['failed']) {
+            $message .= '. ' . trans_choice(':count failed|:count failed', $t['failed'], ['count' => $t['failed']]);
+        }
+
+        if ($result['truncated']) {
+            $message .= '. ' . __('Only the first :max were processed; sync the rest separately.', ['max' => \App\Services\LedgerSyncService::MAX_PER_REQUEST]);
+        }
+
+        return response()->json([
+            'success' => $t['failed'] === 0,
+            'message' => $message . '.',
+        ] + $result);
     }
 }
 

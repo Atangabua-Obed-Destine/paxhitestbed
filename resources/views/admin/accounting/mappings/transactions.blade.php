@@ -211,7 +211,9 @@
                             <div class="col-md-3">
                                 <div class="small-box bg-warning">
                                     <div class="inner">
-                                        <h3>{{ collect($paginatedTransactions)->where('is_mapped', false)->count() }}</h3>
+                                        {{-- Money that moved and is not yet in the ledger. An
+                                             unpaid bill is not counted: nothing moved. --}}
+                                        <h3>{{ collect($paginatedTransactions)->filter(fn ($t) => !$t['is_mapped'] && $t['sync']['code'] !== 'not_paid')->count() }}</h3>
                                         <p>{{ __('unmapped') }}</p>
                                     </div>
                                     <div class="icon">
@@ -232,11 +234,44 @@
                             </div>
                         </div>
 
+                        @php
+                            $canManage = auth()->user()->can('transaction-mapping-manage');
+                            $eligibleOnPage = collect($paginatedTransactions)
+                                ->filter(fn ($t) => !$t['is_mapped'] && $t['sync']['eligible'])
+                                ->count();
+                        @endphp
+
+                        {{--
+                            Posting a selection. Only rows the ledger sync rule
+                            accepts get an enabled checkbox; the server judges
+                            every row again when it posts, so a stale page can
+                            never post something it should not.
+                        --}}
+                        @if($canManage)
+                        <div class="sync-toolbar d-flex flex-wrap align-items-center gap-3 mb-3">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" id="syncSelectAll" {{ $eligibleOnPage ? '' : 'disabled' }}>
+                                <label class="form-check-label" for="syncSelectAll">
+                                    {{ __('Select all postable on this page') }} ({{ $eligibleOnPage }})
+                                </label>
+                            </div>
+                            <button type="button" class="btn btn-success btn-sm" id="syncSelectedBtn" disabled>
+                                <i class="fas fa-sync-alt me-1"></i>{{ __('Sync selected') }} (<span id="syncCount">0</span>)
+                            </button>
+                            <small class="text-muted">
+                                {{ __('Posts using Mapping Settings. Unpaid fees, categories without a mapping, and payroll are never posted.') }}
+                            </small>
+                        </div>
+                        @endif
+
                         <!-- Transactions Table -->
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
+                                        @if($canManage)
+                                        <th width="3%" class="text-center"><span class="visually-hidden">{{ __('Select') }}</span></th>
+                                        @endif
                                         <th width="3%">#</th>
                                         <th width="10%">{{ __('date') }}</th>
                                         <th width="10%">{{ __('type') }}</th>
@@ -249,7 +284,26 @@
                                 </thead>
                                 <tbody>
                                     @forelse($paginatedTransactions as $index => $transaction)
+                                    @php
+                                        $sync = $transaction['sync'];
+                                        $syncable = !$transaction['is_mapped'] && $sync['eligible'];
+                                    @endphp
                                     <tr class="transaction-row {{ $transaction['type'] }}">
+                                        @if($canManage)
+                                        <td class="text-center">
+                                            @if($syncable)
+                                                <input type="checkbox" class="form-check-input sync-select"
+                                                       value="{{ $transaction['type'] }}:{{ $transaction['id'] }}"
+                                                       data-amount="{{ $transaction['amount'] }}"
+                                                       aria-label="{{ __('Select for posting') }}">
+                                            @elseif(!$transaction['is_mapped'])
+                                                {{-- Disabled rather than absent, so it is clear the row
+                                                     was considered and why it cannot be posted. --}}
+                                                <input type="checkbox" class="form-check-input" disabled
+                                                       title="{{ $sync['reason'] }}" aria-label="{{ $sync['reason'] }}">
+                                            @endif
+                                        </td>
+                                        @endif
                                         <td>{{ ($currentPage - 1) * $perPage + $loop->iteration }}</td>
                                         <td>{{ \Carbon\Carbon::parse($transaction['date'])->format('d M Y') }}</td>
                                         <td>
@@ -269,16 +323,35 @@
                                                 <span class="badge badge-success status-badge">
                                                     <i class="fas fa-check-circle"></i> {{ __('mapped') }}
                                                 </span>
-                                            @else
+                                            @elseif($sync['eligible'])
                                                 <span class="badge badge-warning status-badge">
                                                     <i class="fas fa-exclamation-circle"></i> {{ __('unmapped') }}
+                                                </span>
+                                            @elseif($sync['code'] === 'not_paid')
+                                                {{-- A bill nobody has paid. Listed so it is not mistaken
+                                                     for missing, but there is nothing to post. --}}
+                                                <span class="badge status-badge badge-not-paid" title="{{ $sync['reason'] }}">
+                                                    <i class="fas fa-file-invoice"></i> {{ __('Not paid') }}
+                                                </span>
+                                            @elseif($sync['code'] === 'no_mapping')
+                                                <span class="badge status-badge badge-needs-mapping" title="{{ $sync['reason'] }}">
+                                                    <i class="fas fa-exclamation-triangle"></i> {{ __('Needs mapping') }}
+                                                </span>
+                                                @can('transaction-mapping-settings')
+                                                    <div><a href="{{ route('admin.accounting.mappings.settings') }}" class="small">{{ __('Set it up') }}</a></div>
+                                                @endcan
+                                            @else
+                                                <span class="badge status-badge badge-not-paid" title="{{ $sync['reason'] }}">
+                                                    {{ $sync['code'] === 'payroll' ? __('Payroll') : __('Not postable') }}
                                                 </span>
                                             @endif
                                         </td>
                                         <td class="text-center">
-                                            @can('transaction-mapping-manage')
                                             @if($transaction['is_mapped'])
-                                                <button class="btn btn-sm btn-warning edit-mapping-btn" 
+                                                {{-- Re-pointing a posted mapping is the remap permission,
+                                                     the same one the route now enforces. --}}
+                                                @can('transaction-mapping-remap')
+                                                <button class="btn btn-sm btn-warning edit-mapping-btn"
                                                         data-transaction-type="{{ $transaction['type'] }}"
                                                         data-transaction-id="{{ $transaction['id'] }}"
                                                         data-mapping-id="{{ $transaction['mapping']->id }}"
@@ -290,8 +363,15 @@
                                                         data-journal-entry="{{ $transaction['mapping']->journal_entry_id }}">
                                                     <i class="fas fa-edit"></i> {{ __('edit') }}
                                                 </button>
+                                                @endcan
                                             @else
-                                                <button class="btn btn-sm btn-primary map-transaction-btn" 
+                                                @can('transaction-mapping-manage')
+                                                {{-- Picking accounts by hand: only for the types the manual
+                                                     mapping accepts, and only where money actually moved.
+                                                     This is the way to post a category that has no default
+                                                     mapping yet. --}}
+                                                @if(in_array($transaction['type'], ['fee', 'income', 'expense'], true) && in_array($sync['code'], ['eligible', 'no_mapping'], true))
+                                                <button class="btn btn-sm btn-primary map-transaction-btn"
                                                         data-transaction-type="{{ $transaction['type'] }}"
                                                         data-transaction-id="{{ $transaction['id'] }}"
                                                         data-description="{{ $transaction['description'] }}"
@@ -299,24 +379,139 @@
                                                         data-date="{{ $transaction['date'] }}">
                                                     <i class="fas fa-link"></i> {{ __('map') }}
                                                 </button>
-                                                <button class="btn btn-sm btn-success auto-map-btn ml-1" 
+                                                @endif
+                                                @if($syncable)
+                                                <button class="btn btn-sm btn-success auto-map-btn ms-1"
                                                         data-transaction-type="{{ $transaction['type'] }}"
                                                         data-transaction-id="{{ $transaction['id'] }}"
                                                         title="{{ __('auto_map_using_defaults') }}">
                                                     <i class="fas fa-magic"></i>
                                                 </button>
+                                                @endif
+                                                @endcan
                                             @endif
-                                            @endcan
                                         </td>
                                     </tr>
                                     @empty
                                     <tr>
-                                        <td colspan="8" class="text-center py-4 text-muted">
+                                        <td colspan="{{ $canManage ? 9 : 8 }}" class="text-center py-4 text-muted">
                                             <i class="fas fa-inbox fa-3x mb-3"></i>
                                             <p>{{ __('no_transactions_found') }}</p>
                                         </td>
                                     </tr>
                                     @endforelse
+
+@push('css')
+<style>
+    /* Bootstrap 5 dropped the badge-* colour variants, so these carry their
+       own colours. The label says the state too; colour is never alone. */
+    .badge-not-paid { background: #e9ecef; color: #495057; }
+    .badge-needs-mapping { background: #fff3cd; color: #7a5a00; border: 1px solid #f3d27a; }
+    .sync-toolbar { padding: 10px 12px; background: #f8f9fb; border: 1px solid #e6e9ef; border-radius: 6px; }
+</style>
+@endpush
+
+@push('scripts')
+<script>
+(function () {
+    var button = document.getElementById('syncSelectedBtn');
+    if (!button) { return; }
+
+    var selectAll = document.getElementById('syncSelectAll');
+    var counter = document.getElementById('syncCount');
+    var original = button.innerHTML;
+
+    function boxes() { return Array.prototype.slice.call(document.querySelectorAll('.sync-select')); }
+    function chosen() { return boxes().filter(function (b) { return b.checked; }); }
+
+    // Server text (reasons, messages) goes into SweetAlert's html, so it is
+    // escaped first rather than trusted.
+    function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }
+
+    function refresh() {
+        var n = chosen().length;
+        var all = boxes().length;
+        counter.textContent = n;
+        button.disabled = n === 0;
+        if (selectAll) {
+            selectAll.checked = all > 0 && n === all;
+            selectAll.indeterminate = n > 0 && n < all;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            boxes().forEach(function (b) { b.checked = selectAll.checked; });
+            refresh();
+        });
+    }
+
+    document.addEventListener('change', function (event) {
+        if (event.target.classList && event.target.classList.contains('sync-select')) { refresh(); }
+    });
+
+    button.addEventListener('click', function () {
+        var picked = chosen();
+        if (!picked.length) { return; }
+
+        var items = picked.map(function (b) {
+            var parts = b.value.split(':');
+            return { type: parts[0], id: parts[1] };
+        });
+        var total = picked.reduce(function (sum, b) { return sum + (parseFloat(b.dataset.amount) || 0); }, 0);
+
+        Swal.fire({
+            title: @json(__('Post to the ledger?')),
+            html: escapeHtml(picked.length + ' ' + @json(__('transaction(s), totalling')) + ' ' + total.toLocaleString() + ' FCFA.')
+                + '<br><small class="text-muted">' + escapeHtml(@json(__('Each posts using the default mapping for its category. Anything that cannot be posted is listed afterwards.'))) + '</small>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: @json(__('Post')),
+            cancelButtonText: @json(__('cancel'))
+        }).then(function (result) {
+            if (!result.isConfirmed) { return; }
+
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>' + escapeHtml(@json(__('Posting…')));
+
+            $.ajax({
+                url: @json(route('admin.accounting.mappings.bulk-sync')),
+                type: 'POST',
+                data: { _token: @json(csrf_token()), items: items },
+                success: function (res) {
+                    var html = '<p>' + escapeHtml(res.message) + '</p>';
+                    var problems = (res.refused || []).concat(res.failed || []);
+
+                    if (problems.length) {
+                        html += '<div class="text-start small"><strong>' + escapeHtml(@json(__('Not posted:'))) + '</strong><ul class="mb-0">'
+                            + problems.map(function (r) {
+                                return '<li>' + escapeHtml(String(r.type).replace(/_/g, ' ') + ' #' + r.id) + ' — ' + escapeHtml(r.reason) + '</li>';
+                            }).join('')
+                            + '</ul></div>';
+                    }
+
+                    var t = res.totals || {};
+
+                    Swal.fire({
+                        icon: t.failed ? 'error' : (t.refused ? 'warning' : 'success'),
+                        title: t.posted ? @json(__('Posted')) : @json(__('Nothing posted')),
+                        html: html
+                    }).then(function () { location.reload(); });
+                },
+                error: function (xhr) {
+                    var message = (xhr.responseJSON && xhr.responseJSON.message) || @json(__('an_error_occurred'));
+                    Swal.fire({ icon: 'error', title: @json(__('error')), text: message });
+                    button.innerHTML = original;
+                    refresh();
+                }
+            });
+        });
+    });
+
+    refresh();
+})();
+</script>
+@endpush
                                 </tbody>
                             </table>
                         </div>

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\EdutrustPayOutbox;
 use App\Services\EdutrustPay\OutboxService;
+use App\Services\EdutrustPay\SettingsResolver;
 use App\Services\EdutrustPay\PeriodReportBuilder;
 use Carbon\Carbon;
 use EdutrustPay\Contract\Canonical;
@@ -30,8 +31,8 @@ class EdutrustPayReport extends Command
 
     public function handle(PeriodReportBuilder $builder, OutboxService $outbox, Validator $validator): int
     {
-        if (! config('edutrustpay.enabled') && ! $this->option('dry-run')) {
-            $this->error('EdutrustPay reporting is disabled. Set EDUTRUSTPAY_ENABLED=true once credentials are in place.');
+        if (! $this->option('dry-run') && ! app(SettingsResolver::class)->isReporting()) {
+            $this->error('EdutrustPay reporting is switched off, or no credentials are configured. See Settings, EdutrustPay Reporting.');
 
             return self::FAILURE;
         }

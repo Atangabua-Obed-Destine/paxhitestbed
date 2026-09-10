@@ -326,12 +326,32 @@ class TransactionAutoMapService
     }
 
     /**
-     * Generate entry number
+     * The next number in this service's own JE-NNNNNN sequence.
+     *
+     * This used to take whichever entry had the highest id and read the digits
+     * after "JE-". But the payroll, remittance and manual screens number their
+     * entries JE-YYYY-NNNN, through JournalEntry::generateEntryNumber(). Once one
+     * of those was the newest, intval(substr('JE-2026-0007', 3)) returned the
+     * year, 2026, so this generated JE-002027 — a number already taken. The
+     * column is unique, so every automatic fee, income, expense and payment-plan
+     * posting, and every reversal, then failed inside a catch that only logs.
+     *
+     * So only this service's own format is read. Soft-deleted entries still hold
+     * their number in the unique index, so they count too. And the row is read
+     * FOR UPDATE: every caller is already inside a transaction, which makes two
+     * simultaneous postings take numbers one after the other instead of both
+     * reading the same maximum and colliding.
      */
     private function generateEntryNumber()
     {
-        $lastEntry = JournalEntry::orderBy('id', 'desc')->first();
-        $lastNumber = $lastEntry ? intval(substr($lastEntry->entry_number, 3)) : 0;
+        $last = JournalEntry::withTrashed()
+            ->where('entry_number', 'REGEXP', '^JE-[0-9]{6}$')
+            ->orderBy('entry_number', 'desc')
+            ->lockForUpdate()
+            ->value('entry_number');
+
+        $lastNumber = $last ? (int) substr($last, 3) : 0;
+
         return 'JE-' . str_pad($lastNumber + 1, 6, '0', STR_PAD_LEFT);
     }
 

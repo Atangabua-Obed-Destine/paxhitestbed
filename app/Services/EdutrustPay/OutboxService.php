@@ -87,17 +87,28 @@ class OutboxService
      */
     public function deliver(EdutrustPayOutbox $item): string
     {
-        $endpoint = rtrim((string) config('edutrustpay.endpoint'), '/');
+        $settings = app(SettingsResolver::class)->resolve();
+
+        if ($settings === null) {
+            $item->forceFill([
+                'status' => EdutrustPayOutbox::FAILED,
+                'last_response' => 'No EdutrustPay credentials configured. Set them under Settings.',
+            ])->save();
+
+            return 'failed';
+        }
+
+        $endpoint = rtrim($settings['endpoint'], '/');
         $path = $item->kind === 'heartbeat' ? '/api/v1/heartbeat' : '/api/v1/reports';
 
         $timestamp = gmdate('Y-m-d\TH:i:s\Z');
-        $signature = Signer::signRaw($item->payload, $timestamp, (string) config('edutrustpay.secret'));
+        $signature = Signer::signRaw($item->payload, $timestamp, $settings['secret']);
 
         $item->increment('attempts');
 
         try {
             $response = Http::withHeaders([
-                'X-Edutrust-Key-Id' => (string) config('edutrustpay.key_id'),
+                'X-Edutrust-Key-Id' => $settings['key_id'],
                 'X-Edutrust-Timestamp' => $timestamp,
                 'X-Edutrust-Signature' => $signature,
                 'Accept' => 'application/json',

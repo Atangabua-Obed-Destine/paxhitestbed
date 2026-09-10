@@ -41,10 +41,16 @@ class PeriodReportBuilder
         $ledger = new LedgerSummaryService($period);
         $capabilities = (array) config('edutrustpay.capabilities', []);
 
-        $builder = PayloadBuilder::for(
-            (string) config('edutrustpay.institution_ref'),
-            $period
-        )
+        $settings = app(SettingsResolver::class)->resolve();
+
+        if ($settings === null) {
+            throw new \RuntimeException(
+                'No EdutrustPay credentials are configured. They are issued by the operator at the '
+                .'body and pasted in under Settings, EdutrustPay Reporting.'
+            );
+        }
+
+        $builder = PayloadBuilder::for($settings['institution_ref'], $period)
             ->status($status ?? $this->statusFor($period))
             ->sequence($sequence)
             ->generatedAt(gmdate('Y-m-d\TH:i:s\Z'))

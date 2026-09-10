@@ -582,6 +582,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     // for the same reason as budget-sheet below.
     // The Bursar's cash analysis book, generated from money already recorded.
     Route::get('daybook', 'DaybookController@index')->name('daybook.index');
+    Route::get('daybook/month/{month}', 'MonthLinkController@daybook')->name('daybook.month');
     Route::get('daybook/summary', 'DaybookController@summary')->name('daybook.summary');
     Route::get('daybook/analysis', 'DaybookController@analysis')->name('daybook.analysis');
     Route::get('daybook/pdf', 'DaybookController@pdf')->name('daybook.pdf');
@@ -601,6 +602,15 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     // "budget-sheet" is never swallowed by budget/{id}.
     Route::get('budget-sheet', 'BudgetSheetController@index')->name('budget-sheet.index');
     Route::post('budget-sheet/store', 'BudgetSheetController@store')->name('budget-sheet.store');
+    /*
+     * Month-addressable entry points, for links arriving from EdutrustPay.
+     *
+     * Declared BEFORE budget-sheet/{id} so "month" is never swallowed as an id.
+     * Guarded by the same permissions as the screens they land on, so they add
+     * no visibility that typing the URL by hand would not.
+     */
+    Route::get('budget-sheet/month/{month}', 'MonthLinkController@budgetSheet')->name('budget-sheet.month');
+
     Route::get('budget-sheet/{id}/pdf', 'BudgetSheetController@exportPdf')->name('budget-sheet.pdf');
     Route::get('budget-sheet/{id}/excel', 'BudgetSheetController@exportExcel')->name('budget-sheet.excel');
     Route::get('budget-sheet/{id}', 'BudgetSheetController@show')->name('budget-sheet.show');
@@ -722,6 +732,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('accounting/mappings/map-transaction', 'AccountMappingController@mapTransaction')->name('accounting.mappings.map-transaction');
     Route::put('accounting/mappings/{mappingId}', 'AccountMappingController@updateMapping')->name('accounting.mappings.update');
     Route::post('accounting/mappings/auto-map', 'AccountMappingController@autoMap')->name('accounting.mappings.auto-map');
+    Route::post('accounting/mappings/bulk-sync', 'AccountMappingController@bulkSync')->name('accounting.mappings.bulk-sync');
 
     // Fixed Assets & Depreciation
     Route::resource('fixed-assets', 'FixedAssetController');
@@ -859,6 +870,18 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('staff/tax-remittance', 'TaxRemittanceController@index')->name('tax-remittance.index');
     Route::post('staff/tax-remittance', 'TaxRemittanceController@store')->name('tax-remittance.store');
     Route::post('staff/tax-remittance/{id}/void', 'TaxRemittanceController@void')->name('tax-remittance.void');
+
+    /*
+     * EdutrustPay connection settings.
+     *
+     * Permissions are applied in the controller's constructor: viewing,
+     * changing and testing the credentials are separate, because a wrong value
+     * here stops reporting with no visible error at this end — from the body's
+     * console this institution simply goes quiet.
+     */
+    Route::get('edutrustpay', 'EdutrustPayController@index')->name('edutrustpay.index');
+    Route::put('edutrustpay', 'EdutrustPayController@update')->name('edutrustpay.update');
+    Route::post('edutrustpay/test', 'EdutrustPayController@test')->name('edutrustpay.test');
 
     Route::get('staff/tax-report', 'StaffTaxReportController@index')->name('staff-tax-report.index');
     Route::get('staff/tax-report/pdf', 'StaffTaxReportController@exportPdf')->name('staff-tax-report.pdf');

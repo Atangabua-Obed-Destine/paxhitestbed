@@ -1738,6 +1738,18 @@
         </li>
         @endcanany
 
+        {{-- Where this institution's monthly figures are sent, and proof that
+             the credentials still work. Sits beside the audit trail because it
+             is oversight of how this institution is reported on. --}}
+        @can('edutrustpay-view')
+        <li class="nav-item {{ Request::is('admin/edutrustpay*') ? 'active' : '' }}">
+            <a href="{{ route('admin.edutrustpay.index') }}" class="nav-link">
+                <span class="pcoded-micon"><i class="fas fa-satellite-dish"></i></span>
+                <span class="pcoded-mtext">{{ __('EdutrustPay Reporting') }}</span>
+            </a>
+        </li>
+        @endcan
+
         @canany(['profile-view', 'profile-edit'])
         <li class="nav-item {{ Request::is('admin/profile*') ? 'active' : '' }}">
             <a href="{{ route('admin.profile.index') }}" class="nav-link">

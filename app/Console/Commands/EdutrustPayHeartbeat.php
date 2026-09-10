@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\EdutrustPayOutbox;
 use App\Services\EdutrustPay\OutboxService;
+use App\Services\EdutrustPay\SettingsResolver;
 use Illuminate\Console\Command;
 
 /**
@@ -25,8 +26,8 @@ class EdutrustPayHeartbeat extends Command
 
     public function handle(OutboxService $outbox): int
     {
-        if (! config('edutrustpay.enabled')) {
-            $this->comment('EdutrustPay reporting is disabled; nothing to do.');
+        if (! app(SettingsResolver::class)->isReporting()) {
+            $this->comment('EdutrustPay reporting is switched off or unconfigured; nothing to do.');
 
             return self::SUCCESS;
         }

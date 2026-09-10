@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\EdutrustPay\LedgerSummaryService;
 use App\Services\EdutrustPay\PeriodReportBuilder;
+use App\Services\EdutrustPay\SettingsResolver;
 use Carbon\Carbon;
 use EdutrustPay\Contract\Canonical;
 use EdutrustPay\Contract\Capability;
@@ -107,17 +108,23 @@ class EdutrustPayDoctor extends Command
 
     private function checkConfiguration(): void
     {
-        $missing = [];
+        $settings = app(SettingsResolver::class)->resolve();
 
-        foreach (['endpoint', 'key_id', 'secret', 'institution_ref'] as $key) {
-            if (blank(config('edutrustpay.'.$key))) {
-                $missing[] = 'EDUTRUSTPAY_'.strtoupper($key);
+        if ($settings === null) {
+            $this->fail('Configuration', 'No endpoint, institution reference, key id and secret. Set them under Settings, EdutrustPay Reporting.');
+        } else {
+            // Say WHERE the values came from. A saved setting that is being
+            // ignored, or an .env value somebody forgot about, is otherwise
+            // invisible and produces a very confusing afternoon.
+            $this->pass('Configuration', sprintf(
+                'endpoint, key id, secret and institution reference are set (from %s)',
+                $settings['source'] === 'env' ? 'the .env file' : 'the settings screen'
+            ));
+
+            if (! $settings['enabled']) {
+                $this->note('Reporting is switched off, so nothing is scheduled. Reports can still be built by hand.');
             }
         }
-
-        $missing === []
-            ? $this->pass('Configuration', 'endpoint, key id, secret and institution reference are set')
-            : $this->fail('Configuration', 'Missing: '.implode(', ', $missing));
 
         $declared = (array) config('edutrustpay.capabilities', []);
         $unknown = array_diff($declared, Capability::all());
@@ -129,9 +136,6 @@ class EdutrustPayDoctor extends Command
             $this->note('not declared: '.(implode(', ', array_diff(Capability::all(), $declared)) ?: 'nothing'));
         }
 
-        if (! config('edutrustpay.enabled')) {
-            $this->note('EDUTRUSTPAY_ENABLED is false — reports will be built on request but nothing is scheduled.');
-        }
     }
 
     private function checkLedger(string $period): void
@@ -196,7 +200,8 @@ class EdutrustPayDoctor extends Command
 
     private function checkEndpoint(): void
     {
-        $endpoint = rtrim((string) config('edutrustpay.endpoint'), '/');
+        $settings = app(SettingsResolver::class)->resolve();
+        $endpoint = rtrim((string) ($settings['endpoint'] ?? ''), '/');
 
         if ($endpoint === '') {
             return;
@@ -246,14 +251,20 @@ class EdutrustPayDoctor extends Command
      */
     private function checkCredentials(string $endpoint): void
     {
+        $settings = app(SettingsResolver::class)->resolve();
+
+        if ($settings === null) {
+            return;
+        }
+
         $body = json_encode(['note' => 'Credential check from edutrustpay:doctor.']);
         $timestamp = gmdate('Y-m-d\TH:i:s\Z');
 
         try {
             $response = Http::withHeaders([
-                'X-Edutrust-Key-Id' => (string) config('edutrustpay.key_id'),
+                'X-Edutrust-Key-Id' => $settings['key_id'],
                 'X-Edutrust-Timestamp' => $timestamp,
-                'X-Edutrust-Signature' => Signer::signRaw($body, $timestamp, (string) config('edutrustpay.secret')),
+                'X-Edutrust-Signature' => Signer::signRaw($body, $timestamp, $settings['secret']),
                 'Accept' => 'application/json',
             ])->withBody($body, 'application/json')->timeout(10)->post($endpoint.'/api/v1/heartbeat');
         } catch (\Throwable $e) {
