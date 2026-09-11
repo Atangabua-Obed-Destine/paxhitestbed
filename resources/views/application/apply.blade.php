@@ -724,7 +724,10 @@
                              otherwise finish the form, and so could not reach the payment
                              step at all. It can still be supplied later, and admissions
                              can ask for it before a decision. --}}
-                        <input type="file" class="form-control size-guard" data-max-size-mb="5" data-has-existing="{{ $application->photo ? '1' : '0' }}" name="photo" id="photo" accept="image/jpeg,image/png,image/*">
+                        {{-- Only the two formats the server accepts. "image/*"
+                             let a phone offer a HEIC, which was then refused
+                             after the upload rather than before it. --}}
+                        <input type="file" class="form-control size-guard" data-max-size-mb="5" data-has-existing="{{ $application->photo ? '1' : '0' }}" name="photo" id="photo" accept="image/jpeg,image/png,.jpg,.jpeg,.png">
                         <div class="invalid-feedback">{{ __('Upload a recent passport style photograph.') }}</div>
                         <small class="document-help">{{ __('Use a clear, recent colour photograph with the applicant facing the camera. Avoid selfies, filters and group photographs.') }}</small>
                         @if($application->photo)
@@ -733,7 +736,7 @@
                     </div>
                     <div class="form-group col-md-6">
                         <label for="signature">{{ __('Signature Sample (max 2MB)') }}</label>
-                        <input type="file" class="form-control size-guard" data-max-size-mb="2" data-has-existing="{{ $application->signature ? '1' : '0' }}" name="signature" id="signature" accept="image/jpeg,image/png,image/*">
+                        <input type="file" class="form-control size-guard" data-max-size-mb="2" data-has-existing="{{ $application->signature ? '1' : '0' }}" name="signature" id="signature" accept="image/jpeg,image/png,.jpg,.jpeg,.png">
                         @if($application->signature)
                             <small class="text-success d-block mt-1"><i class="fas fa-check-circle me-1"></i>{{ __('A signature is already on file.') }}</small>
                         @endif
@@ -2200,6 +2203,43 @@
                 goToIndex(currentIndex + 1);
             };
 
+            // One place that turns a failed save into something an applicant can
+            // act on, shared with the autosave below.
+            //
+            // A reply that is not JSON — an expired sign-in, a file the server
+            // refused outright, a request that never arrived — used to fall
+            // through to "Your answers could not be saved", which named neither
+            // the cause nor the file. Those are exactly the cases where the
+            // applicant is most stuck.
+            window.describeSaveFailure = window.describeSaveFailure || function (xhr) {
+                var payload = (xhr && xhr.responseJSON) || {};
+                var errors = payload.errors || {};
+                var firstField = Object.keys(errors)[0] || null;
+
+                if (firstField) {
+                    return { message: [].concat(errors[firstField])[0], field: firstField };
+                }
+
+                if (xhr && xhr.status === 419) {
+                    return { message: '{{ __('Your sign-in has expired, so nothing was saved. Sign in again in another tab, then come back and save.') }}', field: null };
+                }
+
+                if (xhr && xhr.status === 413) {
+                    return { message: '{{ __('That file is too large for the server to accept, so nothing was saved. Please upload a smaller file.') }}', field: null };
+                }
+
+                if (xhr && xhr.status === 0) {
+                    return { message: '{{ __('The connection was lost before your answers reached us. Check your internet and try again.') }}', field: null };
+                }
+
+                return {
+                    message: payload.message
+                        || ('{{ __('Your answers could not be saved. Please check them and try again.') }}'
+                            + ' (' + ((xhr && xhr.status) || '?') + ')'),
+                    field: null
+                };
+            };
+
             var stayPut = function (message, fieldName) {
                 $button.prop('disabled', false);
                 notify('error', message);
@@ -2208,6 +2248,20 @@
                 // wherever it lives, rather than just naming it.
                 if (fieldName) {
                     var $field = $form.find('[name="' + fieldName + '"]').first();
+
+                    // The server names nested fields with dots —
+                    // academic_history.0.certificate_file — while the input is
+                    // academic_history[0][certificate_file]. Looking only for
+                    // the dotted form found nothing, so the applicant was told
+                    // a file was wrong and never shown which one.
+                    if (!$field.length && fieldName.indexOf('.') !== -1) {
+                        var parts = fieldName.split('.');
+                        var bracketed = parts.shift() + parts.map(function (part) {
+                            return '[' + part + ']';
+                        }).join('');
+                        $field = $form.find('[name="' + bracketed + '"]').first();
+                    }
+
                     if ($field.length) {
                         $field.addClass('is-invalid');
                         revealField($field[0]);
@@ -2230,14 +2284,8 @@
                 }
                 advance();
             }).fail(function (xhr) {
-                var payload = xhr.responseJSON || {};
-                var errors = payload.errors || {};
-                var firstField = Object.keys(errors)[0] || null;
-                var message = firstField
-                    ? [].concat(errors[firstField])[0]
-                    : (payload.message || '{{ __('Your answers could not be saved. Please check them and try again.') }}');
-
-                stayPut(message, firstField);
+                var failure = describeSaveFailure(xhr);
+                stayPut(failure.message, failure.field);
             });
         });
 
@@ -3630,14 +3678,12 @@
                 isSaving = false;
                 let message = '{{ __("Failed to save draft") }}';
                 
-                if (xhr.responseJSON) {
-                    if (xhr.responseJSON.message) {
-                        message = xhr.responseJSON.message;
-                    }
-                    if (xhr.responseJSON.errors) {
-                        const errors = Object.values(xhr.responseJSON.errors).flat();
-                        message += ': ' + errors.slice(0, 2).join(', ');
-                    }
+                // The same explanation the Save-and-continue button gives, so an
+                // autosave never says less than the button would.
+                if (window.describeSaveFailure) {
+                    message = window.describeSaveFailure(xhr).message;
+                } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
                 }
 
                 updateAutoSaveStatus('error', message);

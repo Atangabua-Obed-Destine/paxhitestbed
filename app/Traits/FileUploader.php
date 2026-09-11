@@ -20,7 +20,11 @@ trait FileUploader {
             // Valid extension check
             $valid_extensions = array('JPG','JPEG','jpg','jpeg','png','gif','ico','svg','webp','pdf','doc','docx','txt','zip','rar','csv','xls','xlsx','ppt','pptx','mp3','avi','mp4','mpeg','3gp','mov','ogg','mkv');
             $file_ext = $request->file($attach)->getClientOriginalExtension();
-            if(in_array($file_ext, $valid_extensions, true))
+            // Compared in lower case: a file named PHOTO.PNG is still a PNG.
+            // This was a strict match against a mostly lower-case list, so an
+            // uppercase name was "rejected" — and because callers assign what
+            // comes back, null was written over the file already stored.
+            if(in_array(strtolower($file_ext), array_map('strtolower', $valid_extensions), true))
             {
 
             //Upload New File
@@ -64,7 +68,11 @@ trait FileUploader {
             // Valid extension check
             $valid_extensions = array('JPG','JPEG','jpg','jpeg','png','gif','ico','svg','webp','pdf','doc','docx','txt','zip','rar','csv','xls','xlsx','ppt','pptx','mp3','avi','mp4','mpeg','3gp','mov','ogg','mkv');
             $file_ext = $request->file($attach)->getClientOriginalExtension();
-            if(in_array($file_ext, $valid_extensions, true))
+            // Compared in lower case: a file named PHOTO.PNG is still a PNG.
+            // This was a strict match against a mostly lower-case list, so an
+            // uppercase name was "rejected" — and because callers assign what
+            // comes back, null was written over the file already stored.
+            if(in_array(strtolower($file_ext), array_map('strtolower', $valid_extensions), true))
             {
 
             $old_attach = public_path('uploads/'.$directory.'/'.$model->attach);
@@ -129,7 +137,11 @@ trait FileUploader {
             // Valid extension check
             $valid_extensions = array('JPG','JPEG','jpg','jpeg','png','gif','ico','svg','webp','pdf','doc','docx','txt','zip','rar','csv','xls','xlsx','ppt','pptx','mp3','avi','mp4','mpeg','3gp','mov','ogg','mkv');
             $file_ext = $request->file($attach)->getClientOriginalExtension();
-            if(in_array($file_ext, $valid_extensions, true))
+            // Compared in lower case: a file named PHOTO.PNG is still a PNG.
+            // This was a strict match against a mostly lower-case list, so an
+            // uppercase name was "rejected" — and because callers assign what
+            // comes back, null was written over the file already stored.
+            if(in_array(strtolower($file_ext), array_map('strtolower', $valid_extensions), true))
             {
 
             $old_attach = public_path('uploads/'.$directory.'/'.$model->$field);
@@ -194,7 +206,11 @@ trait FileUploader {
             // Valid extension check
             $valid_extensions = array('JPG','JPEG','jpg','jpeg','png','gif','ico','svg','webp');
             $file_ext = $request->file($attach)->getClientOriginalExtension();
-            if(in_array($file_ext, $valid_extensions, true))
+            // Compared in lower case: a file named PHOTO.PNG is still a PNG.
+            // This was a strict match against a mostly lower-case list, so an
+            // uppercase name was "rejected" — and because callers assign what
+            // comes back, null was written over the file already stored.
+            if(in_array(strtolower($file_ext), array_map('strtolower', $valid_extensions), true))
             {
 
             //Upload New File
@@ -239,7 +255,11 @@ trait FileUploader {
             // Valid extension check
             $valid_extensions = array('JPG','JPEG','jpg','jpeg','png','gif','ico','svg','webp');
             $file_ext = $request->file($attach)->getClientOriginalExtension();
-            if(in_array($file_ext, $valid_extensions, true))
+            // Compared in lower case: a file named PHOTO.PNG is still a PNG.
+            // This was a strict match against a mostly lower-case list, so an
+            // uppercase name was "rejected" — and because callers assign what
+            // comes back, null was written over the file already stored.
+            if(in_array(strtolower($file_ext), array_map('strtolower', $valid_extensions), true))
             {
 
             $old_attach = public_path('uploads/'.$directory.'/'.$model->$field);

@@ -73,6 +73,79 @@ class ApplicationController extends Controller
     }
 
     /** The document checklist for a degree type's form. */
+    /**
+     * Plain-language names for the fields an applicant uploads into.
+     *
+     * Without these, a rejected certificate is reported as "The
+     * academic_history.0.certificate_file must be a file of type: jpg, jpeg,
+     * png, pdf" — the name of a form array, not of anything on screen.
+     */
+    protected function uploadAttributes(Request $request, array $documentRequirements): array
+    {
+        $attributes = [
+            'photo' => __('passport photo'),
+            'signature' => __('signature'),
+        ];
+
+        foreach ($documentRequirements as $key => $document) {
+            $attributes["documents.$key.file"] = $document['label'] ?? str_replace('_', ' ', $key);
+        }
+
+        // Named per row, because "certificate" alone does not say which of the
+        // qualification cards the applicant should go back to.
+        foreach (array_keys((array) $request->input('academic_history', [])) as $index) {
+            $attributes["academic_history.$index.certificate_file"] =
+                __('certificate for qualification :number', ['number' => (int) $index + 1]);
+        }
+
+        return $attributes;
+    }
+
+    /** What an applicant is told when a file is not one we can take. */
+    protected function uploadMessages(): array
+    {
+        return [
+            'photo.image' => __('The passport photo must be a JPG or PNG image. Photos taken by an iPhone (HEIC) are not accepted — set the camera to "Most Compatible" or convert the file first.'),
+            'photo.max' => __('The passport photo is too large. The most that can be uploaded is 5 MB.'),
+            'signature.image' => __('The signature must be a JPG or PNG image.'),
+            'signature.max' => __('The signature is too large. The most that can be uploaded is 2 MB.'),
+            'documents.*.file.mimes' => __('The :attribute must be a JPG, PNG or PDF file.'),
+            'documents.*.file.max' => __('The :attribute is too large. The most that can be uploaded is 10 MB.'),
+            'academic_history.*.certificate_file.mimes' => __('The :attribute must be a JPG, PNG or PDF file.'),
+            'academic_history.*.certificate_file.max' => __('The :attribute is too large. The most that can be uploaded is 10 MB.'),
+        ];
+    }
+
+    /**
+     * Store an uploaded image, or refuse it — never discard it in silence.
+     *
+     * uploadImage() answers null for a file it will not take, and the old code
+     * assigned that straight onto the record: uploading PHOTO.PNG answered
+     * "saved" and erased the photo already stored. It can also throw on a file
+     * it cannot read — a HEIC, or a PDF renamed .jpg — which reached the
+     * applicant as "an error occurred while saving your draft".
+     *
+     * Both now become an ordinary validation error against the field, so the
+     * page can name it and scroll to it, and whatever was stored stays stored.
+     */
+    protected function storedImageOrFail(Request $request, string $field, int $width, int $height)
+    {
+        try {
+            $stored = $this->uploadImage($request, $field, $this->path, $width, $height);
+        } catch (\Throwable $e) {
+            report($e);
+            $stored = null;
+        }
+
+        if (!$stored) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                $field => __('That file could not be read as an image. Please upload a JPG or PNG.'),
+            ]);
+        }
+
+        return $stored;
+    }
+
     protected function documentRequirements(?DegreeType $degreeType): array
     {
         return DegreeTypeFormConfig::documents($degreeType);
@@ -729,7 +802,11 @@ class ApplicationController extends Controller
             }
         }
 
-        $validated = $request->validate($rules);
+        $validated = $request->validate(
+            $rules,
+            $this->uploadMessages(),
+            $this->uploadAttributes($request, $documentRequirements)
+        );
 
         try {
             DB::beginTransaction();
@@ -801,10 +878,10 @@ class ApplicationController extends Controller
             $application->registration_fee_reference = $validated['registration_fee_reference'] ?? null;
 
             if ($request->hasFile('photo')) {
-                $application->photo = $this->uploadImage($request, 'photo', $this->path, 300, 300);
+                $application->photo = $this->storedImageOrFail($request, 'photo', 300, 300);
             }
             if ($request->hasFile('signature')) {
-                $application->signature = $this->uploadImage($request, 'signature', $this->path, 300, 100);
+                $application->signature = $this->storedImageOrFail($request, 'signature', 300, 100);
             }
 
             $application->declaration_name = $validated['declaration_name'] ?? null;
@@ -1067,7 +1144,22 @@ class ApplicationController extends Controller
                 $rules['languages.*.fluency_level'] = ['nullable', 'in:excellent,good,fair,minimal'];
             }
 
-            $validated = $request->validate($rules);
+            // Documents are checked on a draft save too. They were not before,
+            // so a .docx could be stored as a birth certificate, and a file the
+            // uploader would not take was answered with "saved" while nothing
+            // was kept — the applicant found out only at submit.
+            if ($documentChecklistEnabled) {
+                foreach ($documentRequirements as $key => $document) {
+                    $rules["documents.$key.file"] = ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'];
+                    $rules["documents.$key.note"] = ['nullable', 'string', 'max:500'];
+                }
+            }
+
+            $validated = $request->validate(
+                $rules,
+                $this->uploadMessages(),
+                $this->uploadAttributes($request, $documentRequirements)
+            );
 
             if ($request->filled('program')) {
                 $application->program_id = $validated['program'];
@@ -1144,10 +1236,10 @@ class ApplicationController extends Controller
             }
 
             if ($request->hasFile('photo')) {
-                $application->photo = $this->uploadImage($request, 'photo', $this->path, 300, 300);
+                $application->photo = $this->storedImageOrFail($request, 'photo', 300, 300);
             }
             if ($request->hasFile('signature')) {
-                $application->signature = $this->uploadImage($request, 'signature', $this->path, 300, 100);
+                $application->signature = $this->storedImageOrFail($request, 'signature', 300, 100);
             }
 
             $application->draft_last_saved_at = now();
@@ -1228,6 +1320,17 @@ class ApplicationController extends Controller
                     if ($request->hasFile("documents.$key.file")) {
                         $filePath = $this->uploadMedia($request, "documents.$key.file", $this->path);
                         $note = $request->input("documents.$key.note");
+
+                        // The rules above already refuse anything but JPG, PNG
+                        // and PDF, so an empty answer here means the file could
+                        // not be written. Saying so beats reporting "saved" and
+                        // keeping nothing.
+                        if (!$filePath) {
+                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                "documents.$key.file" => __('That file could not be saved. Please try uploading it again.'),
+                            ]);
+                        }
+
                         if ($filePath) {
                             // Mirror onto the legacy column exactly as update()
                             // does. Draft saves skipped this, which left
