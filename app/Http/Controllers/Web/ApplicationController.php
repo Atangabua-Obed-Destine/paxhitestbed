@@ -1650,8 +1650,20 @@ class ApplicationController extends Controller
         ]);
 
         if (Auth::guard('applicant')->attempt($credentials, $request->boolean('remember'))) {
-            $request->session()->regenerate();
             $user = Auth::guard('applicant')->user();
+
+            // A disabled account is refused here, after the password has been
+            // checked, so the reason only ever reaches the account's owner and
+            // never tells a stranger which emails have an account.
+            if ($user->disabled_at) {
+                Auth::guard('applicant')->logout();
+
+                return back()
+                    ->withErrors(['email' => __('This account has been disabled. Please contact the admissions office.')])
+                    ->onlyInput('email');
+            }
+
+            $request->session()->regenerate();
             $user->portal_last_login_at = now();
             $user->save();
 
@@ -1722,6 +1734,34 @@ class ApplicationController extends Controller
         }
     }
 
+    /**
+     * Stop impersonating an applicant and go back to the Applicants screen.
+     *
+     * Deliberately outside the applicant middleware group: an administrator has
+     * to be able to get out even if the account was disabled while they were
+     * inside it, which is exactly when they would be looking.
+     */
+    public function leaveImpersonation(Request $request)
+    {
+        if (!$request->session()->has('impersonate_applicant_admin_id')) {
+            return redirect()->route('application.login');
+        }
+
+        $applicant = Auth::guard('applicant')->user();
+
+        $request->session()->forget('impersonate_applicant_admin_id');
+        Auth::guard('applicant')->logout();
+
+        if ($applicant) {
+            $applicant->customAuditLog(
+                'impersonation_ended',
+                sprintf('An administrator stopped signing in as applicant %s', $applicant->email)
+            );
+        }
+
+        return redirect()->route('admin.applicant.index');
+    }
+
     public function showForgotPasswordForm()
     {
         if (Auth::guard('applicant')->check()) {
@@ -1736,43 +1776,24 @@ class ApplicationController extends Controller
         $request->validate(['email' => 'required|email']);
 
         $applicant = Applicant::where('email', $request->email)->first();
-        $mail = MailSetting::where('status', '1')->first();
 
         if (!$applicant) {
             return redirect()->back()->with('info', __('If an account with that email exists, we have sent a password reset link.'));
         }
-        if (!$mail || !$mail->sender_email || !$mail->sender_name) {
+
+        // The admin Applicants screen sends this same link through the same
+        // service, so both produce the same email and the same kind of token.
+        $result = app(\App\Services\ApplicantPasswordReset::class)->send($applicant);
+
+        if ($result === \App\Services\ApplicantPasswordReset::MAIL_NOT_CONFIGURED) {
             return redirect()->back()->with('error', __('Email service is not configured. Please contact support.'));
         }
 
-        try {
-            $token = bin2hex(random_bytes(32));
-
-            DB::table('password_resets')->where('email', $applicant->email)->delete();
-            DB::table('password_resets')->insert([
-                'email' => $applicant->email,
-                'token' => $token,
-                'created_at' => now(),
-            ]);
-
-            $data = [
-                'first_name' => $applicant->first_name,
-                'last_name' => $applicant->last_name,
-                'email' => $applicant->email,
-                'token' => $token,
-                'subject' => __('Application Portal - Password Reset Request'),
-                'from' => $mail->sender_email,
-                'sender' => $mail->sender_name,
-                'reset_url' => route('application.password.reset', [$token, $applicant->email]),
-            ];
-
-            Mail::to($applicant->email)->send(new \App\Mail\ApplicantForgotPassword($data));
-
-            return redirect()->back()->with('success', __('We have sent a password reset link to your email address. Please check your inbox (and spam folder).'));
-        } catch (\Exception $e) {
-            report($e);
+        if ($result === \App\Services\ApplicantPasswordReset::FAILED) {
             return redirect()->back()->with('error', __('Failed to send reset email. Please try again later.'));
         }
+
+        return redirect()->back()->with('success', __('We have sent a password reset link to your email address. Please check your inbox (and spam folder).'));
     }
 
     public function showResetForm($token, $email)

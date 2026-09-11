@@ -89,7 +89,13 @@ Route::middleware(['XSS'])->namespace('Web')->group(function () {
         Route::post('application/password/reset', 'ApplicationController@resetPassword')->name('application.password.update');
     });
 
-    Route::middleware('auth:applicant')->group(function () {
+    // Outside every applicant middleware on purpose: an administrator must be
+    // able to leave impersonation even if the account was disabled meanwhile.
+    Route::get('application/leave-impersonation', 'ApplicationController@leaveImpersonation')->name('application.leave-impersonation');
+
+    // applicant.active signs out an account that was disabled while signed in,
+    // on its very next request — refusing the login alone would not.
+    Route::middleware(['auth:applicant', 'applicant.active'])->group(function () {
         // Hub + intake
         Route::get('application/dashboard', 'ApplicationController@dashboard')->name('application.dashboard');
         Route::get('application', 'ApplicationController@index')->name('application.index'); // legacy → dashboard
@@ -249,6 +255,14 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('admission/application/{application}/status-update', 'ApplicationController@storeStatusUpdate')->name('application.status-update');
     Route::get('admission/application/{application}/acceptance-letter/download', 'ApplicationController@downloadAcceptanceLetter')->name('application.acceptance-letter.download');
     Route::post('admission/application/{application}/acceptance-letter/resend', 'ApplicationController@resendAcceptanceLetter')->name('application.acceptance-letter.resend');
+
+    // Applicant accounts — the logins behind applications.
+    Route::get('admission/applicant', 'ApplicantController@index')->name('applicant.index');
+    Route::put('admission/applicant/{applicant}', 'ApplicantController@update')->name('applicant.update');
+    Route::post('admission/applicant/{applicant}/password', 'ApplicantController@passwordChange')->name('applicant.password');
+    Route::post('admission/applicant/{applicant}/toggle', 'ApplicantController@toggle')->name('applicant.toggle');
+    Route::post('admission/applicant/{applicant}/send-reset-link', 'ApplicantController@sendResetLink')->name('applicant.send-reset-link');
+    Route::post('admission/applicant/{applicant}/impersonate', 'ApplicantController@impersonate')->name('applicant.impersonate');
     
     // Admission Fee Configuration
     Route::get('admission/fee-config', 'AdmissionFeeConfigController@index')->name('admission-fee-config.index');

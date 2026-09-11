@@ -75,6 +75,7 @@ class Kernel extends HttpKernel
         'check.platform.fee' => \App\Http\Middleware\CheckPlatformFeePayment::class,
         'select.enrollment' => \App\Http\Middleware\SelectEnrollmentMiddleware::class,
         'check.first.installment' => \App\Http\Middleware\CheckFirstInstallment::class,
+        'applicant.active' => \App\Http\Middleware\EnsureApplicantIsActive::class,
     ];
 
     /**

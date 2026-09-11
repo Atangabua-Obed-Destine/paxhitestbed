@@ -30,9 +30,13 @@ class Applicant extends Authenticatable
         'remember_token',
     ];
 
+    // disabled_at, disabled_by and disabled_reason are deliberately NOT
+    // fillable: the account-details form fills this model, and must never be
+    // able to switch an account on or off. Only the disable action sets them.
     protected $casts = [
         'email_verified_at' => 'datetime',
         'portal_last_login_at' => 'datetime',
+        'disabled_at' => 'datetime',
     ];
 
     public function applications()

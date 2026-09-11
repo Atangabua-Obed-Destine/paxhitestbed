@@ -11,7 +11,7 @@
         </li>
         @endcan
 
-        @canany(['application-create', 'application-view', 'student-create', 'student-view', 'student-import', 'student-password-print', 'student-password-change', 'student-card', 'student-transfer-in-create', 'student-transfer-in-view', 'student-transfer-out-create', 'student-transfer-out-view', 'status-type-create', 'status-type-view', 'id-card-setting-view', 'student-form-a2-view', 'student-form-a3-view'])
+        @canany(['application-create', 'application-view', 'applicant-view', 'student-create', 'student-view', 'student-import', 'student-password-print', 'student-password-change', 'student-card', 'student-transfer-in-create', 'student-transfer-in-view', 'student-transfer-out-create', 'student-transfer-out-view', 'status-type-create', 'status-type-view', 'id-card-setting-view', 'student-form-a2-view', 'student-form-a3-view'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/admission*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
                 <span class="pcoded-micon"><i class="fas fa-university"></i></span>
@@ -21,6 +21,10 @@
                 @canany(['application-create', 'application-view'])
                 <li class="{{ Request::is('admin/admission/application*') && !Request::is('admin/admission/fee-config*') ? 'active' : '' }}"><a href="{{ route('admin.application.index') }}" class="">{{ trans_choice('module_application', 2) }}</a></li>
                 @endcanany
+
+                @can('applicant-view')
+                <li class="{{ Request::is('admin/admission/applicant*') ? 'active' : '' }}"><a href="{{ route('admin.applicant.index') }}" class="">{{ __('Applicants') }}</a></li>
+                @endcan
                 
                 @can('admission-fee-config-view')
                 <li class="{{ Request::is('admin/admission/fee-config*') ? 'active' : '' }}"><a href="{{ route('admin.admission-fee-config.index') }}" class="">{{ __('Admission Fee Config') }}</a></li>

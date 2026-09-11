@@ -123,6 +123,29 @@
     @stack('styles')
 </head>
 <body class="application-portal">
+    {{--
+        A member of staff signed in as this applicant. Shown on every portal
+        page so the session can never be mistaken for the applicant's own, and
+        so the way out is always one click away — including when the account is
+        disabled while they are inside it.
+    --}}
+    @php
+        $impersonatedApplicant = session()->has('impersonate_applicant_admin_id') ? auth('applicant')->user() : null;
+    @endphp
+
+    @if($impersonatedApplicant)
+        <div style="position:sticky;top:0;z-index:99999;background:#8a1c1c;color:#fff;padding:10px 16px;text-align:center;font-size:.9rem;">
+            {{ __('You are signed in as :name (:email). Anything you do here is recorded as theirs.', [
+                'name' => $impersonatedApplicant->full_name ?: __('this applicant'),
+                'email' => $impersonatedApplicant->email,
+            ]) }}
+            <a href="{{ route('application.leave-impersonation') }}"
+               style="margin-left:12px;background:#fff;color:#8a1c1c;padding:4px 10px;border-radius:4px;text-decoration:none;font-weight:600;">
+                {{ __('Leave') }}
+            </a>
+        </div>
+    @endif
+
     @php
         $isAuthPage = in_array(Route::currentRouteName(), ['application.start', 'application.login', 'application.register', 'application.password.request', 'application.password.reset']);
     @endphp
