@@ -53,6 +53,17 @@
     .repeater-actions button:hover {
         color: #a71d2a;
     }
+    .matricule-status {
+        background-color: #f8f9fa;
+    }
+    .matricule-status.is-ready {
+        background-color: #eafaf1;
+        border-color: #63ed7a !important;
+    }
+    .matricule-status.is-blocked {
+        background-color: #fdeced;
+        border-color: #fc544b !important;
+    }
 </style>
 @endsection
 
@@ -137,9 +148,14 @@
                                 <legend>{{ __('Student Identification') }}</legend>
                                 <div class="row">
                                     <div class="form-group col-md-6">
-                                        <label for="student_id">{{ __('field_student_id') }}</label>
-                                        <input type="text" class="form-control" name="student_id" id="student_id" value="{{ old('student_id') }}" readonly>
-                                        <small class="form-text text-muted">{{ __('Auto-generated: PAX + Batch Year + Faculty Code + Number') }}</small>
+                                        <label>{{ __('field_student_id') }}</label>
+                                        {{-- No matricule is shown here. It is generated when the
+                                             record is saved, so a number on screen can never be
+                                             claimed by another admin in the meantime. --}}
+                                        <div id="matricule_status" class="matricule-status border rounded p-2">
+                                            <span class="text-muted">{{ __('Choose a batch and programme.') }}</span>
+                                        </div>
+                                        <small class="form-text text-muted">{{ __('The matricule is generated automatically when you submit.') }}</small>
                                     </div>
                                     <div class="form-group col-md-6">
                                         <label for="admission_date">{{ __('field_admission_date') }} <span>*</span></label>
@@ -709,7 +725,7 @@
 </div>
 
 <!-- Student ID Confirmation Modal -->
-<div class="modal fade" id="studentIdConfirmModal" tabindex="-1" role="dialog" aria-labelledby="studentIdConfirmModalLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+<div class="modal fade" id="studentIdConfirmModal" tabindex="-1" role="dialog" aria-labelledby="studentIdConfirmModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -721,15 +737,10 @@
                 <div class="mb-3">
                     <i class="fas fa-id-card text-primary" style="font-size: 3rem;"></i>
                 </div>
-                <h6 class="mb-2">Generated Student ID:</h6>
-                <h3 class="text-primary mb-3" id="confirmStudentId" style="font-weight: bold; font-size: 2rem;"></h3>
-                <p class="text-muted mb-0">Please confirm the student ID before proceeding with registration.</p>
-                <div class="alert alert-info mt-3 mb-0 text-start">
-                    <small>
-                        <i class="fas fa-info-circle"></i> 
-                        This ID will be used for login and all student records. Please note it down.
-                    </small>
-                </div>
+                {{-- Filled in when the modal opens. It never shows a matricule:
+                     the number is generated and claimed as the record is saved,
+                     so that no two admissions can be given the same one. --}}
+                <div id="confirmMatricule"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="cancelSubmitBtn">
@@ -993,36 +1004,116 @@
         console.log('✓ Batch filter handlers attached successfully');
     };
     
-    // Function to generate Student ID
-    const generateStudentId = () => {
-        const $faculty = $('.faculty');
-        const $batch = $('.batch');
-        const $program = $('.program');
-        const $studentId = $('#student_id');
-        
-        if (!$faculty.length || !$batch.length || !$studentId.length) {
-            console.log('Required elements not found for student ID generation');
+    // The theme ships Bootstrap 5, which has no jQuery .modal() plugin — the
+    // old $('#studentIdConfirmModal').modal('show') was a silent no-op, so the
+    // wizard's Submit did nothing at all.
+    const studentIdConfirmModal = () => bootstrap.Modal.getOrCreateInstance(
+        document.getElementById('studentIdConfirmModal')
+    );
+
+    // What the server last said about whether a matricule can be issued.
+    // Deliberately never a matricule: a number displayed before the record is
+    // written is a number a second admin can be shown at the same time.
+    let matriculeReadiness = null;
+
+    const renderMatriculeStatus = () => {
+        const $panel = $('#matricule_status');
+
+        if (!$panel.length) {
             return;
         }
-        
-        const facultyId = $faculty.val();
-        const batchId = $batch.val();
-        const programId = $program.val();
-        
+
+        if (!matriculeReadiness) {
+            $panel.removeClass('is-ready is-blocked')
+                  .html($('<span class="text-muted"></span>').text("{{ __('Choose a batch and programme.') }}"));
+            return;
+        }
+
+        if (matriculeReadiness.ready) {
+            $panel.removeClass('is-blocked').addClass('is-ready').html(
+                '<i class="fas fa-check-circle text-success"></i> <span class="text-success">' +
+                "{{ __('A matricule will be generated when you submit.') }}" + '</span>' +
+                '<div class="small text-muted mt-1">' + "{{ __('Format') }}" + ': <code>' +
+                $('<div>').text(matriculeReadiness.format || '').html() + '</code></div>'
+            );
+            return;
+        }
+
+        const $list = $('<ul class="mb-0 ps-3 small"></ul>');
+
+        $.each(matriculeReadiness.problems || [], function (i, problem) {
+            $list.append(
+                $('<li></li>')
+                    .append($('<span></span>').text(problem.what))
+                    .append(' ')
+                    .append($('<em class="text-muted"></em>').text(problem.where))
+            );
+        });
+
+        $panel.removeClass('is-ready').addClass('is-blocked').empty()
+              .append('<div class="text-danger mb-1"><i class="fas fa-exclamation-triangle"></i> ' +
+                      "{{ __('No matricule can be generated yet:') }}" + '</div>')
+              .append($list);
+    };
+
+    // What the confirmation modal says just before the record is written.
+    const renderConfirmMatricule = () => {
+        const $body = $('#confirmMatricule');
+        const $confirm = $('#confirmSubmitBtn');
+
+        if (matriculeReadiness && matriculeReadiness.ready) {
+            $body.html(
+                '<h6 class="mb-2">' + "{{ __('Register this student?') }}" + '</h6>' +
+                '<p class="text-muted mb-2">' +
+                "{{ __('The matricule is generated now, as the record is saved, and shown on the student profile.') }}" +
+                '</p>' +
+                '<p class="small text-muted mb-0">' + "{{ __('Format') }}" + ': <code>' +
+                $('<div>').text(matriculeReadiness.format || '').html() + '</code></p>'
+            );
+            $confirm.prop('disabled', false);
+            return;
+        }
+
+        const $list = $('<ul class="mb-0 ps-3 small text-start"></ul>');
+
+        $.each((matriculeReadiness && matriculeReadiness.problems) || [{
+            what: "{{ __('The batch and programme have not been chosen.') }}",
+            where: ''
+        }], function (i, problem) {
+            $list.append(
+                $('<li></li>')
+                    .append($('<span></span>').text(problem.what))
+                    .append(' ')
+                    .append($('<em class="text-muted"></em>').text(problem.where || ''))
+            );
+        });
+
+        $body.empty()
+             .append('<h6 class="mb-2 text-danger">' + "{{ __('No matricule can be generated yet') }}" + '</h6>')
+             .append('<p class="text-muted small">' + "{{ __('Set the following, then submit again.') }}" + '</p>')
+             .append($list);
+
+        $confirm.prop('disabled', true);
+    };
+
+    // Ask whether a matricule CAN be generated, and say what is unset if not.
+    const refreshMatriculeStatus = () => {
+        const facultyId = $('.faculty').val();
+        const batchId = $('.batch').val();
+        const programId = $('.program').val();
+
         if (!facultyId || !batchId) {
-            console.log('Faculty or Batch not selected yet');
-            $studentId.val('');
+            matriculeReadiness = null;
+            renderMatriculeStatus();
             return;
         }
-        
-        console.log('Generating student ID for Faculty:', facultyId, 'Batch:', batchId, 'Program:', programId);
-        
+
         $.ajaxSetup({
             headers: {
                 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
             }
         });
-        
+
         $.ajax({
             type: 'POST',
             url: "{{ route('admin.student.generate-id') }}",
@@ -1033,30 +1124,30 @@
                 program_id: programId
             },
             success: function(response) {
-                console.log('Generated Student ID:', response.student_id);
-                $studentId.val(response.student_id);
-                $studentId.trigger('change');
+                matriculeReadiness = response;
+                renderMatriculeStatus();
             },
             error: function(xhr) {
-                console.error('Error generating student ID:', xhr.responseJSON);
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    alert('Error: ' + xhr.responseJSON.message);
-                }
+                matriculeReadiness = {
+                    ready: false,
+                    problems: [{
+                        what: "{{ __('The matricule settings could not be checked.') }}",
+                        where: "{{ __('Try again, or submit and the system will report the problem.') }}"
+                    }]
+                };
+                renderMatriculeStatus();
             }
         });
     };
-    
-    // Attach student ID generation to faculty, batch, and program changes
+
+    // Re-check whenever the pieces the matricule is built from change
     const attachStudentIdGenerator = () => {
         $('.faculty, .batch, .program').on('change', function() {
-            console.log('Faculty, Batch, or Program changed, regenerating student ID');
-            generateStudentId();
+            refreshMatriculeStatus();
         });
-        
-        // Generate on page load if both are already selected
+
         if ($('.faculty').val() && $('.batch').val()) {
-            console.log('Faculty and Batch already selected, generating student ID');
-            generateStudentId();
+            refreshMatriculeStatus();
         }
     };
     
@@ -1150,31 +1241,16 @@
             },
             onFinishing: function() {
                 validator.settings.ignore = ":disabled";
-                
-                // Ensure student ID is generated before finishing
-                const studentId = $('#student_id').val();
-                if (!studentId || studentId.trim() === '') {
-                    alert('Please wait while the Student ID is being generated...');
-                    generateStudentId();
-                    return false;
-                }
-                
+
                 return $form.valid();
             },
             onFinished: function() {
-                // Show confirmation modal instead of directly submitting
-                const studentId = $('#student_id').val();
-                
-                if (!studentId || studentId.trim() === '') {
-                    alert('Student ID is required. Please ensure Faculty and Batch are selected.');
-                    return false;
-                }
-                
-                // Set the student ID in the modal
-                $('#confirmStudentId').text(studentId);
-                
-                // Show the modal
-                $('#studentIdConfirmModal').modal('show');
+                // Confirm before submitting. The matricule itself is generated
+                // by the server as the record is written, so there is nothing to
+                // show here but whether that will work.
+                renderConfirmMatricule();
+
+                studentIdConfirmModal().show();
             }
         });
 
@@ -1444,12 +1520,12 @@
         
         // Handle modal confirmation buttons
         $('#confirmSubmitBtn').on('click', function() {
-            $('#studentIdConfirmModal').modal('hide');
+            studentIdConfirmModal().hide();
             $(formSelector).trigger('submit');
         });
         
         $('#cancelSubmitBtn').on('click', function() {
-            $('#studentIdConfirmModal').modal('hide');
+            studentIdConfirmModal().hide();
         });
     });
 })(jQuery);

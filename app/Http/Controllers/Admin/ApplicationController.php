@@ -229,7 +229,6 @@ class ApplicationController extends Controller
     {
         // Field Validation
         $request->validate([
-            'student_id' => 'nullable|string|max:50',
             'batch' => 'required',
             'program' => 'required',
             'session' => 'required',
@@ -246,45 +245,20 @@ class ApplicationController extends Controller
             'signature' => 'nullable|image',
         ]);
 
-        // Generate student_id if empty, or use provided value
-        $studentId = $request->student_id;
-        
-        if (empty(trim($studentId ?? ''))) {
-            // Auto-generate student ID
-            try {
-                $faculty = Program::find($request->program)->faculty_id ?? null;
-                if (!$faculty) {
-                    throw new \Exception('Unable to determine faculty from program');
-                }
-                $studentId = Student::generateStudentId($faculty, $request->batch, $request->program);
-            } catch (\Exception $e) {
-                Flasher::addError('Error generating student ID: ' . $e->getMessage());
-                return redirect()->back()->withInput();
-            }
-        }
+        // The matricule is never taken from the form. It is generated at the
+        // moment the student record is written, further down, so that no admin
+        // is ever shown a number that another admin is about to use. All that
+        // happens here is a check that it CAN be generated, so a missing
+        // Academy Code or faculty code is reported plainly instead of surfacing
+        // as an exception halfway through the conversion.
+        $facultyId = Program::find($request->program)->faculty_id ?? null;
+        $readiness = Student::matriculeReadiness($facultyId, $request->batch, $request->program);
 
-        // Check if student_id already exists and regenerate if necessary
-        $attempts = 0;
-        $maxAttempts = 10;
-        
-        while (Student::where('student_id', $studentId)->exists() && $attempts < $maxAttempts) {
-            // Student ID already exists, regenerate it
-            try {
-                $faculty = Program::find($request->program)->faculty_id ?? null;
-                if (!$faculty) {
-                    throw new \Exception('Unable to determine faculty from program');
-                }
-                
-                $studentId = Student::generateStudentId($faculty, $request->batch, $request->program);
-                $attempts++;
-            } catch (\Exception $e) {
-                Flasher::addError('Error generating unique student ID: ' . $e->getMessage());
-                return redirect()->back()->withInput();
+        if (!$readiness['ready']) {
+            foreach ($readiness['problems'] as $problem) {
+                Flasher::addError($problem['what'] . ' ' . $problem['where'], __('Matricule cannot be generated'));
             }
-        }
-        
-        if ($attempts >= $maxAttempts) {
-            Flasher::addError('Unable to generate unique student ID after multiple attempts. Please try again.');
+
             return redirect()->back()->withInput();
         }
 
@@ -297,7 +271,6 @@ class ApplicationController extends Controller
             DB::beginTransaction();
 
             $application = new Student;
-            $application->student_id = $studentId; // Use the validated/regenerated student_id
             $application->registration_no = $request->registration_no;
             $application->batch_id = $request->batch;
             $application->program_id = $request->program;
@@ -386,7 +359,11 @@ class ApplicationController extends Controller
             }
             $application->status = '1';
             $application->created_by = Auth::guard('web')->user()->id;
-            $application->save();
+
+            // The matricule is generated and claimed here, in one step. If
+            // another admission took the number first, the database refuses the
+            // write and the next number is used instead.
+            Student::saveWithIssuedId($application, $facultyId, $request->batch, $request->program);
 
             // Send Login Credentials
             $mail = MailSetting::where('status', '1')->first();
@@ -713,9 +690,12 @@ class ApplicationController extends Controller
             },
             'program',
             'batch',
-            'preferredProgramFirst',
-            'preferredProgramSecond',
-            'preferredProgramThird',
+            // The faculty comes too: the conversion modal filters programmes by
+            // faculty, so switching to a second or third choice in another
+            // faculty has to change both.
+            'preferredProgramFirst.faculty',
+            'preferredProgramSecond.faculty',
+            'preferredProgramThird.faculty',
             'guardians',
             'academicHistories',
             'languages',
@@ -998,7 +978,17 @@ class ApplicationController extends Controller
             $rules['board_review.reviewed_at'] = ['nullable', 'date'];
         }
 
-        $validated = $request->validate($rules);
+        try {
+            $validated = $request->validate($rules);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // A save that worked announces itself with a toast; a save that went
+            // nowhere should too. The red panel on the form lists what to
+            // correct, but it sits above a long form and an admin who has just
+            // pressed Save is not necessarily looking there.
+            Flasher::addError(__('Nothing was saved. Please check the details marked on the form.'), __('msg_error'));
+
+            throw $e;
+        }
 
         try {
             DB::beginTransaction();
@@ -1314,7 +1304,14 @@ class ApplicationController extends Controller
 
             Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
 
-            return redirect()->route($this->route.'.show', $application->id);
+            // Back to the form that was being edited, not to the read-only
+            // screen. Correcting an applicant's details is rarely one change,
+            // and every save used to throw the admin out of the form and leave
+            // them to find their way back into it. The time comes with it so
+            // the page can say plainly that the save landed.
+            return redirect()
+                ->route($this->route.'.edit', $application->id)
+                ->with('saved_at', now()->format('g:i A'));
         } catch (\Throwable $e) {
             DB::rollBack();
             report($e);

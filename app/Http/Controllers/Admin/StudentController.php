@@ -310,35 +310,36 @@ class StudentController extends Controller
      * Format: PAX + Last 2 digits of Batch + Faculty Shortcode + Sequential Number
      * Example: PAX25BF001, PAX26MGT001
      */
+    /**
+     * Report whether a matricule can be issued, and what is unset if it cannot.
+     *
+     * This used to hand back an actual matricule for the form to display and
+     * submit. Two admins admitting students at the same time were each shown
+     * the same next number — the number was only claimed when one of them
+     * finally saved — and the second enrolled a student on a matricule that had
+     * already gone out. So no number is issued here any more. The matricule is
+     * generated at the moment the record is written, and this only answers
+     * whether that will succeed.
+     */
     public function generateId(Request $request)
     {
-        try {
-            $request->validate([
-                'faculty_id' => 'required|exists:faculties,id',
-                'batch_id' => 'required|exists:batches,id',
-            ]);
+        $request->validate([
+            'faculty_id' => 'nullable|exists:faculties,id',
+            'batch_id' => 'nullable|exists:batches,id',
+            'program_id' => 'nullable|exists:programs,id',
+        ]);
 
-            $studentId = Student::generateStudentId($request->faculty_id, $request->batch_id, $request->program_id);
-
-            return response()->json([
-                'success' => true,
-                'student_id' => $studentId,
-                'message' => 'Student ID generated successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
-        }
+        return response()->json(Student::matriculeReadiness(
+            $request->faculty_id,
+            $request->batch_id,
+            $request->program_id
+        ));
     }
 
     public function store(Request $request)
     {
         // Field Validation
         $request->validate([
-            'student_id' => 'nullable|unique:students,student_id',
             'faculty' => 'required|exists:faculties,id',
             'batch' => 'required|exists:batches,id',
             'program' => 'required',
@@ -356,15 +357,17 @@ class StudentController extends Controller
             'signature' => 'nullable|image',
         ]);
 
-        // Auto-generate student_id if empty
-        $studentId = $request->student_id;
-        if (empty($studentId)) {
-            try {
-                $studentId = Student::generateStudentId($request->faculty, $request->batch, $request->program);
-            } catch (\Exception $e) {
-                Flasher::addError('Error generating student ID: ' . $e->getMessage());
-                return redirect()->back()->withInput();
+        // The matricule is generated when the record is written, not before —
+        // see Student::saveWithIssuedId(). Nothing the form submits is used.
+        // This only reports, up front, whether it can be generated at all.
+        $readiness = Student::matriculeReadiness($request->faculty, $request->batch, $request->program);
+
+        if (!$readiness['ready']) {
+            foreach ($readiness['problems'] as $problem) {
+                Flasher::addError($problem['what'] . ' ' . $problem['where'], __('Matricule cannot be generated'));
             }
+
+            return redirect()->back()->withInput();
         }
 
         // Random Password
@@ -375,7 +378,6 @@ class StudentController extends Controller
             DB::beginTransaction();
 
             $student = new Student;
-            $student->student_id = $studentId;
             $student->batch_id = $request->batch;
             $student->program_id = $request->program;
             $student->admission_date = $request->admission_date;
@@ -433,7 +435,10 @@ class StudentController extends Controller
             $student->signature = $this->uploadImage($request, 'signature', $this->path, 300, 100);
             $student->status = '1';
             $student->created_by = Auth::guard('web')->user()->id;
-            $student->save();
+
+            // Generated and claimed in one step, so two admins enrolling at the
+            // same time cannot be given the same matricule.
+            Student::saveWithIssuedId($student, $request->faculty, $request->batch, $request->program);
 
 
             // Attach Status

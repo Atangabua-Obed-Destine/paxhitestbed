@@ -85,7 +85,7 @@ class StudentSingleEnrollController extends Controller
             $selectedEnrollment = null;
             
             // If not found and looks like a matricule, try finding by enrollment matricule
-            if (!$student && strpos($request->student, 'PAX') === 0) {
+            if (!$student && Student::looksLikeMatricule($request->student)) {
                 $selectedEnrollment = StudentEnroll::where('matricule', $request->student)
                     ->with(['program', 'session', 'semester', 'section', 'subjects', 'subjectMarks'])
                     ->orderBy('id', 'desc')
@@ -94,7 +94,7 @@ class StudentSingleEnrollController extends Controller
             }
             
             // If student found by student_id but request looks like matricule, get specific enrollment
-            if ($student && strpos($request->student, 'PAX') === 0 && !$selectedEnrollment) {
+            if ($student && Student::looksLikeMatricule($request->student) && !$selectedEnrollment) {
                 $selectedEnrollment = StudentEnroll::where('matricule', $request->student)
                     ->with(['program', 'session', 'semester', 'section', 'subjects', 'subjectMarks'])
                     ->orderBy('id', 'desc')
@@ -317,7 +317,7 @@ class StudentSingleEnrollController extends Controller
                                                            ->orderBy('id', 'desc')
                                                            ->first();
                         
-                        if ($previousEnrollment && $previousEnrollment->matricule && strpos($previousEnrollment->matricule, 'PAX') === 0) {
+                        if ($previousEnrollment && Student::looksLikeMatricule($previousEnrollment->matricule)) {
                             $enroll->matricule = $previousEnrollment->matricule;
                         } else {
                             // No proper matricule found - generate new one

@@ -113,7 +113,6 @@ class StudentTransferInController extends Controller
     {
         // Field Validation
         $request->validate([
-            'student_id' => 'required|unique:students,student_id',
             'batch' => 'required',
             'program' => 'required',
             'session' => 'required',
@@ -132,14 +131,27 @@ class StudentTransferInController extends Controller
             'date' => 'required|date',
         ]);
 
+        // The matricule is generated when the record is written, not taken from
+        // the form — see Student::saveWithIssuedId(). Check first that it can be
+        // generated, so missing configuration is reported plainly.
+        $facultyId = \App\Models\Program::find($request->program)->faculty_id ?? null;
+        $readiness = Student::matriculeReadiness($facultyId, $request->batch, $request->program);
+
+        if (!$readiness['ready']) {
+            foreach ($readiness['problems'] as $problem) {
+                Flasher::addError($problem['what'] . ' ' . $problem['where'], __('Matricule cannot be generated'));
+            }
+
+            return redirect()->back()->withInput();
+        }
+
         // Random Password
         $password = str_random(8);
 
         // Insert Data
         DB::beginTransaction();
-        
+
         $student = new Student;
-        $student->student_id = $request->student_id;
         $student->batch_id = $request->batch;
         $student->program_id = $request->program;
         $student->admission_date = $request->admission_date;
@@ -209,7 +221,9 @@ class StudentTransferInController extends Controller
         $student->status = '1';
         $student->is_transfer = '1';
         $student->created_by = Auth::guard('web')->user()->id;
-        $student->save();
+
+        // Generated and claimed in one step.
+        Student::saveWithIssuedId($student, $facultyId, $request->batch, $request->program);
 
 
         // Attach Status

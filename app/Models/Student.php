@@ -229,6 +229,168 @@ class Student extends Authenticatable
      * @param int $batchId
      * @return string
      */
+    /**
+     * Does this look like a matricule rather than a numeric record id?
+     *
+     * Code used to ask "does it start with PAX", which stopped being true the
+     * moment a school set its own code — and would have stopped finding the
+     * matricules already issued here. Any matricule carries letters; a record
+     * id never does.
+     */
+    public static function looksLikeMatricule($value): bool
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' && !ctype_digit($value);
+    }
+
+    /**
+     * Can a matricule be issued for this faculty, batch and program — and if
+     * not, what has not been set?
+     *
+     * A matricule is built out of three pieces of configuration: the school's
+     * Academy Code, the faculty's matricule code and the batch's year. When one
+     * of them is missing, generation throws, and an admin filling in a student
+     * record has no way of knowing which one. So this asks the same questions
+     * generateStudentId() asks, but collects the answers instead of stopping at
+     * the first.
+     *
+     * It deliberately returns the shape a matricule will take and NOT a
+     * matricule. Handing out a number before it is written down invites two
+     * admins to enrol two students on the same one; the number is claimed at
+     * the moment the record is saved and not a second earlier.
+     *
+     * @return array{ready: bool, format: ?string, problems: array<int, array{what: string, where: string}>}
+     */
+    public static function matriculeReadiness($facultyId, $batchId, $programId = null): array
+    {
+        $problems = [];
+        $prefix = null;
+        $batchDigits = null;
+        $facultyCode = null;
+
+        try {
+            $prefix = Setting::matriculePrefix();
+        } catch (\Throwable $e) {
+            $problems[] = [
+                'what' => __('The school\'s Academy Code has not been set.'),
+                'where' => __('Settings → General → Academy Code'),
+            ];
+        }
+
+        $faculty = $facultyId ? Faculty::find($facultyId) : null;
+
+        if (!$faculty) {
+            $problems[] = [
+                'what' => __('No faculty has been chosen.'),
+                'where' => __('Choose a programme so its faculty is known.'),
+            ];
+        } else {
+            $facultyCode = !empty($faculty->matric_code) ? $faculty->matric_code : $faculty->shortcode;
+
+            if (empty($facultyCode)) {
+                $problems[] = [
+                    'what' => __('The faculty :faculty has no Matricule Code or Shortcode.', ['faculty' => $faculty->title ?? $faculty->id]),
+                    'where' => __('Faculties → :faculty → Matricule Code', ['faculty' => $faculty->title ?? $faculty->id]),
+                ];
+            }
+        }
+
+        $batch = $batchId ? Batch::find($batchId) : null;
+
+        if (!$batch) {
+            $problems[] = [
+                'what' => __('No batch has been chosen.'),
+                'where' => __('Choose a batch.'),
+            ];
+        } else {
+            $batchDigits = self::batchYearDigits($batch->title);
+
+            if ($batchDigits === null) {
+                $problems[] = [
+                    'what' => __('The batch :batch has no year in its name, so the year digits cannot be read.', ['batch' => $batch->title]),
+                    'where' => __('Batches → :batch → Title', ['batch' => $batch->title]),
+                ];
+            }
+        }
+
+        if ($problems) {
+            return ['ready' => false, 'format' => null, 'problems' => $problems];
+        }
+
+        $suffix = '';
+
+        if ($programId) {
+            $program = \App\Models\Program::with('degreeType')->find($programId);
+
+            if ($program && $program->degreeType && $program->degreeType->code_append_to_student_matricule) {
+                $suffix = strtoupper($program->degreeType->code_append_to_student_matricule);
+            }
+        }
+
+        return [
+            'ready' => true,
+            'format' => $prefix . $batchDigits . strtoupper($facultyCode) . $suffix . '###',
+            'problems' => [],
+        ];
+    }
+
+    /**
+     * The two year digits a batch title carries, or null when it carries none.
+     */
+    protected static function batchYearDigits($batchTitle): ?string
+    {
+        if (preg_match('/(\d{2})$/', (string) $batchTitle, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('/20(\d{2})/', (string) $batchTitle, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Give this student a freshly generated matricule and save it, claiming the
+     * number in the same breath.
+     *
+     * Every caller used to generate an id, look to see whether it was taken and
+     * then insert — with as much time in between as the admin took to fill in
+     * the rest of the form. Two admissions running side by side would both be
+     * told the same number was free and both use it. students.student_id is
+     * unique, so the second insert is refused by the database; that refusal is
+     * caught here and the id generated again, this time with the first one on
+     * file. The loser of the race gets the next number rather than an error.
+     *
+     * MySQL rolls back the failed statement only, not the surrounding
+     * transaction, so this is safe to call inside one — which it must be,
+     * because the record and its matricule have to appear together.
+     */
+    public static function saveWithIssuedId(self $student, $facultyId, $batchId, $programId = null, int $attempts = 5): self
+    {
+        for ($attempt = 1; ; $attempt++) {
+            $student->student_id = self::generateStudentId($facultyId, $batchId, $programId);
+
+            try {
+                $student->save();
+
+                return $student;
+            } catch (\Illuminate\Database\QueryException $e) {
+                $isDuplicateId = ($e->errorInfo[1] ?? null) === 1062
+                    && str_contains($e->getMessage(), 'student_id');
+
+                if (!$isDuplicateId || $attempt >= $attempts) {
+                    throw $e;
+                }
+
+                // Somebody else took this number between generating it and
+                // writing it. Ask for the next one.
+                $student->exists = false;
+            }
+        }
+    }
+
     public static function generateStudentId($facultyId, $batchId, $programId = null)
     {
         try {
@@ -258,7 +420,9 @@ class Student extends Authenticatable
             $batchDigits = $matches[1];
 
             // Build base prefix: PAX + Batch Digits + Faculty Code
-            $basePrefix = 'PAX' . $batchDigits . strtoupper($facultyCode);
+            // The school's own code, from Settings → Academy Code, not a
+            // hardcoded 'PAX'.
+            $basePrefix = Setting::matriculePrefix() . $batchDigits . strtoupper($facultyCode);
 
             // Append degree type code if program is provided
             $degreeTypeSuffix = '';
@@ -388,10 +552,10 @@ class Student extends Authenticatable
             // Build base prefix based on academic level
             if ($level === 'A') {
                 // Undergraduate - use regular faculty code
-                $basePrefix = 'PAX' . $batchDigits . strtoupper($facultyCode);
+                $basePrefix = Setting::matriculePrefix() . $batchDigits . strtoupper($facultyCode);
             } else {
                 // Masters or Doctoral - incorporate level into prefix
-                $basePrefix = 'PAX' . $batchDigits . $level . strtoupper($facultyCode);
+                $basePrefix = Setting::matriculePrefix() . $batchDigits . $level . strtoupper($facultyCode);
             }
             
             // Append degree type matricule code if available

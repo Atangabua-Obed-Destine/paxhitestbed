@@ -172,7 +172,13 @@ class SettingController extends Controller
             $data = new Setting;
             $data->title = $request->title;
             $data->site_subtitle = $request->site_subtitle;
-            $data->academy_code = $request->academy_code;
+            // Only ever written when the form actually carries one. The field
+            // was once commented out of the settings page while this line
+            // stayed, so every save quietly wrote NULL over the school's code —
+            // and without it no matricule can be issued at all.
+            if ($request->filled('academy_code')) {
+                $data->academy_code = strtoupper(trim($request->academy_code));
+            }
             $data->meta_title = $request->meta_title;
             $data->meta_description = $request->meta_description;
             $data->meta_keywords = $request->meta_keywords;
@@ -198,7 +204,13 @@ class SettingController extends Controller
             $data = Setting::find($id);
             $data->title = $request->title;
             $data->site_subtitle = $request->site_subtitle;
-            $data->academy_code = $request->academy_code;
+            // Only ever written when the form actually carries one. The field
+            // was once commented out of the settings page while this line
+            // stayed, so every save quietly wrote NULL over the school's code —
+            // and without it no matricule can be issued at all.
+            if ($request->filled('academy_code')) {
+                $data->academy_code = strtoupper(trim($request->academy_code));
+            }
             $data->meta_title = $request->meta_title;
             $data->meta_description = $request->meta_description;
             $data->meta_keywords = $request->meta_keywords;

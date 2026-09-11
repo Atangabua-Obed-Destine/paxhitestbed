@@ -249,14 +249,19 @@ class User extends Authenticatable
     public static function generateStaffId()
     {
         try {
-            // Find the last staff with PAX prefix
-            $lastStaff = self::where('staff_id', 'LIKE', 'PAX%')
+            // The school's own code, from Settings → Academy Code. Both the
+            // search and the offset below are taken from its length: this read
+            // the digits after character 3, which is only right while the code
+            // happens to be three letters long.
+            $prefix = \App\Models\Setting::matriculePrefix();
+
+            $lastStaff = self::where('staff_id', 'LIKE', $prefix . '%')
                             ->orderBy('staff_id', 'desc')
                             ->first();
 
             if ($lastStaff) {
                 // Extract the numeric part and increment
-                $lastNumber = (int) substr($lastStaff->staff_id, 3); // Remove 'PAX' prefix
+                $lastNumber = (int) substr($lastStaff->staff_id, strlen($prefix));
                 $newNumber = $lastNumber + 1;
             } else {
                 // First staff member
@@ -264,7 +269,7 @@ class User extends Authenticatable
             }
 
             // Format with leading zeros (5 digits)
-            $staffId = 'PAX' . str_pad($newNumber, 5, '0', STR_PAD_LEFT);
+            $staffId = $prefix . str_pad($newNumber, 5, '0', STR_PAD_LEFT);
 
             return $staffId;
 

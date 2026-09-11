@@ -33,14 +33,18 @@
                             <input type="text" class="form-control" name="site_subtitle" id="site_subtitle" value="{{ isset($row->site_subtitle)?$row->site_subtitle:'' }}">
                         </div>
 
-                        {{-- <div class="form-group col-md-6">
-                            <label for="academy_code">{{ __('field_academy_code') }}</label>
-                            <input type="text" class="form-control" name="academy_code" id="academy_code" value="{{ isset($row->academy_code)?$row->academy_code:'' }}">
+                        <div class="form-group col-md-6">
+                            <label for="academy_code">{{ __('field_academy_code') }} <span>*</span></label>
+                            <input type="text" class="form-control" name="academy_code" id="academy_code" value="{{ isset($row->academy_code)?$row->academy_code:'' }}" required>
+
+                            <small class="form-text text-muted">
+                              {{ __('The school\'s own code. It begins every student matricule and staff ID — the PAX in PAX25AF001. Matricules already issued keep the code they were issued under.') }}
+                            </small>
 
                             <div class="invalid-feedback">
                               {{ __('required_field') }} {{ __('field_academy_code') }}
                             </div>
-                        </div> --}}
+                        </div>
 
                         <div class="form-group col-md-6">
                             <label for="meta_title">{{ __('field_meta_title') }} <span>*</span></label>

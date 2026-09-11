@@ -4,6 +4,17 @@
 @section('page_css')
 <link rel="stylesheet" href="{{ asset('dashboard/plugins/lightbox2-master/css/lightbox.min.css') }}">
 <style>
+  .matricule-status {
+    background-color: #f8f9fa;
+  }
+  .matricule-status.is-ready {
+    background-color: #eafaf1;
+    border-color: #63ed7a !important;
+  }
+  .matricule-status.is-blocked {
+    background-color: #fdeced;
+    border-color: #fc544b !important;
+  }
   .timeline-item {
     position: relative;
     padding-left: 1.75rem;
@@ -110,6 +121,35 @@
 
     <div class="row">
       <div class="col-lg-8 mb-4">
+        {{--
+            Both answers to "did that save?" belong here, above the form that
+            was being edited. A save used to send the admin to the read-only
+            screen, and a rejected field was reported nowhere on this page at
+            all — it simply came back looking unchanged.
+        --}}
+        @if (session('saved_at'))
+          <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-1"></i>
+            <strong>{{ __('Saved.') }}</strong>
+            {{ __('Your changes to this application were saved at :time.', ['time' => session('saved_at')]) }}
+            <a href="{{ route('admin.application.show', $row->id) }}" class="alert-link ms-1">{{ __('View the application') }}</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ __('Close') }}"></button>
+          </div>
+        @endif
+
+        @if ($errors->any())
+          <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>{{ __('Nothing was saved.') }}</strong>
+            {{ __('Please correct the following, then save again:') }}
+            <ul class="mb-0 mt-2">
+              @foreach ($errors->all() as $error)
+                <li>{{ $error }}</li>
+              @endforeach
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ __('Close') }}"></button>
+          </div>
+        @endif
+
                 <form id="application-update-form" action="{{ route('admin.application.update', $row->id) }}" method="post" enctype="multipart/form-data" class="card needs-validation" novalidate>
           @csrf
           @method('PUT')
@@ -1043,18 +1083,15 @@
 
           <div class="row g-3">
             <div class="form-group col-md-6">
-              <label for="convert_student_id">{{ __('field_student_id') }}</label>
-              <div class="input-group">
-                <input type="text" class="form-control @error('student_id') is-invalid @enderror" id="convert_student_id" name="student_id" value="{{ old('student_id') }}" placeholder="{{ __('Leave empty to auto-generate') }}">
-                <button type="button" class="btn btn-outline-secondary" id="generate_student_id_btn" title="{{ __('Generate ID') }}">
-                  <i class="fas fa-sync-alt"></i>
-                </button>
+              <label>{{ __('field_student_id') }}</label>
+              {{-- No matricule is shown or typed here. It is generated when this
+                   form is submitted, so two admins admitting students at the
+                   same time can never be handed the same number. All this panel
+                   reports is whether one can be generated. --}}
+              <div id="matricule_status" class="matricule-status border rounded p-2">
+                <span class="text-muted">{{ __('Choose a batch and programme.') }}</span>
               </div>
-              <small class="form-text text-muted">{{ __('Leave empty to auto-generate, or enter a custom Student ID') }}</small>
-              <small class="form-text text-info" id="auto_generated_preview"></small>
-              @error('student_id')
-                <div class="invalid-feedback d-block">{{ $message }}</div>
-              @enderror
+              <small class="form-text text-muted">{{ __('The matricule is generated automatically when you submit.') }}</small>
             </div>
             <div class="form-group col-md-6">
               <label for="convert_admission_date">{{ __('field_admission_date') }} <span>*</span></label>
@@ -1098,6 +1135,42 @@
               @error('program')
                 <div class="invalid-feedback d-block">{{ $message }}</div>
               @enderror
+
+              {{-- What the applicant actually asked for. The programme above is
+                   their first choice, but a first choice is not always the one
+                   they are admitted to — the admin has to be able to see the
+                   fallbacks without leaving the modal to look them up. --}}
+              @php
+                $programChoices = collect([
+                  ['rank' => __('1st choice'), 'program' => $row->preferredProgramFirst],
+                  ['rank' => __('2nd choice'), 'program' => $row->preferredProgramSecond],
+                  ['rank' => __('3rd choice'), 'program' => $row->preferredProgramThird],
+                ])->filter(fn ($choice) => $choice['program'] !== null)->values();
+              @endphp
+
+              @if($programChoices->isNotEmpty())
+                <div class="applicant-choices mt-2 border rounded p-2">
+                  <div class="small text-muted mb-1">{{ __('The applicant\'s choices') }}</div>
+                  <ul class="list-unstyled mb-0 small">
+                    @foreach($programChoices as $choice)
+                      <li class="choice-row d-flex flex-wrap align-items-center mb-1" data-program="{{ $choice['program']->id }}">
+                        <span class="badge bg-secondary me-2">{{ $choice['rank'] }}</span>
+                        <span class="me-2">{{ $choice['program']->title }}</span>
+                        @if($choice['program']->faculty)
+                          <span class="text-muted me-2">{{ $choice['program']->faculty->title }}</span>
+                        @endif
+                        <span class="choice-current badge bg-success d-none">{{ __('Selected') }}</span>
+                        <button type="button" class="btn btn-link btn-sm p-0 choice-switch"
+                                data-program="{{ $choice['program']->id }}"
+                                data-faculty="{{ $choice['program']->faculty_id }}">{{ __('Use this one') }}</button>
+                      </li>
+                    @endforeach
+                  </ul>
+                  @if($programChoices->count() === 1)
+                    <div class="small text-muted mt-1">{{ __('The applicant gave no other choices.') }}</div>
+                  @endif
+                </div>
+              @endif
             </div>
             <div class="form-group col-md-6">
               <label for="convert_session">{{ __('field_session') }} <span>*</span></label>
@@ -1110,7 +1183,10 @@
             </div>
             <div class="form-group col-md-6">
               <label for="convert_semester">{{ __('field_semester') }} <span>*</span></label>
-              <select class="form-control semester @error('semester') is-invalid @enderror" id="convert_semester" name="semester" data-selected="{{ old('semester') }}" required>
+              {{-- A student being admitted starts at the first teaching semester,
+                   in the only section there is, so both are chosen for the admin.
+                   data-default applies only when nothing has been picked. --}}
+              <select class="form-control semester @error('semester') is-invalid @enderror" id="convert_semester" name="semester" data-selected="{{ old('semester') }}" data-default="first-non-resit" required>
                 <option value="">{{ __('select') }}</option>
               </select>
               @error('semester')
@@ -1119,7 +1195,7 @@
             </div>
             <div class="form-group col-md-6">
               <label for="convert_section">{{ __('field_section') }} <span>*</span></label>
-              <select class="form-control section @error('section') is-invalid @enderror" id="convert_section" name="section" data-selected="{{ old('section') }}" required>
+              <select class="form-control section @error('section') is-invalid @enderror" id="convert_section" name="section" data-selected="{{ old('section') }}" data-default="all" required>
                 <option value="">{{ __('select') }}</option>
               </select>
               @error('section')
@@ -1155,7 +1231,7 @@
 @php
   $conversionErrorKeys = collect($errors->keys())
     ->filter(function ($key) {
-      return in_array($key, ['student_id','admission_date','batch','program','session','semester','section','statuses'], true)
+      return in_array($key, ['admission_date','batch','program','session','semester','section','statuses'], true)
         || \Illuminate\Support\Str::startsWith($key, 'statuses.');
     })
     ->values()
@@ -1246,70 +1322,142 @@
     };
     var conversionErrorKeys = @json($conversionErrorKeys);
 
-    // Function to generate Student ID in conversion modal
-    function generateConversionStudentId(forceUpdate) {
+    // Ask whether a matricule CAN be generated — never for a matricule itself.
+    // A number shown here would sit unclaimed on screen for as long as the
+    // admin took to finish the form, and a second admin would be shown the very
+    // same one. The number is claimed at the moment the record is written.
+    function refreshMatriculeStatus() {
       var facultyId = $('#convert_faculty').val();
       var batchId = $('#convert_batch').val();
       var programId = $('#convert_program').val();
-      var $studentId = $('#convert_student_id');
-      var $preview = $('#auto_generated_preview');
-      
+
       if (!facultyId || !batchId) {
-        console.log('Faculty or Batch not selected yet');
-        $preview.text('');
+        renderMatriculeStatus(null);
         return;
       }
-      
-      console.log('Generating student ID for Faculty:', facultyId, 'Batch:', batchId, 'Program:', programId);
-      
-      $.ajaxSetup({
-        headers: {
-          'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-        }
-      });
-      
+
       $.ajax({
         type: 'POST',
         url: "{{ route('admin.student.generate-id') }}",
         data: {
-          _token: $('input[name=_token]').val(),
+          _token: $('#convert-application-form input[name=_token]').val(),
           faculty_id: facultyId,
           batch_id: batchId,
           program_id: programId
         },
         success: function(response) {
-          console.log('Generated Student ID:', response.student_id);
-          // Always show preview
-          $preview.html('<i class="fas fa-magic"></i> {{ __("Auto-generated ID") }}: <strong>' + response.student_id + '</strong>');
-          // Only fill the field if it's empty or forceUpdate is true
-          if (forceUpdate || !$studentId.val().trim()) {
-            $studentId.val(response.student_id);
-          }
+          renderMatriculeStatus(response);
         },
         error: function(xhr) {
-          console.error('Error generating student ID:', xhr.responseJSON);
-          $preview.text('');
-          if (xhr.responseJSON && xhr.responseJSON.message) {
-            alert('Error: ' + xhr.responseJSON.message);
-          }
+          // Unreachable or refused: say so rather than implying all is well.
+          renderMatriculeStatus({
+            ready: false,
+            problems: [{
+              what: "{{ __('The matricule settings could not be checked.') }}",
+              where: "{{ __('Try again, or submit and the system will report the problem.') }}"
+            }]
+          });
         }
       });
     }
 
-    // Generate button click handler
-    $('#generate_student_id_btn').on('click', function() {
-      generateConversionStudentId(true);
+    function renderMatriculeStatus(readiness) {
+      var $panel = $('#matricule_status');
+      var $submit = $('#convert-application-form button[type=submit]');
+
+      if (!readiness) {
+        $panel.removeClass('is-ready is-blocked')
+              .html($('<span class="text-muted"></span>').text("{{ __('Choose a batch and programme.') }}"));
+        $submit.prop('disabled', false);
+        return;
+      }
+
+      if (readiness.ready) {
+        $panel.removeClass('is-blocked').addClass('is-ready').html(
+          '<i class="fas fa-check-circle text-success"></i> <span class="text-success">' +
+          "{{ __('A matricule will be generated when you submit.') }}" + '</span>' +
+          '<div class="small text-muted mt-1">' + "{{ __('Format') }}" + ': <code>' +
+          $('<div>').text(readiness.format || '').html() + '</code></div>'
+        );
+        $submit.prop('disabled', false);
+        return;
+      }
+
+      var $list = $('<ul class="mb-0 ps-3 small"></ul>');
+
+      $.each(readiness.problems || [], function (i, problem) {
+        $list.append(
+          $('<li></li>')
+            .append($('<span></span>').text(problem.what))
+            .append(' ')
+            .append($('<em class="text-muted"></em>').text(problem.where))
+        );
+      });
+
+      $panel.removeClass('is-ready').addClass('is-blocked').empty()
+            .append('<div class="text-danger mb-1"><i class="fas fa-exclamation-triangle"></i> ' +
+                    "{{ __('No matricule can be generated yet:') }}" + '</div>')
+            .append($list);
+
+      // Submitting now would fail anyway, and half-create nothing useful.
+      $submit.prop('disabled', true);
+    }
+
+    // Show which of the applicant's choices is the one currently selected, so
+    // the admin can see at a glance whether they are admitting to the first
+    // choice or to a fallback.
+    function markSelectedChoice() {
+      var current = String($('#convert_program').val() || '');
+
+      $('#convertApplicationModal .choice-row').each(function () {
+        var $row = $(this);
+        var isCurrent = current !== '' && String($row.data('program')) === current;
+
+        $row.find('.choice-current').toggleClass('d-none', !isCurrent);
+        $row.find('.choice-switch').toggleClass('d-none', isCurrent);
+      });
+    }
+
+    // Switching to another choice. The programme list is filtered by faculty,
+    // so a choice in a different faculty means changing the faculty first and
+    // letting the programme list reload — data-selected is what the shared
+    // filter script applies once it has.
+    $('#convertApplicationModal').on('click', '.choice-switch', function () {
+      var programId = String($(this).data('program'));
+      var facultyId = String($(this).data('faculty'));
+      var $program = $('#convert_program');
+      var $faculty = $('#convert_faculty');
+
+      // Try the list as it stands. It is filtered by faculty, but the batch
+      // filter repopulates it too, so the choice is not always in it — and
+      // .val() on a missing option sets nothing at all, silently.
+      $program.data('selected', '');
+      $program.val(programId);
+
+      if (String($program.val() || '') === programId) {
+        $program.trigger('change');
+      } else if (facultyId) {
+        // Reload the list for the choice's own faculty and let the shared
+        // filter script select it once the options are there.
+        $program.data('selected', programId);
+        $faculty.val(facultyId).trigger('change');
+      }
+
+      markSelectedChoice();
+    });
+
+    $('#convert_program').on('change', function () {
+      markSelectedChoice();
     });
 
     $('#convertApplicationModal').on('shown.bs.modal', function () {
-      $('#convert_student_id').trigger('focus');
       var $batch = $('#convert_batch');
       var $faculty = $('#convert_faculty');
       var $program = $('#convert_program');
 
-      // Attach student ID generation to faculty, batch, and program changes
+      // Re-check readiness whenever the pieces the matricule is built from change
       $('#convert_faculty, #convert_batch, #convert_program').off('change.studentid').on('change.studentid', function() {
-        generateConversionStudentId(false);
+        refreshMatriculeStatus();
       });
 
       if(convertPrefill.batch){
@@ -1323,11 +1471,11 @@
         }, 300);
       }
       
-      // Generate student ID if both faculty and batch are already selected
+      // Report matricule readiness once the prefilled selections have settled,
+      // and mark which of the applicant's choices is selected.
       setTimeout(function(){
-        if ($faculty.val() && $batch.val()) {
-          generateConversionStudentId(false);
-        }
+        refreshMatriculeStatus();
+        markSelectedChoice();
       }, 500);
     });
 

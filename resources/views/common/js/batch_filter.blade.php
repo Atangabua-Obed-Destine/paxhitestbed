@@ -156,6 +156,22 @@
                 $semester.data('selected', '');
                 $semester.trigger('change');
               }
+              // Opt-in only: a select asks for this with
+              // data-default="first-non-resit". Every other screen is
+              // untouched, and an explicit choice always wins.
+              else if($semester.data('default') === 'first-non-resit'){
+                var ordered = $.grep(response, function(row){
+                  return !row.is_resit || row.is_resit === '0';
+                }).sort(function(a, b){
+                  var year = (parseInt(a.year, 10) || 0) - (parseInt(b.year, 10) || 0);
+                  return year !== 0 ? year : (a.id - b.id);
+                });
+
+                if(ordered.length){
+                  $semester.val(ordered[0].id);
+                  $semester.trigger('change');
+                }
+              }
             });
           }
 
@@ -200,6 +216,21 @@
               if(selectedValue){
                 $section.val(selectedValue);
                 $section.data('selected', '');
+              }
+              // Opt-in only, with data-default="all": the section named "All",
+              // or the only section there is. Anything else is left for the
+              // admin to choose.
+              else if($section.data('default') === 'all'){
+                var all = $.grep(response, function(row){
+                  return $.trim(String(row.title)).toLowerCase() === 'all';
+                });
+
+                if(all.length){
+                  $section.val(all[0].id);
+                }
+                else if(response.length === 1){
+                  $section.val(response[0].id);
+                }
               }
               $section.trigger('change');
             });

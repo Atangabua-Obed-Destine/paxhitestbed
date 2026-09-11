@@ -6,6 +6,9 @@
     <link rel="stylesheet" href="{{ asset('dashboard/css/pages/wizard.css') }}">
     <style>
         body { background: #f4f6f9; }
+        .matricule-status { background-color: #f8f9fa; }
+        .matricule-status.is-ready { background-color: #eafaf1; border-color: #63ed7a !important; }
+        .matricule-status.is-blocked { background-color: #fdeced; border-color: #fc544b !important; }
         .card { border: none; border-radius: 0.75rem; }
         .wizard-sec-bg { padding: 1.5rem; }
         .wizard > .steps .current a { background-color: #0c7cd5; }
@@ -88,9 +91,14 @@
                                 <legend>{{ __('Student Identification') }}</legend>
                                 <div class="row">
                                     <div class="form-group col-md-6">
-                                        <label for="student_id">{{ __('field_student_id') }}</label>
-                                        <input type="text" class="form-control" name="student_id" id="student_id" value="{{ old('student_id') }}" readonly>
-                                        <small class="form-text text-muted">{{ __('Auto-generated: PAX + Batch Year + Faculty Code + Number') }}</small>
+                                        <label>{{ __('field_student_id') }}</label>
+                                        {{-- No matricule is shown here. It is generated when the
+                                             record is saved, so a number on screen can never be
+                                             claimed by another admin in the meantime. --}}
+                                        <div id="matricule_status" class="matricule-status border rounded p-2">
+                                            <span class="text-muted">{{ __('Choose a batch and programme.') }}</span>
+                                        </div>
+                                        <small class="form-text text-muted">{{ __('The matricule is generated automatically when you submit.') }}</small>
                                     </div>
                                     <div class="form-group col-md-6">
                                         <label for="admission_date">{{ __('field_admission_date') }} <span>*</span></label>
@@ -852,36 +860,68 @@
     (function ($) {
         "use strict";
         
-        // Function to generate Student ID
-        const generateStudentId = () => {
-            const $faculty = $('.faculty');
-            const $batch = $('.batch');
-            const $program = $('.program');
-            const $studentId = $('#student_id');
-            
-            if (!$faculty.length || !$batch.length || !$studentId.length) {
-                console.log('Required elements not found for student ID generation');
+        // Whether a matricule can be issued — never a matricule itself. A
+        // number shown before the record is written is a number a second admin
+        // can be shown at the same time; it is claimed as the record is saved.
+        let matriculeReadiness = null;
+
+        const renderMatriculeStatus = () => {
+            const $panel = $('#matricule_status');
+
+            if (!$panel.length) {
                 return;
             }
-            
-            const facultyId = $faculty.val();
-            const batchId = $batch.val();
-            const programId = $program.val();
-            
+
+            if (!matriculeReadiness) {
+                $panel.removeClass('is-ready is-blocked')
+                      .html($('<span class="text-muted"></span>').text("{{ __('Choose a batch and programme.') }}"));
+                return;
+            }
+
+            if (matriculeReadiness.ready) {
+                $panel.removeClass('is-blocked').addClass('is-ready').html(
+                    '<i class="fas fa-check-circle text-success"></i> <span class="text-success">' +
+                    "{{ __('A matricule will be generated when you submit.') }}" + '</span>' +
+                    '<div class="small text-muted mt-1">' + "{{ __('Format') }}" + ': <code>' +
+                    $('<div>').text(matriculeReadiness.format || '').html() + '</code></div>'
+                );
+                return;
+            }
+
+            const $list = $('<ul class="mb-0 ps-3 small"></ul>');
+
+            $.each(matriculeReadiness.problems || [], function (i, problem) {
+                $list.append(
+                    $('<li></li>')
+                        .append($('<span></span>').text(problem.what))
+                        .append(' ')
+                        .append($('<em class="text-muted"></em>').text(problem.where))
+                );
+            });
+
+            $panel.removeClass('is-ready').addClass('is-blocked').empty()
+                  .append('<div class="text-danger mb-1"><i class="fas fa-exclamation-triangle"></i> ' +
+                          "{{ __('No matricule can be generated yet:') }}" + '</div>')
+                  .append($list);
+        };
+
+        const refreshMatriculeStatus = () => {
+            const facultyId = $('.faculty').val();
+            const batchId = $('.batch').val();
+            const programId = $('.program').val();
+
             if (!facultyId || !batchId) {
-                console.log('Faculty or Batch not selected yet');
-                $studentId.val('');
+                matriculeReadiness = null;
+                renderMatriculeStatus();
                 return;
             }
-            
-            console.log('Generating student ID for Faculty:', facultyId, 'Batch:', batchId, 'Program:', programId);
-            
+
             $.ajaxSetup({
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             });
-            
+
             $.ajax({
                 type: 'POST',
                 url: "{{ route('admin.student.generate-id') }}",
@@ -892,29 +932,29 @@
                     program_id: programId
                 },
                 success: function(response) {
-                    console.log('Generated Student ID:', response.student_id);
-                    $studentId.val(response.student_id);
-                    $studentId.trigger('change');
+                    matriculeReadiness = response;
+                    renderMatriculeStatus();
                 },
-                error: function(xhr) {
-                    console.error('Error generating student ID:', xhr.responseJSON);
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        alert('Error: ' + xhr.responseJSON.message);
-                    }
+                error: function() {
+                    matriculeReadiness = {
+                        ready: false,
+                        problems: [{
+                            what: "{{ __('The matricule settings could not be checked.') }}",
+                            where: "{{ __('Try again, or submit and the system will report the problem.') }}"
+                        }]
+                    };
+                    renderMatriculeStatus();
                 }
             });
         };
-        
-        // Attach student ID generation to faculty, batch, and program changes
+
+        // Re-check whenever the pieces the matricule is built from change
         $('.faculty, .batch, .program').on('change', function() {
-            console.log('Faculty, Batch, or Program changed, regenerating student ID');
-            generateStudentId();
+            refreshMatriculeStatus();
         });
-        
-        // Generate on page load if both are already selected
+
         if ($('.faculty').val() && $('.batch').val()) {
-            console.log('Faculty and Batch already selected, generating student ID');
-            generateStudentId();
+            refreshMatriculeStatus();
         }
         
     }(jQuery));
