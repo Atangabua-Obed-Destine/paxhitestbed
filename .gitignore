@@ -17,6 +17,12 @@ yarn-error.log
 /storage/framework/views/*
 /storage/logs/*
 
+# Laravel Excel writes temporary workbooks here while building a download.
+# The rule lives in this file rather than in a .gitignore inside the folder:
+# on the server that folder belongs to the web server's user, so `git pull`
+# cannot create a file in it.
+/storage/framework/laravel-excel/
+
 # Production fix files (delete after use)
 production-quick-fix.php
 production-quick-fix.sh
