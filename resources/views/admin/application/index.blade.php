@@ -1,5 +1,21 @@
 @extends('admin.layouts.master')
 @section('title', $title)
+@section('page_css')
+<style>
+    /* Approval column: one dot per step in the chain. */
+    .approval-cell { cursor: help; }
+    .approval-track { display: flex; align-items: center; gap: 3px; margin-top: 4px; }
+    .approval-dot {
+        width: 9px; height: 9px; border-radius: 50%;
+        background: #e3e6ed; border: 1px solid #c5ccd8;
+    }
+    .approval-dot.is-done { background: #2ed8b6; border-color: #2ed8b6; }
+    .approval-dot.is-current { background: #fff; border-width: 2px; }
+    .approval-dot.is-current.is-info { border-color: #4099ff; }
+    .approval-dot.is-current.is-warning { border-color: #ffb64d; }
+    .approval-dot.is-current.is-danger { border-color: #ff5370; }
+</style>
+@endsection
 @section('content')
 
 <!-- Start Content-->
@@ -94,6 +110,28 @@
                                     <button type="submit" class="btn btn-info btn-filter"><i class="fas fa-search"></i> {{ __('btn_search') }}</button>
                                 </div>
                             </div>
+
+                            {{-- The admissions board report. The buttons submit this same
+                                 form to the report, so it covers exactly the applications
+                                 these filters select — no need to search first. --}}
+                            <div class="row align-items-end border-top pt-3 mt-2">
+                                <div class="col-md-6 mb-2">
+                                    <h6 class="mb-1"><i class="fas fa-chart-bar"></i> {{ __('Admissions board report') }}</h6>
+                                    <p class="text-muted small mb-0">{{ __('First, second and third choices, applicants by faculty and programme, and which programmes have enough applicants to open — for the applications matching the filters above.') }}</p>
+                                </div>
+                                <div class="form-group col-md-2 mb-2">
+                                    <label for="min_class">{{ __('Minimum class size') }}</label>
+                                    <input type="number" min="1" max="500" class="form-control" name="min_class" id="min_class" value="{{ request('min_class', \App\Services\ApplicationDemandReport::DEFAULT_MIN_CLASS) }}" title="{{ __('A programme needs at least this many first-choice applicants to count as having enough.') }}">
+                                </div>
+                                <div class="form-group col-md-4 mb-2">
+                                    <button type="submit" class="btn btn-primary" formaction="{{ route('admin.application.report.pdf') }}">
+                                        <i class="fas fa-file-pdf"></i> {{ __('Board report (PDF)') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-success" formaction="{{ route('admin.application.report.excel') }}">
+                                        <i class="fas fa-file-excel"></i> {{ __('Workbook (Excel)') }}
+                                    </button>
+                                </div>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -117,6 +155,7 @@
                                         <th>{{ __('Intake') }}</th>
                                         <th>{{ __('field_apply_date') }}</th>
                                         <th>{{ __('Stage') }}</th>
+                                        <th>{{ __('Approval') }}</th>
                                         <th>{{ __('Admission Fee') }}</th>
                                         <th>{{ __('field_status') }}</th>
                                         <th>{{ __('field_action') }}</th>
@@ -152,6 +191,24 @@
                                             @endif
                                         </td>
                                         <td>{{ $row->progress_label }}</td>
+                                        <td>
+                                            {{-- Where the application stands in the approval
+                                                 chain. The label is plain text so it exports
+                                                 cleanly; the tracker and tooltip are for the
+                                                 screen. --}}
+                                            @php $approval = $row->approvalSummary(); @endphp
+                                            <div class="approval-cell" title="{{ $approval['detail'] }}">
+                                                <span class="badge badge-{{ $approval['tone'] }}">{{ $approval['label'] }}</span>
+                                                @if($approval['state'] !== 'not_submitted' && $approval['state'] !== 'approved_before_flow')
+                                                    <div class="approval-track" aria-hidden="true">
+                                                        @foreach($approval['steps'] as $stepKey => $step)
+                                                            <span class="approval-dot {{ $step['approved'] ? 'is-done' : ($approval['step'] === $stepKey ? 'is-current is-'.$approval['tone'] : '') }}"></span>
+                                                        @endforeach
+                                                        <small class="text-muted ms-1">{{ $approval['done'] }}/{{ $approval['total'] }}</small>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </td>
                                         <td>
                                             @php
                                                 $feeEnabledValue = env('ADMISSION_FEE_ENABLED', 'true');

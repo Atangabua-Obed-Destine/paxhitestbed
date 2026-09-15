@@ -75,71 +75,12 @@ class ApplicationController extends Controller
         $data['access'] = $this->access;
 
 
-        if(!empty($request->batch) || $request->batch != null){
-            $data['selected_batch'] = $batch = $request->batch;
-        }
-        else{
-            $data['selected_batch'] = '0';
-        }
-
-        if(!empty($request->program) || $request->program != null){
-            $data['selected_program'] = $program = $request->program;
-        }
-        else{
-            $data['selected_program'] = '0';
-        }
-
-        if(!empty($request->degree_type) || $request->degree_type != null){
-            $data['selected_degree_type'] = $degreeType = $request->degree_type;
-        }
-        else{
-            $data['selected_degree_type'] = '0';
-        }
-
-        if(!empty($request->session) || $request->session != null){
-            $data['selected_session'] = $sessionId = $request->session;
-        }
-        else{
-            $data['selected_session'] = '0';
-        }
-
-        if(!empty($request->status) || $request->status != null){
-            $data['selected_status'] = $status = $request->status;
-        }
-        else{
-            $data['selected_status'] = $status = '99';
-        }
-
-        if(!empty($request->start_date) || $request->start_date != null){
-            $data['selected_start_date'] = $start_date = $request->start_date;
-        }
-        else{
-            $data['selected_start_date'] = $start_date = date('Y-m-d', strtotime(Carbon::now()->subYear()));
-        }
-
-        if(!empty($request->end_date) || $request->end_date != null){
-            $data['selected_end_date'] = $end_date = $request->end_date;
-        }
-        else{
-            $data['selected_end_date'] = $end_date = date('Y-m-d', strtotime(Carbon::today()));
-        }
-
-        if(!empty($request->registration_no) || $request->registration_no != null){
-            $data['selected_registration_no'] = $registration_no = $request->registration_no;
-        }
-        else{
-            $data['selected_registration_no'] = Null;
-        }
-
-        // Free-text search across applicant name, email and phone.
-        if(!empty($request->applicant)){
-            $data['selected_applicant'] = $applicantQuery = trim($request->applicant);
-        }
-        else{
-            $data['selected_applicant'] = null;
-            $applicantQuery = null;
-        }
-
+        // Every filter on this form lives in ApplicationListFilter, so the
+        // admissions board report exports exactly the applications this list
+        // shows for the same form values — one definition, not two that drift
+        // apart.
+        $filter = \App\Support\ApplicationListFilter::fromRequest($request);
+        $data = array_merge($data, $filter->selected);
 
         // Search Filter
         $data['batches'] = Batch::where('status', '1')->orderBy('id', 'desc')->get();
@@ -147,62 +88,9 @@ class ApplicationController extends Controller
         $data['degreeTypes'] = \App\Models\DegreeType::where('status', 1)->orderBy('title', 'asc')->get();
         $data['sessions'] = \App\Models\Session::orderBy('title', 'desc')->get();
 
-
-        if(isset($request->program) || isset($request->status) || isset($request->registration_no) || isset($request->degree_type) || isset($request->session) || !empty($applicantQuery)){
-            // Application Filter
-            $applications = Application::with(['admissionFee.paymentReceipts', 'degreeType', 'session', 'applicant', 'program'])
-                        // Falls back to created_at: an application with no
-                        // apply_date used to match no date range at all and
-                        // vanish from this list entirely, which is a worse
-                        // failure than showing it against the day it was begun.
-                        ->whereRaw('DATE(COALESCE(apply_date, created_at)) >= ?', [$start_date])
-                        ->whereRaw('DATE(COALESCE(apply_date, created_at)) <= ?', [$end_date]);
-                        if(!empty($request->batch)){
-                            $applications->where('batch_id', $batch);
-                        }
-                        if(!empty($request->program)){
-                            $applications->where('program_id', $program);
-                        }
-                        if(!empty($request->degree_type)){
-                            $applications->where('degree_type_id', $degreeType);
-                        }
-                        if(!empty($request->session)){
-                            $applications->where('session_id', $sessionId);
-                        }
-                        if(!empty($request->registration_no)){
-                            $applications->where('registration_no', 'LIKE', '%'.$registration_no.'%');
-                        }
-                        if(!empty($applicantQuery)){
-                            $like = '%'.$applicantQuery.'%';
-                            $applications->where(function ($q) use ($like) {
-                                $q->where('first_name', 'LIKE', $like)
-                                  ->orWhere('last_name', 'LIKE', $like)
-                                  ->orWhereRaw("CONCAT_WS(' ', first_name, last_name) LIKE ?", [$like])
-                                  ->orWhere('email', 'LIKE', $like)
-                                  ->orWhere('phone', 'LIKE', $like)
-                                  ->orWhereHas('applicant', function ($sub) use ($like) {
-                                      $sub->where('first_name', 'LIKE', $like)
-                                          ->orWhere('last_name', 'LIKE', $like)
-                                          ->orWhere('email', 'LIKE', $like)
-                                          ->orWhere('phone', 'LIKE', $like);
-                                  });
-                            });
-                        }
-                        // An unsubmitted draft is not an application yet — it is a form
-                        // somebody may still be filling in. Admissions acts on what has
-                        // been submitted, so drafts stay out unless asked for.
-                        //
-                        // They only became visible here at all when the date filter began
-                        // falling back to created_at; before that a null apply_date
-                        // excluded them by accident rather than by intent.
-                        if ($status === 'draft') {
-                            $applications->where('stage', 'draft');
-                        } elseif (!empty($request->status) || $request->status != null) {
-                            $applications->where('status', $status)->where('stage', '!=', 'draft');
-                        } else {
-                            $applications->where('stage', '!=', 'draft');
-                        }
-            $data['rows'] = $applications->orderBy('registration_no', 'desc')->get();
+        // The list stays empty until a search is made, as it always has.
+        if ($filter->isSearching()) {
+            $data['rows'] = $filter->query()->orderBy('registration_no', 'desc')->get();
         }
 
 
@@ -227,6 +115,26 @@ class ApplicationController extends Controller
      */
     public function store(Request $request)
     {
+        // No student record comes out of an application that has not been
+        // approved all the way through. This is checked here, before anything
+        // is validated or written, because the button on the screen being
+        // disabled is a courtesy — this is the rule. The admission used to be
+        // approved on paper and the button was open to anyone who could edit an
+        // application.
+        $source = Application::where('registration_no', $request->registration_no)->first();
+
+        if ($source && !$source->isFullyApproved()) {
+            if ($source->isApprovalRejected()) {
+                Flasher::addError(__('application_approval.rejected_for_conversion'), __('msg_error'));
+            } else {
+                Flasher::addError(__('application_approval.not_approved_for_conversion', [
+                    'step' => Application::approvalStepTitle($source->currentApprovalStep()),
+                ]), __('msg_error'));
+            }
+
+            return redirect()->back()->withInput();
+        }
+
         // Field Validation
         $request->validate([
             'batch' => 'required',
@@ -716,6 +624,8 @@ class ApplicationController extends Controller
             'path' => $this->path,
             'row' => $application,
             'timeline' => $application->statusUpdates,
+            // Which approvals are in, which one is waiting, and who signed what.
+            'approval' => app(\App\Services\ApplicationApprovalService::class)->state($application),
             'provinces' => Province::where('status', '1')->orderBy('title', 'asc')->get(),
             'present_districts' => District::where('status', '1')
                 ->where('province_id', $application->present_province)
@@ -830,7 +740,11 @@ class ApplicationController extends Controller
         $academicHistoryEnabled = $fieldEnabled('application_academic_history');
         $languageEnabled = $fieldEnabled('application_language_proficiency');
         $documentChecklistEnabled = $fieldEnabled('application_document_checklist');
-        $boardReviewEnabled = $fieldEnabled('application_board_review');
+        // The board's record of its deliberation. This used to hang on a Field
+        // toggle, 'application_board_review', that was never created — so it
+        // was always false and the form, which has existed all along, has never
+        // saved a row. It belongs to whoever gives the board approval.
+        $boardReviewEnabled = Auth::guard('web')->user()?->can('application-approve-board') ?? false;
 
         $rules = [
             'program' => ['required', 'exists:programs,id'],
@@ -878,9 +792,11 @@ class ApplicationController extends Controller
             'studied_in_english' => ['nullable', 'boolean'],
             'photo' => ['nullable', 'image', 'max:5120'],
             'signature' => ['nullable', 'image', 'max:2048'],
-            'stage' => ['required', Rule::in(array_keys(Application::stageLabelMap()))],
-            'status' => ['required', Rule::in([0, 1, 2])],
-            'progress' => ['nullable', 'integer', 'min:0', 'max:100'],
+            // stage, status and progress are deliberately not accepted here.
+            // They follow from the admission approvals, and were previously
+            // free-text controls on this form — which meant anyone who could
+            // edit an application could mark it approved and then create a
+            // student record from it. See ApplicationApprovalService.
             'documents' => ['nullable', 'array'],
         ];
 
@@ -993,9 +909,6 @@ class ApplicationController extends Controller
         try {
             DB::beginTransaction();
 
-            $previousStatus = (int) $application->status;
-            $previousStage = $application->stage;
-
             $application->program_id = $validated['program'];
             $application->first_program_choice_id = $validated['program'];
             $application->second_program_choice_id = $validated['second_program_choice_id'] ?? null;
@@ -1046,9 +959,9 @@ class ApplicationController extends Controller
             $application->registration_fee_bank = $registrationFeeBankEnabled ? ($validated['registration_fee_bank'] ?? null) : null;
             $application->registration_fee_reference = $registrationFeeReferenceEnabled ? ($validated['registration_fee_reference'] ?? null) : null;
 
-            $application->stage = $validated['stage'];
-            $application->status = (int) $validated['status'];
-            $application->progress = $validated['progress'] ?? (Application::stageProgressMap()[$application->stage] ?? $application->progress);
+            // The stage is not touched here. Editing an applicant's details is
+            // not a decision about their application; the decisions are taken
+            // on the approval panel, by whoever holds each step.
 
             if ($request->hasFile('photo')) {
                 $newPhoto = $this->uploadImage($request, 'photo', $this->path, 300, 300);
@@ -1066,16 +979,8 @@ class ApplicationController extends Controller
                 }
             }
 
-            if ($previousStatus !== (int) $application->status) {
-                if ((int) $application->status === 2) {
-                    $application->decision_at = now();
-                    if ($application->stage === 'decision_approved') {
-                        $application->completed_at = now();
-                    }
-                } elseif ((int) $application->status === 0) {
-                    $application->decision_at = now();
-                }
-            }
+            // decision_at and completed_at are stamped by recordStatus() when an
+            // approval moves the application, not by editing its details.
 
             $application->updated_by = Auth::guard('web')->id();
 
@@ -1352,7 +1257,12 @@ class ApplicationController extends Controller
             // 'permanentProvince',
             // 'permanentDistrict',
             'religionDetail',
+            'approvals.decidedBy',
         ]);
+
+        // The "For Official Use Only" block prints what was approved on the
+        // system rather than blank lines for someone to write on.
+        $data['approval'] = app(\App\Services\ApplicationApprovalService::class)->state($application);
 
         // Field toggles resolved per degree type (matches the applicant portal)
         $degreeType = $application->degreeType;
@@ -1363,43 +1273,41 @@ class ApplicationController extends Controller
         return view($this->view.'.preview', $data);
     }
 
+    /**
+     * A note on the application's timeline, optionally shown to the applicant.
+     *
+     * This used to carry a stage, a decision status and a progress percentage,
+     * which made it a second, unguarded way to approve an admission: any user
+     * with application-edit could post decision_approved here and then create a
+     * student record. The stage now follows from the approvals, so what is left
+     * is what the form was for — saying something to the applicant, or to the
+     * file.
+     */
     public function storeStatusUpdate(Request $request, Application $application)
     {
-        $stageOptions = array_keys(Application::stageLabelMap());
-
         $validated = $request->validate([
-            'stage' => ['required', Rule::in($stageOptions)],
             'title' => ['nullable', 'string', 'max:255'],
-            'note' => ['nullable', 'string', 'max:2000'],
-            'status' => ['nullable', Rule::in([0, 1, 2])],
+            'note' => ['required', 'string', 'max:2000'],
             'is_visible_to_applicant' => ['nullable', 'boolean'],
-            'progress' => ['nullable', 'integer', 'min:0', 'max:100'],
         ]);
 
         $visible = array_key_exists('is_visible_to_applicant', $validated)
             ? (bool) $validated['is_visible_to_applicant']
             : true;
 
-        $status = $validated['status'] ?? null;
-        $title = $validated['title'] ?? null;
-        $note = $validated['note'] ?? null;
-
+        // Against the stage the application is already at: a note records
+        // something, it does not move anything.
         $application->recordStatus(
-            $validated['stage'],
-            $note,
-            $status,
-            $title,
+            $application->stage,
+            $validated['note'],
+            $application->status,
+            $validated['title'] ?? null,
             Auth::guard('web')->id(),
             'admin',
             $visible
         );
 
-        if (array_key_exists('progress', $validated) && !is_null($validated['progress'])) {
-            $application->progress = $validated['progress'];
-            $application->save();
-        }
-
-        Flasher::addSuccess(__('Application status updated'), __('msg_success'));
+        Flasher::addSuccess(__('Note added to the application'), __('msg_success'));
 
         return redirect()->back();
     }

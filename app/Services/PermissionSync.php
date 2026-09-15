@@ -55,10 +55,21 @@ class PermissionSync
 
         $found = [];
 
+        // FIRST and LAST are named outright, so they are taken whatever they are
+        // called. FixPermissionNamesSeeder ends in "NamesSeeder" and so never
+        // matched the pattern: it was named as the last seeder to run and then
+        // silently never ran at all, which is why the display names and groups
+        // it settles were never applied.
+        $named = array_merge([self::FIRST], self::LAST);
+
         foreach (glob($directory . '/*.php') ?: [] as $file) {
             $name = basename($file, '.php');
 
-            if (preg_match('/Permissions?Seeder$/', $name) && !in_array($name, self::EXCLUDED, true)) {
+            if (in_array($name, self::EXCLUDED, true)) {
+                continue;
+            }
+
+            if (preg_match('/Permissions?Seeder$/', $name) || in_array($name, $named, true)) {
                 $found[] = $name;
             }
         }

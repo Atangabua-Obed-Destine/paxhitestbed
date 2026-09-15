@@ -250,9 +250,18 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('editor/upload-image', 'EditorImageUploadController@upload')->name('editor.upload-image');
 
     // Student Routes
+    // The admissions board report, for the applications matching the list's filters.
+    Route::get('admission/application-report/pdf', 'ApplicationReportController@pdf')->name('application.report.pdf');
+    Route::get('admission/application-report/excel', 'ApplicationReportController@excel')->name('application.report.excel');
     Route::get('admission/application/{application}/preview', 'ApplicationController@preview')->name('application.preview');
     Route::resource('admission/application', 'ApplicationController');
     Route::post('admission/application/{application}/status-update', 'ApplicationController@storeStatusUpdate')->name('application.status-update');
+
+    // Admission approvals. Each step's own permission is checked in
+    // ApplicationApprovalService against the step being decided, not here.
+    Route::post('admission/application/{application}/approval/approve', 'ApplicationApprovalController@approve')->name('application.approval.approve');
+    Route::post('admission/application/{application}/approval/reject', 'ApplicationApprovalController@reject')->name('application.approval.reject');
+    Route::post('admission/application/{application}/approval/return', 'ApplicationApprovalController@returnToStep')->name('application.approval.return');
     Route::get('admission/application/{application}/acceptance-letter/download', 'ApplicationController@downloadAcceptanceLetter')->name('application.acceptance-letter.download');
     Route::post('admission/application/{application}/acceptance-letter/resend', 'ApplicationController@resendAcceptanceLetter')->name('application.acceptance-letter.resend');
 

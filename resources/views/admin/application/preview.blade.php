@@ -623,10 +623,30 @@
         <div class="official-use">
             <div class="oh">{{ __('For Official Use Only') }}</div>
             <div class="ob">
-                <div class="field"><span class="lbl">{{ __('Application received by') }}</span><span class="box"></span></div>
-                <div class="field"><span class="lbl">{{ __('Date received') }}</span><span class="box"></span></div>
-                <div class="field"><span class="lbl">{{ __('Documents verified by') }}</span><span class="box"></span></div>
-                <div class="field"><span class="lbl">{{ __('Verification date') }}</span><span class="box"></span></div>
+                {{-- These were blank ruled lines, filled in by hand after
+                     printing, and nothing written on them ever came back into
+                     the system. The approvals are now given on the system, so
+                     this prints who gave each one and when. A step not yet
+                     given still prints a rule, because until it is given there
+                     is nothing to print. --}}
+                @foreach($approval['steps'] as $officialStep)
+                    <div class="field">
+                        <span class="lbl">{{ $officialStep['title'] }}</span>
+                        <span class="box">
+                            @if($officialStep['approval'])
+                                {{ $officialStep['approval']->signatory() }}@if($officialStep['approval']->signed_position), {{ $officialStep['approval']->signed_position }}@endif
+                            @endif
+                        </span>
+                    </div>
+                    <div class="field">
+                        <span class="lbl">{{ __('Date') }}</span>
+                        <span class="box">
+                            @if($officialStep['approval'])
+                                {!! $fmtDate($officialStep['approval']->decided_at) !!}
+                            @endif
+                        </span>
+                    </div>
+                @endforeach
                 <div class="field"><span class="lbl">{{ __('Admission fee status') }}</span>
                     <span class="box">
                         @if($row->admissionFee)
@@ -636,10 +656,33 @@
                         @endif
                     </span>
                 </div>
-                <div class="field"><span class="lbl">{{ __('Decision') }}</span><span class="box"></span></div>
+                <div class="field">
+                    <span class="lbl">{{ __('Decision') }}</span>
+                    <span class="box">
+                        @if($approval['rejected'])
+                            {{ __('application_stage.decision_rejected') }}
+                        @elseif($approval['complete'])
+                            {{ __('application_stage.decision_approved') }}
+                        @else
+                            {{ __('Pending') }} — {{ \App\Models\Application::approvalStepTitle($approval['current']) }}
+                        @endif
+                    </span>
+                </div>
+                {{-- A refusal has to say why, on the record as well as on screen. --}}
+                @php
+                    $refusal = $approval['history']->last(fn ($entry) => $entry->decision === 'rejected');
+                @endphp
+                @if($approval['rejected'] && $refusal && $refusal->note)
+                    <div class="field" style="grid-column: 1 / -1;">
+                        <span class="lbl">{{ __('Reason') }}</span>
+                        <span class="box">{{ $refusal->note }}</span>
+                    </div>
+                @endif
                 <div class="field" style="grid-column: 1 / -1;">
-                    <span class="lbl">{{ __('Registrar / Admissions Officer signature') }}</span>
-                    <span class="box" style="min-height: 14mm;"></span>
+                    <span class="lbl">{{ __('Recorded on the system') }}</span>
+                    <span class="box">
+                        {{ __('Approved through the admission approvals; no handwritten signature is required.') }}
+                    </span>
                 </div>
             </div>
         </div>

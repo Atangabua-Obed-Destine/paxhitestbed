@@ -727,26 +727,19 @@
                   <input type="text" class="form-control" id="academic_year" name="academic_year" value="{{ old('academic_year', $row->academic_year) }}">
                 </div>
                 @endif
-                <div class="form-group col-md-4">
-                  <label for="status">{{ __('Decision status') }}</label>
-                  <select id="status" name="status" class="form-control">
-                    <option value="">{{ __('select') }}</option>
-                    <option value="2" {{ old('status', $row->status) == 2 ? 'selected' : '' }}>{{ __('status_approved') }}</option>
-                    <option value="1" {{ old('status', $row->status) == 1 ? 'selected' : '' }}>{{ __('status_pending') }}</option>
-                    <option value="0" {{ old('status', $row->status) == 0 ? 'selected' : '' }}>{{ __('status_rejected') }}</option>
-                  </select>
-                </div>
-                <div class="form-group col-md-4">
-                  <label for="stage">{{ __('Current stage') }}</label>
-                  <select id="stage" name="stage" class="form-control">
-                    @foreach(\App\Models\Application::stageLabelMap() as $stageKey => $stageLabel)
-                      <option value="{{ $stageKey }}" {{ old('stage', $row->stage) === $stageKey ? 'selected' : '' }}>{{ $stageLabel }}</option>
-                    @endforeach
-                  </select>
-                </div>
-                <div class="form-group col-md-4">
-                  <label for="progress">{{ __('Progress (%)') }}</label>
-                  <input type="number" min="0" max="100" class="form-control" id="progress" name="progress" value="{{ old('progress', $row->progress) }}">
+                {{-- The stage, the decision and the progress used to be typed
+                     in here. They now follow from the admission approvals on the
+                     panel to the right, so that a decision is taken by whoever
+                     holds the step, and not by anyone who can edit a phone
+                     number. The application's standing is shown, not set. --}}
+                <div class="form-group col-md-12">
+                  <label>{{ __('Current stage') }}</label>
+                  <div class="border rounded p-2 bg-light">
+                    <span class="badge bg-secondary">{{ $row->progress_label }}</span>
+                    <span class="small text-muted ms-2">
+                      {{ __('Set by the admission approvals, not by hand.') }}
+                    </span>
+                  </div>
                 </div>
                 @if($fieldEnabled('application_program_choice_second'))
                 <div class="form-group col-md-6">
@@ -820,15 +813,44 @@
       </div>
 
       <div class="col-lg-4 mb-4">
+
+        {{-- =========================================================
+             Admission approvals
+
+             These replace the "For Official Use Only" block that used to be
+             printed and signed by hand. Each step is given by whoever holds its
+             permission; the student record cannot be created until all four are
+             in, and that is enforced in the controller, not by this button.
+             ========================================================= --}}
+        @include('admin.application.partials.approvals', ['row' => $row, 'approval' => $approval])
+
   <div class="card mb-4" id="board-review-accordion">
           <div class="card-header">
             <h5 class="mb-0">{{ __('Convert to student record') }}</h5>
           </div>
           <div class="card-block">
-            <p class="text-muted">{{ __('Once all requirements are verified you can create the student profile from this application.') }}</p>
-                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#convertApplicationModal">
-              <i class="fas fa-user-check"></i> {{ __('Create student record') }}
-            </button>
+            @if($approval['complete'])
+              <p class="text-muted">{{ __('Every approval is in. The student profile can be created from this application.') }}</p>
+              <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#convertApplicationModal">
+                <i class="fas fa-user-check"></i> {{ __('Create student record') }}
+              </button>
+            @elseif($approval['rejected'])
+              <p class="text-danger mb-2">
+                <i class="fas fa-times-circle"></i>
+                {{ __('This application was refused. No student record can be created from it.') }}
+              </p>
+              <button type="button" class="btn btn-success" disabled>
+                <i class="fas fa-user-check"></i> {{ __('Create student record') }}
+              </button>
+            @else
+              <p class="text-muted mb-2">
+                {{ __('Waiting on: :step', ['step' => \App\Models\Application::approvalStepTitle($approval['current'])]) }}
+              </p>
+              <button type="button" class="btn btn-success" disabled
+                      title="{{ __('Waiting on: :step', ['step' => \App\Models\Application::approvalStepTitle($approval['current'])]) }}">
+                <i class="fas fa-user-check"></i> {{ __('Create student record') }}
+              </button>
+            @endif
 
             @php
                 $convertedStudent = \App\Models\Student::where('registration_no', $row->registration_no)->first();
@@ -857,7 +879,14 @@
           </div>
         </div>
 
-        @if($fieldEnabled('application_board_review'))
+        {{-- The board's record of its deliberation.
+
+             This form has existed all along but has never saved a single row:
+             it was gated on a Field toggle named application_board_review that
+             was never created, so $fieldEnabled() was always false and the
+             section silently never rendered. It is now shown to whoever holds
+             the board approval step, which is who it was always for. --}}
+        @can('application-approve-board')
         <div class="card mb-4">
           <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">{{ __('Board review') }}</h5>
@@ -907,7 +936,7 @@
             <button type="submit" class="btn btn-primary btn-block" form="application-update-form">{{ __('Save board review') }}</button>
           </div>
         </div>
-        @endif
+        @endcan
 
         <div class="card">
           <div class="card-header">
