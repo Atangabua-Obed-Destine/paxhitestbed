@@ -95,11 +95,13 @@ class DashboardController extends Controller
 		
 		// Fees Stats - Match the fees report calculation
 		// Include all fees: status 0=unpaid, 1=paid, 2=partial. Exclude status 3=cancelled
-		$allFees = Fee::whereIn('status', [0, 1, 2])->get();
-		$data['total_fees_collected'] = $allFees->sum('paid_amount');
-		$data['total_fees_due'] = $allFees->sum(function($fee) {
-			return $fee->remaining_balance ?? 0;
-		});
+		$allFees = Fee::whereIn('status', [0, 1, 2])->withCreditMovedOut()->get();
+		// Net of overpayment credit applied to another fee, which a plain sum
+		// of paid_amount counted twice. See Fee::netPaidSql().
+		$data['total_fees_collected'] = $allFees->sum(fn ($fee) => $fee->net_paid_amount);
+		// Only what is still owed. An overpaid fee's negative balance used to be
+		// added in, and quietly reduced what everyone else owed.
+		$data['total_fees_due'] = $allFees->sum(fn ($fee) => max(0, $fee->net_remaining_balance));
 		$data['pending_payments'] = Fee::whereIn('status', [0, 2])
 			->where(function($q) {
 				$q->whereRaw('paid_amount < (fee_amount + fine_amount - discount_amount)');
@@ -283,7 +285,7 @@ class DashboardController extends Controller
 			$salaries[] = Payroll::where('status', '1')->whereYear('pay_date', $year)->whereMonth('pay_date', $l)->sum('net_salary');
 		}
 		for($i = 1; $i <= $month; $i++){
-			$fees[] = Fee::where('status', '1')->whereYear('pay_date', $year)->whereMonth('pay_date', $i)->sum('paid_amount');
+			$fees[] = Fee::where('status', '1')->whereYear('pay_date', $year)->whereMonth('pay_date', $i)->sum(\Illuminate\Support\Facades\DB::raw(Fee::cashReceivedSql('fees')));
 		}
 		for($j = 1; $j <= $month; $j++){
 			$expenses[] = Expense::where('status', '1')->whereYear('date', $year)->whereMonth('date', $j)->sum('amount');
@@ -297,7 +299,7 @@ class DashboardController extends Controller
 		$student_fee = Fee::where('status', '1')->whereYear('pay_date', $year)->sum('fee_amount');
 		$discounts = Fee::where('status', '1')->whereYear('pay_date', $year)->sum('discount_amount');
 		$fines = Fee::where('status', '1')->whereYear('pay_date', $year)->sum('fine_amount');
-		$fee_paid = Fee::where('status', '1')->whereYear('pay_date', $year)->sum('paid_amount');
+		$fee_paid = Fee::where('status', '1')->whereYear('pay_date', $year)->sum(\Illuminate\Support\Facades\DB::raw(Fee::cashReceivedSql('fees')));
 
 
 

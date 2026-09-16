@@ -68,12 +68,24 @@
                 <div class="small text-muted">{{ __('Not yet reached.') }}</div>
               @endif
 
+              @php $isFinalStep = $step['key'] === \App\Models\Application::finalApprovalStep(); @endphp
+
               @if($step['is_current'] && $mayDecide && !$approval['rejected'])
                 <div class="mt-2">
-                  <button class="btn btn-sm btn-success" type="button"
-                          data-bs-toggle="collapse" data-bs-target="#approve-{{ $step['key'] }}">
-                    <i class="fas fa-check"></i> {{ __('Approve') }}
-                  </button>
+                  @if($isFinalStep)
+                    {{-- The last approval and the record are one action, so this
+                         opens the conversion form rather than a note box. The
+                         approval is recorded with the record, in one go. --}}
+                    <button class="btn btn-sm btn-success" type="button"
+                            data-bs-toggle="modal" data-bs-target="#convertApplicationModal">
+                      <i class="fas fa-user-check"></i> {{ __('Approve & create student record') }}
+                    </button>
+                  @else
+                    <button class="btn btn-sm btn-success" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#approve-{{ $step['key'] }}">
+                      <i class="fas fa-check"></i> {{ __('Approve') }}
+                    </button>
+                  @endif
                   @if($step['sequence'] > 1)
                     <button class="btn btn-sm btn-outline-warning" type="button"
                             data-bs-toggle="collapse" data-bs-target="#return-{{ $step['key'] }}">
@@ -88,18 +100,22 @@
                   @endif
                 </div>
 
-                {{-- Approve --}}
-                <div class="collapse mt-2" id="approve-{{ $step['key'] }}">
-                  <form action="{{ route('admin.application.approval.approve', $row->id) }}" method="post">
-                    @csrf
-                    <input type="hidden" name="step" value="{{ $step['key'] }}">
-                    <textarea name="note" class="form-control form-control-sm mb-2" rows="2"
-                              maxlength="2000" placeholder="{{ __('Note (optional)') }}"></textarea>
-                    <button type="submit" class="btn btn-sm btn-success">
-                      {{ __('Give :step', ['step' => $step['title']]) }}
-                    </button>
-                  </form>
-                </div>
+                {{-- Approve. Not for the final step: that one is given by
+                     creating the student record, so there is no second path
+                     that could approve without creating. --}}
+                @if(!$isFinalStep)
+                  <div class="collapse mt-2" id="approve-{{ $step['key'] }}">
+                    <form action="{{ route('admin.application.approval.approve', $row->id) }}" method="post">
+                      @csrf
+                      <input type="hidden" name="step" value="{{ $step['key'] }}">
+                      <textarea name="note" class="form-control form-control-sm mb-2" rows="2"
+                                maxlength="2000" placeholder="{{ __('Note (optional)') }}"></textarea>
+                      <button type="submit" class="btn btn-sm btn-success">
+                        {{ __('Give :step', ['step' => $step['title']]) }}
+                      </button>
+                    </form>
+                  </div>
+                @endif
 
                 {{-- Return: a missing document is put right, not refused --}}
                 @if($step['sequence'] > 1)

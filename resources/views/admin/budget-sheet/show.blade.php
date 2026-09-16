@@ -367,8 +367,18 @@
                                                 <td>{{ __($s['label']) }}</td>
                                                 <td class="text-end">{{ number_format($s['sheet']) }}</td>
                                                 <td class="text-end">{{ number_format($s['ledger']) }}</td>
-                                                <td class="text-end {{ $s['agrees'] ? 'text-success' : 'text-danger fw-bold' }}">
-                                                    {{ $s['agrees'] ? '—' : number_format($s['difference']) }}
+                                                {{-- A section can agree while still differing by a known,
+                                                     explained amount; show that amount rather than a dash,
+                                                     so a pending correction is never invisible. --}}
+                                                <td class="text-end {{ !$s['agrees'] ? 'text-danger fw-bold' : (abs($s['difference']) > 0.009 ? 'text-warning fw-bold' : 'text-success') }}">
+                                                    @if(!$s['agrees'])
+                                                        {{ number_format($s['difference']) }}
+                                                    @elseif(abs($s['difference']) > 0.009)
+                                                        {{ number_format($s['difference']) }}
+                                                        <div class="small fw-normal">{{ __('known — see below') }}</div>
+                                                    @else
+                                                        —
+                                                    @endif
                                                 </td>
                                                 <td class="small text-muted">
                                                     {{ __('OHADA class :class', ['class' => $s['class']]) }}
@@ -383,6 +393,17 @@
                                     </tbody>
                                 </table>
                             </div>
+
+                            @if(!empty($reconciliation['known_differences']))
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    <strong>{{ __('A known difference, awaiting a ledger correction') }}</strong>
+                                    <ul class="mb-0 mt-1 small">
+                                        @foreach($reconciliation['known_differences'] as $known)
+                                            <li>{{ $known['detail'] }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
 
                             @if(count($reconciliation['issues']))
                                 <div class="alert alert-danger mt-3 mb-0">

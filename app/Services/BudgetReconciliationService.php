@@ -57,6 +57,18 @@ class BudgetReconciliationService
     {
         $actuals = $this->actuals->forPeriod($from, $to);
 
+        // A known, quantified difference, kept apart from real drift.
+        //
+        // When an overpaid fee's excess was applied to another fee as student
+        // credit, the ledger posted it as cash received on that second fee too —
+        // income, and cash, counted twice. The sheet counts the cash once, when
+        // it arrived. So the sheet's income is lower than the ledger's by exactly
+        // that credit. It is a pending ledger correction, reported by
+        // `php artisan fees:credit-audit`; until it is made, it is named here
+        // rather than turning the whole verdict red, and anything beyond it
+        // still does.
+        $creditPostedAsCash = $this->feeCreditPostedAsCash($from, $to);
+
         $sections = [];
         foreach (self::SECTION_CLASSES as $section => $meta) {
             $sheet = $this->actuals->sectionTotal($actuals['lines'], $section);
@@ -64,6 +76,7 @@ class BudgetReconciliationService
             $ledger = array_sum(array_column($accounts, 'amount'));
 
             $difference = round($sheet - $ledger, 2);
+            $explained = $section === 'income' ? round(-$creditPostedAsCash, 2) : 0.0;
 
             $sections[] = [
                 'section' => $section,
@@ -72,8 +85,23 @@ class BudgetReconciliationService
                 'sheet' => $sheet,
                 'ledger' => $ledger,
                 'difference' => $difference,
-                'agrees' => abs($difference) < 0.01,
+                'explained' => $explained,
+                'unexplained' => round($difference - $explained, 2),
+                'agrees' => abs($difference - $explained) < 0.01,
                 'accounts' => $accounts,
+            ];
+        }
+
+        $knownDifferences = [];
+
+        if (abs($creditPostedAsCash) > 0.009) {
+            $knownDifferences[] = [
+                'section' => 'income',
+                'amount' => $creditPostedAsCash,
+                'detail' => sprintf(
+                    'The ledger posted %s FCFA of student credit as cash received: overpayment moved from one fee to another was booked as income on both fees. The sheet counts that cash once. This needs a ledger correction; run php artisan fees:credit-audit for the detail.',
+                    number_format($creditPostedAsCash)
+                ),
             ];
         }
 
@@ -101,11 +129,36 @@ class BudgetReconciliationService
         return [
             'sections' => $sections,
             'issues' => $issues,
+            'known_differences' => $knownDifferences,
             'unallocated' => $actuals['unallocated'],
             'agrees' => $agrees && $issues === [],
             'from' => $from,
             'to' => $to,
         ];
+    }
+
+    /**
+     * Fee credit the ledger posted as cash a second time, for fees paid in the
+     * window.
+     *
+     * Read from what is actually posted, not from paid_amount: once the ledger
+     * has been corrected (Fees → Credit audit), each posting carries the cash
+     * received and this is zero. Worked out from paid_amount instead, it would
+     * go on "explaining" a gap that no longer exists and turn the sheet red.
+     */
+    protected function feeCreditPostedAsCash(?string $from, ?string $to): float
+    {
+        $posted = DB::table('transaction_mappings as tm')
+            ->join('journal_entries as je', 'je.id', '=', 'tm.journal_entry_id')
+            ->where('tm.transaction_type', 'fee')
+            ->where('tm.status', 'active')
+            ->select('tm.transaction_id', 'je.total_debit');
+
+        return round((float) DB::table('fees as f')
+            ->joinSub($posted, 'p', 'p.transaction_id', '=', 'f.id')
+            ->when($from, fn ($q) => $q->whereDate('f.pay_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('f.pay_date', '<=', $to))
+            ->sum(DB::raw('p.total_debit - ' . \App\Models\Fee::cashReceivedSql('f'))), 2);
     }
 
     /**

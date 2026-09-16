@@ -566,6 +566,11 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('student-credits/{id}/request-refund', 'StudentCreditController@requestRefund')->name('student-credits.request-refund');
     Route::post('student-credits/{id}/approve-refund', 'StudentCreditController@approveRefund')->name('student-credits.approve-refund');
     Route::post('student-credits/{id}/reject-refund', 'StudentCreditController@rejectRefund')->name('student-credits.reject-refund');
+
+    // Fee credit audit: duplicated credit and fee postings, corrected in one click each
+    Route::get('fees-credit-audit', 'FeeCreditAuditController@index')->name('fees-credit-audit.index');
+    Route::post('fees-credit-audit/void-duplicates', 'FeeCreditAuditController@voidDuplicates')->name('fees-credit-audit.void-duplicates');
+    Route::post('fees-credit-audit/correct-ledger', 'FeeCreditAuditController@correctLedger')->name('fees-credit-audit.correct-ledger');
     Route::post('student-credits/{id}/process-refund', 'StudentCreditController@processRefund')->name('student-credits.process-refund');
     Route::post('student-credits/{id}/apply-to-fee', 'StudentCreditController@applyToFee')->name('student-credits.apply-to-fee');
 

@@ -418,7 +418,9 @@ class GeneralLedgerController extends Controller
             $feesTableQuery->whereDate('pay_date', '<=', $endDate);
         }
         
-        $feesTableTotal = $feesTableQuery->sum('paid_amount');
+        // Net of overpayment credit applied to another fee, which a plain sum
+        // of paid_amount counts twice. See Fee::netPaidSql().
+        $feesTableTotal = (float) $feesTableQuery->sum(\Illuminate\Support\Facades\DB::raw(\App\Models\Fee::cashReceivedSql('fees')));
         
         // B. From payment_receipts table (new system - verified payments only)
         $paymentReceiptsQuery = PaymentReceipt::where('verification_status', 'verified');
@@ -453,7 +455,7 @@ class GeneralLedgerController extends Controller
             })
             ->join('fees_categories', 'fees.category_id', '=', 'fees_categories.id')
             ->where('fees_categories.status', 1)
-            ->selectRaw('fees_categories.id as category_id, SUM(fees.paid_amount) as total')
+            ->selectRaw('fees_categories.id as category_id, SUM(' . \App\Models\Fee::cashReceivedSql('fees') . ') as total')
             ->groupBy('fees_categories.id')
             ->pluck('total', 'category_id');
         

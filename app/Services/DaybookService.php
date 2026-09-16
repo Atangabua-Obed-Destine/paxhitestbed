@@ -526,7 +526,10 @@ class DaybookService
             ->where('f.paid_amount', '>', 0)
             ->when($from, fn ($q) => $q->whereDate('f.pay_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('f.pay_date', '<=', $to))
-            ->selectRaw("f.id, f.pay_date, f.paid_amount, f.note,
+            // The cash that arrived on this fee. Credit applied to it from
+            // another fee brought no cash and is not a movement in a cash book;
+            // it was already recorded when it was paid. See Fee::cashReceivedSql().
+            ->selectRaw("f.id, f.pay_date, f.paid_amount, f.note, " . \App\Models\Fee::cashReceivedSql('f') . " as cash_received,
                          m.budget_line_id as mapped_line, fc.title as category,
                          fc.is_admission, fc.is_resit, p.faculty_id,
                          TRIM(CONCAT(COALESCE(s.first_name, ap.first_name, ''), ' ',
@@ -536,6 +539,12 @@ class DaybookService
         $rows = [];
 
         foreach ($records as $r) {
+            // A fee settled entirely by credit from another fee received no
+            // cash, so it has no place in the book.
+            if ((float) $r->cash_received <= 0.009) {
+                continue;
+            }
+
             $isTuition = !$r->is_admission && !$r->is_resit;
 
             $lineId = null;
@@ -550,7 +559,7 @@ class DaybookService
                 'ref' => 'FEE-' . $r->id,
                 'description' => trim(($r->payer ?: __('Student')) . ' — ' . ($r->category ?: __('Fee'))),
                 'direction' => self::IN,
-                'amount' => (float) $r->paid_amount,
+                'amount' => (float) $r->cash_received,
                 'line_id' => $lineId,
                 'source' => 'fee',
                 'source_id' => (int) $r->id,

@@ -426,6 +426,13 @@ class StudentCreditService
             $target->updated_by = $performedBy;
             $target->save();
 
+            // The source was saved (and posted) before the transfer credit
+            // existed, so its posting still counts the money moved out as its
+            // own. Now both sides are recorded, post each at its cash received.
+            $posting = app(FeeLedgerPosting::class);
+            $posting->resync($source->fresh(), $performedBy);
+            $posting->resync($target->fresh(), $performedBy);
+
             // 5. Audit transactions for both legs (debit on source, credit on target).
             $student = optional($source->studentEnroll)->student;
             if ($student) {

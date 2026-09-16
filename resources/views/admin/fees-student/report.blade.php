@@ -80,7 +80,7 @@
                         <div class="row align-items-center">
                             <div class="col-8">
                                 <h4 class="text-c-purple">{{ $stats['overpaid_count'] }}</h4>
-                                <h6 class="text-muted m-b-0">{{ __('total_overpaid_fees') }}</h6>
+                                <h6 class="text-muted m-b-0">{{ __('Overpaid Fees') }}</h6>
                             </div>
                             <div class="col-4 text-right">
                                 <i class="feather icon-plus-circle f-28"></i>
@@ -357,7 +357,9 @@
                                         </td>
                                         <td>
                                             @php
-                                                $display_paid = min((float) $row->paid_amount, (float) $row->total_amount);
+                                                // Net of overpayment credit moved to another fee, which
+                                                // counts on that fee instead.
+                                                $display_paid = min((float) $row->net_paid_amount, (float) $row->total_amount);
                                             @endphp
                                             <span class="{{ $display_paid > 0 ? 'text-success' : 'text-muted' }}">
                                             @if(isset($setting->decimal_place))
@@ -370,7 +372,7 @@
                                         </td>
                                         <td>
                                             @php
-                                                $display_balance = max(0, $row->remaining_balance);
+                                                $display_balance = max(0, $row->net_remaining_balance);
                                             @endphp
                                             <strong class="{{ $display_balance > 0 ? 'text-danger' : 'text-success' }}">
                                             @if(isset($setting->decimal_place))
@@ -385,9 +387,9 @@
                                             <br>
                                             <small class="badge badge-warning">{{ __('partial_payment') }}</small>
                                             @endif
-                                            @if($row->isOverpaid() && $row->generatedCredits->isNotEmpty())
+                                            @if($row->credit_moved_out > 0)
                                             <br>
-                                            <small class="badge badge-info" title="{{ __('overpayment_converted_to_credit') }}"><i class="fas fa-exchange-alt"></i> {{ number_format($row->overpayment_amount, 2) }} credited</small>
+                                            <small class="badge badge-info" title="{{ __('Overpayment on this fee, moved as credit to another fee') }}"><i class="fas fa-exchange-alt"></i> {{ number_format($row->credit_moved_out, 2) }} {{ __('moved to another fee') }}</small>
                                             @endif
                                         </td>
                                         <td>
@@ -475,10 +477,10 @@
                                             @endcan
                                             @endif
 
-                                            @if($row->isOverpaid())
-                                            <!-- Overpaid fee - show credit indicator -->
+                                            @if($row->isNetOverpaid())
+                                            <!-- Overpayment still held on this fee, not yet applied elsewhere -->
                                             <span class="badge badge-primary" title="{{ __('overpayment_credit_generated') }}">
-                                                <i class="fas fa-plus-circle"></i> +{{ number_format($row->overpayment_amount, 2) }}
+                                                <i class="fas fa-plus-circle"></i> +{{ number_format($row->net_overpayment_amount, 2) }}
                                             </span>
                                             @endif
                                         </td>

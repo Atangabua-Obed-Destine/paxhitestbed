@@ -510,6 +510,9 @@
                         @can('fees-student-report')
                         <li class="{{ Request::is('admin/student-credits*') ? 'active' : '' }}"><a href="{{ route('admin.student-credits.index') }}" class="">{{ __('student_credits') }}</a></li>
                         @endcan
+                        @can('fee-credit-audit-view')
+                        <li class="{{ Request::is('admin/fees-credit-audit*') ? 'active' : '' }}"><a href="{{ route('admin.fees-credit-audit.index') }}" class="">{{ __('Credit audit') }}</a></li>
+                        @endcan
                     </ul>
                 </li>
                 @endcanany

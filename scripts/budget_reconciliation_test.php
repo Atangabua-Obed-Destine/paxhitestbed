@@ -78,6 +78,34 @@ foreach (['income' => 7, 'expenditure' => 6, 'capital' => 2] as $section => $cla
     check("$section is compared against ledger class $class", $s['class'] === $class);
 }
 
+// The one difference allowed, and only to the franc: fee credit the ledger
+// posted as cash a second time. Worked out here from the credit and posting
+// tables, not by the service, so the service cannot excuse an arbitrary gap.
+// Each posted fee: what its journal entry carries, less the cash it received
+// (paid_amount, less credit applied into it, plus transfers out of it).
+$creditPostedAsCash = 0.0;
+foreach (DB::table('transaction_mappings as tm')->join('journal_entries as je', 'je.id', '=', 'tm.journal_entry_id')
+    ->join('fees as f', 'f.id', '=', 'tm.transaction_id')
+    ->where('tm.transaction_type', 'fee')->where('tm.status', 'active')
+    ->select('f.id', 'f.paid_amount', 'je.total_debit')->get() as $postedFee) {
+    $creditPostedAsCash += (float) $postedFee->total_debit - (float) $postedFee->paid_amount
+        + (float) DB::table('credit_applications')->where('fee_id', $postedFee->id)->sum('amount_applied')
+        - (float) DB::table('student_credits')->where('source_type', 'transfer')->where('source_fee_id', $postedFee->id)->sum('original_amount');
+}
+$creditPostedAsCash = round($creditPostedAsCash, 2);
+$income = sectionOf($base, 'income');
+
+check('the only difference in income is the fee credit the ledger posted as cash',
+    abs(-$income['explained'] - $creditPostedAsCash) < 0.01 && abs($income['unexplained']) < 0.01,
+    sprintf('explained %s, expected %s, unexplained %s', number_format(-$income['explained']), number_format($creditPostedAsCash), number_format($income['unexplained'])));
+check('and it is reported by name, with its amount',
+    $creditPostedAsCash < 0.01
+        ? empty($base['known_differences'])
+        : abs(($base['known_differences'][0]['amount'] ?? 0) - $creditPostedAsCash) < 0.01,
+    json_encode($base['known_differences'] ?? null));
+check('expenditure and capital have no allowance at all',
+    sectionOf($base, 'expenditure')['explained'] == 0 && sectionOf($base, 'capital')['explained'] == 0);
+
 // Capital belongs on the balance sheet, not in the income statement: that is
 // the whole reason it is reconciled against class 2 rather than class 6.
 $capital = sectionOf($base, 'capital');

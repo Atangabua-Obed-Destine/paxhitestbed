@@ -829,10 +829,25 @@
             <h5 class="mb-0">{{ __('Convert to student record') }}</h5>
           </div>
           <div class="card-block">
+            @php
+              // Creating the record gives the final approval, so whoever holds
+              // that step converts from here. There is no separate "approve"
+              // click that could be given and then forgotten.
+              $finalStep = \App\Models\Application::finalApprovalStep();
+              $mayGiveFinalApproval = $approval['current'] === $finalStep
+                  && optional(auth('web')->user())->can(\App\Models\Application::approvalStepMap()[$finalStep]['permission']);
+            @endphp
             @if($approval['complete'])
               <p class="text-muted">{{ __('Every approval is in. The student profile can be created from this application.') }}</p>
               <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#convertApplicationModal">
                 <i class="fas fa-user-check"></i> {{ __('Create student record') }}
+              </button>
+            @elseif($mayGiveFinalApproval && !$approval['rejected'])
+              <p class="text-muted mb-2">
+                {{ __('The last approval and the student record are one step: creating the record gives :step.', ['step' => \App\Models\Application::approvalStepTitle($finalStep)]) }}
+              </p>
+              <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#convertApplicationModal">
+                <i class="fas fa-user-check"></i> {{ __('Approve & create student record') }}
               </button>
             @elseif($approval['rejected'])
               <p class="text-danger mb-2">
@@ -851,6 +866,12 @@
                 <i class="fas fa-user-check"></i> {{ __('Create student record') }}
               </button>
             @endif
+
+            {{-- Said plainly, so an empty course list does not look like a fault. --}}
+            <p class="small text-muted mt-3 mb-0">
+              <i class="fas fa-info-circle"></i>
+              {{ __('No courses are registered here. The student registers their own on Course Registration in their portal. To register courses for a student yourself, use Student → Subject Add/Drop.') }}
+            </p>
 
             @php
                 $convertedStudent = \App\Models\Student::where('registration_no', $row->registration_no)->first();
@@ -1130,11 +1151,22 @@
               @enderror
             </div>
             <div class="form-group col-md-6">
+              @php
+                // An application never carries a batch — the applicant form does
+                // not collect one — so this select used to open empty on every
+                // admission. Empty and required, it cancelled the submit in
+                // silence, and an approved application simply could not be
+                // converted: the button looked dead. Default it to the newest
+                // active batch; the admin can still change it.
+                $defaultBatch = collect($batches)->filter(fn ($option) => (string) $option->status === '1')->sortByDesc('id')->first()
+                    ?: collect($batches)->sortByDesc('id')->first();
+                $selectedBatchId = (int) old('batch', $row->batch_id ?: optional($defaultBatch)->id);
+              @endphp
               <label for="convert_batch">{{ __('field_batch') }} <span>*</span></label>
-              <select class="form-control batch @error('batch') is-invalid @enderror" id="convert_batch" name="batch" data-selected="{{ old('batch', $row->batch_id) }}" required>
+              <select class="form-control batch @error('batch') is-invalid @enderror" id="convert_batch" name="batch" data-selected="{{ $selectedBatchId ?: '' }}" required>
                 <option value="">{{ __('select') }}</option>
                 @foreach($batches as $batch)
-                  <option value="{{ $batch->id }}" {{ (int) old('batch', $row->batch_id) === $batch->id ? 'selected' : '' }}>{{ $batch->title }}</option>
+                  <option value="{{ $batch->id }}" {{ $selectedBatchId === (int) $batch->id ? 'selected' : '' }}>{{ $batch->title }}</option>
                 @endforeach
               </select>
               @error('batch')

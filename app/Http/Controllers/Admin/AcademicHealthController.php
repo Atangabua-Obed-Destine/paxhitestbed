@@ -701,7 +701,9 @@ class AcademicHealthController extends Controller
         // The report is read by administrators asking whether the school is in
         // good order, and money is half that answer. It was absent entirely.
         $feeTotals = DB::table('fees')
-            ->selectRaw('SUM(fee_amount + fine_amount - discount_amount) raised, SUM(paid_amount) paid')
+            // Paid net of overpayment credit applied to another fee, which a
+            // plain SUM(paid_amount) counts twice. See Fee::netPaidSql().
+            ->selectRaw('SUM(fee_amount + fine_amount - discount_amount) raised, SUM(' . \App\Models\Fee::netPaidSql('fees') . ') paid')
             ->first();
 
         $raised = (float) ($feeTotals->raised ?? 0);

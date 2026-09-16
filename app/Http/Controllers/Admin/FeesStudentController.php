@@ -644,13 +644,20 @@ class FeesStudentController extends Controller
 
         if(isset($request->faculty) || isset($request->program) || isset($request->session) || isset($request->semester) || isset($request->section) || isset($request->category) || isset($request->student_id)){
             // Filter Fees - Include all paid and partially paid
-            $fees = Fee::with(['studentEnroll.student', 'studentEnroll.session', 'studentEnroll.semester', 'studentEnroll.program', 'category', 'approvedReceipts', 'paymentPlan', 'creditApplications', 'generatedCredits', 'resitRequest.subject', 'resitRequest.session', 'resitRequest.resitSession', 'resitRequest.resitSemester']);
-            
+            $fees = Fee::with(['studentEnroll.student', 'studentEnroll.session', 'studentEnroll.semester', 'studentEnroll.program', 'category', 'approvedReceipts', 'paymentPlan', 'creditApplications', 'generatedCredits', 'resitRequest.subject', 'resitRequest.session', 'resitRequest.resitSession', 'resitRequest.resitSemester'])
+                ->withCreditMovedOut();
+
+            // Paid and overpaid are judged on the net paid amount: overpayment
+            // credit applied to another fee counts on that fee, not on this one
+            // as well. See Fee::netPaidSql().
+            $netPaid = Fee::netPaidSql('fees');
+            $netDue = '(fees.fee_amount - COALESCE(fees.discount_amount, 0) + COALESCE(fees.fine_amount, 0))';
+
             // Payment status filter
             if($payment_status == '1'){
                 // Fully paid (status = 1) but NOT overpaid
                 $fees->where('status', 1)
-                     ->whereRaw('paid_amount <= (fee_amount - COALESCE(discount_amount, 0) + COALESCE(fine_amount, 0))');
+                     ->whereRaw("{$netPaid} <= {$netDue}");
             } elseif($payment_status == '2'){
                 // Partially paid (status = 2)
                 $fees->where('status', 2);
@@ -664,8 +671,9 @@ class FeesStudentController extends Controller
                          $query->where('status', 'active');
                      });
             } elseif($payment_status == '5'){
-                // Overpaid (paid_amount > net_amount)
-                $fees->whereRaw('paid_amount > (fee_amount - COALESCE(discount_amount, 0) + COALESCE(fine_amount, 0))');
+                // Overpaid: still holding an excess that has not been applied
+                // to another fee.
+                $fees->whereRaw("{$netPaid} > {$netDue}");
             } else {
                 // All statuses (including status 0 = unpaid)
                 $fees->whereIn('status', [0, 1, 2, 3]);
@@ -722,12 +730,15 @@ class FeesStudentController extends Controller
             
             // Count overpaid fees
             $overpaid_count = $all_fees->filter(function($fee) {
-                return $fee->isOverpaid();
+                // Still holding an excess not applied to another fee. A First
+                // Instalment whose overpayment went to the Second is not overpaid.
+                return $fee->isNetOverpaid();
             })->count();
             
             // Calculate total overpayment amount
             $total_overpayment = $all_fees->sum(function($fee) {
-                return $fee->overpayment_amount;
+                // Only the excess still held, not what has already been applied.
+                return $fee->net_overpayment_amount;
             });
             
             // Pre-load resit markings for all resit fees in one query
@@ -751,8 +762,10 @@ class FeesStudentController extends Controller
 
             $data['stats'] = [
                 'total_fees' => $all_fees->count(),
+                // A First Instalment whose overpayment has been moved to the
+                // Second is fully paid, not overpaid — it used to be left out.
                 'fully_paid_count' => $all_fees->filter(function($fee) {
-                    return $fee->status == 1 && !$fee->isOverpaid();
+                    return $fee->status == 1 && !$fee->isNetOverpaid();
                 })->count(),
                 'partially_paid_count' => $all_fees->where('status', 2)->count(),
                 'cancelled_count' => $all_fees->where('status', 3)->count(),
@@ -760,9 +773,13 @@ class FeesStudentController extends Controller
                 'total_amount' => $all_fees->sum(function($fee) {
                     return $fee->total_amount;
                 }),
-                'total_collected' => $all_fees->sum('paid_amount'),
+                // Cash actually received: overpayment credit applied to another
+                // fee is counted on that fee and no longer on this one as well.
+                'total_collected' => $all_fees->sum(function($fee) {
+                    return $fee->net_paid_amount;
+                }),
                 'total_remaining' => $all_fees->sum(function($fee) {
-                    return max(0, $fee->remaining_balance); // Only positive remaining
+                    return max(0, $fee->net_remaining_balance); // Only positive remaining
                 }),
                 'total_overpayment' => $total_overpayment,
             ];

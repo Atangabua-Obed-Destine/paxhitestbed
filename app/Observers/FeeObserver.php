@@ -5,6 +5,8 @@ namespace App\Observers;
 use App\Models\Application;
 use App\Models\Fee;
 use App\Services\ApplicationSubmissionService;
+use App\Services\FeeLedgerPosting;
+use Illuminate\Support\Facades\Log;
 use App\Services\Resit\ResitFeeService;
 use App\Services\TransactionAutoMapService;
 
@@ -32,16 +34,7 @@ class FeeObserver
         // Skip fees under active payment plan - those are handled by PaymentPlanPayment observer
         // Skip payment-plan linked fees for auto mapping only; other sync happens below.
         if (!$fee->payment_plan_id && $fee->paid_amount > 0 && $fee->pay_date) {
-            $this->autoMapService->autoMap(
-                'fee',
-                $fee->id,
-                $fee->category_id,
-                [
-                    'amount' => $fee->paid_amount,
-                    'date' => $fee->pay_date,
-                    'description' => 'Fee Payment - ' . ($fee->category->name ?? 'Student Fee')
-                ]
-            );
+            $this->postCashReceived($fee);
         }
 
         $this->resitFeeService->syncFromFee($fee);
@@ -55,18 +48,15 @@ class FeeObserver
         // Skip fees under active payment plan - those are handled by PaymentPlanPayment observer
         if (!$fee->payment_plan_id) {
             $paidNow = ($fee->paid_amount > 0 && $fee->pay_date);
-            $payload = [
-                'amount' => $fee->paid_amount,
-                'date' => $fee->pay_date,
-                'description' => 'Fee Payment - ' . ($fee->category->name ?? 'Student Fee'),
-            ];
 
             if (!$paidNow) {
                 // Fee was un-paid (amount cleared / pay_date removed) → reverse any posting
                 $this->autoMapService->reverse('fee', $fee->id);
             } elseif ($fee->wasChanged(['paid_amount', 'category_id', 'pay_date'])) {
-                // Newly paid or amount/category changed → (re)post the correct entry
-                $this->autoMapService->remap('fee', $fee->id, $fee->category_id, $payload);
+                // Newly paid or amount/category changed → (re)post the correct
+                // entry. A changed category or date moves the entry even when
+                // the amount is the same.
+                $this->postCashReceived($fee, $fee->wasChanged(['category_id', 'pay_date']));
             }
         }
 
@@ -87,6 +77,21 @@ class FeeObserver
      * there is genuinely nothing left for them to do; leaving the application
      * sitting in draft would only wait on a button press that adds nothing.
      */
+    /**
+     * Post the fee at the cash it actually received, not its paid_amount —
+     * credit applied from another fee was already posted on that fee.
+     */
+    protected function postCashReceived(Fee $fee, bool $force = false): void
+    {
+        try {
+            app(FeeLedgerPosting::class)->resync($fee, null, $force);
+        } catch (\Throwable $e) {
+            // A posting problem must never stop a payment being recorded; the
+            // credit audit page lists any fee whose posting is out of line.
+            Log::error('Fee ledger posting failed', ['fee_id' => $fee->id, 'error' => $e->getMessage()]);
+        }
+    }
+
     protected function submitApplicationIfFeeSettled(Fee $fee): void
     {
         if (!$fee->wasChanged('status') || (int) $fee->status !== 1) {

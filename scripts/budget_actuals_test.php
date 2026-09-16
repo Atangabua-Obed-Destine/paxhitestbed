@@ -27,7 +27,9 @@ $amount = fn (string $code) => $lines[$byCode[$code] ?? 0] ?? 0.0;
 // ---- nothing is lost -----------------------------------------------------
 $expenseSource = (float) DB::table('expenses')->sum('amount');
 $incomeSource = (float) DB::table('incomes')->sum('amount');
-$feeSource = (float) DB::table('fees')->sum('paid_amount');
+// Cash received, not paid_amount: overpayment credit applied to a second fee
+// sits in both fees' paid_amount, and the sheet counts it once, when it arrived.
+$feeSource = (float) DB::table('fees')->sum(DB::raw(\App\Models\Fee::cashReceivedSql('fees')));
 $resolved = array_sum($lines) + array_sum($unallocated);
 
 check('every franc is accounted for',
@@ -52,7 +54,7 @@ $tuitionByLine = $amount('610') + $amount('611') + $amount('612') + $amount('613
 $tuitionSource = (float) DB::table('fees as f')
     ->join('fees_categories as c', 'c.id', '=', 'f.category_id')
     ->where('c.is_admission', 0)->where('c.is_resit', 0)
-    ->sum('f.paid_amount');
+    ->sum(DB::raw(\App\Models\Fee::cashReceivedSql('f')));
 check('tuition lines sum to total tuition',
     abs($tuitionByLine - $tuitionSource) < 0.01,
     number_format($tuitionByLine) . ' vs ' . number_format($tuitionSource));
@@ -65,7 +67,7 @@ foreach (BudgetLine::whereNotNull('faculty_id')->get() as $line) {
         ->join('programs as p', 'p.id', '=', 'se.program_id')
         ->where('p.faculty_id', $line->faculty_id)
         ->where('c.is_admission', 0)->where('c.is_resit', 0)
-        ->sum('f.paid_amount');
+        ->sum(DB::raw(\App\Models\Fee::cashReceivedSql('f')));
 
     check("line {$line->code} equals its school's tuition",
         abs(($lines[$line->id] ?? 0) - $expected) < 0.01,
@@ -80,7 +82,7 @@ check('tuition is no longer all on line 610',
 // ---- resit is separate, not folded into tuition --------------------------
 $resitSource = (float) DB::table('fees as f')
     ->join('fees_categories as c', 'c.id', '=', 'f.category_id')
-    ->where('c.is_resit', 1)->sum('f.paid_amount');
+    ->where('c.is_resit', 1)->sum(DB::raw(\App\Models\Fee::cashReceivedSql('f')));
 check('resit fees report on their own line',
     abs($amount('614') - $resitSource) < 0.01,
     number_format($amount('614')) . ' vs ' . number_format($resitSource));

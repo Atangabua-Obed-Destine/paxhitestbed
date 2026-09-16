@@ -59,13 +59,9 @@ $superAdmin = App\User::whereHas('roles', fn ($q) => $q->where('name', 'Super Ad
     ?: App\User::where('is_admin', 1)->where('status', '1')->firstOrFail();
 
 /** A fresh application that has collected no approvals. */
-function pendingApplication(): ?Application
-{
-    return Application::whereDoesntHave('approvals')
-        ->where('stage', '!=', 'draft')
-        ->orderBy('id', 'desc')
-        ->first();
-}
+// The fixture is shared with the other admission suites, which were starved the
+// same way: scripts/support/application_fixtures.php.
+require_once __DIR__ . '/support/application_fixtures.php';
 
 echo "\n== The chain is defined where the stages are ==\n";
 
@@ -737,6 +733,181 @@ if ($staged) {
         DB::rollBack();
     }
 }
+
+echo "\n== The final approval and the student record are one action ==\n";
+
+// Approving the last step IS creating the record: that is where the enrolment
+// is made, the fees assigned and the acceptance letter sent. An application can
+// no longer sit approved with nobody having created the student — which is
+// exactly what happened to the application that prompted this.
+
+$conversionPayload = function (Application $target) {
+    $session = app('session.store');
+    $session->start();
+
+    $program = App\Models\Program::find($target->program_id) ?: App\Models\Program::first();
+
+    return [
+        '_token' => $session->token(),
+        'registration_no' => $target->registration_no,
+        'batch' => App\Models\Batch::where('status', '1')->orderByDesc('id')->value('id'),
+        'program' => $program->id,
+        'session' => App\Models\Session::first()->id,
+        'semester' => App\Models\Semester::first()->id,
+        'section' => App\Models\Section::first()->id,
+        'first_name' => $target->first_name ?: 'Final',
+        'last_name' => $target->last_name ?: 'Step',
+        'email' => 'final.step.' . uniqid() . '@example.test',
+        'phone' => '000000000',
+        'gender' => $target->gender ?: 1,
+        'dob' => '2000-01-01',
+        'admission_date' => now()->format('Y-m-d'),
+    ];
+};
+
+// The same fixture the rest of the suite uses: a pristine application, made
+// here when the database has none free.
+$convertible = function () {
+    $application = pendingApplication();
+
+    return $application && !Student::where('registration_no', $application->registration_no)->exists()
+        ? $application
+        : null;
+};
+
+$waitingOnFinal = $convertible();
+
+if (!$waitingOnFinal) {
+    echo "  SKIP  no convertible application\n";
+} else {
+    DB::beginTransaction();
+
+    try {
+        Auth::guard('web')->login($superAdmin);
+
+        // Everything but the last step.
+        foreach (['received', 'documents', 'board'] as $step) {
+            $service->approve($waitingOnFinal->fresh(), $step, $superAdmin);
+        }
+
+        check('before converting, it waits on the final approval',
+            $waitingOnFinal->fresh()->currentApprovalStep() === Application::finalApprovalStep());
+
+        $payload = $conversionPayload($waitingOnFinal);
+        $request = Illuminate\Http\Request::create('/admin/admission/application', 'POST', $payload);
+        $request->setLaravelSession(app('session.store'));
+        $kernel->handle($request);
+
+        $created = Student::where('registration_no', $waitingOnFinal->registration_no)->first();
+        $fresh = $waitingOnFinal->fresh();
+
+        check('creating the record from the final step works', $created !== null);
+        check('and records the final approval in the same act', $fresh->isFullyApproved());
+        check('exactly once',
+            $fresh->approvals->where('step', Application::finalApprovalStep())->where('decision', 'approved')->count() === 1);
+    } finally {
+        DB::rollBack();
+    }
+
+    // Atomicity: the approval must not survive a conversion that fails.
+    DB::beginTransaction();
+
+    try {
+        $target = $convertible();
+        $takenEmail = Student::whereNotNull('email')->value('email');
+
+        foreach (['received', 'documents', 'board'] as $step) {
+            $service->approve($target->fresh(), $step, $superAdmin);
+        }
+
+        $payload = $conversionPayload($target);
+        $payload['email'] = $takenEmail; // already belongs to a student
+
+        $request = Illuminate\Http\Request::create('/admin/admission/application', 'POST', $payload);
+        $request->setLaravelSession(app('session.store'));
+        $kernel->handle($request);
+
+        $fresh = $target->fresh();
+
+        check('a conversion that fails creates no student',
+            !Student::where('registration_no', $target->registration_no)->exists());
+        check('and gives no final approval either',
+            !$fresh->isFullyApproved() && $fresh->currentApprovalStep() === Application::finalApprovalStep());
+    } finally {
+        DB::rollBack();
+    }
+
+    // An application already approved converts without being approved twice.
+    $alreadyApproved = Application::whereHas('approvals')->get()
+        ->first(fn ($row) => $row->isFullyApproved() && !Student::where('registration_no', $row->registration_no)->exists());
+
+    if ($alreadyApproved) {
+        DB::beginTransaction();
+
+        try {
+            $before = $alreadyApproved->approvals()->count();
+
+            $request = Illuminate\Http\Request::create('/admin/admission/application', 'POST', $conversionPayload($alreadyApproved));
+            $request->setLaravelSession(app('session.store'));
+            $kernel->handle($request);
+
+            check('an already-approved application still converts',
+                Student::where('registration_no', $alreadyApproved->registration_no)->exists());
+            check('without recording a second final approval',
+                $alreadyApproved->fresh()->approvals()->count() === $before,
+                $before . ' before, ' . $alreadyApproved->fresh()->approvals()->count() . ' after');
+        } finally {
+            DB::rollBack();
+        }
+    }
+
+    // Nobody without the final step may convert at the final step.
+    $withoutFinal = App\User::where('is_admin', 0)->where('status', '1')->get()
+        ->first(fn ($user) => $user->can('application-edit') && !$user->can('application-approve-final'));
+
+    if ($withoutFinal) {
+        DB::beginTransaction();
+
+        try {
+            $target = $convertible();
+
+            foreach (['received', 'documents', 'board'] as $step) {
+                $service->approve($target->fresh(), $step, $superAdmin);
+            }
+
+            Auth::guard('web')->login($withoutFinal);
+
+            $request = Illuminate\Http\Request::create('/admin/admission/application', 'POST', $conversionPayload($target));
+            $request->setLaravelSession(app('session.store'));
+            $kernel->handle($request);
+
+            check('someone who does not hold the final step cannot convert at it',
+                !Student::where('registration_no', $target->registration_no)->exists());
+            check('and no approval is recorded for them', !$target->fresh()->isFullyApproved());
+        } finally {
+            DB::rollBack();
+            Auth::guard('web')->login($superAdmin);
+        }
+    } else {
+        echo "  SKIP  no member of staff holds application-edit without the final step\n";
+    }
+}
+
+$approvalsPartial = file_get_contents(__DIR__ . '/../resources/views/admin/application/partials/approvals.blade.php');
+
+check('the final step offers the conversion, not a separate approve box',
+    str_contains($approvalsPartial, 'Approve & create student record')
+    && str_contains($approvalsPartial, "data-bs-target=\"#convertApplicationModal\""));
+check('and keeps no second path that could approve it without creating the record',
+    !preg_match('~id="approve-\{\{ \$step\[.key.\] \}\}"~', $approvalsPartial)
+    || str_contains($approvalsPartial, '@if(!$isFinalStep)'));
+
+// Anything this suite made for itself goes now, so the next run starts where
+// this one did.
+removeFixtures();
+
+check('the suite left no fixtures of its own behind',
+    !Application::where('first_name', 'Fixture')->where('last_name', 'Application')->exists());
 
 echo "\n$passed passed, $failed failed\n";
 

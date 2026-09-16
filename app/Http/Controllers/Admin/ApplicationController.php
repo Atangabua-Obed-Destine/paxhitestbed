@@ -10,7 +10,6 @@ use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Support\Facades\DB;
 use App\Models\StudentRelative;
 use App\Models\StudentEnroll;
-use App\Models\EnrollSubject;
 use Illuminate\Http\Request;
 use App\Traits\FileUploader;
 use App\Models\Application;
@@ -123,7 +122,28 @@ class ApplicationController extends Controller
         // application.
         $source = Application::where('registration_no', $request->registration_no)->first();
 
-        if ($source && !$source->isFullyApproved()) {
+        // The last approval and the student record are one action. Creating the
+        // record IS the final approval: it is the point at which the enrolment
+        // is made, the fees are assigned and the acceptance letter goes out, so
+        // an application cannot sit approved-but-not-created. Whoever holds the
+        // final step may therefore convert an application that is waiting on it,
+        // and the approval is recorded below inside the same transaction as the
+        // record — if the conversion fails, neither happened.
+        //
+        // Every earlier step is still refused here, and an application already
+        // approved (including those approved before this flow existed) still
+        // converts without being approved twice.
+        $user = Auth::guard('web')->user();
+        $finalStep = Application::finalApprovalStep();
+
+        $givesFinalApproval = $source
+            && !$source->isFullyApproved()
+            && !$source->isApprovalRejected()
+            && $source->currentApprovalStep() === $finalStep
+            && $user
+            && $user->can(Application::approvalStepMap()[$finalStep]['permission']);
+
+        if ($source && !$source->isFullyApproved() && !$givesFinalApproval) {
             if ($source->isApprovalRejected()) {
                 Flasher::addError(__('application_approval.rejected_for_conversion'), __('msg_error'));
             } else {
@@ -177,6 +197,15 @@ class ApplicationController extends Controller
         // Insert Data
         try{
             DB::beginTransaction();
+
+            // Creating the record IS the final approval, and both happen here
+            // or neither does: if anything below fails, the approval is rolled
+            // back with it and the application is left waiting its turn rather
+            // than approved with no student to show for it.
+            if ($givesFinalApproval) {
+                app(\App\Services\ApplicationApprovalService::class)
+                    ->approve(Application::findOrFail($source->id), $finalStep, $user);
+            }
 
             $application = new Student;
             $application->registration_no = $request->registration_no;
@@ -397,15 +426,18 @@ class ApplicationController extends Controller
             }
 
 
-            // Assign Subjects
-            $enrollSubject = EnrollSubject::where('program_id', $request->program)->where('semester_id', $request->semester)->where('section_id', $request->section)->first();
-
-            if(isset($enrollSubject)){
-                foreach($enrollSubject->subjects as $subject){
-                    // Attach Subject
-                    $enroll->subjects()->attach($subject->id);
-                }
-            }
+            // No courses are assigned here on purpose. The student registers
+            // their own in the portal, on Course Registration — the screen that
+            // exists for it, and the one that generates their Form A3.
+            //
+            // Assigning the whole subject set here left that screen with
+            // nothing to choose, because it offers the same set minus whatever
+            // is already attached. The student could not undo it either: a
+            // compulsory or university-requirement subject of the current
+            // semester cannot be dropped.
+            //
+            // An admin who does need to register courses for somebody still
+            // can, from Student → Subject Add/Drop.
 
             // Auto-assign fees from program semester fee configuration
             $this->autoAssignProgramSemesterFees($enroll);

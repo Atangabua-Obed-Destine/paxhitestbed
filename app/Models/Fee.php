@@ -178,6 +178,147 @@ class Fee extends Model
         return $this->remaining_balance < 0;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Paid, net of credit moved to other fees
+    |--------------------------------------------------------------------------
+    |
+    | When a fee is overpaid, the excess is raised as a student credit and later
+    | applied to another fee — typically a First Instalment overpaid before the
+    | Second Instalment was configured. Applying the credit adds it to the target
+    | fee's paid_amount, but nothing ever took it off the source fee's. So the
+    | same money sat in two fees' paid_amount, and every total built by summing
+    | paid_amount counted it twice: Total Collected, the dashboard, the budget
+    | sheet's fee actuals, the General Ledger's fee summary.
+    |
+    | "Net paid" is paid_amount less the overpayment credit that has since been
+    | applied elsewhere. The money counts on the fee it went to, and only there —
+    | which is exactly what a manual transfer between fees already does. Summed
+    | across fees, net paid is the cash actually received.
+    |
+    | The stored paid_amount is left as it is: it is what the receipts and the
+    | ledger were written from.
+    */
+
+    /** @var float|null */
+    protected $creditMovedOutCache = null;
+
+    /**
+     * SQL for the overpayment credit raised on a fee and applied to other fees.
+     *
+     * @param string $feeIdColumn the column holding the fee's id, e.g. "fees.id" or "f.id"
+     */
+    public static function creditMovedOutSql(string $feeIdColumn = 'fees.id'): string
+    {
+        return '(SELECT COALESCE(SUM(ca.amount_applied), 0)'
+            . ' FROM credit_applications ca'
+            . ' JOIN student_credits sc ON sc.id = ca.student_credit_id'
+            . ' WHERE sc.source_fee_id = ' . $feeIdColumn
+            . " AND sc.source_type = '" . StudentCredit::SOURCE_OVERPAYMENT . "')";
+    }
+
+    /**
+     * SQL for a fee's net paid amount.
+     *
+     * @param string $alias the fees table alias in the surrounding query
+     */
+    public static function netPaidSql(string $alias = 'fees'): string
+    {
+        return '(' . $alias . '.paid_amount - ' . static::creditMovedOutSql($alias . '.id') . ')';
+    }
+
+    /**
+     * SQL for the cash actually received on a fee — for anything dated.
+     *
+     * Net paid (above) puts moved credit on the fee it went to, which is right
+     * for whether a fee is settled. But the cash arrived with the fee it was
+     * paid on, in that fee's month. A budget sheet, daybook or monthly chart
+     * built from net paid would move an overpayment out of the month it was
+     * received and show the later credit as cash. So dated views use this:
+     * paid_amount, less any credit applied to the fee (it brought no cash),
+     * plus anything transferred out of it (that cash did arrive here).
+     *
+     * Summed across all fees it equals net paid exactly; only the dating differs.
+     *
+     * @param string $alias the fees table alias in the surrounding query
+     */
+    public static function cashReceivedSql(string $alias = 'fees'): string
+    {
+        return '(' . $alias . '.paid_amount'
+            . ' - (SELECT COALESCE(SUM(ca2.amount_applied), 0) FROM credit_applications ca2'
+            . ' WHERE ca2.fee_id = ' . $alias . '.id)'
+            . ' + (SELECT COALESCE(SUM(sc2.original_amount), 0) FROM student_credits sc2'
+            . ' WHERE sc2.source_fee_id = ' . $alias . '.id'
+            . " AND sc2.source_type = '" . StudentCredit::SOURCE_TRANSFER . "'))";
+    }
+
+    /**
+     * The cash this fee actually received — the per-fee form of
+     * cashReceivedSql(), and the amount its ledger posting must carry.
+     *
+     * Read fresh every time: it is used straight after credit is applied or a
+     * transfer is made, and a cached value would post the old figure.
+     */
+    public function getCashReceivedAmountAttribute(): float
+    {
+        $creditIn = (float) CreditApplication::where('fee_id', $this->id)->sum('amount_applied');
+
+        $transferredOut = (float) StudentCredit::where('source_fee_id', $this->id)
+            ->where('source_type', StudentCredit::SOURCE_TRANSFER)
+            ->sum('original_amount');
+
+        return round((float) ($this->paid_amount ?? 0) - $creditIn + $transferredOut, 2);
+    }
+
+    /** Load credit_moved_out with the fees, so a list does not query once per row. */
+    public function scopeWithCreditMovedOut($query)
+    {
+        if (is_null($query->getQuery()->columns)) {
+            $query->select('fees.*');
+        }
+
+        return $query->selectRaw(static::creditMovedOutSql('fees.id') . ' as credit_moved_out');
+    }
+
+    public function getCreditMovedOutAttribute(): float
+    {
+        if (array_key_exists('credit_moved_out', $this->attributes)) {
+            return (float) $this->attributes['credit_moved_out'];
+        }
+
+        if ($this->creditMovedOutCache === null) {
+            $this->creditMovedOutCache = (float) CreditApplication::query()
+                ->join('student_credits', 'student_credits.id', '=', 'credit_applications.student_credit_id')
+                ->where('student_credits.source_fee_id', $this->id)
+                ->where('student_credits.source_type', StudentCredit::SOURCE_OVERPAYMENT)
+                ->sum('credit_applications.amount_applied');
+        }
+
+        return $this->creditMovedOutCache;
+    }
+
+    /** What was paid on this fee and still belongs to it. */
+    public function getNetPaidAmountAttribute(): float
+    {
+        return round((float) ($this->paid_amount ?? 0) - $this->credit_moved_out, 2);
+    }
+
+    public function getNetRemainingBalanceAttribute(): float
+    {
+        return round((float) ($this->total_amount ?? 0) - $this->net_paid_amount, 2);
+    }
+
+    /** Overpayment still held on this fee — not yet applied anywhere else. */
+    public function getNetOverpaymentAmountAttribute(): float
+    {
+        return max(0, -$this->net_remaining_balance);
+    }
+
+    public function isNetOverpaid(): bool
+    {
+        return $this->net_remaining_balance < -0.005;
+    }
+
     /**
      * Get total credits applied to this fee.
      *

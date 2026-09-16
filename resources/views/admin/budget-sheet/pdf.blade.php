@@ -165,6 +165,12 @@
 
     @if(!empty($reconciliation['agrees']))
         &nbsp;·&nbsp; {{ __('Agreed with the general ledger.') }}
+        @if(!empty($reconciliation['known_differences']))
+            {{ __('Except a known difference awaiting a ledger correction:') }}
+            @foreach($reconciliation['known_differences'] as $known)
+                {{ $known['detail'] }}
+            @endforeach
+        @endif
     @else
         &nbsp;·&nbsp; <strong>{{ __('NOT yet agreed with the general ledger.') }}</strong>
     @endif

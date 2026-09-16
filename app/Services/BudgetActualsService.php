@@ -113,8 +113,13 @@ class BudgetActualsService
             ->leftJoin('fees_categories as fc', 'fc.id', '=', 'f.category_id')
             ->leftJoin('student_enrolls as se', 'se.id', '=', 'f.student_enroll_id')
             ->leftJoin('programs as p', 'p.id', '=', 'se.program_id')
+            // Cash actually received, in the period it arrived. Summing
+            // paid_amount counted overpayment credit twice — once on the fee it
+            // was paid on, again on the fee it was applied to — and put the
+            // second copy in a later period as if it were new cash.
+            // See Fee::cashReceivedSql().
             ->selectRaw('m.budget_line_id as mapped_line, fc.is_admission, fc.is_resit,
-                         p.faculty_id, SUM(f.paid_amount) as total')
+                         p.faculty_id, SUM(' . \App\Models\Fee::cashReceivedSql('f') . ') as total')
             ->where('f.paid_amount', '>', 0)
             ->when($from, fn ($q) => $q->whereDate('f.pay_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('f.pay_date', '<=', $to))
