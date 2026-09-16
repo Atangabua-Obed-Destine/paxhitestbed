@@ -586,12 +586,10 @@ class FeesStudentController extends Controller
             $data['selected_section'] = $section = '0';
         }
 
-        if(!empty($request->category) || $request->category != null){
-            $data['selected_category'] = $category = $request->category;
-        }
-        else{
-            $data['selected_category'] = $category = '0';
-        }
+        // Fees type: any number of categories. None chosen (or "All") means every
+        // category. A single value from an old link still works.
+        $data['selected_category'] = $category = collect((array) $request->input('category', []))
+            ->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
 
         if(!empty($request->student_id) || $request->student_id != null){
             $data['selected_student_id'] = $student_id = $request->student_id;
@@ -600,12 +598,13 @@ class FeesStudentController extends Controller
             $data['selected_student_id'] = $student_id = null;
         }
 
-        if(!empty($request->payment_status) || $request->payment_status != null){
-            $data['selected_payment_status'] = $payment_status = $request->payment_status;
-        }
-        else{
-            $data['selected_payment_status'] = $payment_status = 'all';
-        }
+        // Payment status: any number of statuses, shown if a fee matches any of
+        // them. None chosen (or "all") means every status. A single value from
+        // an old link still works.
+        $data['selected_payment_status'] = $payment_status = collect((array) $request->input('payment_status', []))
+            ->map(fn ($value) => (string) $value)
+            ->filter(fn ($value) => in_array($value, ['0', '1', '2', '3', '4', '5'], true))
+            ->unique()->values()->all();
 
 
 
@@ -653,27 +652,30 @@ class FeesStudentController extends Controller
             $netPaid = Fee::netPaidSql('fees');
             $netDue = '(fees.fee_amount - COALESCE(fees.discount_amount, 0) + COALESCE(fees.fine_amount, 0))';
 
-            // Payment status filter
-            if($payment_status == '1'){
-                // Fully paid (status = 1) but NOT overpaid
-                $fees->where('status', 1)
-                     ->whereRaw("{$netPaid} <= {$netDue}");
-            } elseif($payment_status == '2'){
-                // Partially paid (status = 2)
-                $fees->where('status', 2);
-            } elseif($payment_status == '3'){
-                // Cancelled (status = 3)
-                $fees->where('status', 3);
-            } elseif($payment_status == '4'){
-                // Payment Plan (has active payment plan)
-                $fees->whereNotNull('payment_plan_id')
-                     ->whereHas('paymentPlan', function($query) {
-                         $query->where('status', 'active');
-                     });
-            } elseif($payment_status == '5'){
+            // Payment status filter: a fee is shown if it matches any chosen status.
+            $statusFilters = [
+                // Unpaid
+                '0' => fn ($q) => $q->where('status', 0),
+                // Fully paid but NOT overpaid
+                '1' => fn ($q) => $q->where('status', 1)->whereRaw("{$netPaid} <= {$netDue}"),
+                // Partially paid
+                '2' => fn ($q) => $q->where('status', 2),
+                // Cancelled
+                '3' => fn ($q) => $q->where('status', 3),
+                // On an active payment plan
+                '4' => fn ($q) => $q->whereNotNull('payment_plan_id')
+                    ->whereHas('paymentPlan', fn ($plan) => $plan->where('status', 'active')),
                 // Overpaid: still holding an excess that has not been applied
                 // to another fee.
-                $fees->whereRaw("{$netPaid} > {$netDue}");
+                '5' => fn ($q) => $q->whereRaw("{$netPaid} > {$netDue}"),
+            ];
+
+            if(!empty($payment_status)){
+                $fees->where(function ($any) use ($payment_status, $statusFilters) {
+                    foreach($payment_status as $status){
+                        $any->orWhere(fn ($q) => $statusFilters[$status]($q));
+                    }
+                });
             } else {
                 // All statuses (including status 0 = unpaid)
                 $fees->whereIn('status', [0, 1, 2, 3]);
@@ -701,8 +703,8 @@ class FeesStudentController extends Controller
                     }
                 });
             }
-            if($category != 0){
-                $fees->where('category_id', $category);
+            if(!empty($category)){
+                $fees->whereIn('category_id', $category);
             }
             if(!empty($request->student_id)){
                 $fees->whereHas('studentEnroll', function ($query) use ($student_id){

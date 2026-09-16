@@ -1052,6 +1052,7 @@
     "filter_payment_status": "Payment Status",
     "filter_transactions": "Filter Transactions",
     "filter_unpaid_fees": "Unpaid Fees",
+    "filter_overpaid_fees": "Overpaid Fees",
     "final_profit_or_loss": "Final profit or loss after all expenses",
     "financial_information": "Financial Information",
     "financial_metrics": "Financial Metrics",

@@ -235,6 +235,9 @@
 
 @if ($canCorrect)
 @push('scripts')
+{{-- SweetAlert2 is not part of the admin layout; each page that uses it loads it. --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function () {
     function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }

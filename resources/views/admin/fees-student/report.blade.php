@@ -154,23 +154,22 @@
 
                                 <div class="form-group col-md-2">
                                     <label for="category">{{ __('field_fees_type') }}</label>
-                                    <select class="form-control" name="category" id="category">
-                                        <option value="0">{{ __('all') }}</option>
+                                    <select class="form-control select2" name="category[]" id="category" multiple data-placeholder="{{ __('all') }}">
                                         @foreach( $categories as $category )
-                                        <option value="{{ $category->id }}" @if( $selected_category == $category->id) selected @endif>{{ $category->title }}</option>
+                                        <option value="{{ $category->id }}" @selected(in_array($category->id, (array) $selected_category))>{{ $category->title }}</option>
                                         @endforeach
                                     </select>
                                 </div>
 
                                 <div class="form-group col-md-2">
                                     <label for="payment_status">{{ __('filter_payment_status') }}</label>
-                                    <select class="form-control" name="payment_status" id="payment_status">
-                                        <option value="all" @if($selected_payment_status == 'all') selected @endif>{{ __('all_payment_statuses') }}</option>
-                                        <option value="1" @if($selected_payment_status == '1') selected @endif>{{ __('filter_fully_paid_fees') }}</option>
-                                        <option value="2" @if($selected_payment_status == '2') selected @endif>{{ __('filter_partially_paid_fees') }}</option>
-                                        <option value="3" @if($selected_payment_status == '3') selected @endif>{{ __('status_canceled') }}</option>
-                                        <option value="4" @if($selected_payment_status == '4') selected @endif>{{ __('payment_plan') }}</option>
-                                        <option value="5" @if($selected_payment_status == '5') selected @endif>{{ __('filter_overpaid_fees') }}</option>
+                                    <select class="form-control select2" name="payment_status[]" id="payment_status" multiple data-placeholder="{{ __('all_payment_statuses') }}">
+                                        <option value="0" @selected(in_array('0', (array) $selected_payment_status, true))>{{ __('filter_unpaid_fees') }}</option>
+                                        <option value="1" @selected(in_array('1', (array) $selected_payment_status, true))>{{ __('filter_fully_paid_fees') }}</option>
+                                        <option value="2" @selected(in_array('2', (array) $selected_payment_status, true))>{{ __('filter_partially_paid_fees') }}</option>
+                                        <option value="3" @selected(in_array('3', (array) $selected_payment_status, true))>{{ __('status_canceled') }}</option>
+                                        <option value="4" @selected(in_array('4', (array) $selected_payment_status, true))>{{ __('payment_plan') }}</option>
+                                        <option value="5" @selected(in_array('5', (array) $selected_payment_status, true))>{{ __('filter_overpaid_fees') }}</option>
                                     </select>
                                 </div>
 
