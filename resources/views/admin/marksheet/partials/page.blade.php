@@ -129,6 +129,34 @@
                     <div class="tp-info-cell tp-info-label">{{ __('field_batch') }}</div>
                     <div class="tp-info-cell tp-info-value">{{ $row->batch->title ?? 'N/A' }}</div>
                 </div>
+                @php
+                    // The national exam code CNOENC issued this student, shown
+                    // only once it has been recorded (Admission → HND Exam
+                    // Codes). A student who changed programme keeps the code of
+                    // the programme this transcript is for. Two years of HND
+                    // means two codes, so each is shown against its level.
+                    $examCodes = \App\Models\StudentExamCode::where('student_id', $row->id)
+                        ->where(function ($query) use ($selectedProgramId) {
+                            $query->where('program_id', $selectedProgramId)->orWhereNull('program_id');
+                        })
+                        ->orderBy('level')->get();
+                @endphp
+                @if($examCodes->isNotEmpty())
+                <div class="tp-info-row">
+                    <div class="tp-info-cell tp-info-label">{{ __('HND Exam Code') }}</div>
+                    <div class="tp-info-cell tp-info-value">
+                        @if($examCodes->count() === 1)
+                            <span class="tp-matricule">{{ $examCodes->first()->code }}</span>
+                        @else
+                            {{ $examCodes->map(fn ($c) => __('Level :level', ['level' => $c->level]) . ': ' . $c->code)->implode('   ') }}
+                        @endif
+                    </div>
+                    {{-- Empty, not absent: the cells hold the column widths so
+                         this row lines up with the ones above it. --}}
+                    <div class="tp-info-cell"></div>
+                    <div class="tp-info-cell"></div>
+                </div>
+                @endif
                 <div class="tp-info-row">
                     <div class="tp-info-cell tp-info-label">{{ __('field_gender') }}</div>
                     <div class="tp-info-cell tp-info-value">

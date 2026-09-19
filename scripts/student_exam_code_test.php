@@ -343,6 +343,72 @@ if (!is_file($file)) {
 
 // ---------------------------------------------------------------------------
 
+echo "\n== On the transcript ==\n";
+
+// A student whose transcript actually has marks on it, so the page renders as
+// it does in use rather than as an empty shell.
+$transcriptEnroll = StudentEnroll::whereIn('student_id', $expected)
+    ->whereHas('subjectMarks')
+    ->orderByDesc('id')
+    ->first();
+
+if (!$transcriptEnroll) {
+    echo "  SKIP  no enrolment with marks to print a transcript for\n";
+} else {
+    $studentId = $transcriptEnroll->student_id;
+    $printUrl = "/admin/transcript/marksheet-print/{$studentId}?enrollment_id={$transcriptEnroll->id}";
+
+    DB::beginTransaction();
+
+    try {
+        [$status, $before] = $render($printUrl);
+        check('the transcript prints', $status === 200, "status $status");
+        check('and carries no exam code line before one is recorded',
+            !str_contains($before, 'HND Exam Code'));
+
+        StudentExamCode::create([
+            'student_id' => $studentId, 'session_id' => $transcriptEnroll->session_id, 'level' => $level,
+            'code' => 'HND26TRANSCR1', 'program_id' => $transcriptEnroll->program_id,
+        ]);
+
+        [$status, $after] = $render($printUrl);
+        check('once recorded, the code appears on the printed transcript',
+            $status === 200 && str_contains($after, 'HND Exam Code') && str_contains($after, 'HND26TRANSCR1'));
+
+        [$status, $download] = $render("/admin/transcript/marksheet-download/{$studentId}?enrollment_id={$transcriptEnroll->id}");
+        check('and on the downloaded copy', $status === 200 && str_contains($download, 'HND26TRANSCR1'), "status $status");
+
+        [$status, $bulk] = $render("/admin/transcript/marksheet-bulk?students={$transcriptEnroll->id}");
+        check('and on a batch printed from the list', $status === 200 && str_contains($bulk, 'HND26TRANSCR1'), "status $status");
+
+        // A code belongs to the programme it was issued for.
+        $otherProgram = App\Models\Program::where('id', '!=', $transcriptEnroll->program_id)->value('id');
+
+        if ($otherProgram) {
+            StudentExamCode::where('student_id', $studentId)->update(['program_id' => $otherProgram]);
+            [, $otherHtml] = $render($printUrl);
+            check('a code issued for another programme is not shown on this transcript',
+                !str_contains($otherHtml, 'HND26TRANSCR1'));
+        }
+
+        // Both years of HND, each against its level.
+        StudentExamCode::where('student_id', $studentId)->update(['program_id' => $transcriptEnroll->program_id]);
+        StudentExamCode::create([
+            'student_id' => $studentId, 'session_id' => $transcriptEnroll->session_id, 'level' => $level === 1 ? 2 : 1,
+            'code' => 'HND26TRANSCR2', 'program_id' => $transcriptEnroll->program_id,
+        ]);
+
+        [, $bothHtml] = $render($printUrl);
+        check('a student with a code for each level shows both, labelled',
+            str_contains($bothHtml, 'HND26TRANSCR1') && str_contains($bothHtml, 'HND26TRANSCR2')
+                && str_contains($bothHtml, 'Level 1') && str_contains($bothHtml, 'Level 2'));
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 echo "\n== Permissions ==\n";
 
 [$status, $html] = $render(('/admin/admission/student-form-a2'));
