@@ -11,7 +11,7 @@
         </li>
         @endcan
 
-        @canany(['application-create', 'application-view', 'applicant-view', 'student-create', 'student-view', 'student-import', 'student-password-print', 'student-password-change', 'student-card', 'student-transfer-in-create', 'student-transfer-in-view', 'student-transfer-out-create', 'student-transfer-out-view', 'status-type-create', 'status-type-view', 'id-card-setting-view', 'student-form-a2-view', 'student-form-a3-view'])
+        @canany(['application-create', 'application-view', 'applicant-view', 'student-create', 'student-view', 'student-import', 'student-password-print', 'student-password-change', 'student-card', 'student-transfer-in-create', 'student-transfer-in-view', 'student-transfer-out-create', 'student-transfer-out-view', 'status-type-create', 'status-type-view', 'id-card-setting-view', 'student-form-a2-view', 'student-form-a3-view', 'student-exam-code-view'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/admission*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
                 <span class="pcoded-micon"><i class="fas fa-university"></i></span>
@@ -90,6 +90,9 @@
                 <li class="{{ Request::is('admin/form-a2-access*') ? 'active' : '' }}"><a href="{{ route('admin.form-a2-access.index') }}" class="">{{ __('Form A2 Access') }}</a></li>
                 @endcan
 
+                @can('student-exam-code-view')
+                <li class="{{ Request::is('admin/admission/student-exam-codes*') ? 'active' : '' }}"><a href="{{ route('admin.student-exam-codes.index') }}" class=""><i class="fas fa-id-badge"></i> {{ __('HND Exam Codes') }}</a></li>
+                @endcan
                 @can('student-form-a2-view')
                 <li class="{{ Request::is('admin/admission/student-form-a2*') ? 'active' : '' }}"><a href="{{ route('admin.student-form-a2.index') }}" class=""><i class="fas fa-file-alt"></i> {{ __('Student Form A2') }}</a></li>
                 @endcan

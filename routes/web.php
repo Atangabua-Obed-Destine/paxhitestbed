@@ -296,6 +296,11 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('admission/student-form-a2/{enrollment}/download', 'StudentFormA2Controller@download')->name('student-form-a2.download');
     Route::post('admission/student-form-a2/bulk', 'StudentFormA2Controller@bulk')->name('student-form-a2.bulk');
 
+    // HND exam codes (Admin): the national codes CNOENC issues each year
+    Route::get('admission/student-exam-codes', 'StudentExamCodeController@index')->name('student-exam-codes.index');
+    Route::post('admission/student-exam-codes', 'StudentExamCodeController@save')->name('student-exam-codes.save');
+    Route::get('admission/student-exam-codes/pdf', 'StudentExamCodeController@pdf')->name('student-exam-codes.pdf');
+
     // Student Form A3 (Admin)
     Route::get('admission/student-form-a3', 'StudentFormA3Controller@index')->name('student-form-a3.index');
     Route::get('admission/student-form-a3/{id}/preview', 'StudentFormA3Controller@preview')->name('student-form-a3.preview');
