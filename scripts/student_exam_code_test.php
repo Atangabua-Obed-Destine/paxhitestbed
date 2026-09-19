@@ -236,6 +236,90 @@ check('the recording tests left the table as they found it', $snapshot() === $be
 
 // ---------------------------------------------------------------------------
 
+echo "\n== Moving a code from the wrong student to the right one ==\n";
+
+if ($three->count() < 3) {
+    echo "  SKIP  fewer than three students in this sitting\n";
+} else {
+    [$a, $b] = [$three[0], $three[1]];
+    $moved = 'HND26MOVED001';
+
+    // The page submits its boxes in the order the students are listed, and the
+    // code's old holder can be above or below the one it is moving to. It has
+    // to work either way round: reported from use as "I deleted it but nothing
+    // will save".
+    foreach ([
+        'the right student listed first' => [$b->id => $moved, $a->id => ''],
+        'the wrong student listed first' => [$a->id => '', $b->id => $moved],
+    ] as $label => $codes) {
+        DB::beginTransaction();
+
+        try {
+            StudentExamCode::create(['student_id' => $a->id, 'session_id' => $sessionId, 'level' => $level, 'code' => $moved]);
+            [$status] = $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level, 'codes' => $codes]);
+
+            $holder = StudentExamCode::forSitting($sessionId, $level)->where('code', $moved)->value('student_id');
+            check("clearing one student and giving the code to another works with $label",
+                $status === 302 && (int) $holder === (int) $b->id
+                    && !StudentExamCode::forSitting($sessionId, $level)->where('student_id', $a->id)->exists(),
+                'held by ' . var_export($holder, true) . " expected {$b->id}");
+        } finally {
+            DB::rollBack();
+        }
+    }
+
+    DB::beginTransaction();
+
+    try {
+        StudentExamCode::create(['student_id' => $a->id, 'session_id' => $sessionId, 'level' => $level, 'code' => 'HND26SWAPAAA1']);
+        StudentExamCode::create(['student_id' => $b->id, 'session_id' => $sessionId, 'level' => $level, 'code' => 'HND26SWAPBBB2']);
+
+        $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
+            'codes' => [$a->id => 'HND26SWAPBBB2', $b->id => 'HND26SWAPAAA1']]);
+
+        check('two students can swap codes in one save',
+            StudentExamCode::forSitting($sessionId, $level)->where('student_id', $a->id)->value('code') === 'HND26SWAPBBB2'
+                && StudentExamCode::forSitting($sessionId, $level)->where('student_id', $b->id)->value('code') === 'HND26SWAPAAA1');
+    } finally {
+        DB::rollBack();
+    }
+
+    DB::beginTransaction();
+
+    try {
+        $state = StudentExamCode::forSitting($sessionId, $level)->pluck('code', 'student_id')->toJson();
+        [$status] = $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
+            'codes' => [$a->id => 'HND26SAME0001', $b->id => 'HND26SAME0001']]);
+
+        check('the same code typed on two students in one save is refused, and named',
+            $status === 302
+                && StudentExamCode::forSitting($sessionId, $level)->pluck('code', 'student_id')->toJson() === $state
+                && collect(session('errors') ? session('errors')->all() : [])->contains(fn ($m) => str_contains($m, 'HND26SAME0001')),
+            json_encode(session('errors') ? session('errors')->all() : []));
+    } finally {
+        DB::rollBack();
+    }
+
+    // Whoever recorded a code first keeps that credit when it is corrected.
+    DB::beginTransaction();
+
+    try {
+        StudentExamCode::create(['student_id' => $a->id, 'session_id' => $sessionId, 'level' => $level,
+            'code' => 'HND26ORIGIN01', 'created_by' => 999999]);
+        $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
+            'codes' => [$a->id => 'HND26ORIGIN02']]);
+
+        $row = StudentExamCode::forSitting($sessionId, $level)->where('student_id', $a->id)->first();
+        check('correcting a code keeps who first recorded it, and notes who changed it',
+            $row && $row->code === 'HND26ORIGIN02' && (int) $row->created_by === 999999 && (int) $row->updated_by === (int) $admin->id,
+            json_encode($row ? $row->only('code', 'created_by', 'updated_by') : null));
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 echo "\n== The printed list ==\n";
 
 DB::beginTransaction();

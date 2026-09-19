@@ -54,9 +54,18 @@ class StudentExamCodeController extends Controller
     /**
      * Record the whole column at once.
      *
-     * A box left empty for a student who has a code removes that code — the
-     * screen says so before saving. Everything happens in one transaction, so a
-     * rejected code leaves the whole save untouched rather than half-applied.
+     * The submission is read as the state the column should end up in, not as a
+     * list of changes to apply box by box. That matters when a code moves from
+     * one student to another: worked through in page order, giving the code to
+     * the right student is rejected because the wrong student still holds it,
+     * even though the same save clears them — so the save could never go
+     * through, and the clearing was rolled back with it. Deciding the whole
+     * column first, then writing it, makes the result the same whichever way
+     * round the two students appear on the page, and lets two students swap
+     * codes in one save.
+     *
+     * A clash that a save does not itself resolve is still refused outright:
+     * nothing is half-written.
      */
     public function save(Request $request)
     {
@@ -69,73 +78,83 @@ class StudentExamCodeController extends Controller
         ]);
 
         $userId = Auth::guard('web')->id();
-        $saved = $removed = 0;
+        $submitted = collect((array) $request->input('codes', []))
+            ->mapWithKeys(fn ($code, $studentId) => [(int) $studentId => StudentExamCode::normalise($code)]);
+
+        $current = StudentExamCode::forSitting($sessionId, $level)->get()->keyBy('student_id');
+
+        // What each student should end up with.
+        $removals = $submitted->filter(fn ($code) => $code === '')->keys()
+            ->filter(fn ($studentId) => $current->has($studentId));
+        $wanted = $submitted->filter(fn ($code) => $code !== '')
+            ->filter(fn ($code, $studentId) => optional($current->get($studentId))->code !== $code);
+
         $rejected = [];
-        $unusual = [];
 
-        // A clash throws, which rolls the whole save back and sends the admin
-        // back to the screen with the problem named. Anything else — a database
-        // fault, say — is left to surface as itself rather than being dressed up
-        // as a rejected code.
-        DB::transaction(function () use ($request, $sessionId, $level, $userId, &$saved, &$removed, &$rejected, &$unusual) {
-            foreach ((array) $request->input('codes', []) as $studentId => $rawCode) {
-                $studentId = (int) $studentId;
-                $code = StudentExamCode::normalise($rawCode);
-                $existing = StudentExamCode::forSitting($sessionId, $level)->where('student_id', $studentId)->first();
-
-                if ($code === '') {
-                    if ($existing) {
-                        $existing->delete();
-                        $removed++;
-                    }
-
-                    continue;
-                }
-
-                if ($existing && $existing->code === $code) {
-                    continue;
-                }
-
-                // The commission never issues one code twice, so a code that
-                // already belongs to somebody else is a typing mistake.
-                $owner = StudentExamCode::with('student')->where('code', $code)
-                    ->when($existing, fn ($query) => $query->where('id', '!=', $existing->id))
-                    ->first();
-
-                if ($owner) {
-                    $rejected[] = __(':code already belongs to :student', [
-                        'code' => $code,
-                        'student' => optional($owner->student)->student_id ?? __('another student'),
-                    ]);
-
-                    continue;
-                }
-
-                if (!StudentExamCode::looksLikeCommissionCode($code)) {
-                    $unusual[] = $code;
-                }
-
-                StudentExamCode::updateOrCreate(
-                    ['student_id' => $studentId, 'session_id' => $sessionId, 'level' => $level],
-                    [
-                        'code' => $code,
-                        'program_id' => optional($this->enrollmentFor($studentId, $sessionId, $level))->program_id,
-                        'created_by' => $existing ? $existing->created_by : $userId,
-                        'updated_by' => $userId,
-                    ]
-                );
-
-                $saved++;
+        // Two students given the same code in one save.
+        foreach ($wanted->groupBy(fn ($code) => $code) as $code => $students) {
+            if ($students->count() > 1) {
+                $rejected[] = __(':code was typed for :count students in this save.', ['code' => $code, 'count' => $students->count()]);
             }
+        }
 
-            if ($rejected !== []) {
-                // Nothing is half-saved: the admin fixes the clash and saves again.
-                throw ValidationException::withMessages(['codes' => $rejected]);
+        // A code already held by someone this save does not clear. Codes held
+        // elsewhere — another year or level — count too: the commission never
+        // issues one twice.
+        //
+        // Filtered by hand rather than with only(): on an Eloquent collection
+        // only() picks by model id, not by the key the collection is built on,
+        // and would quietly free nothing.
+        $touched = $removals->merge($wanted->keys())->all();
+        $freed = $current->filter(fn ($row) => in_array((int) $row->student_id, $touched, true))
+            ->pluck('code')->all();
+
+        foreach ($wanted as $studentId => $code) {
+            $owner = StudentExamCode::with('student')->where('code', $code)
+                ->where('student_id', '!=', $studentId)
+                ->first();
+
+            if ($owner && !in_array($code, $freed, true)) {
+                $rejected[] = __(':code already belongs to :student', [
+                    'code' => $code,
+                    'student' => optional($owner->student)->student_id ?? __('another student'),
+                ]);
+            }
+        }
+
+        if ($rejected !== []) {
+            // Refused before anything is written, so nothing is half-saved.
+            throw ValidationException::withMessages(['codes' => array_unique($rejected)]);
+        }
+
+        $unusual = $wanted->reject(fn ($code) => StudentExamCode::looksLikeCommissionCode($code))->values()->all();
+
+        // Written in one go: every code leaving first, so a code moving between
+        // two students never meets itself in the unique index.
+        DB::transaction(function () use ($removals, $wanted, $current, $sessionId, $level, $userId) {
+            StudentExamCode::forSitting($sessionId, $level)
+                ->whereIn('student_id', $removals->merge($wanted->keys())->all())
+                ->delete();
+
+            foreach ($wanted as $studentId => $code) {
+                StudentExamCode::create([
+                    'student_id' => $studentId,
+                    'session_id' => $sessionId,
+                    'level' => $level,
+                    'code' => $code,
+                    'program_id' => optional($this->enrollmentFor($studentId, $sessionId, $level))->program_id,
+                    // Whoever first recorded a code for this student keeps that
+                    // credit; only the change is this user's.
+                    'created_by' => optional($current->get($studentId))->created_by ?? $userId,
+                    'updated_by' => $userId,
+                ]);
             }
         });
 
-        if ($saved || $removed) {
-            Flasher::addSuccess(__(':saved code(s) recorded, :removed removed.', ['saved' => $saved, 'removed' => $removed]), __('msg_success'));
+        if ($wanted->isNotEmpty() || $removals->isNotEmpty()) {
+            Flasher::addSuccess(__(':saved code(s) recorded, :removed removed.', [
+                'saved' => $wanted->count(), 'removed' => $removals->count(),
+            ]), __('msg_success'));
         } else {
             Flasher::addInfo(__('Nothing changed.'), __('msg_info'));
         }
