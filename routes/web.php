@@ -573,6 +573,11 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('student-credits/{id}/reject-refund', 'StudentCreditController@rejectRefund')->name('student-credits.reject-refund');
 
     // Fee credit audit: duplicated credit and fee postings, corrected in one click each
+    // Second Instalment catch-up: raise the instalments never assigned that year
+    Route::get('second-instalment-catchup', 'SecondInstalmentCatchUpController@index')->name('second-instalment-catchup.index');
+    Route::post('second-instalment-catchup/apply', 'SecondInstalmentCatchUpController@apply')->name('second-instalment-catchup.apply');
+    Route::post('second-instalment-catchup/undo', 'SecondInstalmentCatchUpController@undo')->name('second-instalment-catchup.undo');
+
     Route::get('fees-credit-audit', 'FeeCreditAuditController@index')->name('fees-credit-audit.index');
     Route::post('fees-credit-audit/void-duplicates', 'FeeCreditAuditController@voidDuplicates')->name('fees-credit-audit.void-duplicates');
     Route::post('fees-credit-audit/correct-ledger', 'FeeCreditAuditController@correctLedger')->name('fees-credit-audit.correct-ledger');

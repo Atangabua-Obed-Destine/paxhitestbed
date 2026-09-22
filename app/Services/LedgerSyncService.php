@@ -282,8 +282,16 @@ class LedgerSyncService
                     return [null, null, $this->refuse('not_paid', __('Not paid yet, so there is nothing to post.'))];
                 }
 
+                // Settled with credit carried over from another fee: that money
+                // was posted when it first arrived, on the fee it was paid to.
+                // Posting it again here would count the same cash twice — the
+                // fee is posted at its cash received, as FeeObserver does.
+                if ($row->cash_received_amount <= 0.009) {
+                    return [null, null, $this->refuse('settled_by_credit', __('Settled by credit from another fee, which was already posted when it was received.'))];
+                }
+
                 return [$row->category_id, [
-                    'amount' => $row->paid_amount,
+                    'amount' => $row->cash_received_amount,
                     'date' => $row->pay_date,
                     'description' => 'Fee Payment - ' . ($row->category->title ?? $row->category->name ?? 'Student Fee'),
                 ], null];

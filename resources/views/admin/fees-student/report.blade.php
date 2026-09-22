@@ -73,7 +73,17 @@
                 </div>
             </div>
 
-            @if(isset($stats['overpaid_count']) && $stats['overpaid_count'] > 0)
+            @php
+                // Collected can exceed Amount when students have overpaid, so the
+                // overpayment is shown beside the money it explains: Amount less
+                // what is still owed, plus this, is what was collected. The count
+                // goes on that same card, so the four money cards share one row.
+                $overpaidAmount = (float) ($stats['total_overpayment'] ?? 0);
+                $overpaidShown = $overpaidAmount > 0.005;
+                $moneyCols = $overpaidShown ? 'col-xl-3' : 'col-xl-4';
+            @endphp
+
+            @if(isset($stats['overpaid_count']) && $stats['overpaid_count'] > 0 && !$overpaidShown)
             <div class="col-xl-3 col-md-6">
                 <div class="card">
                     <div class="card-block">
@@ -91,7 +101,7 @@
             </div>
             @endif
 
-            <div class="col-xl-4 col-md-6">
+            <div class="{{ $moneyCols }} col-md-6">
                 <div class="card bg-c-blue text-white">
                     <div class="card-block">
                         <h6 class="text-white">{{ __('total_amount') }}</h6>
@@ -107,7 +117,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-4 col-md-6">
+            <div class="{{ $moneyCols }} col-md-6">
                 <div class="card bg-c-green text-white">
                     <div class="card-block">
                         <h6 class="text-white">{{ __('total_collected') }}</h6>
@@ -123,7 +133,7 @@
                 </div>
             </div>
 
-            <div class="col-xl-4 col-md-6">
+            <div class="{{ $moneyCols }} col-md-6">
                 <div class="card bg-c-yellow text-white">
                     <div class="card-block">
                         <h6 class="text-white">{{ __('outstanding_balance') }}</h6>
@@ -138,7 +148,30 @@
                     </div>
                 </div>
             </div>
+
+            @if($overpaidAmount > 0.005)
+            <div class="{{ $moneyCols }} col-md-6">
+                <div class="card bg-c-purple text-white">
+                    <div class="card-block">
+                        <h6 class="text-white">{{ __('Overpaid Amount') }}</h6>
+                        <h3 class="text-white">
+                            @if(isset($setting->decimal_place))
+                            {{ number_format($overpaidAmount, $setting->decimal_place, '.', ',') }}
+                            @else
+                            {{ number_format($overpaidAmount, 2, '.', ',') }}
+                            @endif
+                            {!! $setting->currency_symbol !!}
+                        </h3>
+                        {{-- Says out loud why Collected can be the larger figure. --}}
+                        <small class="text-white">
+                            {{ trans_choice(':count fee|:count fees', $stats['overpaid_count'] ?? 0, ['count' => $stats['overpaid_count'] ?? 0]) }}
+                            — {{ __('paid beyond what was billed, held as student credit') }}
+                        </small>
+                    </div>
+                </div>
+            </div>
             @endif
+            @endif {{-- @if(isset($stats)) — the statistics cards --}}
 
             <!-- Filter Section -->
             <div class="col-sm-12">

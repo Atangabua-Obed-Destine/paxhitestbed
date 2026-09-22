@@ -202,7 +202,7 @@ check('the report renders', $status === 200, (string) $status);
 // The fees the report covers: every status, and only fees of enrolled students.
 $set = Fee::whereIn('status', [0, 1, 2, 3])->whereHas('studentEnroll.student')->get();
 
-$expected = ['collected' => 0.0, 'outstanding' => 0.0, 'fully' => 0, 'overpaid' => 0, 'paid_amount' => 0.0];
+$expected = ['collected' => 0.0, 'outstanding' => 0.0, 'fully' => 0, 'overpaid' => 0, 'overpaid_amount' => 0.0, 'paid_amount' => 0.0];
 
 foreach ($set as $fee) {
     $net = (float) $fee->paid_amount - ($moved[$fee->id] ?? 0);
@@ -217,13 +217,16 @@ foreach ($set as $fee) {
     }
     if ($net > $owed + 0.005) {
         $expected['overpaid']++;
+        $expected['overpaid_amount'] += $net - $owed;
     }
 }
 
 preg_match('/Total Collected\s*([\d,]+(?:\.\d+)?)/', $text, $collected);
 preg_match('/Outstanding Balance\s*([\d,]+(?:\.\d+)?)/', $text, $outstanding);
 preg_match('/(\d+)\s*Total Fully Paid Fees/', $text, $fully);
-preg_match('/(\d+)\s*Overpaid Fees/', $text, $overpaid);
+// The count and the amount share one card: '3 fees - paid beyond what was billed'.
+preg_match('/Overpaid Amount\s*([\d,]+(?:\.\d+)?)/', $text, $overpaidAmount);
+preg_match('/(\d+)\s*fees?\s*[^\d]*paid beyond what was billed/', $text, $overpaid);
 
 check('Total Collected is what was actually collected',
     isset($collected[1]) && abs($number($collected[1]) - $expected['collected']) < 0.01,
@@ -243,6 +246,11 @@ check('Overpaid counts only fees still holding an excess',
         : (isset($overpaid[1]) && (int) $overpaid[1] === $expected['overpaid']),
     ($overpaid[1] ?? 'not shown') . ' vs ' . $expected['overpaid']);
 check('the Overpaid card has a label, not a translation key', !str_contains($text, 'total_overpaid_fees'));
+check('and it shows how much was overpaid, so Amount less Outstanding plus it equals Collected',
+    $expected['overpaid'] === 0
+        ? !isset($overpaidAmount[1])
+        : (isset($overpaidAmount[1]) && abs($number($overpaidAmount[1]) - $expected['overpaid_amount']) < 0.01),
+    ($overpaidAmount[1] ?? 'not shown') . ' vs ' . number_format($expected['overpaid_amount'], 2));
 
 if ($sourceFeeId) {
     check('a fee whose overpayment moved on says so in its row', str_contains($text, 'moved to another fee'));
@@ -484,7 +492,15 @@ if ($preview->isEmpty()) {
                 $reversal && substr((string) $reversal->entry_date, 0, 10) === now()->toDateString(),
                 json_encode($reversal ? ['date' => $reversal->entry_date, 'period' => $reversal->accounting_period_id] : null));
             check('and not filed in the closed period', $reversal && (int) $reversal->accounting_period_id !== (int) $original->accounting_period_id);
-            check('and the fee is posted at its cash received', abs((float) $postingOf($row['fee_id'])->total_debit - $cashOf($row['fee_id'])) < 0.01);
+            // A fee that received no cash — settled wholly by credit carried
+            // over from another fee — ends with no posting at all, which is the
+            // correction: the money was posted on the fee it arrived at.
+            $corrected = $postingOf($row['fee_id']);
+            check('and the fee is posted at its cash received, or not at all when it received none',
+                $cashOf($row['fee_id']) > 0.009
+                    ? ($corrected && abs((float) $corrected->total_debit - $cashOf($row['fee_id'])) < 0.01)
+                    : $corrected === null,
+                'cash ' . $cashOf($row['fee_id']) . ', posted ' . json_encode($corrected));
         }
     } finally {
         DB::rollBack();
@@ -566,6 +582,63 @@ if (!$posted) {
     } finally {
         DB::rollBack();
     }
+}
+
+// ---------------------------------------------------------------------------
+
+echo "\n== Posting a fee by hand, or in bulk ==\n";
+
+// The observer is not the only way a fee reaches the ledger: Accounting →
+// Mappings lists unposted transactions and posts them, one at a time or in
+// bulk, and `ledger:sync` does the same from the terminal. Those paths used
+// paid_amount, so posting from there put the credit back into cash and undid
+// the correction — found in use, after a correction had already been made.
+$sync = app(App\Services\LedgerSyncService::class);
+
+$creditSettled = Fee::withCreditMovedOut()->with('category')
+    ->whereNull('payment_plan_id')->where('paid_amount', '>', 0)->whereNotNull('pay_date')
+    ->get()->first(fn ($fee) => $fee->cash_received_amount <= 0.009);
+
+$partlyCredit = Fee::withCreditMovedOut()->with('category')
+    ->whereNull('payment_plan_id')->where('paid_amount', '>', 0)->whereNotNull('pay_date')
+    ->get()->first(fn ($fee) => $fee->cash_received_amount > 0.009
+        && $fee->cash_received_amount < (float) $fee->paid_amount - 0.009);
+
+$source = new ReflectionMethod($sync, 'source');
+$source->setAccessible(true);
+
+if (!$creditSettled) {
+    echo "  SKIP  no fee settled wholly by credit to test with\n";
+} else {
+    [, $payload, $refusal] = $source->invoke($sync, 'fee', $creditSettled);
+
+    check('a fee settled wholly by credit is refused, not posted again',
+        $payload === null && $refusal !== null, json_encode([$payload, $refusal]));
+    check('and the refusal says why', $refusal && str_contains(json_encode($refusal), 'credit'), json_encode($refusal));
+}
+
+if (!$partlyCredit) {
+    echo "  SKIP  no part-credit fee to test with\n";
+} else {
+    [, $payload] = $source->invoke($sync, 'fee', $partlyCredit);
+
+    check('a fee part-settled by credit is posted at the cash it received',
+        $payload && abs((float) $payload['amount'] - $partlyCredit->cash_received_amount) < 0.01,
+        json_encode($payload) . ' cash ' . $partlyCredit->cash_received_amount);
+    check('which is less than its paid_amount',
+        $payload && (float) $payload['amount'] < (float) $partlyCredit->paid_amount);
+}
+
+// The screen that lists what is waiting to be posted decides through the same
+// service, so a credit-settled fee must be refused there rather than offered.
+if ($creditSettled) {
+    $decision = $sync->decide('fee', $creditSettled, false);
+
+    check('Accounting -> Mappings refuses to post a credit-settled fee',
+        ($decision['can_sync'] ?? $decision['sync'] ?? true) === false || isset($decision['reason']),
+        json_encode($decision));
+    check('and gives the reason, rather than offering it at its full amount',
+        str_contains(strtolower(json_encode($decision)), 'credit'), json_encode($decision));
 }
 
 // ---------------------------------------------------------------------------

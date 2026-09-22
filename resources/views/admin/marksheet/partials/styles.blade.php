@@ -229,7 +229,10 @@
       justify-content: space-between;
       align-items: center;
       padding: 7px 14px;
-      margin-bottom: 14px;
+      /* Below the results table now, so it needs room above rather than below. */
+      margin-top: 16px;
+      margin-bottom: 0;
+      page-break-inside: avoid;
       border: 1.5px solid #1a1a1a;
       background: transparent;
     }
@@ -383,6 +386,38 @@
     .tp-grade-scale {
       margin-top: 16px;
       page-break-inside: avoid;
+    }
+    /* The scale now sits above the results, so its spacing is below it. */
+    .tp-grade-scale-top {
+      margin-top: 0;
+      margin-bottom: 14px;
+    }
+
+    /* --- Key to the transcript --- */
+    .tp-key {
+      margin-top: 16px;
+      page-break-inside: avoid;
+    }
+    /* Columns rather than a wrapping row: the entries then read down one
+       column and on to the next, and a line that wraps cannot push the entry
+       beside it out of line. */
+    .tp-key-grid {
+      column-count: 2;
+      column-gap: 24px;
+    }
+    .tp-key-item {
+      break-inside: avoid;
+      page-break-inside: avoid;
+      padding: 2px 0;
+      font-size: 8.5px;
+      color: #333;
+      line-height: 1.45;
+    }
+    .tp-key-term {
+      font-weight: 800;
+      color: #1a1a1a;
+      display: inline-block;
+      min-width: 74px;
     }
     .tp-grade-scale-title {
       font-size: 9px;

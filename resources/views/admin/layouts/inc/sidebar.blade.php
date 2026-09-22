@@ -516,6 +516,9 @@
                         @can('fee-credit-audit-view')
                         <li class="{{ Request::is('admin/fees-credit-audit*') ? 'active' : '' }}"><a href="{{ route('admin.fees-credit-audit.index') }}" class="">{{ __('Credit audit') }}</a></li>
                         @endcan
+                        @can('second-instalment-catchup-view')
+                        <li class="{{ Request::is('admin/second-instalment-catchup*') ? 'active' : '' }}"><a href="{{ route('admin.second-instalment-catchup.index') }}" class="">{{ __('Second Instalment catch-up') }}</a></li>
+                        @endcan
                     </ul>
                 </li>
                 @endcanany

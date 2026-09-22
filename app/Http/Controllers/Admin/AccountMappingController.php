@@ -210,7 +210,10 @@ class AccountMappingController extends Controller
                     'date' => $fee->pay_date,
                     'description' => $fee->category->title ?? $fee->category->name ?? 'Fee Payment',
                     'reference' => 'Student: ' . $studentName,
-                    'amount' => $fee->paid_amount,
+                    // Cash received, not paid_amount: credit carried over from
+                    // another fee was posted when it arrived there, so the list
+                    // must offer what is actually left to post.
+                    'amount' => $fee->cash_received_amount,
                 ]);
             }
         }
@@ -459,7 +462,8 @@ class AccountMappingController extends Controller
             case 'fee':
                 $fee = Fee::with('category', 'studentEnroll.student')->find($id);
                 return $fee ? [
-                    'amount' => $fee->paid_amount,
+                    // Cash received: see the note on the unposted list above.
+                    'amount' => $fee->cash_received_amount,
                     'date' => $fee->pay_date,
                     'description' => ($fee->category->name ?? 'Fee') . ' - ' . ($fee->studentEnroll->student->name ?? 'Student')
                 ] : null;
