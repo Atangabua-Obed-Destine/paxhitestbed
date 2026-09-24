@@ -19,6 +19,14 @@
         $selectedProgramId = $currentEnroll ? $currentEnroll->program_id : $row->program_id;
     }
 
+    // A passed resit shown against the semester the course was first taken —
+    // off unless the school turned it on under Transcript → Marksheet Setting.
+    // It reports nothing when off, so everything below reads as it always did.
+    $transcriptEnrolls = collect($row->studentEnrolls)->filter(
+        fn ($enroll) => $enroll->program_id == $selectedProgramId && $enroll->matricule == $currentEnroll->matricule
+    );
+    $resitOverride = app(\App\Services\Academic\TranscriptResitOverride::class)->build($transcriptEnrolls, $grades);
+
     // Pre-compute CGPA
     $total_credits = 0;
     $total_cgpa = 0;
@@ -36,6 +44,12 @@
 
         if (isset($item->subjectMarks)) {
             foreach ($item->subjectMarks as $mark) {
+                // The resit row moved into its original semester, so counting it
+                // here as well would count the course twice.
+                if ($resitOverride->isHidden($item->id, $mark->subject_id)) continue;
+
+                $mark = $resitOverride->replacementFor($item->id, $mark->subject_id) ?? $mark;
+
                 if ($mark->is_visible_to_student) {
                     $marks_per = round($mark->total_marks);
                     $credit = $mark->subject->credit_hour;
@@ -74,6 +88,13 @@
     $semester_keys = [];
     foreach ($row->studentEnrolls as $enroll) {
         if (isset($enroll->session) && isset($enroll->semester) && isset($enroll->section) && $enroll->program_id == $selectedProgramId && $enroll->matricule == $currentEnroll->matricule) {
+            // A resit semester whose every course moved into the semester it
+            // belongs to has nothing left to show, so it is left off entirely
+            // rather than printed as an empty heading.
+            if ($resitOverride->isEnabled() && optional($enroll->semester)->is_resit && !$resitOverride->hasVisibleRows($enroll)) {
+                continue;
+            }
+
             $key = $enroll->session->title . '|' . $enroll->semester->title;
             if (!in_array($key, $semester_keys)) {
                 $semester_items[] = [$enroll->session->title, $enroll->semester->title, $enroll->section->title];
@@ -251,6 +272,9 @@
                 @foreach($row->studentEnrolls as $item)
                 @if(isset($item->semester) && isset($item->session) && $semester_item[1] == $item->semester->title && $semester_item[0] == $item->session->title && $item->program_id == $selectedProgramId && $item->matricule == $currentEnroll->matricule)
                 @foreach($item->subjects as $subject)
+                {{-- This resit was passed and now shows in the semester the
+                     course was first taken, so it is not listed twice. --}}
+                @continue($resitOverride->isHidden($item->id, $subject->id))
                 @php
                     $creditsAttempted = (float) $subject->credit_hour;
                     $sem_credits += $creditsAttempted;
@@ -264,6 +288,9 @@
                     if (isset($item->subjectMarks)) {
                         foreach ($item->subjectMarks as $mark) {
                             if ($mark->subject_id == $subject->id) {
+                                // The passed resit stands in for the original fail.
+                                $mark = $resitOverride->replacementFor($item->id, $subject->id) ?? $mark;
+
                                 if ($mark->is_visible_to_student) {
                                     $marks_per = round($mark->total_marks);
                                     foreach ($grades as $grade) {

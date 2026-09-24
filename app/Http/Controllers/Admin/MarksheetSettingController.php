@@ -82,6 +82,10 @@ class MarksheetSettingController extends Controller
             $barcode = 1;
         }
 
+        // Show a passed resit against the semester the course was first taken.
+        // Transcripts only: no mark is rewritten by this.
+        $resitReplacesOriginal = ($request->resit_replaces_original == 1) ? 1 : 0;
+
 
         $id = $request->id;
 
@@ -105,6 +109,7 @@ class MarksheetSettingController extends Controller
             $marksheetSetting->height = $request->height;
             $marksheetSetting->student_photo = $student_photo;
             $marksheetSetting->barcode = $barcode;
+            $marksheetSetting->resit_replaces_original = $resitReplacesOriginal;
             $marksheetSetting->save();
         }
         else{
@@ -126,6 +131,7 @@ class MarksheetSettingController extends Controller
             $marksheetSetting->height = $request->height;
             $marksheetSetting->student_photo = $student_photo;
             $marksheetSetting->barcode = $barcode;
+            $marksheetSetting->resit_replaces_original = $resitReplacesOriginal;
             $marksheetSetting->save();
         }
 

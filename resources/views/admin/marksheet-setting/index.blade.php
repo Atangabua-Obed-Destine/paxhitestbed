@@ -90,6 +90,20 @@
                                   {{ __('required_field') }} {{ __('field_logo_right') }}
                                 </div>
                             </div>
+
+                            {{-- A rule one school asked for. Off unless it is
+                                 turned on here, and it changes the transcript
+                                 only — no stored mark is touched. --}}
+                            <div class="form-group col-md-12 mt-4">
+                                <div class="switch d-inline m-r-10">
+                                    <input type="checkbox" id="resit_replaces_original" name="resit_replaces_original" value="1" @if(isset($row->resit_replaces_original) && $row->resit_replaces_original == 1) checked @endif>
+                                    <label for="resit_replaces_original" class="cr"></label>
+                                </div>
+                                <label for="resit_replaces_original">{{ __('Show a passed resit in the semester the course was first taken') }}</label>
+                                <div class="text-muted" style="font-size: 12px; margin-left: 52px;">
+                                    {{ __('On the transcript, a resit the student passed replaces the original fail in that semester and is no longer listed under the resit semester; the course then counts once towards the GPA. A resit failed again is shown in both places, as it is now. Mark sheets, results and everything else are unaffected.') }}
+                                </div>
+                            </div>
                             <!-- Form End -->
                           </div>
                         </div>
