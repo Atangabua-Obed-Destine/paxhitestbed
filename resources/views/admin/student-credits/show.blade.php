@@ -245,28 +245,28 @@
                     </div>
                     <div class="card-block">
                         @if($credit->canBeRefunded())
-                            <button type="button" class="btn btn-warning btn-block mb-2" id="requestRefundBtn">
+                            <button type="button" class="btn btn-warning btn-block mb-2" id="requestRefundBtn" data-bs-toggle="modal" data-bs-target="#requestRefundModal">
                                 <i class="feather icon-dollar-sign"></i> {{ __('request_refund') }}
                             </button>
                         @endif
 
                         @if($credit->remaining_amount > 0 && in_array($credit->status, ['available', 'partially_applied']) && $credit->refund_state === 'none')
-                            <button type="button" class="btn btn-primary btn-block mb-2" id="applyToFeeBtn">
+                            <button type="button" class="btn btn-primary btn-block mb-2" id="applyToFeeBtn" data-bs-toggle="modal" data-bs-target="#applyToFeeModal">
                                 <i class="feather icon-arrow-right"></i> {{ __('apply_to_fee') }}
                             </button>
                         @endif
 
                         @if($credit->refund_state === 'requested')
-                            <button type="button" class="btn btn-success btn-block mb-2" id="approveRefundBtn">
+                            <button type="button" class="btn btn-success btn-block mb-2" id="approveRefundBtn" data-bs-toggle="modal" data-bs-target="#approveRefundModal">
                                 <i class="feather icon-check"></i> {{ __('approve_refund') }}
                             </button>
-                            <button type="button" class="btn btn-danger btn-block mb-2" id="rejectRefundBtn">
+                            <button type="button" class="btn btn-danger btn-block mb-2" id="rejectRefundBtn" data-bs-toggle="modal" data-bs-target="#rejectRefundModal">
                                 <i class="feather icon-x"></i> {{ __('reject_refund') }}
                             </button>
                         @endif
 
                         @if($credit->refund_state === 'approved')
-                            <button type="button" class="btn btn-primary btn-block mb-2" id="processRefundBtn">
+                            <button type="button" class="btn btn-primary btn-block mb-2" id="processRefundBtn" data-bs-toggle="modal" data-bs-target="#processRefundModal">
                                 <i class="feather icon-dollar-sign"></i> {{ __('process_refund') }}
                             </button>
                         @endif
@@ -349,7 +349,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('request_refund') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('cancel') }}"></button>
             </div>
             <form action="{{ route('admin.student-credits.request-refund', $credit->id) }}" method="POST">
                 @csrf
@@ -366,7 +366,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     <button type="submit" class="btn btn-warning">{{ __('submit_request') }}</button>
                 </div>
             </form>
@@ -380,7 +380,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('approve_refund') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('cancel') }}"></button>
             </div>
             <form action="{{ route('admin.student-credits.approve-refund', $credit->id) }}" method="POST">
                 @csrf
@@ -396,7 +396,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     <button type="submit" class="btn btn-success">{{ __('approve') }}</button>
                 </div>
             </form>
@@ -410,7 +410,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('reject_refund') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('cancel') }}"></button>
             </div>
             <form action="{{ route('admin.student-credits.reject-refund', $credit->id) }}" method="POST">
                 @csrf
@@ -425,7 +425,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     <button type="submit" class="btn btn-danger">{{ __('reject') }}</button>
                 </div>
             </form>
@@ -439,7 +439,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('process_refund') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('cancel') }}"></button>
             </div>
             <form action="{{ route('admin.student-credits.process-refund', $credit->id) }}" method="POST">
                 @csrf
@@ -471,7 +471,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     <button type="submit" class="btn btn-primary">{{ __('complete_refund') }}</button>
                 </div>
             </form>
@@ -485,7 +485,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('apply_credit_to_fee') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('cancel') }}"></button>
             </div>
             <form action="{{ route('admin.student-credits.apply-to-fee', $credit->id) }}" method="POST">
                 @csrf
@@ -547,7 +547,7 @@
                     @endif
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     @if($unpaidFees->count() > 0)
                     <button type="submit" class="btn btn-primary">{{ __('apply_credit') }}</button>
                     @endif
@@ -562,25 +562,10 @@
 @section('page-js')
 <script>
 $(document).ready(function() {
-    $('#requestRefundBtn').click(function() {
-        $('#requestRefundModal').modal('show');
-    });
     
-    $('#approveRefundBtn').click(function() {
-        $('#approveRefundModal').modal('show');
-    });
     
-    $('#rejectRefundBtn').click(function() {
-        $('#rejectRefundModal').modal('show');
-    });
     
-    $('#processRefundBtn').click(function() {
-        $('#processRefundModal').modal('show');
-    });
     
-    $('#applyToFeeBtn').click(function() {
-        $('#applyToFeeModal').modal('show');
-    });
     
     // Auto-fill amount based on selected fee
     $('#feeSelect').change(function() {

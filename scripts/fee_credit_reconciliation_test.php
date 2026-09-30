@@ -258,6 +258,100 @@ if ($sourceFeeId) {
 
 // ---------------------------------------------------------------------------
 
+echo "\n== The status badge on each row ==\n";
+
+// The cards counted overpaid fees net of credit moved away, but each row's own
+// badge still compared the raw paid_amount, so a fee whose excess had been
+// transferred months ago still read "Overpaid" on the report. Reported from use.
+$badge = fn ($fee) => trim(strip_tags($fee->status_badge));
+
+$movedOut = Fee::withCreditMovedOut()->get()
+    ->first(fn ($f) => $f->credit_moved_out > 0.005 && !$f->isNetOverpaid() && $f->paid_amount > $f->total_amount);
+
+if (!$movedOut) {
+    echo "  SKIP  no fee has had its whole overpayment moved to another fee\n";
+} else {
+    check('a fee whose overpayment was moved on no longer reads "Overpaid"',
+        $badge($movedOut) !== 'Overpaid',
+        'fee #' . $movedOut->id . ' shows ' . $badge($movedOut));
+    check('it reads as settled, which is what it is',
+        $badge($movedOut) === 'Fully Paid',
+        'fee #' . $movedOut->id . ' shows ' . $badge($movedOut) . ' (net paid ' . $movedOut->net_paid_amount . ' of ' . $movedOut->total_amount . ')');
+    check('and the row still says where the money went',
+        $movedOut->credit_moved_out > 0.005);
+}
+
+$stillOverpaid = Fee::withCreditMovedOut()->get()->first(fn ($f) => $f->isNetOverpaid());
+
+if (!$stillOverpaid) {
+    echo "  SKIP  no fee is still holding an overpayment\n";
+} else {
+    check('a fee still holding an excess does read "Overpaid"',
+        $badge($stillOverpaid) === 'Overpaid',
+        'fee #' . $stillOverpaid->id . ' shows ' . $badge($stillOverpaid));
+}
+
+// The ordinary cases must be untouched.
+$cases = [
+    'a part-paid fee' => ['fee' => Fee::withCreditMovedOut()->get()
+        ->first(fn ($f) => $f->credit_moved_out < 0.005 && $f->paid_amount > 0.005 && $f->paid_amount < $f->total_amount - 0.005 && $f->status != 3), 'expected' => 'Partially Paid'],
+    'an unpaid fee' => ['fee' => Fee::withCreditMovedOut()->get()
+        ->first(fn ($f) => $f->paid_amount < 0.005 && $f->status != 3), 'expected' => 'Unpaid'],
+    'a settled fee' => ['fee' => Fee::withCreditMovedOut()->get()
+        ->first(fn ($f) => $f->credit_moved_out < 0.005 && $f->total_amount > 0.005 && abs($f->paid_amount - $f->total_amount) < 0.005), 'expected' => 'Fully Paid'],
+];
+
+foreach ($cases as $label => $case) {
+    if (!$case['fee']) {
+        echo "  SKIP  no $label to check\n";
+
+        continue;
+    }
+
+    check("$label still reads \"{$case['expected']}\"", $badge($case['fee']) === $case['expected'],
+        'fee #' . $case['fee']->id . ' shows ' . $badge($case['fee']));
+}
+
+// A transfer that leaves the source short must say so, rather than claiming the
+// fee is settled on a paid_amount that has since been moved away.
+$source = Fee::withCreditMovedOut()->get()->first(fn ($f) => $f->credit_moved_out < 0.005 && $f->total_amount > 1000 && abs($f->paid_amount - $f->total_amount) < 0.005);
+
+if (!$source) {
+    echo "  SKIP  no settled fee to move money out of\n";
+} else {
+    DB::beginTransaction();
+
+    try {
+        // Somewhere for the money to go. Made here rather than hunted for: a
+        // transfer into a settled fee is refused, and whether any student
+        // happens to have an unpaid second fee is an accident of the data.
+        $target = new Fee();
+        $target->student_enroll_id = $source->student_enroll_id;
+        $target->category_id = $source->category_id;
+        $target->fee_amount = 5000;
+        $target->fine_amount = 0;
+        $target->discount_amount = 0;
+        $target->paid_amount = 0;
+        $target->assign_date = now()->format('Y-m-d');
+        $target->due_date = now()->format('Y-m-d');
+        $target->status = 0;
+        $target->note = 'badge test target';
+        $target->save();
+
+        app(App\Services\StudentCreditService::class)
+            ->transferBetweenFees($source->fresh(), $target->fresh(), 1000, 'badge test', $admin->id);
+
+        $after = Fee::withCreditMovedOut()->find($source->id);
+        check('a fee left short by a transfer reads as part-paid, not settled',
+            $badge($after) === 'Partially Paid',
+            'shows ' . $badge($after) . ', net paid ' . $after->net_paid_amount . ' of ' . $after->total_amount);
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// ---------------------------------------------------------------------------
+
 echo "\n== The payment status filters ==\n";
 
 $netOverpaidIds = $set->filter(fn ($fee) => (float) $fee->paid_amount - ($moved[$fee->id] ?? 0) > $due($fee) + 0.005)
@@ -515,7 +609,9 @@ $posted = Fee::query()
     ->whereNull('payment_plan_id')->where('paid_amount', '>=', 20000)->whereNotNull('pay_date')
     ->whereNotIn('id', $preview->pluck('fee_id')->all() ?: [0])
     ->whereIn('id', DB::table('transaction_mappings')->where('transaction_type', 'fee')->where('status', 'active')->select('transaction_id'))
-    ->whereHas('studentEnroll')
+    // The enrolment must have a student: an application submitted online leaves
+    // placeholder enrolments with no student, and credit belongs to a person.
+    ->whereHas('studentEnroll.student')
     ->orderByDesc('id')->first();
 
 if (!$posted) {

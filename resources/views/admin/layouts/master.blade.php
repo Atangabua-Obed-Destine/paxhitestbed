@@ -424,5 +424,8 @@
 
 
     @include('components.chat-widget')
+    {{-- Says a click landed, and stops the same form being sent twice. --}}
+    @include('partials.loading-screen')
+
 </body>
 </html>

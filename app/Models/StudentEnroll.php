@@ -204,6 +204,26 @@ class StudentEnroll extends Model
             }
         }
 
+        // An application submitted online creates a placeholder enrolment purely
+        // so the admission fee has a well-formed row to hang on: there is no
+        // student yet, and no session or semester has been chosen
+        // (Web\ApplicationController@... , which says as much where it makes it).
+        // Described as an enrolment, it read as "Student enrolled: Unknown
+        // Student ... Unknown Semester" — a real enrolment that had gone wrong,
+        // rather than a placeholder doing its job. It is removed when the
+        // application is converted to a student.
+        if (is_null($this->student_id) && is_null($this->session_id) && is_null($this->semester_id)) {
+            if ($event === 'created') {
+                return "Admission fee placeholder created for {$programName} — an application was submitted online; no student record yet";
+            }
+
+            if ($event === 'deleted') {
+                return "Admission fee placeholder removed for {$programName} — the application became a student record";
+            }
+
+            return "Admission fee placeholder {$event} for {$programName}";
+        }
+
         // Generate description based on event
         if ($event === 'created') {
             return "Student enrolled: {$studentName} to {$programName} - {$semesterName}{$sessionInfo}";

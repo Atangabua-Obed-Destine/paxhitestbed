@@ -64,10 +64,15 @@ class FeeCreditReconciliation
      * unspent can be voided; any part already spent is reported for review,
      * because that money has reached another fee and cannot simply be withdrawn.
      */
-    public function duplicateCredits(): Collection
+    /**
+     * @param int|null $onlyFeeId one fee instead of every fee — what a payment
+     *                            reversal asks about the fee it is undoing
+     */
+    public function duplicateCredits(?int $onlyFeeId = null): Collection
     {
         $credits = StudentCredit::whereNotNull('source_fee_id')
             ->whereIn('source_type', [StudentCredit::SOURCE_OVERPAYMENT, StudentCredit::SOURCE_TRANSFER])
+            ->when($onlyFeeId, fn ($query) => $query->where('source_fee_id', $onlyFeeId))
             ->orderBy('id')
             ->get()
             ->groupBy('source_fee_id');
@@ -82,58 +87,81 @@ class FeeCreditReconciliation
                 continue;
             }
 
-            $overpayment = $feeCredits->where('source_type', StudentCredit::SOURCE_OVERPAYMENT);
-            $transferredOut = (float) $feeCredits->where('source_type', StudentCredit::SOURCE_TRANSFER)->sum('original_amount');
-
-            $overpaidNow = max(0, (float) $fee->paid_amount - (float) $fee->total_amount);
-            $genuine = round($overpaidNow + $transferredOut, 2);
-            $credited = round((float) $overpayment->sum('original_amount'), 2);
-            $excess = round($credited - $genuine, 2);
-
-            if ($excess <= 0.009) {
-                continue;
+            if ($finding = $this->creditPosition($fee, $feeCredits)) {
+                $findings->push($finding);
             }
-
-            // Take it from the most recent credit first: the later credit is the
-            // one that re-counted an excess already credited.
-            $toVoid = $excess;
-            $plan = [];
-
-            foreach ($overpayment->sortByDesc('id') as $credit) {
-                if ($toVoid <= 0.009) {
-                    break;
-                }
-
-                $void = round(min((float) $credit->remaining_amount, $toVoid), 2);
-
-                if ($void <= 0.009) {
-                    continue;
-                }
-
-                $plan[] = [
-                    'credit_id' => $credit->id,
-                    'remaining' => (float) $credit->remaining_amount,
-                    'void' => $void,
-                ];
-                $toVoid = round($toVoid - $void, 2);
-            }
-
-            $findings->push([
-                'fee_id' => $fee->id,
-                'student_id' => $overpayment->first()->student_id ?? null,
-                'category' => optional($fee->category)->title,
-                'due' => (float) $fee->total_amount,
-                'paid' => (float) $fee->paid_amount,
-                'genuine_overpayment' => $genuine,
-                'credited' => $credited,
-                'excess' => $excess,
-                'voidable' => round($excess - $toVoid, 2),
-                'already_spent' => $toVoid,
-                'plan' => $plan,
-            ]);
         }
 
         return $findings;
+    }
+
+    /**
+     * How much credit this one fee is carrying that no payment backs.
+     *
+     * @param float|null $paidOverride ask the question of a different paid
+     *                                 amount — what a payment reversal needs to
+     *                                 know before it writes anything
+     */
+    public function creditPosition(Fee $fee, $feeCredits = null, ?float $paidOverride = null): ?array
+    {
+        $feeCredits = $feeCredits ?? StudentCredit::where('source_fee_id', $fee->id)
+            ->whereIn('source_type', [StudentCredit::SOURCE_OVERPAYMENT, StudentCredit::SOURCE_TRANSFER])
+            ->orderBy('id')->get();
+
+        if ($feeCredits->isEmpty()) {
+            return null;
+        }
+
+        $overpayment = $feeCredits->where('source_type', StudentCredit::SOURCE_OVERPAYMENT);
+        $transferredOut = (float) $feeCredits->where('source_type', StudentCredit::SOURCE_TRANSFER)->sum('original_amount');
+
+        $paid = $paidOverride ?? (float) $fee->paid_amount;
+        $overpaidNow = max(0, $paid - (float) $fee->total_amount);
+        $genuine = round($overpaidNow + $transferredOut, 2);
+        $credited = round((float) $overpayment->sum('original_amount'), 2);
+        $excess = round($credited - $genuine, 2);
+
+        if ($excess <= 0.009) {
+            return null;
+        }
+
+        // Take it from the most recent credit first: the later credit is the
+        // one that re-counted an excess already credited.
+        $toVoid = $excess;
+        $plan = [];
+
+        foreach ($overpayment->sortByDesc('id') as $credit) {
+            if ($toVoid <= 0.009) {
+                break;
+            }
+
+            $void = round(min((float) $credit->remaining_amount, $toVoid), 2);
+
+            if ($void <= 0.009) {
+                continue;
+            }
+
+            $plan[] = [
+                'credit_id' => $credit->id,
+                'remaining' => (float) $credit->remaining_amount,
+                'void' => $void,
+            ];
+            $toVoid = round($toVoid - $void, 2);
+        }
+
+        return [
+            'fee_id' => $fee->id,
+            'student_id' => $overpayment->first()->student_id ?? null,
+            'category' => optional($fee->category)->title,
+            'due' => (float) $fee->total_amount,
+            'paid' => (float) $fee->paid_amount,
+            'genuine_overpayment' => $genuine,
+            'credited' => $credited,
+            'excess' => $excess,
+            'voidable' => round($excess - $toVoid, 2),
+            'already_spent' => $toVoid,
+            'plan' => $plan,
+        ];
     }
 
     /**
@@ -144,9 +172,12 @@ class FeeCreditReconciliation
      *
      * @return array{credits: int, amount: float, needs_review: float}
      */
-    public function voidDuplicateCredits(?int $userId = null, string $by = 'fees:credit-audit'): array
+    /**
+     * @param int|null $onlyFeeId cancel only the credit raised by this fee
+     */
+    public function voidDuplicateCredits(?int $userId = null, string $by = 'fees:credit-audit', ?int $onlyFeeId = null): array
     {
-        return DB::transaction(function () use ($userId, $by) {
+        return DB::transaction(function () use ($userId, $by, $onlyFeeId) {
             $voidedCredits = 0;
             $voidedAmount = 0.0;
             $review = 0.0;
@@ -154,7 +185,7 @@ class FeeCreditReconciliation
 
             // Worked out again inside the transaction, so it acts on the data as
             // it is at this moment, not as it was when the preview was shown.
-            foreach ($this->duplicateCredits() as $finding) {
+            foreach ($this->duplicateCredits($onlyFeeId) as $finding) {
                 $review += $finding['already_spent'];
 
                 foreach ($finding['plan'] as $step) {

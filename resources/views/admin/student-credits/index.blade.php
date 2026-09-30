@@ -272,7 +272,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('approve_refund') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close" data-bs-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="approveRefundForm" method="POST">
                 @csrf
@@ -289,7 +289,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     <button type="submit" class="btn btn-success">{{ __('approve_refund') }}</button>
                 </div>
             </form>
@@ -303,7 +303,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('reject_refund') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close" data-bs-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="rejectRefundForm" method="POST">
                 @csrf
@@ -318,7 +318,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     <button type="submit" class="btn btn-danger">{{ __('reject_refund') }}</button>
                 </div>
             </form>
@@ -332,7 +332,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">{{ __('process_refund') }}</h5>
-                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                <button type="button" class="close" data-bs-dismiss="modal"><span>&times;</span></button>
             </div>
             <form id="processRefundForm" method="POST">
                 @csrf
@@ -364,7 +364,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('cancel') }}</button>
                     <button type="submit" class="btn btn-primary">{{ __('complete_refund') }}</button>
                 </div>
             </form>
@@ -386,7 +386,7 @@ $(document).ready(function() {
         $('#approveStudentName').text(student);
         $('#approveAmount').text(parseFloat(amount).toFixed({{ $setting->decimal_place ?? 2 }}));
         $('#approveRefundForm').attr('action', '{{ url("admin/student-credits") }}/' + id + '/approve-refund');
-        $('#approveRefundModal').modal('show');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('approveRefundModal')).show();
     });
     
     // Reject Refund
@@ -396,7 +396,7 @@ $(document).ready(function() {
         
         $('#rejectStudentName').text(student);
         $('#rejectRefundForm').attr('action', '{{ url("admin/student-credits") }}/' + id + '/reject-refund');
-        $('#rejectRefundModal').modal('show');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('rejectRefundModal')).show();
     });
     
     // Process Refund
@@ -408,7 +408,7 @@ $(document).ready(function() {
         $('#processStudentName').text(student);
         $('#processAmount').text(parseFloat(amount).toFixed({{ $setting->decimal_place ?? 2 }}));
         $('#processRefundForm').attr('action', '{{ url("admin/student-credits") }}/' + id + '/process-refund');
-        $('#processRefundModal').modal('show');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('processRefundModal')).show();
     });
 });
 </script>

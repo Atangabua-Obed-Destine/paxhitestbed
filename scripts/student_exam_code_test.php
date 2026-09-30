@@ -69,6 +69,13 @@ $post = function (string $url, array $payload) use ($kernel) {
     return [$response->getStatusCode(), (string) $response->getContent()];
 };
 
+// Codes the school has already recorded are real data. A block that records
+// its own for a student clears that student's row first, inside its own
+// transaction, so it is never fighting the one-code-per-sitting rule.
+$clearCodesFor = function (array $studentIds) use (&$sessionId, &$level) {
+    StudentExamCode::forSitting($sessionId, $level)->whereIn('student_id', $studentIds)->delete();
+};
+
 $snapshot = fn () => json_encode(DB::table('student_exam_codes')->selectRaw('COUNT(*) n, MAX(id) last')->first());
 
 // The sitting with the most students, so the suite has something to work with.
@@ -161,24 +168,32 @@ if ($three->count() < 3) {
     echo "  SKIP  fewer than three students in this sitting\n";
 } else {
     [$a, $b, $c] = [$three[0], $three[1], $three[2]];
+    $mine = [$a->id, $b->id, $c->id];
+
+    // Codes already recorded for these students — this database carries the
+    // real ones — are cleared inside the transaction, and every count below is
+    // of their rows alone, so the section owns exactly what it checks.
+    $ours = fn () => StudentExamCode::forSitting($sessionId, $level)->whereIn('student_id', $mine);
 
     DB::beginTransaction();
 
     try {
+        $ours()->delete();
+
         $codes = [
-            $a->id => 'HND2637757D82',
-            $b->id => ' hnd2637758f7f ', // typed with spaces, in lower case
+            $a->id => 'HND26AAAA0001',
+            $b->id => ' hnd26aaaa0002 ', // typed with spaces, in lower case
             $c->id => '',                // left blank
         ];
 
         $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level, 'codes' => $codes]);
 
-        $saved = StudentExamCode::forSitting($sessionId, $level)->pluck('code', 'student_id');
+        $saved = $ours()->pluck('code', 'student_id');
 
         check('a column of codes is recorded, one row per student',
-            $saved->count() === 2 && $saved[$a->id] === 'HND2637757D82');
+            $saved->count() === 2 && $saved[$a->id] === 'HND26AAAA0001');
         check('a code typed with spaces or in lower case is stored as the commission writes it',
-            ($saved[$b->id] ?? null) === 'HND2637758F7F', $saved[$b->id] ?? 'missing');
+            ($saved[$b->id] ?? null) === 'HND26AAAA0002', $saved[$b->id] ?? 'missing');
         check('a blank box records nothing', !isset($saved[$c->id]));
         check('the programme is kept with the code',
             (int) StudentExamCode::forSitting($sessionId, $level)->where('student_id', $a->id)->value('program_id')
@@ -186,37 +201,37 @@ if ($three->count() < 3) {
 
         // Saving again with one changed
         $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
-            'codes' => [$a->id => 'HND2637759C88', $b->id => 'HND2637758F7F']]);
+            'codes' => [$a->id => 'HND26AAAA0003', $b->id => 'HND26AAAA0002']]);
 
         check('saving again updates rather than duplicating',
-            StudentExamCode::forSitting($sessionId, $level)->count() === 2
-                && StudentExamCode::forSitting($sessionId, $level)->where('student_id', $a->id)->value('code') === 'HND2637759C88');
+            $ours()->count() === 2
+                && $ours()->where('student_id', $a->id)->value('code') === 'HND26AAAA0003');
 
         // The same code on a second student is refused, and nothing is saved.
         // The refusal has to be the screen's own — a clash caught only by the
         // database unique index reaches the admin as a 500 page.
-        $stateBefore = StudentExamCode::forSitting($sessionId, $level)->pluck('code', 'student_id')->toJson();
+        $stateBefore = $ours()->pluck('code', 'student_id')->toJson();
         [$clashStatus] = $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
-            'codes' => [$c->id => 'HND2637759C88']]);
+            'codes' => [$c->id => 'HND26AAAA0003']]);
 
         check('a code already given to another student is refused',
-            !StudentExamCode::forSitting($sessionId, $level)->where('student_id', $c->id)->exists());
+            !$ours()->where('student_id', $c->id)->exists());
         check('and the admin is sent back to the screen, not to an error page',
             $clashStatus === 302, "status $clashStatus");
         check('with the clashing code named, rather than a database error',
-            collect(session('errors') ? session('errors')->all() : [])->contains(fn ($message) => str_contains($message, 'HND2637759C88'))
+            collect(session('errors') ? session('errors')->all() : [])->contains(fn ($message) => str_contains($message, 'HND26AAAA0003'))
                 && !collect(session('errors') ? session('errors')->all() : [])->contains(fn ($message) => str_contains($message, 'SQLSTATE')),
             json_encode(session('errors') ? session('errors')->all() : []));
         check('and the rest of that save is left untouched',
-            StudentExamCode::forSitting($sessionId, $level)->pluck('code', 'student_id')->toJson() === $stateBefore);
+            $ours()->pluck('code', 'student_id')->toJson() === $stateBefore);
 
         // Emptying a box removes the code.
         $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
-            'codes' => [$a->id => '', $b->id => 'HND2637758F7F']]);
+            'codes' => [$a->id => '', $b->id => 'HND26AAAA0002']]);
 
         check('emptying a box removes that student\'s code',
-            !StudentExamCode::forSitting($sessionId, $level)->where('student_id', $a->id)->exists()
-                && StudentExamCode::forSitting($sessionId, $level)->where('student_id', $b->id)->exists());
+            !$ours()->where('student_id', $a->id)->exists()
+                && $ours()->where('student_id', $b->id)->exists());
 
         // Level 1 and Level 2 for one student
         StudentExamCode::create(['student_id' => $b->id, 'session_id' => $sessionId, 'level' => $level === 1 ? 2 : 1, 'code' => 'HND26FFFFFFF1']);
@@ -226,7 +241,7 @@ if ($three->count() < 3) {
         $unusual = $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
             'codes' => [$c->id => 'XYZ123']]);
         check('a code outside the commission\'s format is saved, with a warning rather than a refusal',
-            StudentExamCode::forSitting($sessionId, $level)->where('student_id', $c->id)->value('code') === 'XYZ123');
+            $ours()->where('student_id', $c->id)->value('code') === 'XYZ123');
     } finally {
         DB::rollBack();
     }
@@ -255,6 +270,7 @@ if ($three->count() < 3) {
         DB::beginTransaction();
 
         try {
+            $clearCodesFor([$a->id, $b->id]);
             StudentExamCode::create(['student_id' => $a->id, 'session_id' => $sessionId, 'level' => $level, 'code' => $moved]);
             [$status] = $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level, 'codes' => $codes]);
 
@@ -271,6 +287,7 @@ if ($three->count() < 3) {
     DB::beginTransaction();
 
     try {
+        $clearCodesFor([$a->id, $b->id]);
         StudentExamCode::create(['student_id' => $a->id, 'session_id' => $sessionId, 'level' => $level, 'code' => 'HND26SWAPAAA1']);
         StudentExamCode::create(['student_id' => $b->id, 'session_id' => $sessionId, 'level' => $level, 'code' => 'HND26SWAPBBB2']);
 
@@ -287,6 +304,7 @@ if ($three->count() < 3) {
     DB::beginTransaction();
 
     try {
+        $clearCodesFor([$a->id, $b->id]);
         $state = StudentExamCode::forSitting($sessionId, $level)->pluck('code', 'student_id')->toJson();
         [$status] = $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
             'codes' => [$a->id => 'HND26SAME0001', $b->id => 'HND26SAME0001']]);
@@ -304,6 +322,7 @@ if ($three->count() < 3) {
     DB::beginTransaction();
 
     try {
+        $clearCodesFor([$a->id]);
         StudentExamCode::create(['student_id' => $a->id, 'session_id' => $sessionId, 'level' => $level,
             'code' => 'HND26ORIGIN01', 'created_by' => 999999]);
         $post(('/admin/admission/student-exam-codes'), ['session_id' => $sessionId, 'level' => $level,
@@ -327,6 +346,11 @@ DB::beginTransaction();
 try {
     $withCodes = $students->take(4);
     $given = [];
+
+    // This section checks the whole printed list, so inside its transaction it
+    // owns the whole sitting: the codes the school has really recorded are
+    // cleared here and restored by the rollback.
+    StudentExamCode::forSitting($sessionId, $level)->delete();
 
     foreach ($withCodes as $index => $student) {
         $code = 'HND26ABCDE' . str_pad((string) $index, 2, '0', STR_PAD_LEFT);
@@ -445,11 +469,17 @@ if (!$transcriptEnroll) {
     DB::beginTransaction();
 
     try {
+        // This student may already have a code of their own, at either level.
+        // The section is about what the transcript does once a code exists, so
+        // it starts from none and the rollback puts theirs back.
+        StudentExamCode::where('student_id', $studentId)->delete();
+
         [$status, $before] = $render($printUrl);
         check('the transcript prints', $status === 200, "status $status");
         check('and carries no exam code line before one is recorded',
             !str_contains($before, 'HND Exam Code'));
 
+        $clearCodesFor([$studentId]);
         StudentExamCode::create([
             'student_id' => $studentId, 'session_id' => $transcriptEnroll->session_id, 'level' => $level,
             'code' => 'HND26TRANSCR1', 'program_id' => $transcriptEnroll->program_id,
