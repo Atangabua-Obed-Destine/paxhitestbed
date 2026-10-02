@@ -95,8 +95,16 @@
                                     <div class="col-md-4">
                                         <div class="form-group">
                                             <label for="late_fee_percentage" class="form-label">{{ __('field_late_fee_percentage') }} (%)</label>
-                                            <input type="number" class="form-control" name="late_fee_percentage" id="late_fee_percentage" value="{{ old('late_fee_percentage', 5) }}" min="0" max="100" step="0.01">
-                                            <small class="form-text text-muted">{{ __('late_fee_applied_after_grace_period') }}</small>
+                                            {{-- Late fees are switched off, so the field is shown at nothing and
+                                                 cannot be set. It used to come up pre-filled at 5%, giving every
+                                                 plan a fine nobody had asked for. --}}
+                                            @if(config('payment_plan.late_fees_enabled', false))
+                                                <input type="number" class="form-control" name="late_fee_percentage" id="late_fee_percentage" value="{{ old('late_fee_percentage', 0) }}" min="0" max="100" step="0.01" placeholder="0">
+                                                <small class="form-text text-muted">{{ __('Leave at 0 for no late fee. Anything above 0 is charged after the grace period, and only when someone runs the late-fee step.') }}</small>
+                                            @else
+                                                <input type="number" class="form-control" id="late_fee_percentage" value="0" disabled>
+                                                <small class="form-text text-muted">{{ __('Late fees are switched off — paying an instalment late is never charged for.') }}</small>
+                                            @endif
                                         </div>
                                     </div>
 

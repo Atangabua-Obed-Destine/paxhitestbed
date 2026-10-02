@@ -21,9 +21,17 @@
                         </thead>
                         <tbody>
                             @foreach($installment->payments as $payment)
-                            <tr>
+                            <tr @if($payment->isReversed()) class="text-muted" @endif>
                                 <td>{{ date('d M Y, h:i A', strtotime($payment->payment_date)) }}</td>
-                                <td><strong>{{ number_format($payment->amount, 2) }} {!! $setting->currency_symbol !!}</strong></td>
+                                <td>
+                                    {{-- A reversed payment is kept on the record but no longer counts towards the instalment. --}}
+                                    <strong @if($payment->isReversed()) class="text-decoration-line-through" @endif>
+                                        {{ number_format($payment->amount, 2) }} {!! $setting->currency_symbol !!}
+                                    </strong>
+                                    @if($payment->isReversed())
+                                        <span class="badge bg-danger">{{ __('Reversed') }}</span>
+                                    @endif
+                                </td>
                                 <td>{{ $payment->payment_method_label }}</td>
                                 <td>{{ $payment->reference_no ?? '-' }}</td>
                                 <td>

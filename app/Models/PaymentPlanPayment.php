@@ -25,6 +25,10 @@ class PaymentPlanPayment extends Model
         'paid_by_id',
         'note',
         'payment_account_id',
+        'status',
+        'reversed_at',
+        'reversed_by',
+        'reversal_reason',
     ];
 
     /**
@@ -35,7 +39,19 @@ class PaymentPlanPayment extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'payment_date' => 'datetime',
+        'reversed_at' => 'datetime',
     ];
+
+    /** A reversed payment is kept for the record but no longer counts as money. */
+    public function isReversed(): bool
+    {
+        return $this->status === 'reversed';
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', '!=', 'reversed');
+    }
 
     /**
      * Get the installment this payment belongs to.

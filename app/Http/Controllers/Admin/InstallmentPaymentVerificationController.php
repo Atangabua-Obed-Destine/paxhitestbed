@@ -130,48 +130,28 @@ class InstallmentPaymentVerificationController extends Controller
         try {
             \DB::beginTransaction();
 
-            // Record the payment using the installment's recordPayment method with payment account
-            $receipt->installment->recordPayment(
+            // Read the instalment again under a lock. The balance the verifier
+            // saw was read before this form was submitted, and another receipt
+            // for the same instalment may have been approved since. recordPayment
+            // refuses anything the instalment cannot take; the lock makes sure it
+            // is refusing against the current figure.
+            $installment = PaymentPlanInstallment::whereKey($receipt->installment_id)
+                ->lockForUpdate()->firstOrFail();
+
+            // recordPayment sees to the instalment, the fee, the ledger, the
+            // payment account and the student's statement. This screen used to
+            // credit the payment account itself, which would now be done twice.
+            $installment->recordPayment(
                 $receipt->amount,
                 [
                     'payment_method' => $receipt->payment_method,
                     'payment_date' => $receipt->payment_date,
                     'note' => $receipt->note,
-                    'payment_account_id' => $request->payment_account_id
+                    'payment_account_id' => $request->payment_account_id,
+                    'paid_by_type' => 'App\Models\Student',
+                    'paid_by_id' => $receipt->student_id,
                 ]
             );
-
-            // If payment account is selected, create payment account transaction
-            if ($request->payment_account_id) {
-                $payment_account = PaymentAccount::findOrFail($request->payment_account_id);
-                
-                // Calculate new balance
-                $new_balance = $payment_account->current_balance + $receipt->amount;
-                
-                // Get student info
-                $fee = $receipt->installment->paymentPlan->fee;
-                $student = $fee->studentEnroll->student ?? null;
-                $studentName = $student ? trim($student->first_name . ' ' . $student->last_name) : 'Student';
-                
-                // Create transaction record
-                $account_transaction = new PaymentAccountTransaction;
-                $account_transaction->payment_account_id = $request->payment_account_id;
-                $account_transaction->transaction_type = 'credit'; // Money coming IN
-                $account_transaction->amount = $receipt->amount;
-                $account_transaction->transaction_date = $receipt->payment_date;
-                $account_transaction->title = 'Installment Payment (Verified) - ' . $studentName;
-                $account_transaction->description = 'Verified installment payment via receipt #' . $receipt->id . ' - ' . ($fee->category->title ?? 'Fee');
-                $account_transaction->payment_method = $receipt->payment_method;
-                $account_transaction->reference_type = 'fees';
-                $account_transaction->reference_id = $fee->id;
-                $account_transaction->balance_after = $new_balance;
-                $account_transaction->created_by = Auth::id();
-                $account_transaction->save();
-                
-                // Update account balance
-                $payment_account->current_balance = $new_balance;
-                $payment_account->save();
-            }
 
             // Update receipt status
             $receipt->status = 'approved';
@@ -185,6 +165,13 @@ class InstallmentPaymentVerificationController extends Controller
             Flasher::addSuccess('Payment receipt approved successfully. Payment has been recorded.');
             return redirect()->route($this->route . '.index');
 
+        } catch (\DomainException $e) {
+            // The instalment cannot take this money — most often because another
+            // receipt for it was approved first. The receipt stays pending so it
+            // can be rejected, or approved against a different instalment.
+            \DB::rollBack();
+            Flasher::addError($e->getMessage() . ' The receipt has been left pending.');
+            return redirect()->back();
         } catch (\Exception $e) {
             \DB::rollBack();
             Flasher::addError('Failed to approve receipt: ' . $e->getMessage());

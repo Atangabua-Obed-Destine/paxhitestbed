@@ -210,10 +210,16 @@ class AccountMappingController extends Controller
                     'date' => $fee->pay_date,
                     'description' => $fee->category->title ?? $fee->category->name ?? 'Fee Payment',
                     'reference' => 'Student: ' . $studentName,
-                    // Cash received, not paid_amount: credit carried over from
-                    // another fee was posted when it arrived there, so the list
-                    // must offer what is actually left to post.
-                    'amount' => $fee->cash_received_amount,
+                    // What is actually left for the fee to post, not paid_amount:
+                    // credit carried over from another fee was posted when it
+                    // arrived there, and money taken through a payment plan
+                    // posts instalment by instalment. Same arithmetic as
+                    // FeeLedgerPosting, so the row shows what posting would write.
+                    'amount' => max(0, round(
+                        (float) $fee->cash_received_amount
+                            - app(\App\Services\FeeLedgerPosting::class)->paidThroughPlans($fee),
+                        2
+                    )),
                 ]);
             }
         }

@@ -26,8 +26,8 @@ class PaymentPlanPermissionSeeder extends Seeder
             ['name' => 'payment-plan.update', 'guard_name' => 'web', 'group' => 'Payment Plan', 'title' => 'Update'],
             ['name' => 'payment-plan.destroy', 'guard_name' => 'web', 'group' => 'Payment Plan', 'title' => 'Delete'],
             ['name' => 'payment-plan.pay', 'guard_name' => 'web', 'group' => 'Payment Plan', 'title' => 'Process Payment'],
-            ['name' => 'payment-plan.approve', 'guard_name' => 'web', 'group' => 'Payment Plan', 'title' => 'Approve'],
             ['name' => 'payment-plan.cancel', 'guard_name' => 'web', 'group' => 'Payment Plan', 'title' => 'Cancel'],
+            ['name' => 'payment-plan.reverse', 'guard_name' => 'web', 'group' => 'Payment Plan', 'title' => 'Reverse a Payment'],
         ];
 
         foreach ($permissions as $permission) {

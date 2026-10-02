@@ -82,6 +82,19 @@
                         </div>
 
                         <div class="form-group col-md-6">
+                            <label for="payment_account_id-{{ $installment->id }}" class="form-label">{{ __('field_payment_account') }}</label>
+                            <select class="form-control" name="payment_account_id" id="payment_account_id-{{ $installment->id }}">
+                                <option value="">{{ __('select') }}</option>
+                                @foreach($payment_accounts ?? [] as $account)
+                                    <option value="{{ $account->id }}">{{ $account->title }} ({{ number_format($account->current_balance, 2) }})</option>
+                                @endforeach
+                            </select>
+                            <small class="form-text text-muted">
+                                {{ __('Which account received the money. Left blank, the payment shows under Unlinked Transactions until an account is attached.') }}
+                            </small>
+                        </div>
+
+                        <div class="form-group col-md-6">
                             <label for="reference_no" class="form-label">{{ __('field_reference_number') }}</label>
                             <input type="text" class="form-control" name="reference_no" id="reference_no" value="{{ old('reference_no') }}">
                         </div>

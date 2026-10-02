@@ -31,9 +31,9 @@ class FeeObserver
      */
     public function created(Fee $fee): void
     {
-        // Skip fees under active payment plan - those are handled by PaymentPlanPayment observer
-        // Skip payment-plan linked fees for auto mapping only; other sync happens below.
-        if (!$fee->payment_plan_id && $fee->paid_amount > 0 && $fee->pay_date) {
+        // Money taken through a payment plan is posted by PaymentPlanPaymentObserver;
+        // FeeLedgerPosting subtracts it, so a fee posts only what it took directly.
+        if ($fee->paid_amount > 0 && $fee->pay_date) {
             $this->postCashReceived($fee);
         }
 
@@ -45,19 +45,19 @@ class FeeObserver
      */
     public function updated(Fee $fee): void
     {
-        // Skip fees under active payment plan - those are handled by PaymentPlanPayment observer
-        if (!$fee->payment_plan_id) {
-            $paidNow = ($fee->paid_amount > 0 && $fee->pay_date);
+        // A fee posts what it took directly; money taken through a payment plan
+        // is posted per instalment and subtracted by FeeLedgerPosting, so the
+        // same rules apply whether or not the fee is on a plan.
+        $paidNow = ($fee->paid_amount > 0 && $fee->pay_date);
 
-            if (!$paidNow) {
-                // Fee was un-paid (amount cleared / pay_date removed) → reverse any posting
-                $this->autoMapService->reverse('fee', $fee->id);
-            } elseif ($fee->wasChanged(['paid_amount', 'category_id', 'pay_date'])) {
-                // Newly paid or amount/category changed → (re)post the correct
-                // entry. A changed category or date moves the entry even when
-                // the amount is the same.
-                $this->postCashReceived($fee, $fee->wasChanged(['category_id', 'pay_date']));
-            }
+        if (!$paidNow) {
+            // Fee was un-paid (amount cleared / pay_date removed) → reverse any posting
+            $this->autoMapService->reverse('fee', $fee->id);
+        } elseif ($fee->wasChanged(['paid_amount', 'category_id', 'pay_date'])) {
+            // Newly paid or amount/category changed → (re)post the correct
+            // entry. A changed category or date moves the entry even when
+            // the amount is the same.
+            $this->postCashReceived($fee, $fee->wasChanged(['category_id', 'pay_date']));
         }
 
         $this->resitFeeService->syncFromFee($fee);

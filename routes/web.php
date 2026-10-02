@@ -608,6 +608,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('payment-plan/get-student-fees', 'PaymentPlanController@getStudentFees')->name('payment-plan.get-student-fees');
     Route::post('payment-plan/process-payment', 'PaymentPlanController@processPayment')->name('payment-plan.process-payment');
     Route::post('payment-plan/{id}/cancel', 'PaymentPlanController@cancel')->name('payment-plan.cancel');
+    Route::post('payment-plan/{id}/payment/{payment}/reverse', 'PaymentPlanController@reverse')->name('payment-plan.reverse');
     Route::resource('payment-plan', 'PaymentPlanController');
 
     // Installment Payment Verification Routes

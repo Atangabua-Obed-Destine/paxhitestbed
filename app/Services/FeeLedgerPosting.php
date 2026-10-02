@@ -36,6 +36,31 @@ class FeeLedgerPosting
     {
     }
 
+    /**
+     * What this fee's payment plans have taken from the student.
+     *
+     * That money belongs to the ledger as instalments — PaymentPlanPaymentObserver
+     * posts each one as its own transaction — so it must come off whatever the
+     * fee itself posts, or the same cash is counted twice.
+     *
+     * Recorded, not posted: an instalment payment that failed to post (no
+     * account mapping for the category, or a date in no accounting period) is
+     * still the plan's money. Letting it slip onto the fee would hide the gap
+     * the mappings screen exists to show, and would post it twice as soon as the
+     * instalment was posted properly.
+     */
+    public function paidThroughPlans(Fee $fee): float
+    {
+        $total = DB::table('payment_plan_payments as ppp')
+            ->join('payment_plan_installments as ppi', 'ppi.id', '=', 'ppp.installment_id')
+            ->join('payment_plans as pp', 'pp.id', '=', 'ppi.payment_plan_id')
+            ->where('pp.fee_id', $fee->id)
+            ->where('ppp.status', '!=', 'reversed')
+            ->sum('ppp.amount');
+
+        return round((float) $total, 2);
+    }
+
     /** What the fee's active posting carries, or null when it has none. */
     public function postedAmount(Fee $fee): ?float
     {
@@ -60,12 +85,17 @@ class FeeLedgerPosting
      */
     public function resync(Fee $fee, ?int $userId = null, bool $force = false): string
     {
-        // Payment-plan fees are posted instalment by instalment elsewhere.
-        if ($fee->payment_plan_id) {
-            return self::SKIPPED;
-        }
-
-        $cash = round($fee->cash_received_amount, 2);
+        // Money taken through a payment plan is posted instalment by instalment,
+        // so only what the fee took directly is left for the fee to post.
+        //
+        // This used to be a flat skip whenever the fee carried a plan link, which
+        // was wrong at both ends: a fee whose plan was cancelled and which was
+        // then paid directly stayed unposted for good, and a fee whose plan had
+        // completed lost the protection entirely — the link is cleared on
+        // completion, so its whole amount became postable on top of the
+        // instalments. Subtracting is true in every one of those states, and
+        // needs no link to work.
+        $cash = round($fee->cash_received_amount - $this->paidThroughPlans($fee), 2);
         $posted = $this->postedAmount($fee);
         $shouldPost = $cash > 0.009 && !empty($fee->pay_date);
 

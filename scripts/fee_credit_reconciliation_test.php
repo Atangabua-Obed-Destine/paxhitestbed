@@ -293,8 +293,11 @@ if (!$stillOverpaid) {
 
 // The ordinary cases must be untouched.
 $cases = [
+    // A fee on an active payment plan says so on its badge instead of how much
+    // of it is paid, which is right — but it is not the ordinary case this
+    // section is about, so it is left out of the pick.
     'a part-paid fee' => ['fee' => Fee::withCreditMovedOut()->get()
-        ->first(fn ($f) => $f->credit_moved_out < 0.005 && $f->paid_amount > 0.005 && $f->paid_amount < $f->total_amount - 0.005 && $f->status != 3), 'expected' => 'Partially Paid'],
+        ->first(fn ($f) => $f->credit_moved_out < 0.005 && $f->paid_amount > 0.005 && $f->paid_amount < $f->total_amount - 0.005 && $f->status != 3 && !$f->hasActivePaymentPlan()), 'expected' => 'Partially Paid'],
     'an unpaid fee' => ['fee' => Fee::withCreditMovedOut()->get()
         ->first(fn ($f) => $f->paid_amount < 0.005 && $f->status != 3), 'expected' => 'Unpaid'],
     'a settled fee' => ['fee' => Fee::withCreditMovedOut()->get()

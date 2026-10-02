@@ -50,6 +50,18 @@ class Kernel extends ConsoleKernel
                 ->dailyAt('23:59');
 
         /*
+         * Payment plans: mark instalments overdue once their grace period has
+         * lapsed, and remind students of what falls due in the next week.
+         *
+         * Late fees are deliberately not scheduled. Both of these only report
+         * what is already true, so running them daily can surprise nobody;
+         * charging a late fee takes money off a student, and stays a decision
+         * someone makes by running `payment-plan:maintain --apply-late-fees`.
+         */
+        $schedule->command('payment-plan:maintain --update-status --send-reminders')
+                ->dailyAt('03:15');
+
+        /*
          * ---------------------------------------------------------------
          * EdutrustPay reporting
          * ---------------------------------------------------------------

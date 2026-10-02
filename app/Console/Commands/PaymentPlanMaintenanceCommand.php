@@ -35,10 +35,12 @@ class PaymentPlanMaintenanceCommand extends Command
         $applyLateFees = $this->option('apply-late-fees');
         $sendReminders = $this->option('send-reminders');
         
-        // If no options specified, run all tasks
+        // With no options, do the two things that only report the truth —
+        // mark what is late and remind whoever owes it. Charging a late fee
+        // takes money off a student, so it is never the default: it has to be
+        // asked for with --apply-late-fees.
         if (!$updateStatus && !$applyLateFees && !$sendReminders) {
             $updateStatus = true;
-            $applyLateFees = true;
             $sendReminders = true;
         }
         
@@ -89,13 +91,26 @@ class PaymentPlanMaintenanceCommand extends Command
      */
     protected function applyLateFees()
     {
+        if (!config('payment_plan.late_fees_enabled', false)) {
+            $this->warn('Late fees are switched off, so none were applied.');
+            $this->line('  Turn them on with PAYMENT_PLAN_LATE_FEES=true if a school does charge for late payment.');
+
+            return;
+        }
+
         $this->info('Applying late fees to overdue installments...');
-        
-        // Get overdue installments that don't have late fees yet
+
+        // Get overdue installments that don't have late fees yet.
+        //
+        // The two late-fee conditions have to be bracketed together. Without
+        // the grouping this read "(overdue AND late_fee = 0) OR late_fee IS
+        // NULL", which picked up every instalment that had never been charged —
+        // including ones that were not late at all, and not even due yet.
         $overdueInstallments = PaymentPlanInstallment::with('paymentPlan')
             ->where('status', 'overdue')
-            ->where('late_fee', 0)
-            ->orWhereNull('late_fee')
+            ->where(function ($query) {
+                $query->where('late_fee', 0)->orWhereNull('late_fee');
+            })
             ->get();
         
         $appliedCount = 0;

@@ -12,7 +12,6 @@ use App\Models\PaymentPlanInstallment;
 use App\Models\PaymentPlanPayment;
 use App\Models\Fee;
 use App\Models\Student;
-use App\Models\Transaction;
 use App\Models\PrintSetting;
 use Carbon\Carbon;
 
@@ -41,9 +40,9 @@ class PaymentPlanController extends Controller
         $this->middleware('permission:'.$this->access.'.edit', ['only' => ['edit']]);
         $this->middleware('permission:'.$this->access.'.update', ['only' => ['update']]);
         $this->middleware('permission:'.$this->access.'.destroy', ['only' => ['destroy']]);
-        $this->middleware('permission:'.$this->access.'.pay', ['only' => ['pay', 'processPayment']]);
-        $this->middleware('permission:'.$this->access.'.approve', ['only' => ['approve']]);
+        $this->middleware('permission:'.$this->access.'.pay', ['only' => ['processPayment']]);
         $this->middleware('permission:'.$this->access.'.cancel', ['only' => ['cancel']]);
+        $this->middleware('permission:'.$this->access.'.reverse', ['only' => ['reverse']]);
     }
 
     /**
@@ -139,6 +138,28 @@ class PaymentPlanController extends Controller
             'installments.*.due_date' => 'required|date',
         ]);
 
+        $fee = Fee::findOrFail($request->fee_id);
+
+        // The create form only offers fees with no plan, but that list was drawn
+        // before this form was filled in. Without checking again, a second plan
+        // silently takes the fee over and leaves the first one orphaned, still
+        // holding its payments.
+        if ($fee->payment_plan_id && $fee->paymentPlan) {
+            Flasher::addError('This fee is already on payment plan #' . $fee->payment_plan_id
+                . ' (' . $fee->paymentPlan->status . '). Cancel that plan first.');
+            return redirect()->back()->withInput();
+        }
+
+        // A plan whose instalments do not add up to its total can never settle
+        // the fee, and nothing downstream would notice.
+        $instalmentTotal = round(array_sum(array_column($request->installments ?? [], 'amount')), 2);
+
+        if (abs($instalmentTotal - round((float) $request->total_amount, 2)) >= 0.01) {
+            Flasher::addError('The instalments add up to ' . number_format($instalmentTotal, 2)
+                . ', but the plan total is ' . number_format((float) $request->total_amount, 2) . '.');
+            return redirect()->back()->withInput();
+        }
+
         DB::beginTransaction();
         try {
             // Create payment plan
@@ -147,7 +168,12 @@ class PaymentPlanController extends Controller
                 'fee_id' => $request->fee_id,
                 'total_amount' => $request->total_amount,
                 'installments_count' => $request->installments_count,
-                'late_fee_percentage' => $request->late_fee_percentage ?? 0,
+                // With late fees switched off a plan is created carrying none,
+                // whatever arrives in the request — the form disables the field,
+                // and a form is not a lock.
+                'late_fee_percentage' => config('payment_plan.late_fees_enabled', false)
+                    ? ($request->late_fee_percentage ?? 0)
+                    : 0,
                 'grace_period_days' => $request->grace_period_days ?? 7,
                 'created_by' => Auth::user()->id,
                 'approved_by' => Auth::user()->id,
@@ -211,12 +237,17 @@ class PaymentPlanController extends Controller
         $data['setting'] = PrintSetting::where('slug', 'fees-receipt')->first();
 
         $data['row'] = PaymentPlan::with([
-            'student.currentEnroll', 
-            'fee', 
-            'creator', 
+            'student.currentEnroll',
+            'fee',
+            'creator',
             'approver',
             'installments.payments.paidBy'
         ])->findOrFail($id);
+
+        // Offered on the payment form so the money lands in the right account
+        // and the cash book as it is recorded, rather than waiting to be linked.
+        $data['payment_accounts'] = \App\Models\PaymentAccount::where('status', 1)
+            ->orderBy('title')->get();
 
         return view($this->view.'.show', $data);
     }
@@ -270,11 +301,19 @@ class PaymentPlanController extends Controller
 
         DB::beginTransaction();
         try {
-            $plan->update([
-                'late_fee_percentage' => $request->late_fee_percentage ?? 0,
+            $update = [
                 'grace_period_days' => $request->grace_period_days ?? 7,
                 'notes' => $request->notes,
-            ]);
+            ];
+
+            // With late fees switched off the field is disabled, so nothing is
+            // submitted for it. Leaving the stored percentage untouched keeps an
+            // older plan's record honest; nothing can charge it either way.
+            if (config('payment_plan.late_fees_enabled', false)) {
+                $update['late_fee_percentage'] = $request->late_fee_percentage ?? 0;
+            }
+
+            $plan->update($update);
 
             // Update grace period ends for pending installments
             foreach ($plan->installments()->whereIn('status', ['pending', 'partial'])->get() as $installment) {
@@ -315,12 +354,9 @@ class PaymentPlanController extends Controller
 
         DB::beginTransaction();
         try {
+            // Releases the fee for direct payment again. Money already taken
+            // stays on the fee and stays in the ledger — it was really paid.
             $plan->cancel($request->cancellation_reason);
-
-            // Revert fee status
-            $plan->fee->update([
-                'paid_status' => 0, // Unpaid
-            ]);
 
             DB::commit();
 
@@ -332,23 +368,6 @@ class PaymentPlanController extends Controller
             Flasher::addError('Failed to cancel payment plan: ' . $e->getMessage());
             return redirect()->back();
         }
-    }
-
-    /**
-     * Show payment form for an installment.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function pay($id, $installmentId)
-    {
-        $data['title'] = $this->title;
-        $data['route'] = $this->route;
-        $data['view'] = $this->view;
-
-        $data['plan'] = PaymentPlan::with(['student', 'fee'])->findOrFail($id);
-        $data['installment'] = PaymentPlanInstallment::findOrFail($installmentId);
-
-        return view($this->view.'.pay', $data);
     }
 
     /**
@@ -364,13 +383,22 @@ class PaymentPlanController extends Controller
         $plan = PaymentPlan::findOrFail($id);
         $installment = PaymentPlanInstallment::findOrFail($installmentId);
 
+        // Both ids were checked to exist, never against each other — so an
+        // instalment id from another plan would have credited that other plan's
+        // fee while this plan's screen reported success.
+        if ((int) $installment->payment_plan_id !== (int) $plan->id) {
+            Flasher::addError('That instalment belongs to a different payment plan.');
+            return redirect()->back();
+        }
+
         // Validate
         $request->validate([
             'payment_plan_id' => 'required|exists:payment_plans,id',
             'installment_id' => 'required|exists:payment_plan_installments,id',
-            'amount' => 'required|numeric|min:0|max:' . $installment->remaining_balance,
+            'amount' => 'required|numeric|min:0.01',
             'payment_method' => 'required|integer|between:1,7',
             'payment_date' => 'required|date',
+            'payment_account_id' => 'nullable|exists:payment_accounts,id',
             'reference_no' => 'nullable|string',
             'note' => 'nullable|string',
             'receipt' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
@@ -378,6 +406,13 @@ class PaymentPlanController extends Controller
 
         DB::beginTransaction();
         try {
+            // Read the instalment again under a lock, inside the transaction:
+            // the balance shown on the form may have been settled by another
+            // admin, or by a receipt approved, while this one was being filled
+            // in. recordPayment does the deciding; this makes sure it decides on
+            // what is true now.
+            $installment = PaymentPlanInstallment::whereKey($installment->id)->lockForUpdate()->firstOrFail();
+
             // Handle receipt upload
             $receiptPath = null;
             if ($request->hasFile('receipt')) {
@@ -387,27 +422,19 @@ class PaymentPlanController extends Controller
                 $receiptPath = 'payment-plan/' . $receiptName;
             }
 
-            // Record payment
-            $payment = $installment->recordPayment($request->amount, [
+            // Record payment. The instalment sees to everything the money
+            // touches — the instalment, the fee, the ledger, the payment
+            // account and the student's statement — so both this form and the
+            // receipt-approval screen have identical effects.
+            $installment->recordPayment($request->amount, [
                 'payment_method' => $request->payment_method,
                 'payment_date' => $request->payment_date,
+                'payment_account_id' => $request->payment_account_id,
                 'reference_no' => $request->reference_no,
                 'receipt_path' => $receiptPath,
                 'paid_by_type' => 'App\User',
-                'paid_by_id' => Auth::user()->id,
+                'paid_by_id' => Auth::guard('web')->id(),
                 'note' => $request->note,
-            ]);
-
-            // Create transaction record for accounting (using polymorphic relationship)
-            $transactionId = 'TXN-PP-' . time() . '-' . $installment->id;
-            
-            Transaction::create([
-                'transactionable_id' => $payment->id,
-                'transactionable_type' => 'App\Models\PaymentPlanPayment',
-                'transaction_id' => $transactionId,
-                'amount' => $request->amount,
-                'type' => 1, // 1 = Credit (income)
-                'created_by' => Auth::user()->id,
             ]);
 
             DB::commit();
@@ -415,11 +442,48 @@ class PaymentPlanController extends Controller
             Flasher::addSuccess('Payment recorded successfully!');
             return redirect()->route($this->route.'.show', $id);
 
+        } catch (\DomainException $e) {
+            // The money was refused for a reason worth reading — the balance, a
+            // plan that is no longer active. Nothing has been written.
+            DB::rollback();
+            Flasher::addError($e->getMessage());
+            return redirect()->back()->withInput();
         } catch (\Exception $e) {
             DB::rollback();
             Flasher::addError('Failed to process payment: ' . $e->getMessage());
             return redirect()->back()->withInput();
         }
+    }
+
+    /**
+     * Reverse one instalment payment, everywhere it reached.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function reverse(Request $request, $id, $paymentId)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $payment = PaymentPlanPayment::with('installment')->findOrFail($paymentId);
+
+        // The payment has to belong to the plan whose screen asked for this.
+        if (!$payment->installment || (int) $payment->installment->payment_plan_id !== (int) $id) {
+            Flasher::addError('That payment belongs to a different payment plan.');
+            return redirect()->back();
+        }
+
+        $result = app(\App\Services\InstallmentPaymentReversal::class)
+            ->reverse($payment, $request->reason);
+
+        if ($result['reversed']) {
+            Flasher::addSuccess($result['message']);
+        } else {
+            Flasher::addError($result['message']);
+        }
+
+        return redirect()->route($this->route.'.show', $id);
     }
 
     /**
@@ -441,14 +505,10 @@ class PaymentPlanController extends Controller
         try {
             // Delete installments (payments will cascade)
             $plan->installments()->delete();
-            
-            // Delete plan
-            $plan->delete();
 
-            // Revert fee status if needed
-            if ($plan->fee) {
-                $plan->fee->update(['paid_status' => 0]);
-            }
+            // Deleting the plan releases the fee: fees.payment_plan_id is a
+            // foreign key with ON DELETE SET NULL.
+            $plan->delete();
 
             DB::commit();
 

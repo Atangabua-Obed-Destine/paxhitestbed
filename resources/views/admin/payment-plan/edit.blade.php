@@ -39,10 +39,19 @@
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="late_fee_percentage" class="form-label">{{ __('field_late_fee_percentage') }} (%)</label>
-                                        <input type="number" class="form-control" name="late_fee_percentage" id="late_fee_percentage" 
-                                               value="{{ old('late_fee_percentage', $row->late_fee_percentage) }}" 
-                                               min="0" max="100" step="0.01">
-                                        <small class="form-text text-muted">{{ __('late_fee_applied_after_grace_period') }}</small>
+                                        @if(config('payment_plan.late_fees_enabled', false))
+                                            <input type="number" class="form-control" name="late_fee_percentage" id="late_fee_percentage"
+                                                   value="{{ old('late_fee_percentage', $row->late_fee_percentage) }}"
+                                                   min="0" max="100" step="0.01">
+                                            <small class="form-text text-muted">{{ __('late_fee_applied_after_grace_period') }}</small>
+                                        @else
+                                            {{-- Late fees are switched off. A percentage stored on an older plan is
+                                                 shown so the record is honest, but it cannot be changed and nothing
+                                                 will ever charge it. --}}
+                                            <input type="number" class="form-control" id="late_fee_percentage"
+                                                   value="{{ $row->late_fee_percentage }}" disabled>
+                                            <small class="form-text text-muted">{{ __('Late fees are switched off — paying an instalment late is never charged for.') }}</small>
+                                        @endif
                                     </div>
                                 </div>
 

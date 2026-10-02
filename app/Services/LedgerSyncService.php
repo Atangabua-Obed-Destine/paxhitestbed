@@ -9,6 +9,7 @@ use App\Models\Fee;
 use App\Models\Income;
 use App\Models\PaymentPlanPayment;
 use App\Models\TransactionMapping;
+use App\Services\FeeLedgerPosting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -269,29 +270,32 @@ class LedgerSyncService
     {
         switch ($type) {
             case 'fee':
-                // A fee on a payment plan posts per instalment, as a
-                // payment_plan_payment. Posting the fee as well would count the
-                // same money twice. FeeObserver skips it for the same reason.
-                if ($row->payment_plan_id) {
-                    return [null, null, $this->refuse('payment_plan', __('Paid through a payment plan. Each instalment posts on its own.'))];
-                }
-
                 // An assigned fee that nobody has paid is a bill, not money
                 // received. There is nothing to post.
                 if ((float) $row->paid_amount <= 0 || !$row->pay_date) {
                     return [null, null, $this->refuse('not_paid', __('Not paid yet, so there is nothing to post.'))];
                 }
 
-                // Settled with credit carried over from another fee: that money
-                // was posted when it first arrived, on the fee it was paid to.
-                // Posting it again here would count the same cash twice — the
-                // fee is posted at its cash received, as FeeObserver does.
-                if ($row->cash_received_amount <= 0.009) {
-                    return [null, null, $this->refuse('settled_by_credit', __('Settled by credit from another fee, which was already posted when it was received.'))];
+                // Money taken through a payment plan posts per instalment, as a
+                // payment_plan_payment, so it comes off what the fee posts —
+                // the same arithmetic FeeLedgerPosting uses, so this screen
+                // offers exactly what posting would write.
+                $postable = round(
+                    (float) $row->cash_received_amount
+                        - app(FeeLedgerPosting::class)->paidThroughPlans($row),
+                    2
+                );
+
+                // Settled with credit carried over from another fee, or paid
+                // through a plan: that money was posted when it arrived — on the
+                // fee it was paid to, or as its instalments. Posting it again
+                // here would count the same cash twice.
+                if ($postable <= 0.009) {
+                    return [null, null, $this->refuse('already_posted_elsewhere', __('This money was already posted where it arrived — as credit from another fee, or instalment by instalment.'))];
                 }
 
                 return [$row->category_id, [
-                    'amount' => $row->cash_received_amount,
+                    'amount' => $postable,
                     'date' => $row->pay_date,
                     'description' => 'Fee Payment - ' . ($row->category->title ?? $row->category->name ?? 'Student Fee'),
                 ], null];
