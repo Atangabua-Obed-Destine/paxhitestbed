@@ -117,6 +117,27 @@
                                 </select>
                                 <small class="form-text text-muted">{{ __('You can select multiple roles. Hold Ctrl (Windows) or Cmd (Mac) to select multiple.') }}</small>
 
+                                @php
+                                    // Roles this member of staff holds that the
+                                    // person editing them cannot assign. Shown
+                                    // so the editor knows they are there —
+                                    // otherwise an Admin looks like someone with
+                                    // no role at all — and so it is clear that
+                                    // saving will not remove them.
+                                    $assignable = collect($roles)->pluck('id')->all();
+                                    $lockedRoles = collect($userRoles)
+                                        ->reject(fn ($role) => in_array($role->id, $assignable));
+                                @endphp
+
+                                @if($lockedRoles->isNotEmpty())
+                                    <small class="form-text text-warning d-block mt-1">
+                                        <i class="fas fa-lock"></i>
+                                        {{ __('Also holds') }}
+                                        <strong>{{ $lockedRoles->pluck('name')->implode(', ') }}</strong>
+                                        — {{ __('only a Super Admin can change that. Saving here will not remove it.') }}
+                                    </small>
+                                @endif
+
                                 <div class="invalid-feedback">
                                   {{ __('required_field') }} {{ __('field_role') }}
                                 </div>

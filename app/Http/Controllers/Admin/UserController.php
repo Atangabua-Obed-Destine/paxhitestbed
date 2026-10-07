@@ -56,6 +56,66 @@ class UserController extends Controller
     }
 
     /**
+     * Roles nobody may hand out through this screen.
+     *
+     * Super Admin is the account that can grant every other power in the
+     * system, including the power to grant itself; it is created deliberately,
+     * not from a staff form.
+     */
+    protected const NEVER_ASSIGNABLE = ['Super Admin'];
+
+    /**
+     * Roles only a Super Admin may hand out.
+     *
+     * Admin carries nearly everything Super Admin does, so being able to create
+     * one is effectively being able to create a peer. It stays out of the list
+     * for everybody else.
+     */
+    protected const SUPER_ADMIN_ONLY = ['Admin'];
+
+    /** Is the person doing this a Super Admin? */
+    protected function actorIsSuperAdmin(): bool
+    {
+        $actor = Auth::guard('web')->user();
+
+        return $actor !== null && $actor->hasRole('Super Admin');
+    }
+
+    /**
+     * The roles the person using this screen is allowed to assign.
+     *
+     * One list, used to build the dropdown and to check what comes back from
+     * it. A dropdown is a convenience, not a lock: without the same rule on the
+     * way in, anyone who can edit a user could post the Admin role id by hand.
+     */
+    protected function assignableRoles()
+    {
+        $hidden = self::NEVER_ASSIGNABLE;
+
+        if (!$this->actorIsSuperAdmin()) {
+            $hidden = array_merge($hidden, self::SUPER_ADMIN_ONLY);
+        }
+
+        return Role::whereNotIn('name', $hidden)->orderBy('name', 'asc')->get();
+    }
+
+    /**
+     * Stop a role being assigned by someone not allowed to assign it.
+     *
+     * Returns the roles that were refused, so the caller can say which.
+     *
+     * @param  mixed $roles  whatever the form submitted
+     * @return array<string> names of the refused roles
+     */
+    protected function refusedRoles($roles): array
+    {
+        $submitted = Role::whereIn('id', (array) $roles)->pluck('name')->all();
+        $allowed = $this->assignableRoles()->pluck('name')->all();
+
+        return array_values(array_diff($submitted, $allowed));
+    }
+
+    /**
      * Display a listing of the resource.
      *
      * @return \Illuminate\Http\Response
@@ -145,7 +205,7 @@ class UserController extends Controller
                         ->orderBy('title', 'asc')->get();
         $data['designations'] = Designation::where('status', '1')
                         ->orderBy('title', 'asc')->get();
-        $data['roles'] = Role::whereNotIn('name', ['Super Admin', 'Admin'])->orderBy('name', 'asc')->get();
+        $data['roles'] = $this->assignableRoles();
         $data['work_shifts'] = WorkShiftType::where('status', '1')
                         ->orderBy('title', 'asc')->get();
 
@@ -164,7 +224,7 @@ class UserController extends Controller
         $data['route']     = $this->route;
         $data['view']      = $this->view;
 
-        $data['roles'] = Role::whereNotIn('name', ['Super Admin', 'Admin'])->orderBy('name', 'asc')->get();
+        $data['roles'] = $this->assignableRoles();
         $data['departments'] = Department::where('status', '1')
                         ->orderBy('title', 'asc')->get();
         $data['designations'] = Designation::where('status', '1')
@@ -232,6 +292,16 @@ class UserController extends Controller
             'resume' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,zip,rar,csv,xls,xlsx,ppt,pptx|max:20480',
             'joining_letter' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,zip,rar,csv,xls,xlsx,ppt,pptx|max:20480',
         ]);
+
+        // The dropdown leaves out roles this person may not hand out; this is
+        // what makes that true rather than merely displayed.
+        if ($refused = $this->refusedRoles($request->roles)) {
+            Flasher::addError(__('Only a Super Admin can assign the :roles role.', [
+                'roles' => implode(', ', $refused),
+            ]), __('msg_error'));
+
+            return redirect()->back()->withInput();
+        }
 
         // Auto-generate staff_id if empty (as a fallback)
         $staffId = $request->staff_id;
@@ -435,7 +505,7 @@ class UserController extends Controller
                             $query->where('status', '1');
                         })->get();
 
-        $data['roles'] = Role::whereNotIn('name', ['Super Admin', 'Admin'])->orderBy('name', 'asc')->get();
+        $data['roles'] = $this->assignableRoles();
         $data['departments'] = Department::where('status', '1')
                         ->orderBy('title', 'asc')->get();
         $data['designations'] = Designation::where('status', '1')
@@ -489,6 +559,13 @@ class UserController extends Controller
             'joining_letter' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,zip,rar,csv,xls,xlsx,ppt,pptx|max:20480',
         ]);
 
+        if ($refused = $this->refusedRoles($request->roles)) {
+            Flasher::addError(__('Only a Super Admin can assign the :roles role.', [
+                'roles' => implode(', ', $refused),
+            ]), __('msg_error'));
+
+            return redirect()->back()->withInput();
+        }
 
         // Update Data
         try{
@@ -635,8 +712,18 @@ class UserController extends Controller
             }}
 
 
-            // Assign Role
-            $user->roles()->sync($request->roles);
+            // Assign Role.
+            //
+            // Roles this person cannot assign are also roles they cannot take
+            // away: the dropdown does not offer them, so a plain sync would
+            // quietly strip an Admin of that role the first time anyone else
+            // edited their phone number. Those are carried over untouched.
+            $keep = $user->roles()
+                ->whereNotIn('name', $this->assignableRoles()->pluck('name')->all())
+                ->pluck('roles.id')
+                ->all();
+
+            $user->roles()->sync(array_unique(array_merge((array) $request->roles, $keep)));
 
             // Attach Update
             $user->programs()->sync($request->programs);
