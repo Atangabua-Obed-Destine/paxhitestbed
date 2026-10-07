@@ -950,8 +950,15 @@
     <!-- Auto-show Modal Script -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            $('#progressionModal').modal('show');
-            
+            // Bootstrap 5 dropped the jQuery plugin, so $(...).modal('show')
+            // does nothing here and this modal never actually appeared after a
+            // progression. The native API is what this version answers to.
+            const progressed = document.getElementById('progressionModal');
+
+            if (progressed && typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getOrCreateInstance(progressed).show();
+            }
+
             // Add confetti effect
             if (typeof confetti !== 'undefined') {
                 setTimeout(function() {
@@ -1037,6 +1044,41 @@
     $(document).ready(function() {
         let eligibilityData = null;
 
+        // Set when the modal is opened with data already in hand, so the
+        // show.bs.modal handler does not fetch the same thing a second time.
+        let skipNextModalFetch = false;
+
+        /**
+         * Open the progression modal from eligibility data already loaded.
+         *
+         * Used to raise it unprompted on page load: a student who can move up
+         * should be told so rather than having to find the button. Built from
+         * the response we already have, so opening it costs no second request,
+         * and through the same builders the button uses, so what they see is
+         * identical either way.
+         */
+        function showProgressionModal(response) {
+            const element = document.getElementById('manualProgressionModal');
+
+            if (!element || typeof bootstrap === 'undefined') {
+                return;
+            }
+
+            try {
+                if (response.eligible === true) {
+                    buildEligibleModal(response);
+                } else {
+                    buildNotEligibleModal(response);
+                }
+
+                skipNextModalFetch = true;
+                bootstrap.Modal.getOrCreateInstance(element).show();
+            } catch (error) {
+                console.error('[Progression] Could not open the modal automatically:', error);
+                skipNextModalFetch = false;
+            }
+        }
+
         // Check eligibility on page load (determines button styling)
         function checkProgressionEligibility() {
             console.log('[Progression] Checking eligibility...');
@@ -1066,6 +1108,14 @@
                     
                     // Always show the button
                     $('#progression-button-container').fadeIn();
+
+                    // And raise the modal itself when they can actually move.
+                    // Progression is the one thing on this portal a student can
+                    // miss entirely by not noticing a button, so it comes to
+                    // them. It closes like any other modal.
+                    if (response.eligible === true) {
+                        showProgressionModal(response);
+                    }
                 },
                 error: function(xhr) {
                     console.error('[Progression] AJAX failed:', xhr.status, xhr.responseText);
@@ -1114,6 +1164,14 @@
 
             $('#progressionModalHeader').removeClass('bg-info bg-warning').addClass('bg-success');
 
+            // Moving up a semester can also mean moving into a new academic
+            // year. The student is told which session they are going into, and
+            // told plainly when it is a different one from the session they are
+            // in now.
+            const targetSession = response.target_session_title || summary.target_session || '';
+            const newSession = (response.enters_new_session === true || summary.enters_new_session === true)
+                && targetSession !== '';
+
             let bodyHtml = `
                 <div class="alert alert-success">
                     <h5><i class="fas fa-check-circle"></i> ${summary.message || '{{ __("You are eligible for progression!") }}'}</h5>
@@ -1140,11 +1198,26 @@
                             <div class="card-body">
                                 <h6 class="card-title text-success">{{ __('Progress To') }}</h6>
                                 <p class="mb-0"><strong>${response.target_semester_title || 'N/A'}</strong></p>
-                                <small class="text-muted">${summary.progression_type || ''}</small>
+                                <small class="text-muted d-block">${summary.progression_type || ''}</small>
+                                ${targetSession ? `<small class="${newSession ? 'text-success fw-bold' : 'text-muted'} d-block">${targetSession}</small>` : ''}
                             </div>
                         </div>
                     </div>
                 </div>
+
+                ${newSession ? `
+                <div class="alert alert-success d-flex align-items-start mb-3">
+                    <i class="fas fa-calendar-alt mt-1 me-2"></i>
+                    <div>
+                        <strong>{{ __('This begins a new academic year.') }}</strong>
+                        <div class="small mt-1">
+                            {{ __('Progressing moves you from') }}
+                            <strong>${summary.current_session || ''}</strong>
+                            {{ __('into') }} <strong>${targetSession}</strong>.
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
             `;
 
             // Academic stats for regular progression
@@ -1504,6 +1577,14 @@
 
         // Load eligibility details when modal is opened — always fetch fresh data
         $('#manualProgressionModal').on('show.bs.modal', function() {
+            // Unless it was opened automatically, which fills it from the
+            // eligibility data the page had already loaded. Fetching again
+            // would only replace that with the same answer.
+            if (skipNextModalFetch) {
+                skipNextModalFetch = false;
+                return;
+            }
+
             // Reset to loading state
             resetModalToLoading();
 

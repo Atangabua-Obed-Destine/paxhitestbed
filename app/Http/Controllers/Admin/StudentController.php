@@ -35,6 +35,7 @@ use App\Models\Batch;
 use App\Models\Grade;
 use App\Models\Fee;
 use App\Models\ResitRequest;
+use App\Services\Academic\OutstandingCourses;
 
 class StudentController extends Controller
 {
@@ -615,26 +616,21 @@ class StudentController extends Controller
         // Prepare GPA trend data for selected enrollment only
         $data['gpa_trend'] = $this->prepareGPATrendData($student, $data['grades'], $selectedProgramId, $selectedMatricule);
 
-        // Subject IDs with an active (in-progress) resit workflow for this student/program/matricule.
-        // The transcript carry-over count excludes these so the page agrees with the academic-standings page.
+        // Subjects the student is still waiting to sit a resit for. The
+        // transcript carry-over count excludes these so the page agrees with the
+        // academic-standings page.
+        //
+        // "Waiting to sit", not "has an open request": a request stayed
+        // 'scheduled' for ever once scheduled, so a resit sat and failed months
+        // earlier was still hiding its course from this count.
+        // OutstandingCourses settles that from the marks.
         $activeResitSubjectIds = [];
-        if ($selectedProgramId && $selectedMatricule) {
-            $programEnrollIds = $student->studentEnrolls
-                ->where('program_id', $selectedProgramId)
-                ->where('matricule', $selectedMatricule)
-                ->pluck('id');
-            if ($programEnrollIds->isNotEmpty()) {
-                $activeResitSubjectIds = ResitRequest::whereIn('student_enroll_id', $programEnrollIds)
-                    ->whereIn('workflow_state', [
-                        ResitRequest::STATE_REQUESTED,
-                        ResitRequest::STATE_AWAITING_PAYMENT,
-                        ResitRequest::STATE_FINANCE_REVIEW,
-                        ResitRequest::STATE_APPROVED,
-                        ResitRequest::STATE_SCHEDULED,
-                    ])
-                    ->pluck('subject_id')
-                    ->all();
-            }
+        if ($selectedProgramId) {
+            $activeResitSubjectIds = app(OutstandingCourses::class)
+                ->forStudent($student, (int) $selectedProgramId, $selectedMatricule)
+                ->filter(fn (array $row) => $row['awaiting_resit'])
+                ->keys()
+                ->all();
         }
         $data['active_resit_subject_ids'] = $activeResitSubjectIds;
 

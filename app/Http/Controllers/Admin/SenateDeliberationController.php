@@ -1554,7 +1554,19 @@ class SenateDeliberationController extends Controller
                     continue;
                 }
 
-                if ($request && $request->workflow_state === ResitRequest::STATE_SCHEDULED) {
+                // Has the resit actually been sat? A published mark on a later
+                // enrolment says so. This has to be settled before the branch
+                // below, because a request stayed 'scheduled' for ever once
+                // scheduled — so a resit sat and failed months earlier went on
+                // printing as "Scheduled Resit" instead of the carry-over it is.
+                $satLater = $laterEnrollments->contains(function ($laterEnrollment) use ($subjectId) {
+                    return collect($laterEnrollment->subjectMarks ?? [])->contains(function ($laterMark) use ($subjectId) {
+                        return $laterMark->subject_id == $subjectId
+                            && $laterMark->workflow_state === SubjectMarking::STATE_PUBLISHED;
+                    });
+                });
+
+                if (!$satLater && $request && $request->workflow_state === ResitRequest::STATE_SCHEDULED) {
                     $subjectMetrics[$subjectId] = [
                         'label' => 'Scheduled Resit',
                         'code' => 'RES',
@@ -1563,7 +1575,7 @@ class SenateDeliberationController extends Controller
                     continue;
                 }
 
-                if ($request && in_array($request->workflow_state, [
+                if (!$satLater && $request && in_array($request->workflow_state, [
                     ResitRequest::STATE_REQUESTED,
                     ResitRequest::STATE_AWAITING_PAYMENT,
                     ResitRequest::STATE_FINANCE_REVIEW,
@@ -1587,6 +1599,8 @@ class SenateDeliberationController extends Controller
                     ResitRequest::STATE_DECLINED,
                     ResitRequest::STATE_REJECTED,
                     ResitRequest::STATE_CANCELLED,
+                    // A resit that was sat and failed: spent, and owed again.
+                    ResitRequest::STATE_COMPLETED,
                 ], true))) {
                     $subjectMetrics[$subjectId] = [
                         'label' => 'Carry Over',

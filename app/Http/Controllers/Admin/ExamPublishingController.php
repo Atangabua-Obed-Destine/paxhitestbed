@@ -2517,12 +2517,24 @@ class ExamPublishingController extends Controller
                     continue;
                 }
 
-                if ($request && $request->workflow_state === ResitRequest::STATE_SCHEDULED) {
+                // Whether the resit has actually been sat decides the next two
+                // branches. A request stayed 'scheduled' for ever once
+                // scheduled, so without this a resit sat and failed months ago
+                // kept printing as "Scheduled Resit" rather than the carry-over
+                // it is.
+                $satLater = $laterEnrollments->contains(function ($laterEnrollment) use ($subjectId) {
+                    return collect($laterEnrollment->subjectMarks ?? [])->contains(function ($laterMark) use ($subjectId) {
+                        return $laterMark->subject_id == $subjectId
+                            && $laterMark->workflow_state === SubjectMarking::STATE_PUBLISHED;
+                    });
+                });
+
+                if (!$satLater && $request && $request->workflow_state === ResitRequest::STATE_SCHEDULED) {
                     $subjectMetrics[$subjectId] = ['label' => 'Scheduled Resit', 'code' => 'RES', 'class' => 'primary'];
                     continue;
                 }
 
-                if ($request && in_array($request->workflow_state, [
+                if (!$satLater && $request && in_array($request->workflow_state, [
                     ResitRequest::STATE_REQUESTED,
                     ResitRequest::STATE_AWAITING_PAYMENT,
                     ResitRequest::STATE_FINANCE_REVIEW,
@@ -2542,6 +2554,8 @@ class ExamPublishingController extends Controller
                     ResitRequest::STATE_DECLINED,
                     ResitRequest::STATE_REJECTED,
                     ResitRequest::STATE_CANCELLED,
+                    // A resit that was sat and failed: spent, and owed again.
+                    ResitRequest::STATE_COMPLETED,
                 ], true))) {
                     $subjectMetrics[$subjectId] = ['label' => 'Carry Over', 'code' => 'CO', 'class' => 'dark'];
                     continue;

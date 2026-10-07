@@ -3,8 +3,14 @@
     <ul class="nav pcoded-inner-navbar">
 
         @php
-            function panel($slug){
-                return \App\Models\Field::field($slug);
+            // Guarded: a function declared in a view is declared globally, so
+            // rendering this sidebar a second time in the same process — two
+            // renders in one job or test, or the partial included twice —
+            // fataled with "Cannot redeclare panel()".
+            if (!function_exists('panel')) {
+                function panel($slug){
+                    return \App\Models\Field::field($slug);
+                }
             }
         @endphp
 

@@ -54,6 +54,10 @@ class AppServiceProvider extends ServiceProvider
         Payroll::observe(PayrollObserver::class);
         PaymentPlanPayment::observe(PaymentPlanPaymentObserver::class);
 
+        // Closes a resit request once its paper has been sat and marked, so a
+        // spent resit stops reading as one still to come.
+        \App\Models\SubjectMarking::observe(\App\Observers\SubjectMarkingObserver::class);
+
         // Share view for Common Data
         if (\Schema::hasTable('languages')) {
             $user_languages = Language::where('status', '1')->get();

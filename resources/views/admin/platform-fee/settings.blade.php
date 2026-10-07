@@ -206,6 +206,73 @@
                             </div>
                         </div>
 
+                        <!-- Mobile money shortcode: the student taps it instead of typing it -->
+                        <div class="col-md-12">
+                            <hr class="my-4">
+                            <h5 class="mb-1"><i class="fas fa-mobile-alt"></i> {{ __('Mobile money shortcode') }}</h5>
+                            <p class="text-muted small">
+                                {{ __('Set this and the student gets a button that opens their phone\'s dialler with the code already filled in — no typing, no mistyped merchant number or amount. Leave it empty and they will simply see your written instructions as before.') }}
+                            </p>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="form-group mb-3">
+                                <label for="ussd_template" class="form-label">
+                                    <i class="fas fa-hashtag"></i> {{ __('Shortcode pattern') }}
+                                </label>
+                                <input type="text" class="form-control @error('ussd_template') is-invalid @enderror"
+                                       name="ussd_template" id="ussd_template"
+                                       value="{{ old('ussd_template', $setting->ussd_template) }}"
+                                       placeholder="*126*4*123456*{amount}#">
+                                @error('ussd_template')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                <small class="text-muted">
+                                    {{ __('Write your merchant number in, and put') }} <code>{amount}</code>
+                                    {{ __('where the fee goes — the portal fills that in, so the amount stays right when you change the fee. Example:') }}
+                                    <code>*126*4*123456*{amount}#</code>
+                                </small>
+
+                                @if($setting->hasDialCode())
+                                    <div class="alert alert-success mt-2 mb-0 py-2">
+                                        <i class="fas fa-check-circle"></i>
+                                        {{ __('Students will be asked to dial') }}
+                                        <strong><code>{{ $setting->dialCode() }}</code></strong>
+                                        {{ __('for the current fee of') }}
+                                        <strong>{{ number_format($setting->fee_amount, 0) }}</strong>.
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="merchant_name" class="form-label">
+                                    <i class="fas fa-user-check"></i> {{ __('Name the student should see') }}
+                                </label>
+                                <input type="text" class="form-control" name="merchant_name" id="merchant_name"
+                                       value="{{ old('merchant_name', $setting->merchant_name) }}"
+                                       placeholder="{{ __('e.g. PAX HIGHER INSTITUTE') }}">
+                                <small class="text-muted">
+                                    {{ __('Shown so the student can check the name their phone displays before entering their PIN.') }}
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="merchant_number" class="form-label">
+                                    <i class="fas fa-phone"></i> {{ __('Merchant or phone number') }}
+                                </label>
+                                <input type="text" class="form-control" name="merchant_number" id="merchant_number"
+                                       value="{{ old('merchant_number', $setting->merchant_number) }}"
+                                       placeholder="{{ __('e.g. 671008494') }}">
+                                <small class="text-muted">
+                                    {{ __('Shown as a fallback for a student whose phone will not open the shortcode.') }}
+                                </small>
+                            </div>
+                        </div>
+
                         <!-- Submit Button -->
                         <div class="col-md-12 text-center mt-4">
                             <button type="submit" class="btn btn-save">

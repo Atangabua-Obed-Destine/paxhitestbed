@@ -569,7 +569,23 @@ class CourseRegistrationController extends Controller
     }
 
     /**
-     * Prepare carry-over courses (courses from same semester type, previous years, not yet validated)
+     * Prepare carry-over courses: what the student still owes, limited to the
+     * semester type they are registering into.
+     *
+     * The rule for "still owed" lives in OutstandingCourses, shared with the
+     * progression modal, the admin student page and the Senate sheets. This
+     * method used to carry its own copy, and the copies disagreed — most
+     * sharply over a resit that had been sat and failed, which one screen
+     * counted and another hid.
+     *
+     * Two things stay particular to this screen, because they are about what a
+     * student may be shown rather than about what they owe:
+     *
+     *   - only courses of the semester type being registered, from this year or
+     *     earlier, since that is where a carry-over is re-registered;
+     *   - only courses whose failing mark the student is actually allowed to
+     *     see (isMarkPublished), so a result still embargoed does not reach
+     *     them early through this list.
      */
     private function prepareCarryOverCourses($student, $currentEnroll, $grades)
     {
@@ -577,125 +593,102 @@ class CourseRegistrationController extends Controller
             return [];
         }
 
-        $carryOverCourses = [];
-        $passedSubjects = []; // Track subjects that have been passed (including resits)
         $currentSemester = $currentEnroll->semester;
         $currentYear = $currentSemester->year;
         $currentSemesterType = $currentSemester->semester_type ?? 1;
 
-        // FIRST PASS: Identify all subjects that have been passed (>= 50%) in ANY enrollment
-        // This includes resit semesters
-        foreach ($student->studentEnrolls as $enroll) {
-            // Only check enrollments from the same program
-            if ($enroll->program_id != $currentEnroll->program_id) {
-                continue;
-            }
+        $outstanding = app(\App\Services\Academic\OutstandingCourses::class)
+            ->carryOvers($currentEnroll)
+            ->filter(function (array $row) use ($currentSemesterType, $currentYear) {
+                return $row['semester_type'] == $currentSemesterType
+                    && $row['from_year'] <= $currentYear;
+            });
 
-            if (isset($enroll->subjectMarks)) {
-                foreach ($enroll->subjectMarks as $mark) {
-                    if (!isset($mark->subject)) continue;
-
-                    // CRITICAL: Only consider published marks
-                    if (!$this->isMarkPublished($mark)) {
-                        continue;
-                    }
-
-                    $marksPer = round($mark->total_marks);
-                    $subjectId = $mark->subject_id;
-                    
-                    // If student passed this subject in ANY semester (including resit), mark it as passed
-                    if ($marksPer >= 50) {
-                        $passedSubjects[$subjectId] = true;
-                    }
-                }
-            }
+        if ($outstanding->isEmpty()) {
+            return [];
         }
 
-        // Get all semesters with same type and year <= current year
-        $relevantSemesters = \App\Models\Semester::where('status', 1)
-            ->where('semester_type', $currentSemesterType)
-            ->where('year', '<=', $currentYear)
-            ->where('is_resit', '!=', 1)
-            ->pluck('id')
-            ->toArray();
+        $visibleSubjectIds = $this->subjectsWithVisibleFailure($student, $currentEnroll);
 
-        // SECOND PASS: Get failed courses that have NOT been passed later
-        foreach ($student->studentEnrolls as $enroll) {
-            // Only check enrollments from the same program
-            if ($enroll->program_id != $currentEnroll->program_id) {
+        $carryOverCourses = [];
+
+        foreach ($outstanding as $subjectId => $row) {
+            if (!isset($visibleSubjectIds[$subjectId])) {
                 continue;
             }
 
-            if (!in_array($enroll->semester_id, $relevantSemesters)) {
-                continue;
-            }
-
-            if (isset($enroll->subjectMarks)) {
-                foreach ($enroll->subjectMarks as $mark) {
-                    if (!isset($mark->subject)) continue;
-
-                    // CRITICAL: Only consider published marks
-                    if (!$this->isMarkPublished($mark)) {
-                        continue;
-                    }
-
-                    $marksPer = round($mark->total_marks);
-                    $subjectId = $mark->subject_id;
-                    
-                    // Only include courses that failed initially AND have NOT been passed later
-                    if ($marksPer < 50 && !isset($passedSubjects[$subjectId])) {
-                        
-                        // If already in list, keep the best attempt
-                        if (isset($carryOverCourses[$subjectId])) {
-                            if ($marksPer > $carryOverCourses[$subjectId]['best_marks']) {
-                                $carryOverCourses[$subjectId]['best_marks'] = $marksPer;
-                            }
-                            $carryOverCourses[$subjectId]['attempts']++;
-                        } else {
-                            $gradeTitle = '';
-                            $gradePoint = 0;
-                            foreach ($grades as $grade) {
-                                if ($marksPer >= $grade->min_mark && $marksPer <= $grade->max_mark) {
-                                    $gradeTitle = $grade->title;
-                                    $gradePoint = $grade->point;
-                                    break;
-                                }
-                            }
-
-                            $carryOverCourses[$subjectId] = [
-                                'subject' => $mark->subject,
-                                'best_marks' => $marksPer,
-                                'grade' => $gradeTitle,
-                                'grade_point' => $gradePoint,
-                                'attempts' => 1,
-                                'semester_title' => $enroll->semester->title ?? '',
-                                'session_title' => $enroll->session->title ?? '',
-                                'subject_type' => $mark->subject->subject_type,
-                                'credit_hours' => $mark->subject->credit_hour,
-                            ];
-                        }
-                    }
+            $gradeTitle = '';
+            $gradePoint = 0;
+            foreach ($grades as $grade) {
+                if ($row['best_marks'] >= $grade->min_mark && $row['best_marks'] <= $grade->max_mark) {
+                    $gradeTitle = $grade->title;
+                    $gradePoint = $grade->point;
+                    break;
                 }
             }
+
+            $carryOverCourses[] = [
+                'subject' => $row['subject'],
+                'best_marks' => $row['best_marks'],
+                'grade' => $gradeTitle,
+                'grade_point' => $gradePoint,
+                'attempts' => $row['attempts'],
+                'semester_title' => $row['from_semester'],
+                'session_title' => $row['from_session'],
+                'subject_type' => $row['subject_type'],
+                'credit_hours' => $row['credit_hours'],
+            ];
         }
 
         // Sort by priority: Compulsory > University Requirement > Optional
         // Within each type, sort by attempts (highest first)
-        usort($carryOverCourses, function($a, $b) {
-            // First sort by subject type priority
+        usort($carryOverCourses, function ($a, $b) {
             $typeOrder = [1 => 1, 2 => 2, 0 => 3]; // Compulsory, University Req, Optional
             $typeA = $typeOrder[$a['subject_type']] ?? 4;
             $typeB = $typeOrder[$b['subject_type']] ?? 4;
-            
+
             if ($typeA != $typeB) {
                 return $typeA - $typeB;
             }
-            
-            // Then by number of attempts (descending)
+
             return $b['attempts'] - $a['attempts'];
         });
 
         return $carryOverCourses;
+    }
+
+    /**
+     * Subjects the student has a failing mark for that they are allowed to see.
+     *
+     * A mark can be published in the workflow and still be held back from the
+     * student by an override or a future publish date; this screen is the
+     * student's own, so a course only appears once its result has reached them.
+     *
+     * @return array<int, true>
+     */
+    private function subjectsWithVisibleFailure($student, $currentEnroll): array
+    {
+        $visible = [];
+
+        foreach ($student->studentEnrolls as $enroll) {
+            if ($enroll->program_id != $currentEnroll->program_id) {
+                continue;
+            }
+
+            foreach ($enroll->subjectMarks ?? [] as $mark) {
+                if (!isset($mark->subject) || !$this->isMarkPublished($mark)) {
+                    continue;
+                }
+
+                $passMark = (float) ($mark->subject->passing_marks ?: 50);
+
+                if (round($mark->total_marks) < $passMark) {
+                    $visible[$mark->subject_id] = true;
+                }
+            }
+        }
+
+        return $visible;
     }
 
     /**

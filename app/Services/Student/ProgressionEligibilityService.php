@@ -6,6 +6,7 @@ use App\Models\Student;
 use App\Models\StudentEnroll;
 use App\Models\SubjectMarking;
 use App\Models\ResitRequest;
+use App\Services\Academic\OutstandingCourses;
 use App\Services\Academic\SemesterProgressionService;
 
 class ProgressionEligibilityService
@@ -177,13 +178,21 @@ class ProgressionEligibilityService
         // Get summary data
         $summary = $this->buildRegularProgressionSummary($enrollment, $result);
 
+        // Where they actually land. This used to report the session they were
+        // already in, which was wrong whenever the institution had opened a new
+        // academic year — the student was moved into it without being told.
+        $targetSession = $this->progressionService->targetSessionFor($enrollment);
+        $newSession = $this->progressionService->entersNewSession($enrollment);
+
         return [
             'eligible' => true,
             'type' => 'regular',
             'enrollment_id' => $enrollment->id,
             'program_id' => $enrollment->program_id,
             'program_name' => $enrollment->program->title ?? 'N/A',
-            'target_session_id' => $enrollment->session_id, // Use current session for now
+            'target_session_id' => $targetSession->id ?? $enrollment->session_id,
+            'target_session_title' => $targetSession->title ?? null,
+            'enters_new_session' => $newSession,
             'target_semester_id' => $result['next_semester']->id,
             'target_semester_title' => $result['next_semester']->title,
             'summary' => $summary,
@@ -251,11 +260,18 @@ class ProgressionEligibilityService
 
         $gpa = $totalCredits > 0 ? $totalGradePoints / $totalCredits : 0;
 
+        $targetSession = $this->progressionService->targetSessionFor($enrollment);
+
         return [
             'program_name' => $enrollment->program->title ?? 'N/A',
             'current_semester' => $enrollment->semester->title ?? 'N/A',
             'current_session' => $enrollment->session->title ?? 'N/A',
             'target_semester' => $result['next_semester']->title ?? 'N/A',
+            // Named, and flagged when it differs: moving up can also mean moving
+            // into a new academic year, and that is not something to discover
+            // after the fact.
+            'target_session' => $targetSession->title ?? ($enrollment->session->title ?? 'N/A'),
+            'enters_new_session' => $this->progressionService->entersNewSession($enrollment),
             'progression_type' => 'Regular Semester',
             'semester_gpa' => number_format($gpa, 2),
             'credits_attempted' => number_format($totalCredits, 1),
@@ -281,81 +297,27 @@ class ProgressionEligibilityService
             return [];
         }
 
-        $student = $enrollment->student;
-        if (!$student) {
-            return [];
-        }
-
-        // Get ALL enrollments for this student & program, ordered by ID so regular semesters come before resits
-        $allEnrollments = $student->enrolls()
-            ->where('program_id', $enrollment->program_id)
-            ->with(['semester', 'subjectMarks.subject'])
-            ->orderBy('id', 'asc')
-            ->get();
-
-        // Build set of subjects passed (≥50%) in ANY published enrollment
-        $passedSubjectIds = [];
-        foreach ($allEnrollments as $enroll) {
-            foreach ($enroll->subjectMarks ?? [] as $mark) {
-                if (!$mark->subject) continue;
-                if ($mark->workflow_state !== SubjectMarking::STATE_PUBLISHED) continue;
-                if (round($mark->total_marks) >= 50) {
-                    $passedSubjectIds[$mark->subject_id] = true;
-                }
-            }
-        }
-
-        // Find subjects with active/pending resit requests (being handled through the resit process)
-        $activeResitSubjectIds = ResitRequest::whereIn('student_enroll_id',
-                $allEnrollments->pluck('id')->toArray()
-            )
-            ->whereIn('workflow_state', ['requested', 'awaiting_payment', 'finance_review', 'approved', 'scheduled'])
-            ->pluck('subject_id')
-            ->flip()
-            ->toArray();
-
-        // Collect carry-over courses from all previous enrollments
-        $carryOvers = [];
-        foreach ($allEnrollments as $enroll) {
-            // Skip the current enrollment
-            if ($enroll->id === $enrollment->id) continue;
-
-            foreach ($enroll->subjectMarks ?? [] as $mark) {
-                if (!$mark->subject) continue;
-                if ($mark->workflow_state !== SubjectMarking::STATE_PUBLISHED) continue;
-
-                $subjectId = $mark->subject_id;
-                $marksPer = round($mark->total_marks);
-
-                if ($marksPer >= 50) continue;
-                if (isset($passedSubjectIds[$subjectId])) continue;
-                if (isset($activeResitSubjectIds[$subjectId])) continue;
-
-                // Update best mark if already tracked from an earlier enrollment
-                if (isset($carryOvers[$subjectId])) {
-                    if ($marksPer > $carryOvers[$subjectId]['best_marks']) {
-                        $carryOvers[$subjectId]['best_marks'] = $marksPer;
-                    }
-                    continue;
-                }
-
-                $fromSemester = $enroll->semester;
-                $semType = $fromSemester ? ($fromSemester->semester_type ?? 1) : 1;
-
-                $carryOvers[$subjectId] = [
-                    'subject_id' => $subjectId,
-                    'subject_code' => $mark->subject->code ?? '',
-                    'subject_title' => $mark->subject->title ?? '',
-                    'credit_hours' => $mark->subject->credit_hour ?? 0,
-                    'best_marks' => $marksPer,
-                    'from_semester' => $fromSemester->title ?? '',
-                    'from_year' => $fromSemester->year ?? 0,
-                    'semester_type' => $semType,
-                    'semester_type_label' => $semType == 1 ? 'First Semester' : 'Second Semester',
-                ];
-            }
-        }
-
-        return array_values($carryOvers);
+        // One rule, shared with course registration, the admin student page and
+        // the Senate sheets — see OutstandingCourses. This method used to carry
+        // its own copy of it, and the copies had drifted: a resit that had been
+        // sat and failed was still being treated as "in hand" and dropped from
+        // the list, so a student who failed a resit was offered progression with
+        // the course missing from his carry-overs.
+        return app(OutstandingCourses::class)
+            ->carryOvers($enrollment)
+            ->map(fn (array $row) => [
+                'subject_id' => $row['subject_id'],
+                'subject_code' => $row['subject_code'],
+                'subject_title' => $row['subject_title'],
+                'credit_hours' => $row['credit_hours'],
+                'best_marks' => $row['best_marks'],
+                'attempts' => $row['attempts'],
+                'from_semester' => $row['from_semester'],
+                'from_year' => $row['from_year'],
+                'semester_type' => $row['semester_type'],
+                'semester_type_label' => $row['semester_type_label'],
+            ])
+            ->values()
+            ->all();
     }
 }

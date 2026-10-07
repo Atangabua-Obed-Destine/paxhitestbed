@@ -49,6 +49,41 @@ class PlatformFeeController extends Controller
             'welcome_message' => 'nullable|string',
             'fee_amount' => 'required|numeric|min:0',
             'payment_instructions' => 'nullable|string',
+            // A shortcode a student taps rather than types. It must carry the
+            // amount placeholder: a pattern with the amount already written into
+            // it would keep charging that figure after the fee changed.
+            'ussd_template' => [
+                'nullable',
+                'string',
+                'max:191',
+                function ($attribute, $value, $fail) {
+                    if (trim((string) $value) === '') {
+                        return;
+                    }
+
+                    $hasPlaceholder = false;
+                    foreach (PlatformFeeSetting::AMOUNT_PLACEHOLDERS as $placeholder) {
+                        if (str_contains($value, $placeholder)) {
+                            $hasPlaceholder = true;
+                            break;
+                        }
+                    }
+
+                    if (!$hasPlaceholder) {
+                        $fail(__('The shortcode must include {amount} where the fee goes, for example *126*4*123456*{amount}#'));
+                    }
+
+                    if (!str_starts_with(trim($value), '*')) {
+                        $fail(__('A shortcode starts with *, for example *126*4*123456*{amount}#'));
+                    }
+
+                    if (!str_ends_with(trim($value), '#')) {
+                        $fail(__('A shortcode ends with #, for example *126*4*123456*{amount}#'));
+                    }
+                },
+            ],
+            'merchant_name' => 'nullable|string|max:191',
+            'merchant_number' => 'nullable|string|max:50',
             'is_enabled' => 'boolean',
         ]);
 
@@ -58,6 +93,9 @@ class PlatformFeeController extends Controller
             'welcome_message' => $request->welcome_message,
             'fee_amount' => $request->fee_amount,
             'payment_instructions' => $request->payment_instructions,
+            'ussd_template' => $request->filled('ussd_template') ? trim($request->ussd_template) : null,
+            'merchant_name' => $request->merchant_name,
+            'merchant_number' => $request->merchant_number,
             'is_enabled' => $request->has('is_enabled'),
         ]);
 

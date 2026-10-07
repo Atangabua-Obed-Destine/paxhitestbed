@@ -24,6 +24,15 @@ class ResitRequest extends Model
     public const STATE_CANCELLED = 'cancelled';
     public const STATE_DECLINED = 'declined'; // Student chose not to resit
 
+    // The paper was sat and marked. A request is a request to sit; once that has
+    // happened it is spent, whether the student passed or failed. Without this
+    // the workflow ended at 'scheduled' and a sat resit looked for ever like one
+    // still to come, which hid failed courses from every carry-over list.
+    public const STATE_COMPLETED = 'completed';
+
+    public const OUTCOME_PASSED = 'passed';
+    public const OUTCOME_FAILED = 'failed';
+
     public const PAYMENT_PENDING = 'pending';
     public const PAYMENT_PARTIAL = 'partial';
     public const PAYMENT_PAID = 'paid';
@@ -54,6 +63,8 @@ class ResitRequest extends Model
         'approved_at',
         'state_changed_at',
         'state_changed_by',
+        'completed_at',
+        'outcome',
         'notes',
     ];
 
@@ -61,7 +72,14 @@ class ResitRequest extends Model
         'fee_amount' => 'float',
         'approved_at' => 'datetime',
         'state_changed_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
+
+    /** The paper has been sat and marked; this request is spent. */
+    public function isCompleted(): bool
+    {
+        return $this->workflow_state === self::STATE_COMPLETED;
+    }
 
     public function studentEnroll(): BelongsTo
     {

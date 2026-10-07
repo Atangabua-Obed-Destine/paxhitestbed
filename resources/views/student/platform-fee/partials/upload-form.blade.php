@@ -1,6 +1,23 @@
+@php
+    $uploadMatricule = $currentEnrollment->matricule ?? $student->student_id ?? null;
+@endphp
+
 <form action="{{ route('student.platform-fee.upload') }}" method="POST" enctype="multipart/form-data" id="paymentForm">
     @csrf
-    
+
+    @if($uploadMatricule)
+        {{-- Repeated here, at the moment of uploading, because this is the last
+             point at which a student can still notice they left it out. --}}
+        <div class="alert alert-warning d-flex align-items-start" style="border-radius: 10px;">
+            <i class="fas fa-id-card mt-1 me-2"></i>
+            <div>
+                {{ __('Make sure your matricule') }}
+                <strong>{{ $uploadMatricule }}</strong>
+                {{ __('was given as the payment reference. It is what lets the school match this payment to you.') }}
+            </div>
+        </div>
+    @endif
+
     <div class="upload-area" id="uploadArea">
         <i class="fas fa-cloud-upload-alt"></i>
         <h4>Click or Drag to Upload Receipt</h4>

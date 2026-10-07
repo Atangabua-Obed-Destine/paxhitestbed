@@ -229,14 +229,26 @@ class SemesterProgressionService
 
             // Check if marks < 50% (failed)
             if (round($marking->total_marks) < 50) {
-                // Student failed - check if they've declined OR scheduled resit for this course
-                $hasDeclinedOrScheduled = ResitRequest::where('student_enroll_id', $enrollment->id)
+                // Student failed. They may still progress once the course has
+                // been settled one way or another: declined, or a resit that has
+                // been dealt with.
+                //
+                // A resit that has already been sat counts as settled whatever
+                // the outcome — a failed one becomes a carry-over, which does
+                // not block progression. What must still block it is a resit the
+                // student has yet to sit, which is the one case 'scheduled' used
+                // to be read as, indiscriminately.
+                $settled = ResitRequest::where('student_enroll_id', $enrollment->id)
                     ->where('subject_id', $subject->id)
-                    ->whereIn('workflow_state', [ResitRequest::STATE_DECLINED, ResitRequest::STATE_SCHEDULED])
+                    ->whereIn('workflow_state', [
+                        ResitRequest::STATE_DECLINED,
+                        ResitRequest::STATE_SCHEDULED,
+                        ResitRequest::STATE_COMPLETED,
+                    ])
                     ->exists();
-                
-                // If they haven't declined or scheduled, they can't progress yet
-                if (!$hasDeclinedOrScheduled) {
+
+                // If they haven't declined or sat/scheduled a resit, they can't progress yet
+                if (!$settled) {
                     return false;
                 }
             }
@@ -246,23 +258,52 @@ class SemesterProgressionService
     }
 
     /**
+     * The academic session a student progressing from this enrolment lands in.
+     *
+     * Progressing does not merely move a student along the semesters: where the
+     * institution has opened a new academic year, it moves them into that year
+     * too. The student is told which session they are going into before they
+     * press the button, and this is the one place that decides it, so what the
+     * screen promises and what the progression does cannot drift apart.
+     *
+     * Falls back to the session they are already in, for an institution that has
+     * not marked a current session.
+     */
+    public function targetSessionFor(StudentEnroll $currentEnrollment): Session
+    {
+        $systemCurrent = Session::where('current', 1)->where('status', 1)->first();
+
+        return $systemCurrent ?: $currentEnrollment->session;
+    }
+
+    /** Does progressing from here mean starting a new academic session? */
+    public function entersNewSession(StudentEnroll $currentEnrollment): bool
+    {
+        $target = $this->targetSessionFor($currentEnrollment);
+
+        return $target && (int) $target->id !== (int) $currentEnrollment->session_id;
+    }
+
+    /**
      * Check if student has active resit requests
      */
     protected function hasActiveResitRequests(StudentEnroll $enrollment): bool
     {
-        $activeStates = [
-            ResitRequest::STATE_REQUESTED,
-            ResitRequest::STATE_AWAITING_PAYMENT,
-            ResitRequest::STATE_FINANCE_REVIEW,
-            ResitRequest::STATE_APPROVED,
-            ResitRequest::STATE_SCHEDULED,
-        ];
+        // Only a resit still awaiting its sitting is active. One already sat is
+        // spent whatever its stored state says — nothing ever moved a request
+        // out of 'scheduled', so counting those would make every student with a
+        // long-settled resit look permanently mid-process.
+        $enrollments = $enrollment->student
+            ? $enrollment->student->enrolls()->where('program_id', $enrollment->program_id)->get()
+            : collect([$enrollment]);
 
-        $activeRequests = ResitRequest::where('student_enroll_id', $enrollment->id)
-            ->whereIn('workflow_state', $activeStates)
-            ->count();
+        $bySemester = $enrollments->keyBy('semester_id');
+        $outstanding = app(OutstandingCourses::class);
 
-        return $activeRequests > 0;
+        return ResitRequest::where('student_enroll_id', $enrollment->id)
+            ->whereIn('workflow_state', OutstandingCourses::OPEN_STATES)
+            ->get()
+            ->contains(fn (ResitRequest $request) => $outstanding->awaitingSitting($request, $bySemester));
     }
 
     /**
@@ -471,21 +512,10 @@ class SemesterProgressionService
             // Get the student
             $student = $currentEnrollment->student;
 
-            // Determine the correct session for the new enrollment
-            // If the next semester is in a new academic year (e.g., Year 1 -> Year 2),
-            // we should check if there's a new active session in the system.
-            // Otherwise, we default to the current active session of the system.
-            
-            $targetSessionId = $currentEnrollment->session_id;
-            
-            // Get the system's current active session
-            $systemCurrentSession = Session::where('current', 1)->where('status', 1)->first();
-            
-            if ($systemCurrentSession) {
-                // If the system has moved to a new session (e.g. 2024-2025), use that.
-                // This handles the case where a student progresses into a new academic year.
-                $targetSessionId = $systemCurrentSession->id;
-            }
+            // The session the student lands in. Worked out by targetSessionFor()
+            // so the figure shown to the student before they press the button is
+            // the one the button actually uses.
+            $targetSessionId = $this->targetSessionFor($currentEnrollment)->id;
 
             // Check if enrollment already exists for next semester
             $existingEnrollment = StudentEnroll::where('student_id', $student->id)
