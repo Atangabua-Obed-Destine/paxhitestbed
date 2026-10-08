@@ -40,6 +40,90 @@
                             </ol>
                         </div>
                         
+                        {{-- When the school stops taking new requests for a sitting.
+                             A sitting is a session and a semester type, which is the
+                             grain a resit timetable has. Closing one stops requests;
+                             declining stays open so a student can still settle a
+                             failed course by carrying it over. --}}
+                        <div class="card border mb-3">
+                            <div class="card-header bg-light d-flex align-items-center justify-content-between">
+                                <strong><i class="fas fa-door-closed"></i> {{ __('Resit request windows') }}</strong>
+                                <small class="text-muted">
+                                    {{ __('Closing a window stops new requests. Students can still decline a course to carry it over.') }}
+                                </small>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm mb-0 align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>{{ __('Session') }}</th>
+                                                @foreach($semesterTypes as $typeValue => $typeLabel)
+                                                    <th>{{ $typeLabel }}</th>
+                                                @endforeach
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        @foreach($sessions as $sessionRow)
+                                            <tr>
+                                                <td>
+                                                    {{ $sessionRow->title }}
+                                                    @if($sessionRow->current)
+                                                        <span class="badge bg-success">{{ __('Current') }}</span>
+                                                    @endif
+                                                </td>
+                                                @foreach($semesterTypes as $typeValue => $typeLabel)
+                                                    @php
+                                                        $window = $resitWindows[$sessionRow->id . ':' . $typeValue] ?? null;
+                                                        // No row means open, so a school that has never
+                                                        // used this screen is unaffected.
+                                                        $isOpen = $window === null || $window->is_open;
+                                                    @endphp
+                                                    <td>
+                                                        <form method="post" action="{{ route('admin.resit-requests.toggle-window') }}" style="display:inline;"
+                                                              onsubmit="return confirm('{{ $isOpen ? __('Close resit requests for this semester? Students will only be able to decline courses.') : __('Open resit requests for this semester again?') }}');">
+                                                            @csrf
+                                                            <input type="hidden" name="session_id" value="{{ $sessionRow->id }}">
+                                                            <input type="hidden" name="semester_type" value="{{ $typeValue }}">
+                                                            <button type="submit" class="btn btn-sm {{ $isOpen ? 'btn-success' : 'btn-warning' }}">
+                                                                <i class="fas {{ $isOpen ? 'fa-lock-open' : 'fa-lock' }}"></i>
+                                                                {{ $isOpen ? __('Open') : __('Closed') }}
+                                                            </button>
+                                                        </form>
+
+                                                        @if(!$isOpen)
+                                                            <div class="small text-muted mt-1">
+                                                                @if($window->closed_at)
+                                                                    {{ __('Closed') }} {{ $window->closed_at->format('j M Y') }}
+                                                                @endif
+                                                            </div>
+
+                                                            {{-- What students are told. Left empty they get a
+                                                                 plain default, so a closed window is never just
+                                                                 a missing button. --}}
+                                                            <form method="post" action="{{ route('admin.resit-requests.toggle-window') }}" class="mt-1">
+                                                                @csrf
+                                                                <input type="hidden" name="session_id" value="{{ $sessionRow->id }}">
+                                                                <input type="hidden" name="semester_type" value="{{ $typeValue }}">
+                                                                <input type="hidden" name="keep_state" value="1">
+                                                                <input type="text" name="note" class="form-control form-control-sm"
+                                                                       value="{{ $window->note }}"
+                                                                       maxlength="191"
+                                                                       placeholder="{{ __('What students are told (optional)') }}"
+                                                                       style="font-size: 11px;">
+                                                            </form>
+                                                        @endif
+                                                    </td>
+                                                @endforeach
+                                            </tr>
+                                        @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                            </div>
+                        </div>
+
                         <form method="get" action="{{ route('admin.resit-requests.index') }}" class="row g-2 align-items-end">
                             <div class="form-group col-md-3">
                                 <label for="filter_session" class="form-label">{{ __('Session') }}</label>

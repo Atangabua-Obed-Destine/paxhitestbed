@@ -166,6 +166,20 @@ class ResitController extends Controller
         
         \Illuminate\Support\Facades\Log::info("ResitController@index for student {$student->id}: failed_courses count = " . count($data['failed_courses']));
 
+        // Is the school still taking requests for this sitting? When it is not,
+        // the page offers only the decline, and says so — rather than letting a
+        // student send a request that will be turned down.
+        $enrollmentSemesterType = optional(optional($currentEnrollment)->semester)->semester_type;
+
+        $data['resit_requests_open'] = \App\Models\ResitRequestWindow::acceptsRequests(
+            optional($currentEnrollment)->session_id,
+            $enrollmentSemesterType
+        );
+        $data['resit_requests_closed_note'] = \App\Models\ResitRequestWindow::noteFor(
+            optional($currentEnrollment)->session_id,
+            $enrollmentSemesterType
+        );
+
         return view($this->view.'.index', $data);
     }
 
@@ -375,7 +389,24 @@ class ResitController extends Controller
             Flasher::addError(__('You did not fail this course'), __('Error'));
             return redirect()->back();
         }
-        
+
+        // Is the school still taking requests for this sitting?
+        //
+        // Checked here and not only on the page, because the page is where the
+        // button is hidden and that is not the same as the request being
+        // refused. Declining is deliberately left open: a student still has to
+        // be able to settle the course by carrying it over.
+        $enrollmentSemesterType = optional($enrollment->semester)->semester_type;
+
+        if (!\App\Models\ResitRequestWindow::acceptsRequests($enrollment->session_id, $enrollmentSemesterType)) {
+            Flasher::addError(
+                \App\Models\ResitRequestWindow::noteFor($enrollment->session_id, $enrollmentSemesterType),
+                __('Resit requests are closed')
+            );
+
+            return redirect()->back();
+        }
+
         // Get resit fee category
         $resit_category = FeesCategory::where('is_resit', 1)
             ->where('status', 1)

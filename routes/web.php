@@ -414,6 +414,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('academic/session', 'SessionController');
     Route::get('academic/session-current/{id}', 'SessionController@current')->name('session.current');
     Route::get('academic/session-toggle-applications/{id}', 'SessionController@toggleApplications')->name('session.toggle-applications');
+    Route::get('academic/session-toggle-progression/{id}', 'SessionController@toggleProgression')->name('session.toggle-progression');
+    Route::post('academic/session-progression-note/{id}', 'SessionController@progressionNote')->name('session.progression-note');
     Route::resource('academic/semester', 'SemesterController');
     Route::resource('academic/section', 'SectionController');
     Route::resource('academic/room', 'ClassRoomController');
@@ -484,6 +486,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('exam/resit-requests/{resit_request}/transition', 'ResitRequestController@transition')->name('resit-requests.transition');
     Route::post('exam/resit-requests/{resit_request}/i-grade', 'ResitRequestController@iGrade')->name('resit-requests.i-grade');
     Route::post('exam/resit-requests/{resit_request}/cancel-resit', 'ResitRequestController@cancelResit')->name('resit-requests.cancel-resit');
+    Route::post('exam/resit-requests/toggle-window', 'ResitRequestController@toggleWindow')->name('resit-requests.toggle-window');
     Route::get('exam/resit-settings', 'ResitSettingController@edit')->name('resit-settings.edit');
     Route::put('exam/resit-settings', 'ResitSettingController@update')->name('resit-settings.update');
     Route::resource('exam/exam-type', 'ExamTypeController');

@@ -44,11 +44,16 @@ class SemesterProgressionService
             }
 
             // 1.5. Ensure they have no unresolved failed courses from their parent regular semester
-            if ($this->hasUnresolvedFailedCoursesFromParent($enrollment)) {
+            $unresolvedFromParent = $this->unresolvedFailedCoursesFromParent($enrollment);
+
+            if (!empty($unresolvedFromParent)) {
                 return [
                     'eligible' => false,
                     'reason' => 'You still have unresolved failed courses from your regular semester. You must request a resit or decline them before progressing to the next regular semester.',
                     'next_semester' => null,
+                    // Carried out so the portal can name them and point the
+                    // student at the page where they are settled.
+                    'unresolved_courses' => $unresolvedFromParent,
                 ];
             }
             
@@ -446,54 +451,23 @@ class SemesterProgressionService
             return true;
         }
 
-        // 2. Check for carry-over courses: failed courses from previous semesters
-        //    of the SAME semester_type as the target, not passed and no active resit
-        $targetSemesterType = $targetSemester->semester_type;
+        // 2. Carry-over courses: anything still owed that belongs to the target
+        //    semester's type is something to register for.
+        //
+        // This used to carry its own copy of the carry-over rule, and that copy
+        // treated any resit request in 'scheduled' as being handled. A resit
+        // that has already been sat and failed is not being handled — it is
+        // spent, and the course is owed again. A student who had failed three
+        // First Semester resits was therefore told he had "no new courses to
+        // register for" and held out of the year he plainly belonged in.
+        //
+        // OutstandingCourses settles that from the marks, and is the same rule
+        // the carry-over lists and the progression modal use.
+        $targetSemesterType = (int) $targetSemester->semester_type;
 
-        // Get all enrollments for this student/program in non-resit semesters of the same type
-        $priorEnrollments = $student->enrolls()
-            ->where('program_id', $enrollment->program_id)
-            ->whereHas('semester', function ($q) use ($targetSemesterType) {
-                $q->where('semester_type', $targetSemesterType)
-                  ->where('is_resit', 0);
-            })
-            ->with(['subjectMarks.subject'])
-            ->get();
-
-        // Find subjects with active resit requests (exclude these — they're being handled)
-        $activeResitSubjectIds = ResitRequest::whereIn('student_enroll_id',
-                $priorEnrollments->pluck('id')->toArray()
-            )
-            ->whereIn('workflow_state', [
-                ResitRequest::STATE_REQUESTED,
-                ResitRequest::STATE_AWAITING_PAYMENT,
-                ResitRequest::STATE_FINANCE_REVIEW,
-                ResitRequest::STATE_APPROVED,
-                ResitRequest::STATE_SCHEDULED,
-            ])
-            ->pluck('subject_id')
-            ->unique();
-
-        foreach ($priorEnrollments as $priorEnroll) {
-            foreach ($priorEnroll->subjectMarks ?? [] as $mark) {
-                if (!$mark->subject) continue;
-                if ($mark->workflow_state !== SubjectMarking::STATE_PUBLISHED) continue;
-                if (round($mark->total_marks) >= 50) continue;
-
-                $subjectId = $mark->subject_id;
-
-                // Skip if already passed in a later enrollment
-                if ($passedSubjectIds->contains($subjectId)) continue;
-
-                // Skip if has an active resit request
-                if ($activeResitSubjectIds->contains($subjectId)) continue;
-
-                // This is a carry-over course — student has something to register for
-                return true;
-            }
-        }
-
-        return false;
+        return app(OutstandingCourses::class)
+            ->carryOvers($enrollment)
+            ->contains(fn (array $row) => (int) $row['semester_type'] === $targetSemesterType);
     }
 
     /**
@@ -767,9 +741,28 @@ class SemesterProgressionService
      */
     protected function hasUnresolvedFailedCoursesFromParent(StudentEnroll $resitEnrollment): bool
     {
+        return !empty($this->unresolvedFailedCoursesFromParent($resitEnrollment));
+    }
+
+    /**
+     * Which courses from the parent semester are still unsettled, and why.
+     *
+     * A student sitting in a resit semester can still be held back by a failed
+     * course from the semester it belongs to — one they never requested a resit
+     * for, nor declined. This used to answer only yes or no, so the portal
+     * could say that something was wrong but never which course, and the
+     * student had nothing to act on.
+     *
+     * Same shape as the unresolved list from checkResitSemesterProgression, so
+     * both routes into the portal describe a blocker the same way.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function unresolvedFailedCoursesFromParent(StudentEnroll $resitEnrollment): array
+    {
         $resitSemester = $resitEnrollment->semester;
         if (!$resitSemester || !$resitSemester->parent_semester_id) {
-            return false;
+            return [];
         }
 
         $parentEnrollment = StudentEnroll::where('student_id', $resitEnrollment->student_id)
@@ -779,31 +772,47 @@ class SemesterProgressionService
             ->first();
 
         if (!$parentEnrollment) {
-            return false;
+            return [];
         }
 
-        $failedCourses = $this->getFailedCourses($parentEnrollment);
+        $unresolved = [];
 
-        foreach ($failedCourses as $course) {
+        foreach ($this->getFailedCourses($parentEnrollment) as $course) {
             $isRegisteredInResit = $resitEnrollment->subjects()->where('subjects.id', $course->id)->exists();
             if ($isRegisteredInResit) {
                 continue;
             }
 
-            $hasDeclined = \App\Models\ResitRequest::where('student_enroll_id', $parentEnrollment->id)
+            $request = \App\Models\ResitRequest::where('student_enroll_id', $parentEnrollment->id)
                 ->where('subject_id', $course->id)
-                ->where('workflow_state', \App\Models\ResitRequest::STATE_DECLINED)
-                ->exists();
+                ->orderByDesc('id')
+                ->first();
 
-            if ($hasDeclined) {
+            // Declined settles it: the student has said they will not resit.
+            if ($request && $request->workflow_state === \App\Models\ResitRequest::STATE_DECLINED) {
                 continue;
             }
-            
-            // Neither registered for resit nor declined -> Unresolved!
-            return true;
+
+            // Neither registered for a resit nor declined — unresolved.
+            $open = [
+                \App\Models\ResitRequest::STATE_REQUESTED,
+                \App\Models\ResitRequest::STATE_AWAITING_PAYMENT,
+                \App\Models\ResitRequest::STATE_FINANCE_REVIEW,
+            ];
+
+            $unresolved[] = [
+                'subject_id' => $course->id,
+                'subject_code' => $course->code,
+                'subject_title' => $course->title,
+                'status' => $request && in_array($request->workflow_state, $open, true)
+                    ? 'pending_payment'
+                    : 'no_request',
+                'workflow_state' => $request->workflow_state ?? null,
+                'from_parent_semester' => true,
+            ];
         }
 
-        return false;
+        return $unresolved;
     }
 
     /**

@@ -209,7 +209,31 @@ class CourseRegistrationController extends Controller
             'performanceSummary' => $performanceSummary,
             'carryOverCourses' => $carryOverCourses,
             'currentSemesterEnrolledSubjectIds' => $currentSemesterEnrolledSubjectIds,
+
+            // Whether the year ahead is still being set up. A graduation
+            // verdict reached while courses are missing is not a final one, and
+            // the page says so rather than letting a student conclude their
+            // programme is over.
+            'progressionPaused' => $this->nextYearStillBeingSetUp($currentEnroll),
         ]);
+    }
+
+    /**
+     * Is the academic year this student would move into closed to progression?
+     *
+     * Read from the same place the progression modal reads it, so the two
+     * screens cannot tell the student different things.
+     */
+    private function nextYearStillBeingSetUp($currentEnroll): bool
+    {
+        if (!$currentEnroll) {
+            return false;
+        }
+
+        $target = app(\App\Services\Academic\SemesterProgressionService::class)
+            ->targetSessionFor($currentEnroll);
+
+        return $target !== null && !$target->allowsProgression();
     }
 
     public function update(Request $request)

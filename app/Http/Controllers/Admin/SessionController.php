@@ -217,4 +217,48 @@ class SessionController extends Controller
 
         return redirect()->back();
     }
+
+    /**
+     * Open or close this academic year to students progressing into it.
+     *
+     * Closed while the year's courses are still being set up: without it, a
+     * student whose marks are published is invited to move into a year that has
+     * no courses in it, and their portal reads as though their programme were
+     * over.
+     */
+    public function toggleProgression($id)
+    {
+        $session = Session::findOrFail($id);
+        $session->progression_open = !$session->progression_open;
+        $session->save();
+
+        Flasher::addSuccess(
+            $session->progression_open
+                ? __('Students can now progress into :session.', ['session' => $session->title])
+                : __('Progression into :session is paused. Students are told it is temporary.', ['session' => $session->title]),
+            __('msg_success')
+        );
+
+        return redirect()->back();
+    }
+
+    /**
+     * Set the line students are shown while this year is closed.
+     */
+    public function progressionNote(Request $request, $id)
+    {
+        $request->validate([
+            'progression_note' => 'nullable|string|max:191',
+        ]);
+
+        $session = Session::findOrFail($id);
+        $session->progression_note = $request->filled('progression_note')
+            ? trim($request->progression_note)
+            : null;
+        $session->save();
+
+        Flasher::addSuccess(__('Saved. Students will see this while progression is paused.'), __('msg_success'));
+
+        return redirect()->back();
+    }
 }

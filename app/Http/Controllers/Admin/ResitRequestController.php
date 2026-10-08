@@ -92,6 +92,10 @@ class ResitRequestController extends Controller
         return view('admin.resit-requests.index', [
             'requests'        => $requests,
             'sessions'        => Session::orderByDesc('id')->get(['id', 'title', 'current']),
+            // Which sittings are still taking requests. Keyed "session:type"
+            // so the screen can look one up without a query per row.
+            'resitWindows'    => \App\Models\ResitRequestWindow::all()
+                ->keyBy(fn ($window) => $window->session_id . ':' . $window->semester_type),
             'resitSemesters'  => Semester::resit()->orderBy('title')->get(['id', 'title']),
             'years'           => $years,
             'semesterTypes'   => [
@@ -324,5 +328,77 @@ class ResitRequestController extends Controller
 
         Flasher::addSuccess(__("Successfully synced {$migratedCount} stuck students."));
         return redirect()->route('admin.resit-requests.index');
+    }
+
+    /**
+     * Open or close resit requests for one sitting.
+     *
+     * A sitting is an academic session and a semester type, which is the grain
+     * a resit timetable has. Once it is drawn up the school cannot keep taking
+     * new requests for it, but students go on asking because nothing tells them
+     * otherwise.
+     *
+     * Declining is deliberately left open. A student still has to be able to
+     * settle a failed course by carrying it over; closing that too would leave
+     * them with no move at all and their progression stuck.
+     */
+    public function toggleWindow(Request $request)
+    {
+        $data = $request->validate([
+            'session_id' => 'required|exists:sessions,id',
+            'semester_type' => 'required|in:1,2',
+            'note' => 'nullable|string|max:191',
+            // Set when the note is being saved on its own, so editing the
+            // wording does not also flip the window open or shut.
+            'keep_state' => 'nullable|boolean',
+        ]);
+
+        $window = \App\Models\ResitRequestWindow::firstOrNew([
+            'session_id' => $data['session_id'],
+            'semester_type' => (int) $data['semester_type'],
+        ]);
+
+        $keepState = $request->boolean('keep_state');
+
+        if ($keepState) {
+            // Absent and only the note submitted: nothing to say yet.
+            $window->is_open = $window->exists ? $window->is_open : true;
+        } else {
+            // Absent means open, so the first toggle closes it.
+            $window->is_open = $window->exists ? !$window->is_open : false;
+        }
+
+        if ($request->has('note')) {
+            $window->note = $request->filled('note') ? trim($data['note']) : null;
+        }
+
+        $window->closed_by = $window->is_open ? null : Auth::id();
+        $window->closed_at = $window->is_open
+            ? null
+            : ($window->closed_at ?? now());
+
+        $window->save();
+
+        if ($keepState) {
+            Flasher::addSuccess(__('Saved. Students will see this while requests are closed.'), __('msg_success'));
+
+            return redirect()->back();
+        }
+
+        $label = \App\Models\ResitRequestWindow::typeLabel((int) $data['semester_type']);
+        $session = Session::find($data['session_id']);
+
+        Flasher::addSuccess(
+            $window->is_open
+                ? __('Students can request resits for :type in :session again.', [
+                    'type' => $label, 'session' => $session->title ?? '',
+                ])
+                : __('Resit requests for :type in :session are closed. Students can still decline to carry a course over.', [
+                    'type' => $label, 'session' => $session->title ?? '',
+                ]),
+            __('msg_success')
+        );
+
+        return redirect()->back();
     }
 }

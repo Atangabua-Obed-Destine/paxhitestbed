@@ -99,6 +99,7 @@
                                         <th>{{ __('field_program') }}</th>
                                         <th>{{ __('field_status') }}</th>
                                         <th>{{ __('Applications') }}</th>
+                                        <th>{{ __('Progression') }}</th>
                                         <th>{{ __('field_action') }}</th>
                                     </tr>
                                 </thead>
@@ -148,6 +149,68 @@
                                                 <span class="badge badge-pill badge-success">{{ __('Open') }}</span>
                                                 @else
                                                 <span class="badge badge-pill badge-secondary">{{ __('Closed') }}</span>
+                                                @endif
+                                            @endcan
+                                        </td>
+
+                                        {{-- Whether students may move INTO this academic year. Closed
+                                             while its courses are still being set up: otherwise a
+                                             student whose marks are published is invited into a year
+                                             with no courses in it. --}}
+                                        <td>
+                                            @can($access.'-edit')
+                                                @if( $row->progression_open )
+                                                <a href="{{ route($route.'.toggle-progression', $row->id) }}" class="btn btn-success btn-sm" title="{{ __('Students can progress into this year. Click to pause.') }}">
+                                                    <i class="fas fa-arrow-circle-up"></i> {{ __('Open') }}
+                                                </a>
+                                                @else
+                                                <a href="{{ route($route.'.toggle-progression', $row->id) }}" class="btn btn-warning btn-sm" title="{{ __('Progression into this year is paused. Click to open.') }}">
+                                                    <i class="fas fa-pause-circle"></i> {{ __('Paused') }}
+                                                </a>
+                                                @endif
+
+                                                @if( !$row->progression_open )
+                                                    <button type="button" class="btn btn-link btn-sm p-0 d-block mt-1"
+                                                            data-bs-toggle="modal" data-bs-target="#progressionNote{{ $row->id }}"
+                                                            style="font-size: 11px;">
+                                                        <i class="fas fa-pen"></i> {{ __('What students are told') }}
+                                                    </button>
+
+                                                    <div class="modal fade" id="progressionNote{{ $row->id }}" tabindex="-1" aria-hidden="true">
+                                                        <div class="modal-dialog modal-dialog-centered">
+                                                            <div class="modal-content">
+                                                                <form action="{{ route($route.'.progression-note', $row->id) }}" method="post">
+                                                                    @csrf
+                                                                    <div class="modal-header">
+                                                                        <h5 class="modal-title">{{ __('What students are told') }} — {{ $row->title }}</h5>
+                                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                    </div>
+                                                                    <div class="modal-body">
+                                                                        <label for="progression_note{{ $row->id }}" class="form-label">
+                                                                            {{ __('Shown on their portal while progression is paused') }}
+                                                                        </label>
+                                                                        <textarea class="form-control" name="progression_note" id="progression_note{{ $row->id }}"
+                                                                                  rows="3" maxlength="191"
+                                                                                  placeholder="{{ __('e.g. Courses for this year are still being set up. Progression opens in November.') }}">{{ $row->progression_note }}</textarea>
+                                                                        <small class="form-text text-muted">
+                                                                            {{ __('Leave empty and students see:') }}
+                                                                            "{{ $row->progressionNote() }}"
+                                                                        </small>
+                                                                    </div>
+                                                                    <div class="modal-footer">
+                                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_close') }}</button>
+                                                                        <button type="submit" class="btn btn-primary">{{ __('btn_save') }}</button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                @endif
+                                            @else
+                                                @if( $row->progression_open )
+                                                <span class="badge badge-pill badge-success">{{ __('Open') }}</span>
+                                                @else
+                                                <span class="badge badge-pill badge-warning">{{ __('Paused') }}</span>
                                                 @endif
                                             @endcan
                                         </td>

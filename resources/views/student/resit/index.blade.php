@@ -2,6 +2,32 @@
 @section('title', $title)
 @section('content')
 
+@php
+    // Whether the school is still taking requests for this sitting. Declining is
+    // always available: a student must be able to settle a failed course by
+    // carrying it over, even after requests close.
+    $resitRequestsOpen = $resit_requests_open ?? true;
+    $resitClosedNote = $resit_requests_closed_note ?? '';
+@endphp
+
+@if(!$resitRequestsOpen)
+    <div class="main-body">
+        <div class="page-wrapper">
+            <div class="alert alert-warning d-flex align-items-start" style="border-left: 5px solid #f0ad4e;">
+                <i class="fas fa-lock mt-1 me-2"></i>
+                <div>
+                    <strong class="d-block mb-1">{{ __('Resit requests are closed for this semester') }}</strong>
+                    <span>{{ $resitClosedNote }}</span>
+                    <div class="small text-muted mt-2">
+                        {{ __('You can still use') }} <strong>"{{ __('Don\'t Resit Course') }}"</strong>
+                        {{ __('to carry a course over. Do that for each failed course so your progression is not held up.') }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
+
 <!-- Start Content-->
 <div class="main-body">
     <div class="page-wrapper">
@@ -295,6 +321,7 @@
                                                 @elseif($isCancelled || $isRejected)
                                                     <!-- Cancelled or rejected - can request again or decline -->
                                                     <div class="btn-group" role="group">
+                                                        @if($resitRequestsOpen)
                                                         <form method="post" action="{{ route($route.'.store') }}" style="display:inline;" onsubmit="return confirm('{{ __('Are you sure you want to request a resit for this course? A resit fee will be assigned.') }}');">
                                                             @csrf
                                                             <input type="hidden" name="student_enroll_id" value="{{ $enrollment->id }}">
@@ -304,6 +331,7 @@
                                                                 <i class="fas fa-paper-plane"></i> {{ __('Request Resit') }}
                                                             </button>
                                                         </form>
+                                                        @endif
                                                         
                                                         <form method="post" action="{{ route($route.'.decline') }}" style="display:inline; margin-left: 5px;" onsubmit="return confirm('{{ __('Are you sure you do NOT want to resit this course? This means you accept the failing grade and will move forward without retaking this course.') }}');">
                                                             @csrf
@@ -336,6 +364,7 @@
                                             @else
                                                 <!-- No request exists - show both buttons -->
                                                 <div class="btn-group" role="group">
+                                                    @if($resitRequestsOpen)
                                                     <form method="post" action="{{ route($route.'.store') }}" style="display:inline;" onsubmit="return confirm('{{ __('Are you sure you want to request a resit for this course? A resit fee will be assigned.') }}');">
                                                         @csrf
                                                         <input type="hidden" name="student_enroll_id" value="{{ $enrollment->id }}">
@@ -345,6 +374,7 @@
                                                             <i class="fas fa-paper-plane"></i> {{ __('Request Resit') }}
                                                         </button>
                                                     </form>
+                                                    @endif
                                                     
                                                     <form method="post" action="{{ route($route.'.decline') }}" style="display:inline; margin-left: 5px;" onsubmit="return confirm('{{ __('Are you sure you do NOT want to resit this course? This means you accept the failing grade and will move forward without retaking this course.') }}');">
                                                         @csrf

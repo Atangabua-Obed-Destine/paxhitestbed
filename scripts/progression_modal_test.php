@@ -69,20 +69,41 @@ function asStudent(string $path, Student $student, $kernel): string
 
 app('session.store')->start();
 
-/** A student the portal says can progress, and one it says cannot. */
+/**
+ * Three students: one who can progress, one who is held up by something they
+ * can settle today, and one who cannot progress and has nothing to do about it.
+ * The three are meant to get three different answers.
+ */
 $eligible = null;
+$blocked = null;
 $notEligible = null;
 
-foreach (Student::whereHas('enrolls')->limit(60)->get() as $candidate) {
+foreach (Student::whereHas('enrolls')->limit(80)->get() as $candidate) {
     $verdict = json_decode(asStudent('/student/progression/check-eligibility', $candidate, $kernel), true);
+
+    // A student is picked as "blocked" from the raw unresolved courses, not
+    // from action_required — otherwise breaking action_required would make this
+    // suite quietly skip the section instead of failing it.
+    //
+    // Both checks are read. A student in a regular semester is held up by the
+    // resit check; one already in a resit semester by the regular check looking
+    // back at the semester it belongs to. Reading only the first missed five
+    // students who had a failed course they had never acted on.
+    $unresolved = array_merge(
+        $verdict['resit_check']['unresolved_courses'] ?? [],
+        $verdict['regular_check']['unresolved_courses'] ?? []
+    );
 
     if (($verdict['eligible'] ?? null) === true && !$eligible) {
         $eligible = [$candidate, $verdict];
-    } elseif (($verdict['eligible'] ?? null) === false && !$notEligible) {
+    } elseif (!empty($unresolved) && !$blocked) {
+        $blocked = [$candidate, $verdict];
+    } elseif (($verdict['eligible'] ?? null) === false
+        && empty($unresolved) && !$notEligible) {
         $notEligible = [$candidate, $verdict];
     }
 
-    if ($eligible && $notEligible) {
+    if ($eligible && $blocked && $notEligible) {
         break;
     }
 }
@@ -324,10 +345,131 @@ if ($result === null) {
         !str_contains($result['body'], 'new academic year'), 'the notice appeared anyway');
 }
 
-echo "\nA student who cannot progress yet is not interrupted\n";
+echo "\nA student held up by something they can settle is told so\n";
+
+if (!$blocked) {
+    echo "  SKIP  no student currently has an unsettled failed course\n";
+} else {
+    // The payload has to say so before the page can act on it.
+    check('the payload names what is in the way',
+        !empty($blocked[1]['blockers']),
+        'blockers: ' . json_encode($blocked[1]['blockers'] ?? null));
+    check('and says the student can settle it',
+        ($blocked[1]['action_required'] ?? null) === true,
+        'action_required: ' . var_export($blocked[1]['action_required'] ?? null, true));
+
+    $result = runCase($source, $blocked[1], $work, $chrome, $asset, 'blocked');
+
+    if ($result === null) {
+        check('the browser reported back', false, 'the harness page may have errored');
+    } else {
+        check('the modal opens for them too', $result['open'] === true,
+            'a student who can act should not have to find the button');
+        check('exactly once', $result['shown'] === 1, $result['shown'] . ' time(s)');
+        check('it says what is holding them up',
+            str_contains($result['body'], 'holding up your progression'));
+        check('and points them at the resit centre',
+            stripos($result['body'], 'Resit Centre') !== false);
+
+        $missing = [];
+        foreach ($blocked[1]['blockers'] ?? [] as $blocker) {
+            if (!str_contains($result['body'], $blocker['subject_code'])) {
+                $missing[] = $blocker['subject_code'];
+            }
+        }
+
+        check('listing every course that is in the way',
+            empty($missing), 'missing: ' . implode(', ', $missing));
+        check('and saying what to do about each',
+            str_contains($result['body'], 'Ask to resit this course')
+                || str_contains($result['body'], 'Pay the resit fee'));
+    }
+}
+
+echo "\nA student already in a resit semester is told about the one they skipped\n";
+
+// The case this missed: sitting in a resit semester, held back by a failed
+// course from the semester it belongs to that they never requested nor
+// declined. The resit check reports "already in a resit semester" and an empty
+// list, so reading only that check found nothing to tell them.
+// The student is found from the records themselves — a resit enrolment whose
+// parent semester holds a failed course with no resit request and no decline.
+// Finding them through the payload would mean this section quietly skipped
+// whenever the payload stopped reporting it, which is exactly the regression
+// being guarded against.
+$inResit = null;
+$progression = app(\App\Services\Academic\SemesterProgressionService::class);
+$unresolvedFromParent = new ReflectionMethod($progression, 'unresolvedFailedCoursesFromParent');
+$unresolvedFromParent->setAccessible(true);
+
+foreach (Student::whereHas('enrolls')->limit(80)->get() as $candidate) {
+    $enrollment = $candidate->currentEnroll;
+
+    if (!$enrollment || !optional($enrollment->semester)->is_resit) {
+        continue;
+    }
+
+    if (empty($unresolvedFromParent->invoke($progression, $enrollment))) {
+        continue;
+    }
+
+    $inResit = [
+        $candidate,
+        json_decode(asStudent('/student/progression/check-eligibility', $candidate, $kernel), true),
+        $unresolvedFromParent->invoke($progression, $enrollment),
+    ];
+    break;
+}
+
+if (!$inResit) {
+    echo "  SKIP  no student in a resit semester is held up by a parent-semester course\n";
+} else {
+    check('the blocker is found even though the resit check reports none',
+        !empty($inResit[1]['blockers']),
+        'resit check said: ' . ($inResit[1]['resit_check']['reason'] ?? '-'));
+    check('and the student is told they can act',
+        ($inResit[1]['action_required'] ?? null) === true);
+
+    // Compared against the records, not against the payload's own account of
+    // itself.
+    $codes = array_column($inResit[2], 'subject_code');
+    $reported = array_column($inResit[1]['blockers'] ?? [], 'subject_code');
+
+    check('every unsettled course is named',
+        empty(array_diff($codes, $reported)),
+        'missing: ' . implode(', ', array_diff($codes, $reported)));
+    check('and none is listed twice',
+        count($reported) === count(array_unique($reported)), implode(', ', $reported));
+}
+
+echo "\nA course reported by both checks is one blocker, not two\n";
+
+// No student in this database is currently reported by both checks at once, so
+// the two lists are handed in directly. Without this the de-duplication would
+// go untested until the day it mattered.
+$service = app(\App\Services\Student\ProgressionEligibilityService::class);
+$blockersFrom = new ReflectionMethod($service, 'blockersFrom');
+$blockersFrom->setAccessible(true);
+
+$same = ['subject_id' => 4242, 'subject_code' => 'DUP101', 'subject_title' => 'Counted Once', 'status' => 'no_request'];
+$other = ['subject_id' => 4243, 'subject_code' => 'ONE102', 'subject_title' => 'Only Here', 'status' => 'no_request'];
+
+$merged = $blockersFrom->invoke($service,
+    ['unresolved_courses' => [$same]],
+    ['unresolved_courses' => [$same, $other]]
+);
+
+$codes = array_column($merged, 'subject_code');
+
+check('the course both checks report appears once',
+    count(array_keys($codes, 'DUP101')) === 1, implode(', ', $codes));
+check('and the one only a single check reports is still there',
+    in_array('ONE102', $codes, true), implode(', ', $codes));
+
+echo "\nA student with nothing to do is not interrupted\n";
 
 if (!$notEligible) {
-    echo "  SKIP  every student sampled is eligible, so there is no case to run\n";
+    echo "  SKIP  every student sampled can either progress or act\n";
 } else {
     $result = runCase($source, $notEligible[1], $work, $chrome, $asset, 'not-eligible');
 
@@ -337,6 +479,8 @@ if (!$notEligible) {
         check('the eligibility check still runs once', $result['calls'] === 1, $result['calls'] . ' call(s)');
         check('but no modal is opened', $result['open'] === false && $result['shown'] === 0,
             'open=' . var_export($result['open'], true) . ' shown=' . $result['shown']);
+        check('because there is nothing they could do about it',
+            ($notEligible[1]['action_required'] ?? null) !== true);
     }
 }
 

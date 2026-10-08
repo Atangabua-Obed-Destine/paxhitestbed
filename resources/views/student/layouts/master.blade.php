@@ -1065,7 +1065,9 @@
             }
 
             try {
-                if (response.eligible === true) {
+                if (response.paused === true) {
+                    buildPausedModal(response);
+                } else if (response.eligible === true) {
                     buildEligibleModal(response);
                 } else {
                     buildNotEligibleModal(response);
@@ -1092,16 +1094,32 @@
                     console.log('[Progression] Response:', JSON.stringify(response));
                     eligibilityData = response;
                     
-                    if (response.eligible === true) {
+                    if (response.paused === true) {
+                        // The year they would move into is not open yet. Said
+                        // plainly rather than left as "not eligible", which
+                        // would be untrue — they may have met every requirement.
+                        console.log('[Progression] Progression is paused.');
+                        $('#progression-button')
+                            .removeClass('btn-success btn-outline-info')
+                            .addClass('btn-outline-warning')
+                            .html('<i class="fas fa-pause-circle"></i> {{ __("Progression paused") }}');
+                    } else if (response.eligible === true) {
                         console.log('[Progression] Student IS eligible. Showing green button.');
                         $('#progression-button')
                             .removeClass('btn-outline-info')
                             .addClass('btn-success')
                             .html('<i class="fas fa-arrow-circle-up"></i> {{ __("Ready to Progress") }} <span class="position-absolute top-0 start-100 translate-middle p-2 bg-danger border border-light rounded-circle pulse-animation"><span class="visually-hidden">New</span></span>');
+                    } else if (response.action_required === true) {
+                        // Something is in the way that they can settle today.
+                        console.log('[Progression] Blocked, and the student can act.');
+                        $('#progression-button')
+                            .removeClass('btn-success btn-outline-info')
+                            .addClass('btn-warning')
+                            .html('<i class="fas fa-exclamation-triangle"></i> {{ __("Action needed") }} <span class="position-absolute top-0 start-100 translate-middle p-2 bg-danger border border-light rounded-circle pulse-animation"><span class="visually-hidden">New</span></span>');
                     } else {
                         console.log('[Progression] Student NOT eligible. Reason: ' + (response.message || 'N/A'));
                         $('#progression-button')
-                            .removeClass('btn-success')
+                            .removeClass('btn-success btn-warning')
                             .addClass('btn-outline-info')
                             .html('<i class="fas fa-tasks"></i> {{ __("Progression Status") }}');
                     }
@@ -1109,11 +1127,15 @@
                     // Always show the button
                     $('#progression-button-container').fadeIn();
 
-                    // And raise the modal itself when they can actually move.
-                    // Progression is the one thing on this portal a student can
-                    // miss entirely by not noticing a button, so it comes to
-                    // them. It closes like any other modal.
-                    if (response.eligible === true) {
+                    // And raise the modal itself when there is something to see:
+                    // either they can move, or something is holding them up
+                    // that they can settle. Both are things a student can miss
+                    // entirely by not noticing a button, so they come to them.
+                    //
+                    // Not raised when the hold-up is with the school, or when
+                    // they are simply waiting on marks — a modal they can do
+                    // nothing about, on every page load, is just noise.
+                    if (response.eligible === true || response.action_required === true) {
                         showProgressionModal(response);
                     }
                 },
@@ -1388,6 +1410,57 @@
         }
 
         // Build modal content for NOT eligible student
+        /**
+         * The year ahead is not open yet.
+         *
+         * Kept separate from the not-eligible modal on purpose: a student held
+         * back by this may have met every requirement, and telling them they
+         * have not would be untrue. They are told what is happening, that it is
+         * temporary, and whatever the school has said about it.
+         */
+        function buildPausedModal(response) {
+            $('#progressionModalHeader').removeClass('bg-success bg-info').addClass('bg-warning');
+
+            const summary = response.summary || {};
+            const note = response.paused_note || '';
+            const session = response.target_session_title || '';
+
+            $('#progressionModalBody').html(`
+                <div class="text-center mb-3">
+                    <i class="fas fa-pause-circle" style="font-size: 3rem; color: #f0ad4e;"></i>
+                    <h5 class="mt-2 mb-1">{{ __('Progression is paused for now') }}</h5>
+                    <p class="text-muted mb-0">
+                        ${session
+                            ? `{{ __('You cannot move into') }} <strong>${session}</strong> {{ __('just yet.') }}`
+                            : `{{ __('You cannot move into the next semester just yet.') }}`}
+                    </p>
+                </div>
+
+                ${note ? `
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i> ${note}
+                </div>` : ''}
+
+                <div class="alert alert-light border mb-0">
+                    <strong class="d-block mb-1">{{ __('What this means for you') }}</strong>
+                    <ul class="mb-0 ps-3 text-muted" style="font-size: .92rem;">
+                        <li>{{ __('Nothing is wrong with your results, and you have not missed anything.') }}</li>
+                        <li>{{ __('Your marks and records stay exactly as they are.') }}</li>
+                        <li>{{ __('This page will let you progress as soon as the school opens it.') }}</li>
+                    </ul>
+                </div>
+
+                ${summary.current_semester ? `
+                <p class="text-muted mt-3 mb-0" style="font-size: .85rem;">
+                    {{ __('You are currently in') }} <strong>${summary.current_semester}</strong>
+                    ${summary.current_session ? ` — ${summary.current_session}` : ''}.
+                </p>` : ''}
+            `);
+
+            // Nothing to proceed with while it is paused.
+            $('#progressionModalFooter').hide();
+        }
+
         function buildNotEligibleModal(response) {
             $('#progressionModalHeader').removeClass('bg-success bg-warning').addClass('bg-info');
 
@@ -1401,12 +1474,84 @@
             const regularReason = regularCheck.reason || null;
             const unresolvedCourses = resitCheck.unresolved_courses || [];
 
+            const blockers = response.blockers || [];
+            const actionRequired = response.action_required === true;
+
             let bodyHtml = `
                 <div class="alert alert-info">
                     <h5 class="mb-1"><i class="fas fa-info-circle"></i> {{ __('Progression Status') }}</h5>
                     <p class="mb-0">${message}</p>
                 </div>
             `;
+
+            // What is actually in the way, and whose move it is.
+            //
+            // A failed course holds up progression until it is settled, and the
+            // place to settle it is a page the student has no reason to visit.
+            // Saying only "not yet eligible" left them stuck with no idea why.
+            if (blockers.length > 0) {
+                bodyHtml += `
+                    <div class="card border-warning mb-3">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ __('What is holding up your progression') }}
+                                <span class="badge bg-dark ms-2">${blockers.length}</span>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-2" style="font-size: .9rem;">
+                                {{ __('These failed courses have not been settled yet. Each one needs either a resit request or a decision not to resit before you can move on.') }}
+                            </p>
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>{{ __('Course') }}</th>
+                                            <th>{{ __('Status') }}</th>
+                                            <th>{{ __('What to do') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                `;
+
+                blockers.forEach(function (blocker) {
+                    bodyHtml += `
+                        <tr>
+                            <td>
+                                <strong>${blocker.subject_code || ''}</strong>
+                                <div class="text-muted" style="font-size: .82rem;">${blocker.subject_title || ''}</div>
+                            </td>
+                            <td>
+                                <span class="badge ${blocker.student_can_act ? 'bg-warning text-dark' : 'bg-secondary'}">
+                                    ${blocker.label || ''}
+                                </span>
+                            </td>
+                            <td style="font-size: .85rem;">${blocker.what_to_do || ''}</td>
+                        </tr>
+                    `;
+                });
+
+                bodyHtml += `
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            ${actionRequired ? `
+                            <a href="{{ route('student.resit.index') }}" class="btn btn-warning w-100 mt-3">
+                                <i class="fas fa-redo-alt"></i> {{ __('Go to Resit Centre and settle these') }}
+                            </a>
+                            <small class="text-muted d-block mt-2">
+                                {{ __('Once every failed course is either scheduled for a resit or declined, your progression opens automatically.') }}
+                            </small>` : `
+                            <div class="alert alert-light border mb-0 mt-3">
+                                <i class="fas fa-clock"></i>
+                                {{ __('Your requests are with the school. Nothing is needed from you — this will clear once they are processed.') }}
+                            </div>`}
+                        </div>
+                    </div>
+                `;
+            }
 
             // Program and semester context
             if (programName || currentSemester) {
@@ -1598,7 +1743,9 @@
                     try {
                         eligibilityData = response;
 
-                        if (response.eligible === true) {
+                        if (response.paused === true) {
+                            buildPausedModal(response);
+                        } else if (response.eligible === true) {
                             buildEligibleModal(response);
                         } else {
                             buildNotEligibleModal(response);

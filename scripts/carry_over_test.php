@@ -396,6 +396,62 @@ check('every course the marks say is owed appears in the outstanding list',
     $hiddenTotal === 0, "{$hiddenTotal} course(s) hidden across {$studentsAffected} student(s)");
 
 // ---------------------------------------------------------------------------
+section('Progression counts a spent resit as something to register');
+// ---------------------------------------------------------------------------
+// A course failed on resit is owed again, so it is something to register for in
+// the next semester of its type. Progression used to keep its own copy of the
+// carry-over rule, and that copy read any 'scheduled' request as being handled —
+// so a student who had failed three First Semester resits was told he had "no
+// new courses to register for" and held out of the year he belonged in.
+$progression = app(\App\Services\Academic\SemesterProgressionService::class);
+$hasUnvalidated = new ReflectionMethod($progression, 'hasUnvalidatedCourses');
+$hasUnvalidated->setAccessible(true);
+
+$withSpentResit = null;
+
+foreach (Student::whereHas('enrolls')->get() as $one) {
+    $enrollment = $one->currentEnroll;
+
+    if (!$enrollment || !$enrollment->program_id) {
+        continue;
+    }
+
+    $owed = app(OutstandingCourses::class)->carryOvers($enrollment);
+
+    // Someone owing a course they have already failed a resit of.
+    $spent = $owed->first(fn (array $row) => $row['attempts'] > 1);
+
+    if ($spent) {
+        $withSpentResit = [$one, $enrollment, $spent];
+        break;
+    }
+}
+
+if (!$withSpentResit) {
+    skip('no student owes a course they have already failed a resit of');
+} else {
+    [$one, $enrollment, $spent] = $withSpentResit;
+
+    $target = \App\Models\Semester::where('semester_type', $spent['semester_type'])
+        ->where('is_resit', 0)
+        ->orderByDesc('year')
+        ->first();
+
+    if (!$target) {
+        skip('no regular semester of that type to progress into');
+    } else {
+        check('the course is owed after a failed resit',
+            $spent['attempts'] > 1 && $spent['best_marks'] < $spent['pass_mark'],
+            $spent['subject_code'] . ' best ' . $spent['best_marks'] . ' over ' . $spent['attempts'] . ' attempts');
+
+        check('so progression sees something to register for',
+            $hasUnvalidated->invoke($progression, $enrollment, $target) === true,
+            $one->student_id . ' owes ' . $spent['subject_code']
+                . ' in a ' . $spent['semester_type_label'] . ' but progression said there was nothing to register');
+    }
+}
+
+// ---------------------------------------------------------------------------
 section('The screens agree with each other');
 // ---------------------------------------------------------------------------
 $eligibility = app(\App\Services\Student\ProgressionEligibilityService::class);

@@ -259,6 +259,19 @@
                                                 <li class="text-success">
                                                     <strong>{{ __('Congratulations!') }}</strong> {{ __('You have validated all required courses and are eligible for graduation.') }}
                                                 </li>
+
+                                                {{-- While the next academic year is still being set up, "all
+                                                     required courses" means every course that exists so far.
+                                                     Saying so stops a student reading this as the end of their
+                                                     programme when their remaining courses simply have not been
+                                                     configured yet. --}}
+                                                @if(!empty($progressionPaused))
+                                                    <li class="text-warning mt-2">
+                                                        <i class="fas fa-info-circle"></i>
+                                                        <strong>{{ __('Not final yet.') }}</strong>
+                                                        {{ __('Courses for the next academic year are still being set up, so this is based only on the courses published so far. It may change once they are added.') }}
+                                                    </li>
+                                                @endif
                                             @endif
                                         </ul>
                                     </div>

@@ -76,6 +76,17 @@ class ProgressionEligibilityService
             $allReasons[] = $result;
         }
 
+        // A student held back only because the year ahead is not open yet is
+        // told exactly that. This used to flatten every answer into a generic
+        // "not yet eligible", which dropped the paused flag and the school's
+        // note along with it — so the screen said one thing for a student with
+        // a single enrolment and another for a student with two.
+        foreach ($allReasons as $reason) {
+            if (($reason['paused'] ?? false) === true) {
+                return $reason;
+            }
+        }
+
         // Return the most relevant reason from the first enrollment
         $primaryReason = $allReasons[0] ?? [];
         return [
@@ -96,13 +107,34 @@ class ProgressionEligibilityService
 
         // Check for resit semester progression first
         $resitEligibility = $this->checkResitSemesterEligibility($enrollment);
+
+        // Check for regular semester progression
+        $regularEligibility = $this->checkRegularSemesterEligibility($enrollment);
+
+        // Would they otherwise be able to move? Then the only thing stopping
+        // them is the year ahead not being ready, and that is what they are
+        // told — rather than "not yet eligible", which would be untrue.
+        //
+        // Checked here because this is the one method both the student's modal
+        // and ProgressionController@proceed go through, so the screen and the
+        // server cannot disagree about it.
+        //
+        // A student who could not progress anyway keeps their own reason: it is
+        // true, it is more use to them, and the paused panel's reassurance that
+        // their results are fine would not be.
+        if ($resitEligibility['eligible'] || $regularEligibility['eligible']) {
+            if ($paused = $this->progressionPaused($enrollment)) {
+                $paused['carry_over_courses'] = $carryOverCourses;
+
+                return $paused;
+            }
+        }
+
         if ($resitEligibility['eligible']) {
             $resitEligibility['carry_over_courses'] = $carryOverCourses;
             return $resitEligibility;
         }
 
-        // Check for regular semester progression
-        $regularEligibility = $this->checkRegularSemesterEligibility($enrollment);
         if ($regularEligibility['eligible']) {
             $regularEligibility['carry_over_courses'] = $carryOverCourses;
             if (!empty($carryOverCourses)) {
@@ -113,6 +145,14 @@ class ProgressionEligibilityService
 
         // Determine the most useful reason to show the student
         $reason = $regularEligibility['reason'] ?? $resitEligibility['reason'] ?? 'Not yet eligible for progression';
+
+        // What is actually standing in their way, and whose move it is.
+        //
+        // Taken from both checks: a student in a regular semester is held up by
+        // the resit check, one already in a resit semester by the regular
+        // check's look back at the semester it belongs to. Reading only the
+        // first missed the second entirely.
+        $blockers = $this->blockersFrom($resitEligibility, $regularEligibility);
 
         return [
             'eligible' => false,
@@ -125,7 +165,89 @@ class ProgressionEligibilityService
             'resit_check' => $resitEligibility,
             'regular_check' => $regularEligibility,
             'carry_over_courses' => $carryOverCourses,
+
+            // Named at the top level so the portal does not have to go digging
+            // through resit_check to find out whether the student can do
+            // something about this.
+            'blockers' => $blockers,
+            'blocked_by_resits' => !empty($blockers),
+            'action_required' => collect($blockers)->contains(fn ($b) => $b['student_can_act']),
         ];
+    }
+
+    /**
+     * The failed courses standing between this student and progression.
+     *
+     * A failed course stops progression until it is settled one way or the
+     * other — resit requested and paid for, or declined. Until then the portal
+     * said only "not yet eligible", which tells a student nothing about what to
+     * do, and the thing they had to do lived on a different page they had no
+     * reason to visit.
+     *
+     * Each blocker says whose move it is, because the two cases need different
+     * things from the student: one is a decision they have to make, the other
+     * is a wait they should not be chasing.
+     *
+     * @param  array<string, mixed> ...$checks the eligibility checks to read
+     * @return array<int, array<string, mixed>>
+     */
+    protected function blockersFrom(array ...$checks): array
+    {
+        $blockers = [];
+        $seen = [];
+
+        $courses = [];
+        foreach ($checks as $check) {
+            foreach ($check['unresolved_courses'] ?? [] as $course) {
+                // The same course can be reported by both checks; it is one
+                // blocker, not two.
+                $key = $course['subject_id'] ?? ($course['subject_code'] ?? null);
+
+                if ($key !== null && isset($seen[$key])) {
+                    continue;
+                }
+
+                if ($key !== null) {
+                    $seen[$key] = true;
+                }
+
+                $courses[] = $course;
+            }
+        }
+
+        foreach ($courses as $course) {
+            $status = $course['status'] ?? 'no_request';
+            $state = $course['workflow_state'] ?? null;
+
+            if ($status === 'no_request') {
+                $blockers[] = [
+                    'subject_code' => $course['subject_code'] ?? '',
+                    'subject_title' => $course['subject_title'] ?? '',
+                    'status' => $status,
+                    'label' => __('Awaiting your decision'),
+                    'what_to_do' => __('Ask to resit this course, or decline it.'),
+                    'student_can_act' => true,
+                ];
+                continue;
+            }
+
+            // Raised, but not yet settled. Whether that is on the student or on
+            // the school decides what they are told to do about it.
+            $awaitingPayment = $state === \App\Models\ResitRequest::STATE_AWAITING_PAYMENT;
+
+            $blockers[] = [
+                'subject_code' => $course['subject_code'] ?? '',
+                'subject_title' => $course['subject_title'] ?? '',
+                'status' => $status,
+                'label' => $awaitingPayment ? __('Awaiting your payment') : __('With the school'),
+                'what_to_do' => $awaitingPayment
+                    ? __('Pay the resit fee, then upload or present your receipt.')
+                    : __('Your request is being reviewed. There is nothing for you to do.'),
+                'student_can_act' => $awaitingPayment,
+            ];
+        }
+
+        return $blockers;
     }
 
     /**
@@ -161,6 +283,42 @@ class ProgressionEligibilityService
     }
 
     /**
+     * The year this student would be entering is not open for progression.
+     *
+     * Returns the answer to give them, or null when the way is clear.
+     *
+     * A student is told which year is closed and what the school has said about
+     * it, rather than being given the ordinary "not yet eligible" — they may
+     * have met every requirement, and being told they have not would be untrue.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function progressionPaused(StudentEnroll $enrollment): ?array
+    {
+        $target = $this->progressionService->targetSessionFor($enrollment);
+
+        if (!$target || $target->allowsProgression()) {
+            return null;
+        }
+
+        return [
+            'eligible' => false,
+            'paused' => true,
+            'type' => null,
+            'enrollment_id' => $enrollment->id,
+            'program_name' => $enrollment->program->title ?? 'N/A',
+            'target_session_title' => $target->title,
+            'message' => __('Progression into :session is paused for now.', ['session' => $target->title]),
+            'paused_note' => $target->progressionNote(),
+            'summary' => [
+                'program_name' => $enrollment->program->title ?? 'N/A',
+                'current_semester' => $enrollment->semester->title ?? 'N/A',
+                'current_session' => $enrollment->session->title ?? 'N/A',
+            ],
+        ];
+    }
+
+    /**
      * Check if student is eligible for regular semester progression
      */
     protected function checkRegularSemesterEligibility(StudentEnroll $enrollment): array
@@ -172,6 +330,12 @@ class ProgressionEligibilityService
                 'eligible' => false,
                 'type' => null,
                 'reason' => $result['reason'] ?? null,
+                // A student already sitting in a resit semester can still be
+                // held back by a failed course from the semester it belongs to.
+                // That blocker is reported here rather than by the resit check,
+                // and without carrying it out the portal could say something was
+                // wrong but never which course.
+                'unresolved_courses' => $result['unresolved_courses'] ?? [],
             ];
         }
 
