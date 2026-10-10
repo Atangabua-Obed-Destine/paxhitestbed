@@ -214,10 +214,29 @@ try {
         ResitRequestWindow::noteFor($enrollment->session_id, $semesterType)
             === 'Resit timetable is already published.');
 
-    // The other semester type is a separate sitting.
+    // The other semester type is a separate sitting. It is opened on purpose
+    // first: the school may have closed both of its own accord, and then an
+    // assertion that it is open would be reading the school's configuration
+    // instead of measuring whether one window leaks into the other.
     $otherType = $semesterType === 1 ? 2 : 1;
+    setWindow($enrollment->session_id, $otherType, true);
+    setWindow($enrollment->session_id, $semesterType, false, 'Resit timetable is already published.');
+
     check('closing one semester type does not close the other',
         ResitRequestWindow::acceptsRequests($enrollment->session_id, $otherType));
+
+    // Asserted the other way round as well, because one direction on its own
+    // can pass by accident: a lookup that ignored the semester type would
+    // return whichever row it found first, and if that row happened to be the
+    // open one the check above would read as a pass. Both directions cannot be
+    // satisfied by a single answer for the whole session.
+    setWindow($enrollment->session_id, $otherType, false, 'Other sitting closed.');
+    setWindow($enrollment->session_id, $semesterType, true);
+
+    check('and it holds the other way round too',
+        ResitRequestWindow::acceptsRequests($enrollment->session_id, $semesterType)
+            && !ResitRequestWindow::acceptsRequests($enrollment->session_id, $otherType),
+        'semester type ' . $semesterType . ' should be open and ' . $otherType . ' closed');
 
     setWindow($enrollment->session_id, $semesterType, true);
     check('opening it again lets requests through',

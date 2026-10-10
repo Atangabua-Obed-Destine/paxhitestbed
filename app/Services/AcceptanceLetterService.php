@@ -60,6 +60,10 @@ class AcceptanceLetterService
         $tokens['[fee_breakdown_total_words]'] = $feeData['words'];
         $tokens['[fee_breakdown_total_deadline]'] = $feeData['deadline'];
 
+        $yearTotal = $this->getYearFeeTotalData($student);
+        $tokens['[fee_year_total]'] = $yearTotal['total'];
+        $tokens['[fee_year_total_words]'] = $yearTotal['words'];
+
         return strtr($this->normalizeLetterHtml($setting->acceptance_letter_html), $tokens);
     }
 
@@ -170,6 +174,100 @@ class AcceptanceLetterService
             'words' => $words,
             'deadline' => $dueDateStr
         ];
+    }
+
+    /**
+     * The whole academic year's fee for the student's programme, summed from the
+     * programme fee structure (Programme Semester Fees).
+     *
+     * [fee_breakdown_total] is only the first instalment, so a letter had no way
+     * to quote what the year actually costs — the figure an applicant and their
+     * sponsor most want to see. This adds the year up instead: every active fee
+     * row for the programme across that year's teaching semesters.
+     *
+     * Resit semesters are left out. A resit fee is charged only if a student
+     * fails, so including it would overstate the cost of the year for everyone.
+     *
+     * Every active category counts, not just instalments. If the school adds a
+     * row for insurance or an identity card, it is part of what the year costs
+     * and appears here without anyone having to change this code.
+     *
+     * The year is the earliest one the student is enrolled in — their admission
+     * year — so a letter quotes the same figure whenever it is regenerated,
+     * rather than drifting to Year 2 once the student progresses.
+     *
+     * @return array{total: string, words: string, raw: float, rows: int}
+     */
+    public function getYearFeeTotalData(Student $student): array
+    {
+        $setting = Setting::where('status', '1')->first();
+        $dp = $setting->decimal_place ?? 0;
+        $money = fn ($n) => number_format((float) $n, $dp, '.', ',');
+
+        $empty = ['total' => $money(0), 'words' => 'Zero', 'raw' => 0.0, 'rows' => 0];
+
+        if (!$student->program_id) {
+            return $empty;
+        }
+
+        $student->loadMissing('studentEnrolls.semester');
+
+        // The admission year. Resit semesters carry the year of the course being
+        // resat, so they are excluded here too — otherwise a student sitting a
+        // resit could pin the year the wrong way.
+        $year = $student->studentEnrolls
+            ->map(fn ($e) => $e->semester)
+            ->filter(fn ($s) => $s && !$s->is_resit && $s->year !== null)
+            ->map(fn ($s) => (int) $s->year)
+            ->filter(fn ($y) => $y > 0)
+            ->min();
+
+        $year = $year ?: 1;
+
+        $semesterIds = Semester::where('is_resit', 0)
+            ->where('year', (string) $year)
+            ->whereHas('programs', fn ($q) => $q->where('program_id', $student->program_id))
+            ->pluck('id');
+
+        if ($semesterIds->isEmpty()) {
+            return $empty;
+        }
+
+        $fees = ProgramSemesterFee::where('program_id', $student->program_id)
+            ->whereIn('semester_id', $semesterIds)
+            ->where('status', 1)
+            ->get();
+
+        if ($fees->isEmpty()) {
+            return $empty;
+        }
+
+        $total = (float) $fees->sum(fn ($f) => (float) $f->amount);
+
+        return [
+            'total' => $money($total),
+            'words' => $this->spellOut($total),
+            'raw' => $total,
+            'rows' => $fees->count(),
+        ];
+    }
+
+    /**
+     * An amount written out in words.
+     *
+     * Falls back to the digits rather than to "Zero" when intl is unavailable:
+     * a letter quoting the wrong amount in words is worse than one quoting the
+     * right amount twice.
+     */
+    public function spellOut(float $amount): string
+    {
+        if (!class_exists('NumberFormatter')) {
+            return number_format($amount, 0, '.', ',');
+        }
+
+        $formatter = new \NumberFormatter('en', \NumberFormatter::SPELLOUT);
+
+        return ucwords($formatter->format($amount));
     }
 
     /**
@@ -406,6 +504,32 @@ class AcceptanceLetterService
         $sample['[fee_breakdown_total]'] = '138,500';
         $sample['[fee_breakdown_total_words]'] = 'One Hundred Thirty-Eight Thousand Five Hundred';
         $sample['[fee_breakdown_total_deadline]'] = 'Tuesday, September 30th, ' . date('Y');
+
+        // The preview has no student, so the year total is shown for the first
+        // programme on this degree type — a real configured figure where one
+        // exists, so the admin can tell the placeholder is wired up.
+        $sampleProgram = $degreeType->programs()->first();
+        $sampleYearTotal = 0.0;
+
+        if ($sampleProgram) {
+            $sampleSemesterIds = Semester::where('is_resit', 0)
+                ->where('year', '1')
+                ->whereHas('programs', fn ($q) => $q->where('program_id', $sampleProgram->id))
+                ->pluck('id');
+
+            $sampleYearTotal = (float) ProgramSemesterFee::where('program_id', $sampleProgram->id)
+                ->whereIn('semester_id', $sampleSemesterIds)
+                ->where('status', 1)
+                ->get()
+                ->sum(fn ($f) => (float) $f->amount);
+        }
+
+        if ($sampleYearTotal <= 0) {
+            $sampleYearTotal = 350000;
+        }
+
+        $sample['[fee_year_total]'] = number_format($sampleYearTotal, $setting->decimal_place ?? 0, '.', ',');
+        $sample['[fee_year_total_words]'] = $this->spellOut($sampleYearTotal);
         
         $sample['[payment_deadlines]'] = '<ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">'
             . '<li>- 1st Installment: Tuesday, September 30th, ' . date('Y') . ' being (120,500) One Hundred Twenty Thousand Five Hundred ' . $currency . '</li>'

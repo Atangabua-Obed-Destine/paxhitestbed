@@ -386,7 +386,7 @@
                 <div class="tp-key-item"><span class="tp-key-term">Credit</span> The credit value of the course.</div>
                 <div class="tp-key-item"><span class="tp-key-term">Attempted</span> Credits the student sat for.</div>
                 <div class="tp-key-item"><span class="tp-key-term">Earned</span> Credits passed. A failed course earns none.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Grade Pt</span> The point value of the grade, from the Grading Scale above.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Grade Pt</span> The point value of the grade, from the Grading Scale on this transcript.</div>
                 <div class="tp-key-item"><span class="tp-key-term">Grade</span> The letter grade awarded.</div>
                 <div class="tp-key-item"><span class="tp-key-term">Quality Pts</span> Grade Pt &times; Credit — what the course contributes to the GPA.</div>
                 <div class="tp-key-item"><span class="tp-key-term">Semester GPA</span> Quality Points for the semester &divide; credits attempted in it.</div>

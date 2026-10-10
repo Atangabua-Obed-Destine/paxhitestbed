@@ -229,9 +229,10 @@
                                             <textarea class="form-control texteditor" name="acceptance_letter_html" rows="12">{{ optional($settings)->acceptance_letter_html }}</textarea>
                                             <div class="alert bg-white border mt-2 mb-0">
                                                 <strong>{{ __('Placeholders') }}:</strong>
-                                                [name] [first_name] [last_name] [student_id] [matricule] [program] [degree_type] [faculty] [faculty_title] [faculty_shortcode] [intake] [admission_date] [date] [institution] [address] [email] [phone] [dob] [place_of_birth] [fee_breakdown] [fee_breakdown_total] [fee_breakdown_total_words] [fee_breakdown_total_deadline] [payment_deadlines]
+                                                [name] [first_name] [last_name] [student_id] [matricule] [program] [degree_type] [faculty] [faculty_title] [faculty_shortcode] [intake] [admission_date] [date] [institution] [address] [email] [phone] [dob] [place_of_birth] [fee_breakdown] [fee_breakdown_total] [fee_breakdown_total_words] [fee_breakdown_total_deadline] [fee_year_total] [fee_year_total_words] [payment_deadlines]
                                                 <br><small class="text-muted">{{ __('[fee_breakdown] inserts the Year-1 first-installment fee table from the programme\'s fee configuration (add your own heading above it).') }}</small>
                                                 <br><small class="text-muted">{{ __('[payment_deadlines] inserts a formatted list of all Year-1 regular installment deadlines with spelled-out amounts.') }}</small>
+                                                <br><small class="text-muted">{{ __('[fee_year_total] is the fee for the whole academic year: every fee configured for that year of the programme under Programme Semester Fees, added up — so both installments, plus anything else you have set there. [fee_year_total_words] is the same figure written out in words. [fee_breakdown_total], by contrast, is only the first installment.') }}</small>
                                             </div>
                                         </div>
                                     </div>

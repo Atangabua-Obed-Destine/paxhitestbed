@@ -44,6 +44,15 @@
       overflow: hidden;
     }
 
+    /* --- Letterhead ---
+       The institution's letterhead is shared with every other document, so it
+       is not changed at the source. On a transcript it was taking 56mm of a
+       297mm page — a fifth of the sheet before a single mark was printed — so
+       it is scaled down here only, where the space is needed. */
+    .tp-page .letterhead {
+      zoom: 0.74;
+    }
+
     /* --- Letterhead background --- */
     .tp-letterhead {
       position: absolute;
@@ -62,14 +71,16 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-top: 18px;
-      padding-top: 12px;
+      margin-top: 10px;
+      padding-top: 7px;
       border-top: 1px solid #ccc;
     }
+    /* 70px still scans reliably at this error-correction level; the code is
+       only carrying a short verification URL. */
     .tp-verify-qr {
-      width: 82px;
-      height: 82px;
-      flex: 0 0 82px;
+      width: 70px;
+      height: 70px;
+      flex: 0 0 70px;
     }
     .tp-verify-qr svg { width: 100%; height: 100%; display: block; }
     .tp-verify-text {
@@ -132,14 +143,17 @@
          absolutely positioned at the top of the page. The letterhead is
          now normal flow content rendered above this block, so that
          reservation became an empty band sitting under it. */
-      padding: 24px 42px 40px 42px;
+      /* Tightened so two semesters of marks fit on the sheet with the
+         letterhead, details and signatures. The side margins are kept wide
+         enough to bind or hole-punch without cutting into the record. */
+      padding: 14px 36px 16px 36px;
     }
 
     /* --- Document title --- */
     .tp-doc-title {
       text-align: center;
-      margin-bottom: 16px;
-      padding-bottom: 8px;
+      margin-bottom: 6px;
+      padding-bottom: 4px;
       border-bottom: 2.5px double #1a1a1a;
     }
     .tp-doc-title h2 {
@@ -161,7 +175,7 @@
 
     /* --- Student Information Grid --- */
     .tp-info-section {
-      margin-bottom: 14px;
+      margin-bottom: 8px;
     }
     .tp-info-grid {
       display: table;
@@ -173,8 +187,8 @@
     }
     .tp-info-cell {
       display: table-cell;
-      padding: 3.5px 0;
-      font-size: 11px;
+      padding: 1.5px 0;
+      font-size: 10.5px;
       vertical-align: top;
     }
     /* The label column shrinks to its widest label rather than taking a fixed
@@ -228,9 +242,9 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 7px 14px;
+      padding: 5px 14px;
       /* Below the results table now, so it needs room above rather than below. */
-      margin-top: 16px;
+      margin-top: 9px;
       margin-bottom: 0;
       page-break-inside: avoid;
       border: 1.5px solid #1a1a1a;
@@ -263,6 +277,16 @@
       font-size: 18px;
     }
 
+    /* A semester is kept whole: on a four-semester transcript the page break
+       used to fall in the middle of one, so a reader saw half its courses, its
+       subtotal on the next sheet, and no indication that the two belonged
+       together. A semester that will not fit in the space left moves down
+       intact instead. */
+    .tp-records-table tbody {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
     /* --- Academic Records Table --- */
     .tp-records-table {
       width: 100%;
@@ -289,7 +313,7 @@
 
     /* Semester header row */
     .tp-sem-header td {
-      padding: 8px 4px 4px;
+      padding: 5px 4px 2.5px;
       font-size: 10px;
       font-weight: 800;
       text-transform: uppercase;
@@ -302,7 +326,7 @@
 
     /* Per-semester column headers */
     .tp-col-headers th {
-      padding: 3px 4px;
+      padding: 1.5px 4px;
       font-size: 8px;
       font-weight: 700;
       text-transform: uppercase;
@@ -317,8 +341,11 @@
     }
 
     /* Course rows */
+    /* 1.5px rather than 3px: on a 39-row transcript the row padding alone
+       was costing about 31mm of page, which is what pushed the second
+       semester across the page break. */
     .tp-records-table tbody td {
-      padding: 3px 4px;
+      padding: 1px 4px;
       border-bottom: 0.5px solid #ddd;
       text-align: center;
       font-size: 10px;
@@ -390,7 +417,7 @@
     /* The scale now sits above the results, so its spacing is below it. */
     .tp-grade-scale-top {
       margin-top: 0;
-      margin-bottom: 14px;
+      margin-bottom: 7px;
     }
 
     /* --- Key to the transcript --- */
@@ -455,13 +482,15 @@
 
     /* --- Footer / Signatures --- */
     .tp-footer-section {
-      margin-top: 24px;
+      margin-top: 12px;
       page-break-inside: avoid;
     }
+    /* Still a clear hand's width above the rule to sign in, but 50px left
+       13mm of empty page that the marks needed. */
     .tp-signatures {
       display: flex;
       justify-content: space-between;
-      margin-top: 50px;
+      margin-top: 28px;
     }
     .tp-sig-block {
       text-align: center;
@@ -488,7 +517,7 @@
     /* --- End-of-document marker --- */
     .tp-end-marker {
       text-align: center;
-      margin-top: 18px;
+      margin-top: 8px;
       font-size: 8px;
       color: #999;
       letter-spacing: 3px;
