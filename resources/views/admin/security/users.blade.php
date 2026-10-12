@@ -50,6 +50,27 @@
                         </h3>
                     </div>
                     <div class="card-body">
+                        {{-- Whether these switches decide anything at all.
+
+                             The per-user switch is only consulted when two-factor
+                             is on globally AND not mandatory. With it mandatory,
+                             every account is challenged whatever the switch says;
+                             with it off globally, none are. Both states left the
+                             switch looking like a working control that quietly
+                             changed nothing. --}}
+                        @if($twoFactorPolicy['overridden'])
+                        <div class="alert alert-info d-flex align-items-start" role="alert">
+                            <i class="fas fa-info-circle mt-1 me-2"></i>
+                            <div>
+                                <strong class="d-block">{{ __('These switches are not deciding anything at the moment') }}</strong>
+                                <span>{{ $twoFactorPolicy['explanation'] }}</span>
+                                @can('security-settings')
+                                    <a href="{{ route('admin.security.settings') }}" class="d-block mt-1">{{ __('Change this in Security Settings') }}</a>
+                                @endcan
+                            </div>
+                        </div>
+                        @endif
+
                         <table id="usersTable" class="table table-bordered table-striped table-hover">
                             <thead>
                                 <tr>
@@ -100,17 +121,26 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <div class="custom-control custom-switch">
-                                            <input type="checkbox" 
-                                                   class="custom-control-input toggle-2fa" 
+                                        {{-- form-check/form-switch, not custom-control/custom-switch:
+                                             those are Bootstrap 4 class names and this application
+                                             ships Bootstrap 5, where nothing defines them at all, so
+                                             the control rendered as a bare checkbox with loose text
+                                             beside it instead of a switch. --}}
+                                        <div class="form-check form-switch">
+                                            <input type="checkbox"
+                                                   class="form-check-input toggle-2fa"
+                                                   role="switch"
                                                    id="2fa-{{ $user->id }}"
                                                    data-id="{{ $user->id }}"
                                                    data-type="{{ $userType === 'students' ? 'student' : 'user' }}"
                                                    {{ $user->two_factor_enabled ? 'checked' : '' }}>
-                                            <label class="custom-control-label" for="2fa-{{ $user->id }}">
+                                            <label class="form-check-label" for="2fa-{{ $user->id }}">
                                                 {{ $user->two_factor_enabled ? __('Enabled') : __('Disabled') }}
                                             </label>
                                         </div>
+                                        @if($twoFactorPolicy['overridden'])
+                                          <small class="text-muted">{{ $twoFactorPolicy['short'] }}</small>
+                                        @endif
                                     </td>
                                     <td>
                                         @if($user->isBlocked())

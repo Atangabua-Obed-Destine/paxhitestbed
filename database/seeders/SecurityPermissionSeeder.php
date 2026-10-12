@@ -2,113 +2,60 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Illuminate\Database\Seeder;
 
+/**
+ * Permissions for the security screens.
+ *
+ * These routes were behind `auth:web` alone, which meant any member of staff
+ * who could sign in — a lecturer, a bursar — could open Security → Users and
+ * switch off a Super Admin's two-factor authentication, read the security log,
+ * or change the password policy. The screens that guard the system were the
+ * least guarded in it.
+ *
+ * Usage: php artisan db:seed --class=SecurityPermissionSeeder
+ */
 class SecurityPermissionSeeder extends Seeder
 {
     public function run()
     {
         $permissions = [
-    [
-        'name' => 'security-dashboard-view',
-        'title' => 'View Security Dashboard',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-audit-view',
-        'title' => 'View Audit Logs',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-audit-export',
-        'title' => 'Export Audit Logs',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-login-history-view',
-        'title' => 'View Login History',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-active-sessions-view',
-        'title' => 'View Active Sessions',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-active-sessions-terminate',
-        'title' => 'Terminate Active Sessions',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-failed-logins-view',
-        'title' => 'View Failed Logins',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-ip-whitelist-view',
-        'title' => 'View IP Whitelist',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-ip-whitelist-manage',
-        'title' => 'Manage IP Whitelist',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-blocked-ips-view',
-        'title' => 'View Blocked IPs',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-    [
-        'name' => 'security-blocked-ips-manage',
-        'title' => 'Manage Blocked IPs',
-        'group' => 'Security',
-        'guard_name' => 'web',
-    ],
-];
+            ['name' => 'security-view', 'guard_name' => 'web', 'group' => 'Security', 'title' => 'View Security Screens'],
+            ['name' => 'security-manage', 'guard_name' => 'web', 'group' => 'Security', 'title' => 'Block Users, Toggle 2FA, Manage IPs'],
+            ['name' => 'security-settings', 'guard_name' => 'web', 'group' => 'Security', 'title' => 'Change Security Settings'],
+        ];
 
-        $permNames = [];
-        foreach ($permissions as $perm) {
-            if (is_array($perm)) {
-                $name = $perm['name'] ?? $perm[0] ?? null;
-                if (!$name) continue;
-                
-                $guard = $perm['guard_name'] ?? 'web';
-                $title = $perm['title'] ?? null;
-                $group = $perm['group'] ?? null;
-                
-                $updateData = [];
-                if ($title) $updateData['title'] = $title;
-                if ($group) $updateData['group'] = $group;
-
-                Permission::updateOrCreate(
-                    ['name' => $name, 'guard_name' => $guard],
-                    $updateData
-                );
-                $permNames[] = $name;
-            } else {
-                Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
-                $permNames[] = $perm;
-            }
+        foreach ($permissions as $permission) {
+            Permission::updateOrCreate(
+                ['name' => $permission['name'], 'guard_name' => $permission['guard_name']],
+                $permission
+            );
         }
 
-        // Try to assign to sensible roles
-        $adminRole = Role::where('name', 'Admin')->first();
-        if ($adminRole) $adminRole->givePermissionTo($permNames);
-        
-        $superAdminRole = Role::where('name', 'Super Admin')->first();
-        if ($superAdminRole) $superAdminRole->givePermissionTo($permNames);
+        echo "✓ Security permissions created successfully!\n";
+
+        // Only the two administrative roles. Deliberately not handed to every
+        // role that happens to exist: the point of this seeder is that these
+        // screens stop being open to everyone.
+        $adminRoles = Role::whereIn('name', ['Super Admin', 'Admin'])->get();
+
+        foreach ($adminRoles as $role) {
+            foreach ($permissions as $permission) {
+                $role->givePermissionTo($permission['name']);
+            }
+            echo "✓ Granted to role: {$role->name}\n";
+        }
+
+        if ($adminRoles->isEmpty()) {
+            echo "⚠ Warning: no Super Admin or Admin role found. Grant these by hand or nobody can open Security.\n";
+        }
+
+        // Spatie caches the permission map; without this the new permissions
+        // are not visible until the cache happens to expire.
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+        echo "All done! Security screens are now restricted.\n";
     }
 }

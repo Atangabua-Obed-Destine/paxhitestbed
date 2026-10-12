@@ -61,6 +61,42 @@ class SecurityController extends Controller
     /**
      * Display user management page
      */
+    /**
+     * Whether the per-user two-factor switches on this screen decide anything.
+     *
+     * The switch is only consulted when two-factor is on globally AND is not
+     * mandatory. Mandatory challenges everyone whatever the switch says; off
+     * globally challenges nobody. In both cases the switch still saved, still
+     * said "Enabled", and still changed nothing about signing in - so the
+     * screen has to say which of the three it is.
+     */
+    private function twoFactorPolicy(string $userType): array
+    {
+        $isStudent = $userType === 'students';
+        $who = $isStudent ? __('students') : __('staff');
+
+        $enabled = (bool) SecuritySetting::getValue($isStudent ? 'enable_2fa_student' : 'enable_2fa_admin', false);
+        $mandatory = (bool) SecuritySetting::getValue($isStudent ? '2fa_mandatory_student' : '2fa_mandatory_admin', false);
+
+        if (!$enabled) {
+            return [
+                'overridden' => true,
+                'short' => __('no effect'),
+                'explanation' => __('Two-factor authentication is switched off for :who in Security Settings, so nobody is asked for a code and these switches change nothing.', ['who' => $who]),
+            ];
+        }
+
+        if ($mandatory) {
+            return [
+                'overridden' => true,
+                'short' => __('always on'),
+                'explanation' => __('Two-factor authentication is mandatory for :who, so every one of them is asked for a code whatever these switches say.', ['who' => $who]),
+            ];
+        }
+
+        return ['overridden' => false, 'short' => '', 'explanation' => ''];
+    }
+
     public function users(Request $request)
     {
         $userType = $request->get('type', 'users');
@@ -111,7 +147,9 @@ class SecurityController extends Controller
                 ->get();
         }
 
-        return view('admin.security.users', compact('users', 'userType', 'orphanedAttempts'));
+        $twoFactorPolicy = $this->twoFactorPolicy($userType);
+
+        return view('admin.security.users', compact('users', 'userType', 'orphanedAttempts', 'twoFactorPolicy'));
     }
 
     /**

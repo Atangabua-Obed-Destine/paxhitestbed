@@ -1509,38 +1509,42 @@ Route::middleware(['auth:student', 'XSS'])->prefix('student')->name('student.')-
 
 // Security Management Routes (Outside platform fee check - always accessible to admins)
 Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Admin')->prefix('admin')->group(function () {
+    // These screens were behind auth:web alone, so any member of staff who
+    // could sign in could open them - a lecturer was able to switch off a
+    // Super Admin's two-factor authentication. Reading is separated from
+    // acting, and changing the policy itself is separated again.
     Route::prefix('security')->name('security.')->group(function () {
-        Route::get('dashboard', 'SecurityController@dashboard')->name('dashboard');
-        
-        // User Management
-        Route::get('users', 'SecurityController@users')->name('users');
-        Route::post('users/block', 'SecurityController@blockUser')->name('users.block');
-        Route::post('users/unblock', 'SecurityController@unblockUser')->name('users.unblock');
-        Route::post('users/reset-attempts', 'SecurityController@resetAttempts')->name('users.reset-attempts');
-        Route::post('users/reset-orphaned', 'SecurityController@resetOrphanedAttempts')->name('users.reset-orphaned');
-        
-        // Security Logs
-        Route::get('logs', 'SecurityController@logs')->name('logs');
-        Route::post('logs/clear', 'SecurityController@clearLogs')->name('logs.clear');
-        
-        // IP Whitelist Management
-        Route::get('whitelist', 'SecurityController@whitelist')->name('whitelist');
-        Route::post('whitelist/add', 'SecurityController@addToWhitelist')->name('whitelist.add');
-        Route::post('whitelist/remove', 'SecurityController@removeFromWhitelist')->name('whitelist.remove');
-        Route::post('whitelist/toggle', 'SecurityController@toggleWhitelist')->name('whitelist.toggle');
-        
-        // Blocked IPs Management
-        Route::get('blocked-ips', 'SecurityController@blockedIps')->name('blocked-ips');
-        Route::post('blocked-ips/unblock', 'SecurityController@unblockIp')->name('blocked-ips.unblock');
-        Route::post('blocked-ips/block', 'SecurityController@blockIp')->name('blocked-ips.block');
-        Route::post('blocked-ips/clear-all', 'SecurityController@clearAllBlocks')->name('blocked-ips.clear-all');
-        
-        // Security Settings
-        Route::get('settings', 'SecurityController@settings')->name('settings');
-        Route::post('settings', 'SecurityController@updateSettings')->name('settings.update');
-        
-        // Two-Factor Authentication
-        Route::post('users/toggle-2fa', 'SecurityController@toggle2FA')->name('users.toggle-2fa');
+        Route::middleware('permission:security-view')->group(function () {
+            Route::get('dashboard', 'SecurityController@dashboard')->name('dashboard');
+            Route::get('users', 'SecurityController@users')->name('users');
+            Route::get('logs', 'SecurityController@logs')->name('logs');
+            Route::get('whitelist', 'SecurityController@whitelist')->name('whitelist');
+            Route::get('blocked-ips', 'SecurityController@blockedIps')->name('blocked-ips');
+        });
+
+        Route::middleware('permission:security-manage')->group(function () {
+            Route::post('users/block', 'SecurityController@blockUser')->name('users.block');
+            Route::post('users/unblock', 'SecurityController@unblockUser')->name('users.unblock');
+            Route::post('users/reset-attempts', 'SecurityController@resetAttempts')->name('users.reset-attempts');
+            Route::post('users/reset-orphaned', 'SecurityController@resetOrphanedAttempts')->name('users.reset-orphaned');
+            Route::post('users/toggle-2fa', 'SecurityController@toggle2FA')->name('users.toggle-2fa');
+
+            Route::post('logs/clear', 'SecurityController@clearLogs')->name('logs.clear');
+
+            Route::post('whitelist/add', 'SecurityController@addToWhitelist')->name('whitelist.add');
+            Route::post('whitelist/remove', 'SecurityController@removeFromWhitelist')->name('whitelist.remove');
+            Route::post('whitelist/toggle', 'SecurityController@toggleWhitelist')->name('whitelist.toggle');
+
+            Route::post('blocked-ips/unblock', 'SecurityController@unblockIp')->name('blocked-ips.unblock');
+            Route::post('blocked-ips/block', 'SecurityController@blockIp')->name('blocked-ips.block');
+            Route::post('blocked-ips/clear-all', 'SecurityController@clearAllBlocks')->name('blocked-ips.clear-all');
+        });
+
+        // The policy itself, so a step above managing it.
+        Route::middleware('permission:security-settings')->group(function () {
+            Route::get('settings', 'SecurityController@settings')->name('settings');
+            Route::post('settings', 'SecurityController@updateSettings')->name('settings.update');
+        });
     });
 
 }); // End of admin route group
