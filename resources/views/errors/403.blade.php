@@ -122,7 +122,7 @@
                                 <div class="col-sm-12">
                                     <div class="card">
                                         <div class="card-header">
-                                            <h5>{{ __('error_404_title') }}</h5>
+                                            <h5>{{ __('error_403_title') }}</h5>
                                         </div>
                                         <div class="card-block">
                                             <a onclick="history.back()" class="btn btn-info">{{ __('btn_back') }}</a>

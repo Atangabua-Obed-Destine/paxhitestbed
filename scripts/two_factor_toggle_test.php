@@ -130,6 +130,22 @@ if (!$lecturer) {
         check('the Super Admin\'s setting is untouched by the attempt',
             (bool) User::find($admin->id)->two_factor_enabled === $before,
             'the refusal has to actually refuse, not merely redirect afterwards');
+
+        // What the refusal LOOKS like, not only its status. errors/403.blade.php
+        // was a copy of the 404 page, so a permission refusal read as "Error
+        // 404, maybe this page not exist" - sending whoever saw it hunting for
+        // a broken route instead of a missing permission.
+        $refusalRequest = Request::create('/admin/security/users', 'GET');
+        $refusalRequest->setLaravelSession(app('session.store'));
+        $refusalPage = $kernel->handle($refusalRequest)->getContent();
+
+        check('the refusal page does not claim the page is missing',
+            !str_contains($refusalPage, 'Error 404'),
+            'a 403 dressed as a 404 hands a wrong diagnosis to whoever reads it');
+
+        check('it says the problem is permission',
+            stripos($refusalPage, 'permission') !== false,
+            'so that granting the role is the obvious next step');
     } finally {
         DB::rollBack();
     }

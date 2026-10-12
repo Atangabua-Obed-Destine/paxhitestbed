@@ -2902,5 +2902,6 @@
     "enter_amount": "Enter an amount",
     "max": "Most you can apply",
     "no_unpaid_fees_found": "This student has no fee with a balance, so there is nothing to apply this credit to. It will be applied automatically to their next fee, or it can be refunded.",
-    "apply_credit": "Apply Credit"
+    "apply_credit": "Apply Credit",
+    "error_403_title": "You do not have permission to open this page. If you think you should, ask an administrator to grant it to your role."
 }
