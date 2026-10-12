@@ -1137,6 +1137,9 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('staff-assignment/get-courses', 'StaffAssignmentController@getCourses')->name('staff-assignment.get-courses');
 
     // Env Setting Routes
+    // Declared before the resource so it cannot be swallowed by a generated
+    // route, and kept behind the same setting-mail permission as the screen.
+    Route::post('setting/mail-setting/test','MailSettingController@test')->name('mail-setting.test');
     Route::resource('setting/mail-setting','MailSettingController');
     Route::resource('setting/sms-setting','SMSSettingController');
     Route::resource('setting/payment-setting','PaymentSettingController');

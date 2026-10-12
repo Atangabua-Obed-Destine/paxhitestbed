@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Flasher\Laravel\Facade\Flasher;
 use App\Traits\EnvironmentVariable;
+use App\Services\MailSettingTester;
 use Illuminate\Http\Request;
 use App\Models\MailSetting;
 
@@ -100,5 +101,43 @@ class MailSettingController extends Controller
         Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
 
         return redirect()->back();
+    }
+
+    /**
+     * Try the settings on screen and report how far they get.
+     *
+     * Takes the values from the form rather than from the saved row, so a
+     * wrong password can be corrected and proved before it is saved over a
+     * working one. Nothing here writes to the database or to .env.
+     */
+    public function test(Request $request, MailSettingTester $tester)
+    {
+        $request->validate([
+            'driver' => 'required|in:smtp,sendmail',
+            'test_email' => 'required|email',
+        ]);
+
+        $saved = MailSetting::where('status', '1')->first();
+
+        $config = [
+            'driver' => $request->input('driver'),
+            'host' => trim((string) $request->input('host')),
+            'port' => trim((string) $request->input('port')),
+            'username' => trim((string) $request->input('username')),
+            // An untouched password field posts the value already on screen.
+            // Falling back to the saved one covers a browser that declines to
+            // autofill it, so the test is not failed by a blank it invented.
+            'password' => $request->filled('password')
+                ? (string) $request->input('password')
+                : (string) optional($saved)->password,
+            'encryption' => (string) $request->input('encryption'),
+            'sender_email' => trim((string) $request->input('sender_email')),
+            'sender_name' => trim((string) $request->input('sender_name')),
+            'reply_email' => trim((string) $request->input('reply_email')),
+        ];
+
+        return response()->json(
+            $tester->run($config, trim((string) $request->input('test_email')))
+        );
     }
 }
