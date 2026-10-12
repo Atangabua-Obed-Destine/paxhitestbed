@@ -18,6 +18,7 @@ use App\Traits\FileUploader;
 use App\Models\Designation;
 use App\Models\MailSetting;
 use App\Mail\SendPassword;
+use App\Services\StaffCredentialsMailer;
 use App\Models\Department;
 use App\Models\District;
 use App\Models\Province;
@@ -448,18 +449,48 @@ class UserController extends Controller
             $user->programs()->attach($request->programs);
 
             DB::commit();
-
-
-            Flasher::addSuccess(__('msg_created_successfully'), __('msg_success'));
-
-            return redirect()->route($this->route.'.index');
         }
         catch(\Exception $e){
+
+            // Was missing, so a failed create left the transaction open until
+            // the connection closed.
+            DB::rollBack();
+
+            // Logged, because it was not. A duplicate staff ID failed here for
+            // a long time showing nothing but "could not create", which left
+            // nobody anything to go on.
+            \Illuminate\Support\Facades\Log::error('Staff account creation failed: ' . $e->getMessage(), [
+                'email' => $request->email,
+                'exception' => get_class($e),
+            ]);
 
             Flasher::addError(__('msg_created_error'), __('msg_error'));
 
             return redirect()->back();
         }
+
+        // Sent after the commit and outside the try above, on purpose. The
+        // account is what matters; a mail server that is down must not make a
+        // staff account that was created look like one that failed. The
+        // administrator is told either way and can send it again from the
+        // staff list.
+        if ($request->boolean('send_credentials')) {
+            $outcome = app(StaffCredentialsMailer::class)->send($user);
+
+            if ($outcome['sent']) {
+                Flasher::addSuccess(__('Staff account created. Login details were emailed to :email.', [
+                    'email' => $user->email,
+                ]), __('msg_success'));
+            } else {
+                Flasher::addWarning(__('Staff account created, but the login details were not sent — :reason. Use "Send Password" on the staff list to try again.', [
+                    'reason' => $outcome['reason'],
+                ]), __('msg_error'));
+            }
+        } else {
+            Flasher::addSuccess(__('msg_created_successfully'), __('msg_success'));
+        }
+
+        return redirect()->route($this->route.'.index');
     }
 
     /**
@@ -811,36 +842,20 @@ class UserController extends Controller
      */
     public function sendPassword($id)
     {
-        //
         $user = User::where('id', $id)->firstOrFail();
 
-        $mail = MailSetting::where('status', '1')->first();
+        // The same path the create screen uses, so the two cannot drift apart.
+        $outcome = app(StaffCredentialsMailer::class)->send($user);
 
-        if(isset($mail->sender_email) && isset($mail->sender_name)){
-
-            $sendTo = $user->email;
-            $receiver = $user->first_name.' '.$user->last_name;
-
-            // Passing data to email template
-            $data['name'] = $user->first_name.' '.$user->last_name;
-            $data['staff_id'] = $user->staff_id;
-            $data['email'] = $user->email;
-            $data['password'] = Crypt::decryptString($user->password_text);
-
-            // Mail Information
-            $data['subject'] = __('msg_your_login_credentials');
-            $data['from'] = $mail->sender_email;
-            $data['sender'] = $mail->sender_name;
-
-
-            // Send Mail
-            Mail::to($sendTo, $receiver)->send(new SendPassword($data));
-
-
+        if ($outcome['sent']) {
             Flasher::addSuccess(__('msg_sent_successfully'), __('msg_success'));
-        }
-        else{
-            Flasher::addSuccess(__('msg_receiver_not_found'), __('msg_success'));
+        } else {
+            // Reported as an error. This used to flash success whatever
+            // happened, and an unconfigured mail server read to the
+            // administrator as a credential that had been delivered.
+            Flasher::addError(__('Login details were not sent — :reason.', [
+                'reason' => $outcome['reason'],
+            ]), __('msg_error'));
         }
 
         return redirect()->back();

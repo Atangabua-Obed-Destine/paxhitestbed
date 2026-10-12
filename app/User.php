@@ -254,24 +254,31 @@ class User extends Authenticatable
             // the digits after character 3, which is only right while the code
             // happens to be three letters long.
             $prefix = \App\Models\Setting::matriculePrefix();
+            $offset = strlen($prefix) + 1;
 
-            $lastStaff = self::where('staff_id', 'LIKE', $prefix . '%')
-                            ->orderBy('staff_id', 'desc')
-                            ->first();
+            // Highest by NUMBER, not by text. The ids in use are a mix of
+            // widths — PAX0027, PAX00028 and PAX000213 all exist — and sorting
+            // them as strings ranked PAX0027 above PAX000213. The generator
+            // then proposed 28, which was already taken, so every staff account
+            // created without a typed-in id died on the unique index and the
+            // administrator saw only a generic failure.
+            $highest = (int) self::where('staff_id', 'LIKE', $prefix . '%')
+                ->selectRaw("MAX(CAST(SUBSTRING(staff_id, {$offset}) AS UNSIGNED)) AS highest")
+                ->value('highest');
 
-            if ($lastStaff) {
-                // Extract the numeric part and increment
-                $lastNumber = (int) substr($lastStaff->staff_id, strlen($prefix));
-                $newNumber = $lastNumber + 1;
-            } else {
-                // First staff member
-                $newNumber = 1;
+            // Then the first number that is genuinely free. Those mixed widths
+            // mean "one past the highest" is not by itself proof of an unused
+            // id, and two people adding staff in the same minute would
+            // otherwise both be handed it.
+            for ($number = max($highest, 0) + 1; $number <= $highest + 1000; $number++) {
+                $candidate = $prefix . str_pad($number, 5, '0', STR_PAD_LEFT);
+
+                if (!self::where('staff_id', $candidate)->exists()) {
+                    return $candidate;
+                }
             }
 
-            // Format with leading zeros (5 digits)
-            $staffId = $prefix . str_pad($newNumber, 5, '0', STR_PAD_LEFT);
-
-            return $staffId;
+            throw new \RuntimeException('Could not find a free staff ID after 1000 attempts.');
 
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Staff ID Generation Error: ' . $e->getMessage());

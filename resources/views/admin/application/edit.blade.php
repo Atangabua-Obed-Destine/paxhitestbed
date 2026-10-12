@@ -837,7 +837,26 @@
               $mayGiveFinalApproval = $approval['current'] === $finalStep
                   && optional(auth('web')->user())->can(\App\Models\Application::approvalStepMap()[$finalStep]['permission']);
             @endphp
-            @if($approval['complete'])
+            @php
+              // Worked out before the button, not after it. The page used to
+              // offer "Create student record" to an application that had
+              // already been converted, so an administrator returning to it saw
+              // the same button and no sign that it had worked - and a second
+              // press was stopped only by a unique-email error.
+              $alreadyConverted = \App\Models\Student::where('registration_no', $row->registration_no)->first();
+            @endphp
+            @if($alreadyConverted)
+              <p class="mb-2">
+                <i class="fas fa-check-circle text-success"></i>
+                {{ __('This application has been converted. :name was admitted as :matricule.', [
+                    'name' => trim($alreadyConverted->first_name . ' ' . $alreadyConverted->last_name),
+                    'matricule' => $alreadyConverted->student_id,
+                ]) }}
+              </p>
+              <a href="{{ route('admin.student.show', $alreadyConverted->id) }}" class="btn btn-outline-primary">
+                <i class="fas fa-user"></i> {{ __('Open the student record') }}
+              </a>
+            @elseif($approval['complete'])
               <p class="text-muted">{{ __('Every approval is in. The student profile can be created from this application.') }}</p>
               <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#convertApplicationModal">
                 <i class="fas fa-user-check"></i> {{ __('Create student record') }}
@@ -874,7 +893,7 @@
             </p>
 
             @php
-                $convertedStudent = \App\Models\Student::where('registration_no', $row->registration_no)->first();
+                $convertedStudent = $alreadyConverted;
             @endphp
             @if($convertedStudent)
             <div class="mt-3">
@@ -1277,9 +1296,51 @@
             </div>
           </div>
         </div>
+
+        {{-- The confirmation step.
+
+             Creating the record spends a matricule, raises the programme's
+             fees and emails the student their login the moment it is pressed.
+             None of that can be taken back from this screen, and the details
+             that decide it - batch, programme, session, semester - are chosen
+             from six dropdowns that all default to something plausible. So the
+             choices are read back in words before anything is written. --}}
+        <div class="modal-body d-none" id="convert-confirm-step">
+          <div class="alert alert-warning" role="alert">
+            <h6 class="alert-heading mb-2">
+              <i class="fas fa-exclamation-triangle"></i> {{ __('This cannot be undone from this screen') }}
+            </h6>
+            <p class="mb-2">{{ __('Pressing the button below will, straight away:') }}</p>
+            <ul class="mb-2 ps-3">
+              <li>{{ __('issue a matricule, which is spent for good even if the record is later deleted') }}</li>
+              <li>{{ __('enrol the student on the batch, programme, session and semester shown below') }}</li>
+              <li>{{ __('raise that programme\'s fees against them') }}</li>
+              <li>{{ __('email the student their portal login, and the acceptance letter') }}</li>
+              <li id="convert-confirm-approval-note" class="d-none">{{ __('record the final approval in your name') }}</li>
+            </ul>
+            <p class="mb-0 small">{{ __('Emails cannot be recalled. Check every line below before you continue.') }}</p>
+          </div>
+
+          <div id="convert-confirm-warnings"></div>
+
+          <table class="table table-sm mb-0" id="convert-confirm-table">
+            <tbody></tbody>
+          </table>
+        </div>
+
         <div class="modal-footer">
-          <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('btn_close') }}</button>
-          <button type="submit" class="btn btn-primary">{{ __('btn_submit') }}</button>
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal" id="convert-close-btn">{{ __('btn_close') }}</button>
+          <button type="button" class="btn btn-light d-none" id="convert-back-btn">
+            <i class="fas fa-arrow-left"></i> {{ __('Back to the details') }}
+          </button>
+          {{-- type="button": nothing can be submitted until the details have
+               been read back. --}}
+          <button type="button" class="btn btn-primary" id="convert-review-btn">{{ __('btn_submit') }}</button>
+          {{-- Disabled while hidden, so pressing Enter in a field cannot submit
+               the form past the confirmation step. --}}
+          <button type="submit" class="btn btn-danger d-none" id="convert-confirm-btn" disabled>
+            <i class="fas fa-user-check"></i> {{ __('Yes, create the student record') }}
+          </button>
         </div>
       </form>
     </div>
@@ -1288,6 +1349,176 @@
 @endsection
 
 @section('page_js')
+<script>
+(function () {
+  "use strict";
+
+  var form = document.getElementById('convert-application-form');
+  if (!form) { return; }
+
+  var formStep    = form.querySelector('.modal-body');
+  var confirmStep = document.getElementById('convert-confirm-step');
+  var reviewBtn   = document.getElementById('convert-review-btn');
+  var confirmBtn  = document.getElementById('convert-confirm-btn');
+  var backBtn     = document.getElementById('convert-back-btn');
+  var closeBtn    = document.getElementById('convert-close-btn');
+  var tableBody   = document.querySelector('#convert-confirm-table tbody');
+  var warnings    = document.getElementById('convert-confirm-warnings');
+  var approvalNote= document.getElementById('convert-confirm-approval-note');
+
+  if (!formStep || !confirmStep || !reviewBtn || !confirmBtn) { return; }
+
+  // Creating the record gives the last approval too, but only when it has not
+  // already been given; the button's own wording is where that is known.
+  var givesFinalApproval = document.querySelector('[data-bs-target="#convertApplicationModal"]') &&
+      /Approve/i.test(document.querySelector('[data-bs-target="#convertApplicationModal"]').textContent || '');
+
+  function escapeHtml(value) {
+    var holder = document.createElement('div');
+    holder.textContent = value === null || value === undefined ? '' : value;
+    return holder.innerHTML;
+  }
+
+  function selectedText(id) {
+    var field = document.getElementById(id);
+    if (!field) { return ''; }
+    if (field.tagName === 'SELECT') {
+      if (field.multiple) {
+        return Array.prototype.filter.call(field.options, function (o) { return o.selected; })
+          .map(function (o) { return o.text.trim(); }).join(', ');
+      }
+      var option = field.options[field.selectedIndex];
+      return option ? option.text.trim() : '';
+    }
+    return (field.value || '').trim();
+  }
+
+  function hidden(name) {
+    var field = form.querySelector('input[type="hidden"][name="' + name + '"]');
+    return field ? (field.value || '').trim() : '';
+  }
+
+  function row(label, value, muted) {
+    var shown = value === '' || value === null || value === undefined
+      ? '<span class="text-muted">' + {!! json_encode(__('Not set')) !!} + '</span>'
+      : escapeHtml(value);
+
+    return '<tr><th scope="row" class="w-50 fw-normal text-muted">' + escapeHtml(label) + '</th>'
+         + '<td class="' + (muted ? 'text-muted' : 'fw-bold') + '">' + shown + '</td></tr>';
+  }
+
+  /** Whether the programme chosen is one the applicant actually asked for. */
+  function programmeNotes() {
+    var programField = document.getElementById('convert_program');
+    var notes = [];
+
+    if (!programField || !programField.value) { return notes; }
+
+    var choices = document.querySelectorAll('#convertApplicationModal .choice-row[data-program]');
+    if (!choices.length) { return notes; }
+
+    var matched = null;
+    Array.prototype.forEach.call(choices, function (choiceRow, index) {
+      if (String(choiceRow.getAttribute('data-program')) === String(programField.value)) {
+        matched = index;
+      }
+    });
+
+    if (matched === null) {
+      notes.push({
+        level: 'danger',
+        text: {!! json_encode(__('The programme selected is not one the applicant applied for. Check this is deliberate.')) !!}
+      });
+    } else if (matched > 0) {
+      notes.push({
+        level: 'info',
+        text: {!! json_encode(__('This is not the applicant\'s first choice. That is allowed, but worth being sure about.')) !!}
+      });
+    }
+
+    return notes;
+  }
+
+  function build() {
+    var studentName = (hidden('first_name') + ' ' + hidden('last_name')).trim();
+
+    tableBody.innerHTML =
+        row({!! json_encode(__('Student')) !!}, studentName)
+      + row({!! json_encode(__('field_email')) !!}, hidden('email'), true)
+      + row({!! json_encode(__('Registration no.')) !!}, hidden('registration_no'), true)
+      + row({!! json_encode(__('field_admission_date')) !!}, selectedText('convert_admission_date'))
+      + row({!! json_encode(__('field_batch')) !!}, selectedText('convert_batch'))
+      + row({!! json_encode(__('field_faculty')) !!}, selectedText('convert_faculty'))
+      + row({!! json_encode(__('field_program')) !!}, selectedText('convert_program'))
+      + row({!! json_encode(__('field_session')) !!}, selectedText('convert_session'))
+      + row({!! json_encode(__('field_semester')) !!}, selectedText('convert_semester'))
+      + row({!! json_encode(__('field_section')) !!}, selectedText('convert_section'))
+      + row({!! json_encode(__('field_status')) !!}, selectedText('convert_statuses'), true);
+
+    var notes = programmeNotes();
+    warnings.innerHTML = notes.map(function (note) {
+      return '<div class="alert alert-' + note.level + ' py-2 small">'
+           + '<i class="fas fa-info-circle"></i> ' + escapeHtml(note.text) + '</div>';
+    }).join('');
+
+    if (approvalNote) {
+      approvalNote.classList.toggle('d-none', !givesFinalApproval);
+    }
+  }
+
+  function showConfirm() {
+    build();
+    formStep.classList.add('d-none');
+    confirmStep.classList.remove('d-none');
+    reviewBtn.classList.add('d-none');
+    closeBtn.classList.add('d-none');
+    backBtn.classList.remove('d-none');
+    confirmBtn.classList.remove('d-none');
+    confirmBtn.disabled = false;
+    confirmBtn.focus();
+  }
+
+  function showForm() {
+    formStep.classList.remove('d-none');
+    confirmStep.classList.add('d-none');
+    reviewBtn.classList.remove('d-none');
+    closeBtn.classList.remove('d-none');
+    backBtn.classList.add('d-none');
+    confirmBtn.classList.add('d-none');
+    // Disabled again, so Enter in a field cannot reach it from the form step.
+    confirmBtn.disabled = true;
+  }
+
+  reviewBtn.addEventListener('click', function () {
+    // The required fields are still enforced first: there is no point
+    // confirming a set of details that will be refused on submit.
+    if (!form.checkValidity()) {
+      form.classList.add('was-validated');
+      form.reportValidity();
+      return;
+    }
+    showConfirm();
+  });
+
+  if (backBtn) { backBtn.addEventListener('click', showForm); }
+
+  // Submitting takes a few seconds (it sends two emails), and a second press
+  // would try to admit the same applicant twice.
+  form.addEventListener('submit', function () {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> '
+      + {!! json_encode(__('Creating the record\u2026')) !!};
+    if (backBtn) { backBtn.disabled = true; }
+  });
+
+  // Reopening the modal always starts at the details again, never on a stale
+  // confirmation built from values that have since changed.
+  var modalElement = document.getElementById('convertApplicationModal');
+  if (modalElement) {
+    modalElement.addEventListener('hidden.bs.modal', showForm);
+  }
+})();
+</script>
 <script src="{{ asset('dashboard/plugins/lightbox2-master/js/lightbox.min.js') }}"></script>
 @php
   $conversionErrorKeys = collect($errors->keys())

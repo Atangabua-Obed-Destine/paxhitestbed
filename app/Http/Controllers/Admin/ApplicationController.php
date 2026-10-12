@@ -155,6 +155,21 @@ class ApplicationController extends Controller
             return redirect()->back()->withInput();
         }
 
+        // Already converted. Without this the second attempt was stopped only
+        // by the unique rule on the e-mail address, which told the
+        // administrator "the email has already been taken" - true, but no help
+        // at all in working out that the student already exists.
+        $existing = Student::where('registration_no', $request->registration_no)->first();
+
+        if ($existing) {
+            Flasher::addWarning(__('A student record already exists for this application: :name (:matricule). Nothing was created.', [
+                'name' => trim($existing->first_name . ' ' . $existing->last_name),
+                'matricule' => $existing->student_id,
+            ]), __('msg_warning'));
+
+            return redirect()->route($this->route . '.index');
+        }
+
         // Field Validation
         $request->validate([
             'batch' => 'required',
@@ -302,32 +317,10 @@ class ApplicationController extends Controller
             // write and the next number is used instead.
             Student::saveWithIssuedId($application, $facultyId, $request->batch, $request->program);
 
-            // Send Login Credentials
-            $mail = MailSetting::where('status', '1')->first();
-
-            if(isset($mail->sender_email) && isset($mail->sender_name)){
-                $sendTo = $application->email;
-                $receiver = $application->first_name.' '.$application->last_name;
-
-                // Passing data to email template
-                $mailData['name'] = $application->first_name.' '.$application->last_name;
-                $mailData['student_id'] = $application->student_id;
-                $mailData['email'] = $application->email;
-                $mailData['password'] = $password;
-
-                // Mail Information
-                $mailData['subject'] = __('msg_your_login_credentials');
-                $mailData['from'] = $mail->sender_email;
-                $mailData['sender'] = $mail->sender_name;
-
-                // Send Mail
-                try {
-                    Mail::to($sendTo, $receiver)->send(new SendPassword($mailData));
-                } catch (\Exception $e) {
-                    // Log error but don't fail the transaction
-                    \Illuminate\Support\Facades\Log::error("Failed to send credential email: " . $e->getMessage());
-                }
-            }
+            // The login credentials used to be emailed right here, inside the
+            // transaction. Mail cannot be rolled back, so a failure further
+            // down sent a student the password to an account that then ceased
+            // to exist. It is sent after the commit instead, below.
 
 
             // Attach Status
@@ -457,37 +450,85 @@ class ApplicationController extends Controller
             );
 
             DB::commit();
-
-            // Email the acceptance letter (PDF) configured for this degree type, if enabled.
-            // Sent after commit so the student + enrollment are fully persisted; never breaks the flow.
-            $letterSent = false;
-            $letterError = null;
-            try {
-                $letterSent = (bool) app(\App\Services\AcceptanceLetterService::class)->sendTo($application);
-            } catch (\Throwable $e) {
-                $letterError = $e->getMessage();
-                \Illuminate\Support\Facades\Log::error('Acceptance letter send failed: ' . $letterError);
-            }
-
-            if ($letterSent) {
-                Flasher::addSuccess(__('Acceptance letter emailed to') . ' ' . $application->email, __('msg_success'));
-            } elseif ($letterError) {
-                Flasher::addWarning(__('Student created, but the acceptance letter email failed to send. You can resend it from the application page.'), __('msg_warning'));
-            } else {
-                // Not sent because template disabled, mail not configured, or student has no email.
-                Flasher::addInfo(__('Student created. Acceptance letter was not emailed (template disabled, mail not configured, or missing email).'), __('msg_info'));
-            }
-
-            Flasher::addSuccess(__('msg_created_successfully'), __('msg_success'));
-
-            return redirect()->route($this->route.'.index');
         }
         catch(\Exception $e){
 
+            // Was missing: a failed conversion left the transaction open until
+            // the connection closed, and the only trace of why was a generic
+            // flash with nothing written down anywhere.
+            DB::rollBack();
+
+            \Illuminate\Support\Facades\Log::error('Application conversion failed: ' . $e->getMessage(), [
+                'application' => optional($source)->id,
+                'registration_no' => $request->registration_no,
+                'exception' => get_class($e),
+            ]);
+
             Flasher::addError(__('msg_created_error'), __('msg_error'));
 
-            return redirect()->back();
+            return redirect()->back()->withInput();
         }
+
+        // --- Everything below runs only once the record is safely saved. ---
+        //
+        // The headline comes first, so it is the message the administrator
+        // reads first, and it names what was created. "Created successfully"
+        // on its own left them to go and look up whether a matricule had been
+        // issued at all, after the most consequential click on the screen.
+        $studentName = trim($application->first_name . ' ' . $application->last_name);
+
+        Flasher::addSuccess(
+            $givesFinalApproval
+                ? __(':name admitted as :matricule. The final approval was recorded in your name.', [
+                    'name' => $studentName,
+                    'matricule' => $application->student_id,
+                  ])
+                : __(':name admitted as :matricule.', [
+                    'name' => $studentName,
+                    'matricule' => $application->student_id,
+                  ]),
+            __('msg_success')
+        );
+
+        // The student's own portal login. Reported now rather than only
+        // written to the log: a student who never receives this cannot sign
+        // in, and nobody was being told that it had failed.
+        $credentials = app(\App\Services\StudentCredentialsMailer::class)->send($application, $password);
+
+        if ($credentials['sent']) {
+            Flasher::addSuccess(__('Portal login details emailed to :email.', [
+                'email' => $application->email,
+            ]), __('msg_success'));
+        } else {
+            Flasher::addWarning(__('Portal login details were not sent - :reason. Use Send Password on the student record to try again.', [
+                'reason' => $credentials['reason'],
+            ]), __('msg_warning'));
+        }
+
+        // The acceptance letter configured for this degree type, if enabled.
+        $letterSent = false;
+        $letterError = null;
+
+        try {
+            $letterSent = (bool) app(\App\Services\AcceptanceLetterService::class)->sendTo($application);
+        } catch (\Throwable $e) {
+            $letterError = $e->getMessage();
+            \Illuminate\Support\Facades\Log::error('Acceptance letter send failed: ' . $letterError);
+        }
+
+        if ($letterSent) {
+            Flasher::addSuccess(__('Acceptance letter emailed to') . ' ' . $application->email, __('msg_success'));
+        } elseif ($letterError) {
+            Flasher::addWarning(__('The acceptance letter failed to send. You can resend it from this page.'), __('msg_warning'));
+        } else {
+            Flasher::addInfo(__('No acceptance letter was emailed (template disabled, mail not configured, or no email address).'), __('msg_info'));
+        }
+
+        // Back to the list. Returning to the application put the
+        // administrator in front of a page that still offered to create the
+        // record they had just created, which reads as though nothing
+        // happened. The toasts above carry the outcome across the redirect.
+        return redirect()->route($this->route . '.index');
     }
 
     /**

@@ -184,6 +184,26 @@
                                 <div class="invalid-feedback">
                                   {{ __('required_field') }} {{ __('field_email') }}
                                 </div>
+
+                                {{-- Beside the address the details will go to, and on by
+                                     default: a new member of staff needs their login, and
+                                     sending it was previously a second, separate errand on
+                                     another screen that was easy to forget. Can be turned
+                                     off for someone whose account is being prepared ahead
+                                     of time or handed over in person. --}}
+                                <div class="form-check mt-2">
+                                    {{-- An unticked checkbox posts nothing at all, so the
+                                         hidden 0 is what makes "do not send" a decision the
+                                         server actually receives rather than an absence it
+                                         has to guess at. --}}
+                                    <input type="hidden" name="send_credentials" value="0">
+                                    <input class="form-check-input" type="checkbox" value="1"
+                                           name="send_credentials" id="send_credentials"
+                                           {{ old('send_credentials', $errors->any() ? '0' : '1') == '1' ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="send_credentials">
+                                        {{ __('Email the login details to this address now') }}
+                                    </label>
+                                </div>
                             </div>
 
                             <div class="form-group col-md-4">
