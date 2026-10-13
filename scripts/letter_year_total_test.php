@@ -291,6 +291,61 @@ try {
 }
 
 // ---------------------------------------------------------------------------
+section('The registration number placeholder');
+// ---------------------------------------------------------------------------
+// The number an applicant quoted on everything before they had a matricule, so
+// a letter can be matched back to the application it came from.
+$withReg = Student::whereNotNull('registration_no')->where('registration_no', '!=', '')->first();
+
+if (!$withReg) {
+    skip('no student carries a registration number');
+} else {
+    $tokens = $service->tokens($withReg);
+
+    check('[registration_no] resolves to that student',
+        ($tokens['[registration_no]'] ?? null) === (string) $withReg->registration_no,
+        'got ' . var_export($tokens['[registration_no]'] ?? null, true)
+            . ', expected ' . var_export((string) $withReg->registration_no, true));
+
+    // Named apart from the matricule on purpose: they are different numbers and
+    // a letter that confused them would be matched to the wrong application.
+    check('and is not the matricule',
+        ($tokens['[registration_no]'] ?? null) !== ($tokens['[matricule]'] ?? null)
+            || (string) $withReg->registration_no === (string) $withReg->student_id,
+        'the two placeholders should carry different numbers');
+
+    $degree = $service->degreeType($withReg);
+
+    if (!$degree) {
+        skip('this student programme has no degree type to write a letter with');
+    } else {
+        DB::beginTransaction();
+
+        try {
+            $setting = $degree->applicationSetting
+                ?: $degree->applicationSetting()->create(['acceptance_letter_enabled' => 1]);
+            $setting->forceFill([
+                'acceptance_letter_enabled' => 1,
+                'acceptance_letter_html' => '<p>Reg: [registration_no]</p>',
+            ])->save();
+            $degree->unsetRelation('applicationSetting');
+
+            $letter = (string) $service->resolveHtml($withReg->fresh());
+
+            check('it is substituted into a real letter',
+                str_contains($letter, (string) $withReg->registration_no),
+                'looking for ' . $withReg->registration_no);
+
+            check('and no placeholder is left showing',
+                !str_contains($letter, '[registration_no]'),
+                'an unsubstituted token goes out to the applicant as literal text');
+        } finally {
+            DB::rollBack();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 section('The placeholders in a real letter');
 // ---------------------------------------------------------------------------
 $degreeType = $service->degreeType($student);

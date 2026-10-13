@@ -319,6 +319,10 @@ class AcceptanceLetterService
             '[last_name]'      => $student->last_name ?? '',
             '[student_id]'     => $student->student_id ?? '',
             '[matricule]'      => optional($enroll)->matricule ?? $student->student_id ?? '',
+            // The number the applicant quoted on everything before they had a
+            // matricule, so a letter can be matched against the application it
+            // came from.
+            '[registration_no]' => $student->registration_no ?? '',
             '[program]'        => optional($student->program)->title ?? '',
             '[degree_type]'    => optional($degreeType)->title ?? '',
             '[faculty]'        => optional(optional($student->program)->faculty)->title ?? '',
@@ -462,6 +466,7 @@ class AcceptanceLetterService
         $sample = [
             '[name]' => 'Jane A. Doe', '[first_name]' => 'Jane', '[last_name]' => 'Doe',
             '[student_id]' => 'PAX25SAMPLE001', '[matricule]' => 'PAX25SAMPLE001',
+            '[registration_no]' => '10000123',
             '[program]' => optional($degreeType->programs()->first())->title ?? 'Sample Programme',
             '[degree_type]' => $degreeType->title,
             '[faculty]' => optional(optional($degreeType->programs()->first())->faculty)->title ?? 'Sample Faculty',
