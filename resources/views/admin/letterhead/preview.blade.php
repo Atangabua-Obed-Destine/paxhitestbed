@@ -3,9 +3,18 @@
 <head>
     <meta charset="utf-8">
     <style>
-        @page { margin: 12mm 15mm; }
+        /* No page margin, and the letterhead spans the full sheet.
+
+           This preview used to lay the letterhead out inside a 180mm column
+           while every real document gives it the full 210mm, so the same
+           configuration produced two different results: centred text sat in a
+           different place and lines broke in different spots. The preview is
+           meant to show what you will get, so it is laid out the way the
+           documents are, and the sample text below it carries the margin
+           instead. */
+        @page { margin: 0; }
         body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #222; }
-        .sample { margin-top: 10px; }
+        .sample { margin-top: 10px; padding: 0 15mm 12mm; }
         .sample h2 { font-size: 14px; margin: 0 0 6px; }
         .muted { color: #777; font-size: 10.5px; }
         .filler { margin-top: 8px; line-height: 1.7; text-align: justify; }

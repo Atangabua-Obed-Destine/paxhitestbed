@@ -14,8 +14,13 @@
 
     @import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700;900&family=Source+Sans+Pro:wght@400;600;700&display=swap');
 
+    @php
+        // Settings -> Marksheet. Off by default, so a school that never touches
+        // it keeps the portrait transcript registrars and embassies expect.
+        $tpLandscape = (bool) (optional($marksheet ?? null)->landscape);
+    @endphp
     @page {
-      size: A4 portrait;
+      size: A4 {{ $tpLandscape ? 'landscape' : 'portrait' }};
       margin: 0;
     }
     @page :footer { display: none; }
@@ -37,8 +42,8 @@
     /* --- Page container --- */
     .tp-page {
       position: relative;
-      width: 210mm;
-      min-height: 297mm;
+      width: {{ $tpLandscape ? '297mm' : '210mm' }};
+      min-height: {{ $tpLandscape ? '210mm' : '297mm' }};
       margin: 0 auto;
       background: #fff;
       overflow: hidden;
@@ -50,7 +55,11 @@
        297mm page — a fifth of the sheet before a single mark was printed — so
        it is scaled down here only, where the space is needed. */
     .tp-page .letterhead {
-      zoom: 0.74;
+      /* Not scaled down. A zoom here shrank the institution's name and address
+         to three-quarters size, which left them looking small and marooned in
+         the middle of a full-width band - the letterhead stopped reading as a
+         letterhead. The space it was buying is found in the margins instead. */
+      width: 100%;
     }
 
     /* --- Letterhead background --- */
@@ -287,6 +296,60 @@
       page-break-inside: avoid;
     }
 
+    @if($tpLandscape)
+    /* --- Two semesters to a row ---
+       Each semester becomes a table of its own so the pair can sit side by
+       side; every tbody already carries its own column headers, so a standalone
+       table still reads correctly on its own. */
+    .tp-sem-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5mm;
+      align-items: flex-start;
+    }
+    .tp-sem-cell {
+      /* calc keeps the pair honest when the gap changes; min-width:0 stops a
+         long course title forcing the cell wider than its half. */
+      flex: 1 1 calc(50% - 2.5mm);
+      min-width: 0;
+    }
+    .tp-sem-cell > table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    /* Half the width means half the room for a course title, so the type scale
+       comes down with it rather than wrapping every title onto three lines. */
+    .tp-sem-cell .tp-records-table tbody td { font-size: 9px; }
+    .tp-sem-cell .tp-col-headers th { font-size: 7.5px; }
+    .tp-sem-cell .tp-sem-header td { font-size: 9px; }
+    .tp-sem-cell .tp-col-title { width: 30%; }
+    .tp-sem-cell .tp-col-code { width: 13%; }
+    @endif
+
+    @if($tpLandscape)
+    /* The page is 87mm shorter on its side, so the bands between the letterhead
+       and the marks are tightened to earn that back. Measured, not guessed: it
+       is what puts the whole record - both semesters and the cumulative GPA -
+       on the first sheet instead of spilling the totals onto the second. */
+    .tp-page .letterhead { margin-bottom: 3px; }
+    .tp-content { padding-top: 6px; }
+    .tp-doc-title { margin-bottom: 3px; padding-bottom: 2px; }
+    .tp-info-section { margin-bottom: 4px; }
+    .tp-grade-scale-top { margin-bottom: 3px; }
+    .tp-grade-scale-item { font-size: 8.5px; padding: 1px 0; }
+    .tp-summary-bar { margin-top: 5px; padding: 3px 14px; }
+    .tp-info-cell { padding: 0.5px 0; }
+    .tp-grade-scale-title { margin-bottom: 2px; padding-bottom: 1px; }
+    .tp-key-grid { column-count: 4; }
+
+    /* An odd number of semesters leaves half a row empty. The totals and the
+       key move into that gap rather than starting a new band below it. */
+    .tp-sem-cell-filler { display: flex; flex-direction: column; gap: 3mm; }
+    .tp-sem-cell-filler .tp-summary-bar { margin-top: 0; }
+    .tp-sem-cell-filler .tp-key { margin-top: 0; }
+    .tp-sem-cell-filler .tp-key-grid { column-count: 2; }
+    @endif
+
     /* --- Academic Records Table --- */
     .tp-records-table {
       width: 100%;
@@ -428,23 +491,27 @@
     /* Columns rather than a wrapping row: the entries then read down one
        column and on to the next, and a line that wraps cannot push the entry
        beside it out of line. */
+    /* Three columns, not two: fourteen short definitions in two columns ran to
+       35mm of a page whose marks only need 90mm. The entries still read down
+       one column and on to the next. */
     .tp-key-grid {
-      column-count: 2;
-      column-gap: 24px;
+      column-count: 3;
+      column-gap: 16px;
     }
     .tp-key-item {
       break-inside: avoid;
       page-break-inside: avoid;
-      padding: 2px 0;
-      font-size: 8.5px;
+      padding: 0.5px 0;
+      font-size: 8px;
       color: #333;
-      line-height: 1.45;
+      line-height: 1.3;
     }
     .tp-key-term {
       font-weight: 800;
       color: #1a1a1a;
       display: inline-block;
-      min-width: 74px;
+      /* Narrower columns, so the term no longer reserves 74px it does not need. */
+      min-width: 56px;
     }
     .tp-grade-scale-title {
       font-size: 9px;

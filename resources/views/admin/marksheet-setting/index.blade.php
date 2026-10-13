@@ -94,6 +94,17 @@
                             {{-- A rule one school asked for. Off unless it is
                                  turned on here, and it changes the transcript
                                  only — no stored mark is touched. --}}
+                            <div class="form-group col-md-12">
+                                <div class="switch d-inline">
+                                    <input type="checkbox" id="landscape" name="landscape" value="1" @if(isset($row->landscape) && $row->landscape == 1) checked @endif>
+                                    <label for="landscape" class="cr"></label>
+                                </div>
+                                <label for="landscape">{{ __('Print transcripts sideways, two semesters to a row') }}</label>
+                                <small class="form-text text-muted">
+                                    {{ __('Turns the page on its side so two semester tables sit side by side. Off by default: portrait is the format most registrars and embassies expect.') }}
+                                </small>
+                            </div>
+
                             <div class="form-group col-md-12 mt-4">
                                 <div class="switch d-inline m-r-10">
                                     <input type="checkbox" id="resit_replaces_original" name="resit_replaces_original" value="1" @if(isset($row->resit_replaces_original) && $row->resit_replaces_original == 1) checked @endif>

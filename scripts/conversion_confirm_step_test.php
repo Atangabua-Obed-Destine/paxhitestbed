@@ -176,6 +176,15 @@ window.addEventListener('load', function () {
 
     setTimeout(function () {
       note('confirmShown', !step.classList.contains('d-none'));
+      var tick = document.getElementById('convert-confirm-check');
+      note('hasTick', !!tick);
+      note('tickStartsUnticked', !!tick && !tick.checked);
+      note('disabledUntilTicked', confirm.disabled);
+      if (tick) {
+        tick.checked = true;
+        tick.dispatchEvent(new Event('change'));
+      }
+      note('enabledAfterTick', !confirm.disabled);
       note('formHidden', body ? body.classList.contains('d-none') : 'na');
       note('confirmEnabled', !confirm.disabled);
       note('backShown', !back.classList.contains('d-none'));
@@ -276,7 +285,15 @@ section('The confirmation reads the choices back');
 check('pressing submit shows the confirmation instead of saving', $is('confirmShown'));
 check('and hides the form behind it', $is('formHidden'));
 check('the review button gives way to the confirm button', $is('reviewHidden') && $is('backShown'));
-check('the confirm button is now usable', $is('confirmEnabled'));
+check('the confirmation asks for a deliberate tick',
+    $is('hasTick') && $is('tickStartsUnticked'),
+    'the money screens ask the same way; this one let a second click through');
+
+check('the confirm button is dead until it is ticked',
+    $is('disabledUntilTicked'),
+    'otherwise it is just a second click in the same place as the first');
+
+check('and live once it is', $is('enabledAfterTick'));
 
 check('every enrolment detail is listed',
     (int) ($result['summaryRows'] ?? 0) >= 10,

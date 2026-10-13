@@ -229,6 +229,20 @@
         </div>
 
         {{-- Academic Records Table --}}
+        @php
+            // Two-up only earns its place with more than one semester to pair.
+            $tpLandscape = (bool) (optional($marksheet ?? null)->landscape);
+            $tpTwoUp = $tpLandscape && count($semester_items) > 1;
+
+            // An odd number of semesters leaves half of the last row empty.
+            // The totals and the key go in that gap instead of opening a new
+            // band below it, which is the whole point of pairing them up.
+            $tpFillTotalsInGrid = $tpTwoUp && (count($semester_items) % 2 === 1);
+        @endphp
+
+        @if($tpTwoUp)
+        <div class="tp-sem-grid">
+        @else
         <table class="tp-records-table">
             <thead>
                 <tr>
@@ -243,8 +257,10 @@
                     <th class="tp-col-qpt">Quality Pts</th>
                 </tr>
             </thead>
+        @endif
 
             @foreach($semester_items as $semIdx => $semester_item)
+            @if($tpTwoUp)<div class="tp-sem-cell"><table class="tp-records-table">@endif
             <tbody>
                 {{-- Semester Header --}}
                 <tr class="tp-sem-header">
@@ -345,55 +361,24 @@
                     <td colspan="5" style="text-align:right; font-size:8.5px; color:#555;">Credits Earned: {{ number_format($sem_earned, 1) }} / {{ number_format($sem_credits, 1) }}</td>
                 </tr>
             </tbody>
+            @if($tpTwoUp)</table></div>@endif
             @endforeach
+
+            @if($tpFillTotalsInGrid)
+            <div class="tp-sem-cell tp-sem-cell-filler">
+                @include('admin.marksheet.partials.totals')
+            </div>
+            @endif
+
+        @if($tpTwoUp)
+        </div>
+        @else
         </table>
+        @endif
 
-        {{-- Summary: the totals read after the results they are drawn from.
-             Academic standing is left off — it is awarded on graduation, and a
-             transcript issued mid-programme should not appear to confer one. --}}
-        <div class="tp-summary-bar">
-            <div class="tp-summary-item">
-                <span class="tp-summary-label">Cumulative GPA</span>
-                <span class="tp-summary-value tp-gpa-big">{{ number_format((float)$com_gpa, 2, '.', '') }}</span>
-            </div>
-            <div class="tp-summary-item">
-                <span class="tp-summary-label">Total Credits</span>
-                <span class="tp-summary-value">{{ number_format((float)$total_credits, 1) }}</span>
-            </div>
-            <div class="tp-summary-item">
-                <span class="tp-summary-label">Credits Earned</span>
-                <span class="tp-summary-value">{{ number_format((float)$total_credits_earned, 1) }}</span>
-            </div>
-            <div class="tp-summary-item">
-                <span class="tp-summary-label">Courses</span>
-                <span class="tp-summary-value">{{ $total_courses }}</span>
-            </div>
-        </div>
-
-        {{-- Key: what every column and abbreviation on this transcript means, so
-             it can be read by someone outside the school. --}}
-        <div class="tp-key">
-            <div class="tp-grade-scale-title">Key to this Transcript</div>
-            <div class="tp-key-grid">
-                <div class="tp-key-item"><span class="tp-key-term">Code</span> The course code as it appears in the programme.</div>
-                {{-- The three course types get a line each: bundled into one
-                     "Type" entry, a reader looking up C or UR did not find them.
-                     The wording is the school's own, from the subject form. --}}
-                <div class="tp-key-item"><span class="tp-key-term">Type</span> What kind of course it is: C, UR or E.</div>
-                <div class="tp-key-item"><span class="tp-key-term">C</span> Compulsory — required for this programme.</div>
-                <div class="tp-key-item"><span class="tp-key-term">UR</span> University Requirement — required of every student.</div>
-                <div class="tp-key-item"><span class="tp-key-term">E</span> Elective — chosen by the student.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Credit</span> The credit value of the course.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Attempted</span> Credits the student sat for.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Earned</span> Credits passed. A failed course earns none.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Grade Pt</span> The point value of the grade, from the Grading Scale on this transcript.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Grade</span> The letter grade awarded.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Quality Pts</span> Grade Pt &times; Credit — what the course contributes to the GPA.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Semester GPA</span> Quality Points for the semester &divide; credits attempted in it.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Cumulative GPA</span> The same, across every semester on this transcript.</div>
-                <div class="tp-key-item"><span class="tp-key-term">&mdash;</span> No mark has been published for that course yet.</div>
-            </div>
-        </div>
+        @if(!$tpFillTotalsInGrid)
+        @include('admin.marksheet.partials.totals')
+        @endif
 
         {{-- Signatures --}}
         <div class="tp-footer-section">

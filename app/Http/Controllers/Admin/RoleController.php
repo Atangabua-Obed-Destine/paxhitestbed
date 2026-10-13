@@ -111,7 +111,7 @@ class RoleController extends Controller
         $data['route']     = $this->route;
         $data['path']      = $this->path;
 
-        $data['role'] = Role::find($id);
+        $data['role'] = Role::findOrFail($id);
 
         $data['rolePermissions'] = Permission::join("role_has_permissions","role_has_permissions.permission_id","=","permissions.id")
             ->where("role_has_permissions.role_id",$id)
@@ -133,11 +133,21 @@ class RoleController extends Controller
         $data['route']     = $this->route;
         $data['path']      = $this->path;
 
-        $data['role'] = Role::find($id);
+        // findOrFail, not find: a role id that does not exist returned null and
+        // the view read ->id straight off it, so a stale link or a typed-in id
+        // produced a 500 where a 404 is the honest answer.
+        $data['role'] = Role::findOrFail($id);
         $data['permission'] = Permission::get();
 
         $data['rolePermissions'] = DB::table("role_has_permissions")->where("role_has_permissions.role_id",$id)
             ->get();
+
+        // Keyed by permission id so the view can ask whether one is assigned in
+        // a single lookup rather than by scanning the whole list each time.
+        $data['assignedPermissionIds'] = $data['rolePermissions']
+            ->pluck('permission_id')
+            ->flip()
+            ->all();
 
         return view($this->view.'.edit', $data);
     }
@@ -160,7 +170,7 @@ class RoleController extends Controller
 
         // Update Data
         DB::beginTransaction();
-        $role = Role::find($id);
+        $role = Role::findOrFail($id);
         $role->name = $request->input('name');
         $role->save();
 

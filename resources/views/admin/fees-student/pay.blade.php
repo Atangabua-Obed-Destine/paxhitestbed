@@ -66,7 +66,20 @@
                             <div class="row">
                                 <div class="col-md-6 text-center">
                                     <small class="text-muted">{{ __('field_already_paid') }}</small>
-                                    <h5 class="mb-0 text-success">{{ number_format($row->paid_amount ?? 0, 2) }}</h5>
+                                    {{-- Net, not gross. Where credit has been moved to
+                                         another fee the two differ, and the gross figure
+                                         read as a double payment: one fee showed
+                                         "already paid 300,000" against a 150,000 charge
+                                         with nothing outstanding. --}}
+                                    <h5 class="mb-0 text-success">{{ number_format($row->net_paid_amount, 2) }}</h5>
+                                    @if(abs(($row->paid_amount ?? 0) - $row->net_paid_amount) > 0.005)
+                                        <small class="text-muted d-block">
+                                            {{ __('of :gross received; :moved moved to another fee', [
+                                                'gross' => number_format($row->paid_amount ?? 0, 2),
+                                                'moved' => number_format(($row->paid_amount ?? 0) - $row->net_paid_amount, 2),
+                                            ]) }}
+                                        </small>
+                                    @endif
                                 </div>
                                 <div class="col-md-6 text-center">
                                     <small class="text-muted">{{ __('field_remaining_balance') }}</small>
@@ -354,9 +367,81 @@
                         </div>
                     </div>
                 </div>
+                {{-- Read the figures back before any money is recorded.
+
+                     Recording a receipt posts to the ledger, credits the payment
+                     account and issues a receipt number. It can be reversed, but
+                     a reversal is itself a permanent entry, so an amount typed
+                     wrongly is a correction on the record rather than a quiet
+                     edit. The officer confirms the number against what was
+                     actually handed over. --}}
+                <div class="modal-body d-none" id="pay-confirm-{{ $row->id }}">
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading mb-1">
+                            <i class="fas fa-hand-holding-usd"></i> {{ __('Check this against the money you received') }}
+                        </h6>
+                        <p class="mb-0">{{ __('This records the amount below as received from the student. Reversing it later leaves a correction on the record, so confirm the figure now.') }}</p>
+                    </div>
+
+                    <div class="text-center my-3">
+                        <div class="text-muted small text-uppercase">{{ __('Amount to record as received') }}</div>
+                        <div style="font-size:2.4rem;line-height:1.1;font-weight:700;" id="pay-confirm-amount-{{ $row->id }}">0.00</div>
+                        <div class="text-muted">{!! $setting->currency_symbol !!}</div>
+                    </div>
+
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr>
+                                <th class="fw-normal text-muted w-50">{{ __('field_name') }}</th>
+                                <td class="fw-bold">{{ $row->studentEnroll->student->first_name ?? '' }} {{ $row->studentEnroll->student->last_name ?? '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_matricule') }}</th>
+                                <td class="fw-bold">#{{ $row->studentEnroll->matricule ?? ($row->studentEnroll->student->student_id ?? '') }}</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_fees_type') }}</th>
+                                <td class="fw-bold">{{ $row->category->title ?? '' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_payment_method') }}</th>
+                                <td class="fw-bold" id="pay-confirm-method-{{ $row->id }}">&mdash;</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_payment_account') }}</th>
+                                <td id="pay-confirm-account-{{ $row->id }}">&mdash;</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_remaining_balance') }} {{ __('after this') }}</th>
+                                <td class="fw-bold" id="pay-confirm-balance-{{ $row->id }}">&mdash;</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div id="pay-confirm-notes-{{ $row->id }}"></div>
+
+                    {{-- A deliberate act, not a second reflex click on the same
+                         spot: the confirm button stays disabled until this is
+                         ticked. --}}
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="pay-confirm-check-{{ $row->id }}">
+                        <label class="form-check-label" for="pay-confirm-check-{{ $row->id }}">
+                            {{ __('I have counted this and it matches the amount the student paid.') }}
+                        </label>
+                    </div>
+                </div>
+
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> {{ __('btn_close') }}</button>
-                    <button type="submit" class="btn btn-success" id="submit-btn-{{ $row->id }}"><i class="fas fa-money-check"></i> {{ __('btn_received') }}</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="pay-close-{{ $row->id }}"><i class="fas fa-times"></i> {{ __('btn_close') }}</button>
+                    <button type="button" class="btn btn-secondary d-none" id="pay-back-{{ $row->id }}"><i class="fas fa-arrow-left"></i> {{ __('btn_back') }}</button>
+                    {{-- type="button": nothing is recorded until the figures have
+                         been read back. --}}
+                    <button type="button" class="btn btn-success" id="submit-btn-{{ $row->id }}"><i class="fas fa-money-check"></i> {{ __('btn_received') }}</button>
+                    {{-- Disabled while hidden, so Enter in a field cannot submit
+                         the form past the confirmation. --}}
+                    <button type="submit" class="btn btn-success d-none" id="pay-confirm-btn-{{ $row->id }}" disabled>
+                        <i class="fas fa-check"></i> {{ __('Yes, record this payment') }}
+                    </button>
                 </div>
               </form>
             </div>
@@ -397,5 +482,139 @@
                 }
             });
         }
+
+        // --- The confirmation step -------------------------------------------
+        const form        = submitBtn ? submitBtn.closest('form') : null;
+        const formBody    = form ? form.querySelector('.modal-body') : null;
+        const confirmStep = document.getElementById('pay-confirm-' + feeId);
+        const confirmBtn  = document.getElementById('pay-confirm-btn-' + feeId);
+        const backBtn     = document.getElementById('pay-back-' + feeId);
+        const closeBtn    = document.getElementById('pay-close-' + feeId);
+        const confirmTick = document.getElementById('pay-confirm-check-' + feeId);
+
+        if (!form || !confirmStep || !confirmBtn) { return; }
+
+        const money = function (value) {
+            return (parseFloat(value) || 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2, maximumFractionDigits: 2
+            });
+        };
+
+        const escapeHtml = function (value) {
+            const holder = document.createElement('div');
+            holder.textContent = value === null || value === undefined ? '' : value;
+            return holder.innerHTML;
+        };
+
+        const selectedText = function (id) {
+            const field = document.getElementById(id);
+            if (!field || field.selectedIndex < 0) { return ''; }
+            const option = field.options[field.selectedIndex];
+            return option && option.value !== '' ? option.text.trim() : '';
+        };
+
+        const fill = function () {
+            const amount = parseFloat(paymentAmountField ? paymentAmountField.value : 0) || 0;
+
+            document.getElementById('pay-confirm-amount-' + feeId).textContent = money(amount);
+
+            const method = selectedText('payment_method-' + feeId);
+            document.getElementById('pay-confirm-method-' + feeId).textContent =
+                method || {!! json_encode(__('select')) !!};
+
+            const account = selectedText('payment_account_id-' + feeId);
+            document.getElementById('pay-confirm-account-' + feeId).innerHTML = account
+                ? escapeHtml(account)
+                : '<span class="text-muted">' + {!! json_encode(__('select_payment_account_optional')) !!} + '</span>';
+
+            const after = maxAmount - amount;
+            document.getElementById('pay-confirm-balance-' + feeId).textContent =
+                money(Math.max(0, after)) + ' {!! $setting->currency_symbol !!}';
+
+            // Anything the officer should look at twice is said here rather than
+            // left for them to work out from the numbers.
+            const notes = [];
+
+            if (amount > maxAmount + 0.005) {
+                notes.push({
+                    level: 'danger',
+                    text: {!! json_encode(__('This is more than the balance due. The extra is held as credit for this student.')) !!}
+                        + ' (' + money(amount - maxAmount) + ' {!! $setting->currency_symbol !!})'
+                });
+            } else if (amount > 0 && amount < maxAmount - 0.005) {
+                notes.push({
+                    level: 'info',
+                    text: {!! json_encode(__('This is a part payment. The rest stays outstanding.')) !!}
+                });
+            }
+
+            if (amount <= 0) {
+                notes.push({
+                    level: 'danger',
+                    text: {!! json_encode(__('The amount is zero. Nothing would be recorded as received.')) !!}
+                });
+            }
+
+            document.getElementById('pay-confirm-notes-' + feeId).innerHTML = notes.map(function (note) {
+                return '<div class="alert alert-' + note.level + ' py-2 mb-0 mt-2 small">'
+                     + escapeHtml(note.text) + '</div>';
+            }).join('');
+        };
+
+        const showConfirm = function () {
+            fill();
+            if (formBody) { formBody.classList.add('d-none'); }
+            confirmStep.classList.remove('d-none');
+            submitBtn.classList.add('d-none');
+            if (closeBtn) { closeBtn.classList.add('d-none'); }
+            if (backBtn) { backBtn.classList.remove('d-none'); }
+            confirmBtn.classList.remove('d-none');
+            // Ticked afresh every time: a confirmation carried over from the
+            // previous look is not a confirmation.
+            if (confirmTick) { confirmTick.checked = false; }
+            confirmBtn.disabled = true;
+        };
+
+        const showForm = function () {
+            if (formBody) { formBody.classList.remove('d-none'); }
+            confirmStep.classList.add('d-none');
+            // Going back withdraws the confirmation, so the tick goes with it.
+            if (confirmTick) { confirmTick.checked = false; }
+            submitBtn.classList.remove('d-none');
+            if (closeBtn) { closeBtn.classList.remove('d-none'); }
+            if (backBtn) { backBtn.classList.add('d-none'); }
+            confirmBtn.classList.add('d-none');
+            confirmBtn.disabled = true;
+        };
+
+        submitBtn.addEventListener('click', function () {
+            // The required fields are still enforced first: there is no point
+            // confirming figures the server is going to refuse.
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                form.reportValidity();
+                return;
+            }
+            showConfirm();
+        });
+
+        if (backBtn) { backBtn.addEventListener('click', showForm); }
+
+        if (confirmTick) {
+            confirmTick.addEventListener('change', function () {
+                confirmBtn.disabled = !this.checked;
+            });
+        }
+
+        // Recording takes a moment, and a second press would take the money twice.
+        form.addEventListener('submit', function () {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> '
+                + {!! json_encode(__('Recording...')) !!};
+        });
+
+        // Reopening always starts at the form, never on a stale confirmation.
+        const payModal = document.getElementById('payModal-' + feeId);
+        if (payModal) { payModal.addEventListener('hidden.bs.modal', showForm); }
     });
     </script>

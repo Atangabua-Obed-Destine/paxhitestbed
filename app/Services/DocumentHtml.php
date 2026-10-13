@@ -130,13 +130,37 @@ class DocumentHtml
         }, $html);
 
         // Keep line-height and font-size; drop fixed dimensions.
-        $html = preg_replace('/(?<![a-z-])(?:min-|max-)?width\s*:\s*[^;"\']*;?/i', '', $html);
+        //
+        // A width in PER CENT is kept. Stripping those as well was what made a
+        // letterhead look nothing like its own editor: the letterhead is a
+        // three-column table carrying width:100%, and with that removed the
+        // table shrank to fit its text and its margin:auto centred it, so the
+        // institution's details ended up huddled in the middle of the page with
+        // white space either side. A relative width cannot overflow the page,
+        // which is the only thing this strip exists to prevent; a fixed one in
+        // px, pt or inches still goes.
+        $html = preg_replace('/(?<![a-z-])(?:min-|max-)?width\s*:\s*(?![^;"\']*%)[^;"\']*;?/i', '', $html);
         $html = preg_replace('/(?<!font-)(?<!line-)(?<![a-z])(?:min-|max-)?height\s*:\s*[^;"\']*;?/i', '', $html);
         $html = preg_replace('/text-indent\s*:\s*[^;"\']*;?/i', '', $html);
 
-        $html = preg_replace('/\s(?:width|height)\s*=\s*"[^"]*"/i', '', $html);
-        $html = preg_replace("/\s(?:width|height)\s*=\s*'[^']*'/i", '', $html);
-        $html = preg_replace('/\s(?:width|height)\s*=\s*[0-9.]+%?/i', '', $html);
+        // Same rule for the HTML attribute, with one guard: Word writes values
+        // like width="109%", which would overflow, so anything above 100 goes
+        // with the fixed ones.
+        $keepPercentAttribute = function (array $match): string {
+            $value = trim($match[2], "\"' ");
+
+            if (strtolower($match[1]) === 'width'
+                && substr($value, -1) === '%'
+                && (float) rtrim($value, '%') <= 100) {
+                return $match[0];
+            }
+
+            return '';
+        };
+
+        $html = preg_replace_callback('/\s(width|height)\s*=\s*("[^"]*")/i', $keepPercentAttribute, $html);
+        $html = preg_replace_callback("/\s(width|height)\s*=\s*('[^']*')/i", $keepPercentAttribute, $html);
+        $html = preg_replace_callback('/\s(width|height)\s*=\s*([0-9.]+%?)/i', $keepPercentAttribute, $html);
 
         return preg_replace_callback(
             '/<!--dochtml-img-(\d+)-->/',

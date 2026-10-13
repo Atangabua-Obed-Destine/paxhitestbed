@@ -231,17 +231,70 @@
                 @csrf
                 <div class="modal-body">
                     <input type="hidden" id="approve-payment-id">
+
+                    {{-- What is actually being approved.
+
+                         This modal used to carry nothing but a hidden id and a
+                         note box: the officer confirmed a payment without being
+                         shown the student, the amount or the receipt. --}}
+                    <div class="text-center mb-3">
+                        <div class="text-muted small text-uppercase">{{ __('Amount being approved') }}</div>
+                        <div style="font-size:2.2rem;line-height:1.1;font-weight:700;" id="approve-amount">&mdash;</div>
+                        <div class="text-muted">{!! $setting->currency_symbol ?? '' !!}</div>
+                    </div>
+
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th class="fw-normal text-muted w-50">{{ __('field_name') }}</th>
+                                <td class="fw-bold" id="approve-student">&mdash;</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_matricule') }}</th>
+                                <td class="fw-bold" id="approve-matricule">&mdash;</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_session') }}</th>
+                                <td id="approve-session">&mdash;</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_payment_date') }}</th>
+                                <td id="approve-date">&mdash;</td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('Student note') }}</th>
+                                <td id="approve-student-note" class="text-muted">&mdash;</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="mb-3" id="approve-receipt-wrap">
+                        <a href="#" target="_blank" class="btn btn-outline-primary btn-sm" id="approve-receipt-link">
+                            <i class="fas fa-receipt"></i> {{ __('Open the receipt the student uploaded') }}
+                        </a>
+                    </div>
+
                     <div class="alert alert-success">
                         <i class="fas fa-info-circle"></i> You are about to approve this payment and grant student access to the portal.
                     </div>
+
                     <div class="form-group">
                         <label>Admin Note (Optional)</label>
                         <textarea class="form-control" id="approve-note" rows="3" placeholder="Add any verification notes..."></textarea>
                     </div>
+
+                    {{-- A deliberate act rather than a reflex click: the approve
+                         button stays dead until this is ticked. --}}
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="approve-confirm-check">
+                        <label class="form-check-label" for="approve-confirm-check">
+                            {{ __('I have opened the receipt and the amount above matches what the student paid.') }}
+                        </label>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Approve Payment</button>
+                    <button type="submit" class="btn btn-success" id="approve-submit-btn" disabled><i class="fas fa-check"></i> Approve Payment</button>
                 </div>
             </form>
         </div>
@@ -358,8 +411,45 @@ $(document).ready(function() {
     // Approve payment
     window.approvePayment = function(id) {
         $('#approve-payment-id').val(id);
+        $('#approve-note').val('');
+
+        // Cleared and disarmed first, so a slow or failed load can never leave
+        // the previous payment's details on screen beside this one's id.
+        $('#approve-confirm-check').prop('checked', false);
+        $('#approve-submit-btn').prop('disabled', true);
+        $('#approve-amount').text('...');
+        $('#approve-student, #approve-matricule, #approve-session, #approve-date, #approve-student-note').text('\u2014');
+        $('#approve-receipt-wrap').hide();
+
         $('#approveModal').modal('show');
+
+        $.get("{{ url('admin/platform-fee/verifications') }}/" + id, function (payment) {
+            $('#approve-amount').text(payment.fee_amount);
+            $('#approve-student').text(payment.student_name);
+            $('#approve-matricule').text(payment.student_id);
+            $('#approve-session').text(payment.session);
+            $('#approve-date').text(payment.payment_date);
+            $('#approve-student-note').text(payment.student_note || '\u2014');
+
+            if (payment.receipt_url) {
+                $('#approve-receipt-link').attr('href', payment.receipt_url);
+                $('#approve-receipt-wrap').show();
+            }
+        }).fail(function () {
+            // Better to refuse than to approve against figures that never loaded.
+            $('#approve-amount').text('\u2014');
+            $('#approve-student').text('{{ __('Could not load this payment. Close and try again.') }}');
+        });
     };
+
+    $('#approve-confirm-check').on('change', function () {
+        $('#approve-submit-btn').prop('disabled', !this.checked);
+    });
+
+    $('#approveModal').on('hidden.bs.modal', function () {
+        $('#approve-confirm-check').prop('checked', false);
+        $('#approve-submit-btn').prop('disabled', true);
+    });
 
     $('#approveForm').submit(function(e) {
         e.preventDefault();

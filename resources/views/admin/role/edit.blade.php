@@ -58,12 +58,14 @@
 
                         <div class="form-group d-inline permission-item" style="margin-right: 40px;" data-group="{{ str_replace(' ', '-', strtolower($value->group)) }}">
                             <div class="checkbox d-inline">
+                                {{-- A lookup, not a loop. This asked "is this one of
+                                     the role's permissions?" by walking every assigned
+                                     permission for every permission on the page: with
+                                     781 of each that is 610,000 iterations, and the
+                                     whitespace each one emitted built a 40MB page that
+                                     exhausted PHP's memory before it could be sent. --}}
                                 <input type="checkbox" id="checkbox-{{ $value->id }}" name="permission[]" value="{{ $value->id }}" class="permission-checkbox"
-
-                                @foreach($rolePermissions as $rolePermission)
-                                    @if($rolePermission->permission_id == $value->id) checked @endif
-                                @endforeach  
-                                >
+                                    {{ isset($assignedPermissionIds[$value->id]) ? 'checked' : '' }}>
 
                                 <label for="checkbox-{{ $value->id }}" class="cr">{{ $value->title }}</label>
                             </div>

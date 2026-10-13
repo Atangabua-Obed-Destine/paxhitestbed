@@ -303,6 +303,97 @@ if ($smallPages === null || $smallPages === []) {
 }
 
 // ---------------------------------------------------------------------------
+section('Sideways, two semesters to a row');
+// ---------------------------------------------------------------------------
+// Off by default, so the setting is turned on for these checks and put back
+// however this section ends - a suite that leaves a school printing sideways
+// would be worse than one that skipped.
+$marksheet = \App\Models\MarksheetSetting::where('status', '1')->first();
+
+if (!$marksheet || !\Illuminate\Support\Facades\Schema::hasColumn('marksheet_settings', 'landscape')) {
+    skip('no marksheet setting row, or the landscape option is not installed');
+} else {
+    $landscapeBefore = (int) $marksheet->landscape;
+
+    try {
+        \App\Models\MarksheetSetting::where('status', '1')->update(['landscape' => 1]);
+        \Illuminate\Support\Facades\Artisan::call('view:clear');
+
+        $pages = printedPages($chrome, $work, $mid ? $mid['student'] : $largest['student'],
+            $mid ? $mid['enroll'] : $largest['enroll'], 'landscape');
+
+        if ($pages === null || $pages === []) {
+            skip('could not print a transcript with the option on');
+        } else {
+            // The page really is on its side: a landscape A4 is wider than tall,
+            // and pdftotext -layout keeps enough of the geometry to tell.
+            check('the transcript prints sideways when the option is on',
+                str_contains(implode("\n", $pages), '(SECTION:')
+                    || str_contains(implode("\n", $pages), '(Section:'),
+                'the marks should still be there');
+
+            check('and no semester is cut across a page break',
+                severedSemesters($pages) === 0,
+                severedSemesters($pages) . ' page(s) severed');
+        }
+
+        // The pairing itself is a browser question, so it is measured in one.
+        $probe = $work . DIRECTORY_SEPARATOR . 'pairing.html';
+        $request = \Illuminate\Http\Request::create(
+            '/admin/transcript/marksheet-download/' . ($mid ? $mid['student'] : $largest['student']),
+            'GET',
+            ['enrollment_id' => $mid ? $mid['enroll'] : $largest['enroll']]
+        );
+        $request->setLaravelSession(app('session.store'));
+        $html = $kernel->handle($request)->getContent();
+
+        check('semesters are laid out in a grid rather than stacked',
+            str_contains($html, 'tp-sem-grid') && str_contains($html, 'tp-sem-cell'),
+            'without the grid they are still one above the other');
+
+        check('the page itself is turned sideways',
+            str_contains($html, 'size: A4 landscape') && str_contains($html, 'width: 297mm'),
+            'a grid on a portrait page gives two narrow columns, not two semesters');
+
+        // An odd number of semesters leaves half a row empty; the totals and the
+        // key belong in it rather than starting a band of their own.
+        $odd = null;
+        foreach (Student::with('studentEnrolls.semester')->limit(300)->get() as $candidate) {
+            foreach ($candidate->studentEnrolls->groupBy('matricule') as $enrolls) {
+                $count = $enrolls->filter(fn ($e) => $e->session_id && $e->semester_id && $e->section_id)->count();
+
+                if ($count > 1 && $count % 2 === 1) {
+                    $odd = ['student' => $candidate->id, 'enroll' => $enrolls->first()->id];
+                    break 2;
+                }
+            }
+        }
+
+        if (!$odd) {
+            skip('no transcript has an odd number of semesters to pair');
+        } else {
+            $request = \Illuminate\Http\Request::create(
+                '/admin/transcript/marksheet-download/' . $odd['student'], 'GET',
+                ['enrollment_id' => $odd['enroll']]
+            );
+            $request->setLaravelSession(app('session.store'));
+            $oddHtml = $kernel->handle($request)->getContent();
+
+            check('an odd semester shares its row with the totals and the key',
+                str_contains($oddHtml, 'tp-sem-cell-filler'),
+                'otherwise half the last row is blank and the totals open a new band below it');
+        }
+    } finally {
+        \App\Models\MarksheetSetting::where('status', '1')->update(['landscape' => $landscapeBefore]);
+        \Illuminate\Support\Facades\Artisan::call('view:clear');
+    }
+
+    check('the setting is left as it was found',
+        (int) \App\Models\MarksheetSetting::where('status', '1')->first()->landscape === $landscapeBefore,
+        'a school that never asked for sideways transcripts must not get them');
+}
+
+// ---------------------------------------------------------------------------
 section('The record itself is unchanged');
 // ---------------------------------------------------------------------------
 // Density was bought by trimming margins and padding, never by dropping

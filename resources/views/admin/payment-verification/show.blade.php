@@ -505,6 +505,40 @@
                     </button>
                 </div>
                 <div class="modal-body">
+                    {{-- The figure being approved, said plainly.
+
+                         This modal listed what approving would do but never what
+                         it was for: the officer was asked to confirm an amount
+                         the screen did not show them. --}}
+                    <div class="text-center mb-3">
+                        <div class="text-muted small text-uppercase">{{ __('Amount being approved') }}</div>
+                        <div style="font-size:2.2rem;line-height:1.1;font-weight:700;">
+                            {{ number_format((float) ($row->amount ?? 0), 2) }}
+                        </div>
+                        <div class="text-muted">{!! $setting->currency_symbol !!}</div>
+                    </div>
+
+                    <table class="table table-sm">
+                        <tbody>
+                            <tr>
+                                <th class="fw-normal text-muted w-50">{{ __('field_name') }}</th>
+                                <td class="fw-bold">
+                                    @if($row->student)
+                                        {{ $row->student->first_name }} {{ $row->student->last_name }}
+                                        <span class="text-muted">({{ $row->student->student_id ?? '' }})</span>
+                                    @else
+                                        {{ optional($row->applicant ?? optional($row->fee ?? null)->applicant)->first_name }}
+                                        {{ optional($row->applicant ?? optional($row->fee ?? null)->applicant)->last_name }}
+                                    @endif
+                                </td>
+                            </tr>
+                            <tr>
+                                <th class="fw-normal text-muted">{{ __('field_payment_date') }}</th>
+                                <td>{{ $row->payment_date ? date('d/m/Y', strtotime($row->payment_date)) : '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
                     <div class="alert alert-success">
                         <p><strong>{{ __('confirm_approve_receipt') }}</strong></p>
                         <ul class="mb-0">
@@ -512,6 +546,15 @@
                             <li>{{ __('msg_student_will_be_notified') }}</li>
                             <li>{{ __('msg_action_cannot_be_undone') }}</li>
                         </ul>
+                    </div>
+
+                    {{-- A deliberate act, not a reflex click: the approve button
+                         stays disabled until this is ticked. --}}
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="approve-confirm-check">
+                        <label class="form-check-label" for="approve-confirm-check">
+                            {{ __('I have checked this receipt and the amount above matches what the student paid.') }}
+                        </label>
                     </div>
 
                     <div class="form-group">
@@ -534,7 +577,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_cancel') }}</button>
-                    <button type="submit" class="btn btn-success" id="approveSubmitBtn"><i class="fas fa-check"></i> {{ __('btn_approve') }}</button>
+                    <button type="submit" class="btn btn-success" id="approveSubmitBtn" disabled><i class="fas fa-check"></i> {{ __('btn_approve') }}</button>
                 </div>
             </form>
         </div>
@@ -629,3 +672,24 @@
     });
 </script>
 @endsection
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tick = document.getElementById('approve-confirm-check');
+    const button = document.getElementById('approveSubmitBtn');
+    const modal = document.getElementById('approveModal');
+
+    if (!tick || !button) { return; }
+
+    tick.addEventListener('change', function () { button.disabled = !this.checked; });
+
+    // Reopening always starts unticked: a confirmation carried over from the
+    // previous look is not a confirmation.
+    if (modal) {
+        modal.addEventListener('hidden.bs.modal', function () {
+            tick.checked = false;
+            button.disabled = true;
+        });
+    }
+});
+</script>

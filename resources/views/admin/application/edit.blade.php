@@ -1326,6 +1326,15 @@
           <table class="table table-sm mb-0" id="convert-confirm-table">
             <tbody></tbody>
           </table>
+
+          {{-- A deliberate act, not a second reflex click in the same place as
+               the first. The money screens ask the same way. --}}
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="convert-confirm-check">
+            <label class="form-check-label" for="convert-confirm-check">
+              {{ __('I have checked the batch, programme, session and semester above and they are correct.') }}
+            </label>
+          </div>
         </div>
 
         <div class="modal-footer">
@@ -1360,6 +1369,7 @@
   var confirmStep = document.getElementById('convert-confirm-step');
   var reviewBtn   = document.getElementById('convert-review-btn');
   var confirmBtn  = document.getElementById('convert-confirm-btn');
+  var confirmTick = document.getElementById('convert-confirm-check');
   var backBtn     = document.getElementById('convert-back-btn');
   var closeBtn    = document.getElementById('convert-close-btn');
   var tableBody   = document.querySelector('#convert-confirm-table tbody');
@@ -1474,8 +1484,10 @@
     closeBtn.classList.add('d-none');
     backBtn.classList.remove('d-none');
     confirmBtn.classList.remove('d-none');
-    confirmBtn.disabled = false;
-    confirmBtn.focus();
+    // Ticked afresh every time: a confirmation carried over from the previous
+    // look is not a confirmation.
+    if (confirmTick) { confirmTick.checked = false; }
+    confirmBtn.disabled = true;
   }
 
   function showForm() {
@@ -1485,6 +1497,8 @@
     closeBtn.classList.remove('d-none');
     backBtn.classList.add('d-none');
     confirmBtn.classList.add('d-none');
+    // Going back withdraws the confirmation, so the tick goes with it.
+    if (confirmTick) { confirmTick.checked = false; }
     // Disabled again, so Enter in a field cannot reach it from the form step.
     confirmBtn.disabled = true;
   }
@@ -1501,6 +1515,12 @@
   });
 
   if (backBtn) { backBtn.addEventListener('click', showForm); }
+
+  if (confirmTick) {
+    confirmTick.addEventListener('change', function () {
+      confirmBtn.disabled = !this.checked;
+    });
+  }
 
   // Submitting takes a few seconds (it sends two emails), and a second press
   // would try to admit the same applicant twice.
