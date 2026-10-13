@@ -1715,6 +1715,38 @@
       $submit.prop('disabled', true);
     }
 
+    // Fill the session, semester and section lists.
+    //
+    // The shared filter script only populates them when the programme select
+    // CHANGES. In this modal the programme is already chosen server-side, so
+    // nothing ever changed and the three lists stayed empty until something
+    // poked them. Asked for once: a second open does not refetch lists that
+    // are already loaded.
+    var conversionListsLoaded = false;
+
+    window.loadConversionLists = function (force) {
+      var $program = $('#convert_program');
+
+      if (!$program.val() || (conversionListsLoaded && !force)) {
+        return;
+      }
+
+      conversionListsLoaded = true;
+
+      // Said out loud while they are on their way. An empty select reads as
+      // "this school has no sessions", which is a different problem from
+      // "they have not arrived yet".
+      $('#convert_session, #convert_semester, #convert_section').each(function () {
+        var $select = $(this);
+        if ($select.find('option').length <= 1) {
+          $select.find('option[value=""]').text({!! json_encode(__('Loading...')) !!});
+        }
+      });
+
+      $program.trigger('change');
+    };
+
+
     // Show which of the applicant's choices is the one currently selected, so
     // the admin can see at a glance whether they are admitting to the first
     // choice or to a fallback.
@@ -1778,17 +1810,18 @@
 
       if(convertPrefill.program){
         $program.val(convertPrefill.program);
-        setTimeout(function(){
-          $program.trigger('change');
-        }, 300);
       }
-      
-      // Report matricule readiness once the prefilled selections have settled,
-      // and mark which of the applicant's choices is selected.
-      setTimeout(function(){
-        refreshMatriculeStatus();
-        markSelectedChoice();
-      }, 500);
+
+      // The session, semester and section lists are loaded when the PAGE loads
+      // (see the block after the shared filter script), not here. They used to
+      // be asked for 300ms after the modal opened and read 200ms after that, so
+      // whether the administrator saw them depended on how fast three requests
+      // came back: open it quickly and the lists were still empty, open it a
+      // second time and they were there. Nothing here depends on a guessed
+      // delay any more.
+      loadConversionLists();
+      refreshMatriculeStatus();
+      markSelectedChoice();
     });
 
     if(conversionErrorKeys.length){
@@ -1880,4 +1913,20 @@
   })(jQuery);
 </script>
 @include('common.js.batch_filter')
+
+{{-- After the shared filter script, never before: its ".program" change
+     handler has to exist before anything triggers it. This is what fills the
+     session, semester and section lists while the page is still loading, so
+     the conversion modal is ready the first time it is opened rather than the
+     second. --}}
+<script>
+(function ($) {
+  "use strict";
+  $(function () {
+    if (typeof window.loadConversionLists === 'function') {
+      window.loadConversionLists();
+    }
+  });
+})(jQuery);
+</script>
 @endsection

@@ -280,6 +280,36 @@ check('an incomplete form does not reach the confirmation',
     'confirming details that will be refused on submit wastes the admin\'s time');
 
 // ---------------------------------------------------------------------------
+section('The lists are ready before the modal is opened');
+// ---------------------------------------------------------------------------
+// Session, semester and section are filled by the shared filter script, which
+// only reacts when the programme select CHANGES. The programme is already
+// chosen server-side, so nothing changed and the lists stayed empty: the modal
+// opened blank the first time and was only populated by the time it was opened
+// again. They are now asked for while the page loads.
+check('the page defines a loader for the dependent lists',
+    str_contains($response->getContent(), 'window.loadConversionLists'),
+    'without one, nothing ever pokes the shared filter script');
+
+check('and calls it on page load, not on modal open',
+    (bool) preg_match('/\$\(function \(\) \{\s*if \(typeof window\.loadConversionLists/', $response->getContent()),
+    'waiting for the modal is what made the first open blank');
+
+check('the loader is placed after the shared filter script',
+    strpos($response->getContent(), 'window.loadConversionLists();')
+        > strpos($response->getContent(), 'filter-session'),
+    'its change handler has to be bound before anything triggers it');
+
+// Scoped to this view's own source: the rendered page carries shared scripts
+// with timers of their own, and failing on those would say nothing about this.
+$conversionView = file_get_contents(resource_path('views/admin/application/edit.blade.php'));
+
+check('the modal no longer defers the cascade behind a timer',
+    !str_contains($conversionView, "\$program.trigger('change');
+        }, 300);"),
+    'whether the lists appeared depended on how fast three requests came back');
+
+// ---------------------------------------------------------------------------
 section('The confirmation reads the choices back');
 // ---------------------------------------------------------------------------
 check('pressing submit shows the confirmation instead of saving', $is('confirmShown'));
