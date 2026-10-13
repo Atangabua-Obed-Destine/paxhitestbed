@@ -8,6 +8,7 @@ use App\Models\Semester;
 use App\Models\MailSetting;
 use App\Models\ProgramSemesterFee;
 use App\Mail\AcceptanceLetter as AcceptanceLetterMail;
+use App\Services\DocumentHtml;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -278,29 +279,12 @@ class AcceptanceLetterService
      */
     public function normalizeLetterHtml(?string $html): ?string
     {
-        if ($html === null || $html === '') {
-            return $html;
-        }
-
-        // Drop Word's empty <o:p> tags and mso-* style properties.
-        $html = preg_replace('/<\/?o:p[^>]*>/i', '', $html);
-        $html = preg_replace('/mso-[^:;"\']+:[^;"\']*;?/i', '', $html);
-
-        // Remove fixed width/height/min-/max- in inline styles (keep line-height & font-size).
-        $html = preg_replace('/(?<![a-z-])(?:min-|max-)?width\s*:\s*[^;"\']*;?/i', '', $html);
-        $html = preg_replace('/(?<!font-)(?<!line-)(?<![a-z])(?:min-|max-)?height\s*:\s*[^;"\']*;?/i', '', $html);
-
-        // Remove text-indent (Word lists use a negative indent that makes the bullet
-        // overlap the text in DomPDF).
-        $html = preg_replace('/text-indent\s*:\s*[^;"\']*;?/i', '', $html);
-
-        // Remove width/height HTML attributes (Word adds these to tables/cells/images),
-        // covering quoted ("451") and unquoted (=451) forms.
-        $html = preg_replace('/\s(?:width|height)\s*=\s*"[^"]*"/i', '', $html);
-        $html = preg_replace("/\s(?:width|height)\s*=\s*'[^']*'/i", '', $html);
-        $html = preg_replace('/\s(?:width|height)\s*=\s*[0-9.]+%?/i', '', $html);
-
-        return $html;
+        // One implementation, in DocumentHtml. This method used to carry its own
+        // copy of the same strips, and the copies drifted: DocumentHtml learned
+        // to set images aside first, so a logo resized in the editor kept the
+        // size it was given, while this one went on stripping width and height
+        // off every <img> and the sent letter rendered them at full size.
+        return DocumentHtml::normalize($html);
     }
 
     /**
