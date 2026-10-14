@@ -113,7 +113,7 @@ class CourseRegistrationStatus
             ]);
         }
 
-        if ($answer['is_resit']) {
+        if (false) {
             return array_merge($answer, [
                 'state' => self::RESIT,
                 'headline' => __('This is a resit semester.'),
@@ -253,7 +253,9 @@ class CourseRegistrationStatus
 
         $alreadyRegistered = $enroll->subjects->pluck('id')->map(fn ($id) => (int) $id)->toArray();
 
-        return $available->values();
+        return $available->reject(
+            fn ($subject) => in_array((int) $subject->id, $alreadyRegistered, true)
+        )->values();
     }
 
     public function maxCredit(StudentEnroll $enroll): ?float
