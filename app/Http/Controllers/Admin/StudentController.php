@@ -61,7 +61,7 @@ class StudentController extends Controller
         $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-create|'.$this->access.'-edit|'.$this->access.'-delete|'.$this->access.'-card', ['only' => ['index','show','status','sendPassword']]);
         $this->middleware('permission:'.$this->access.'-create', ['only' => ['create','store']]);
         $this->middleware('permission:'.$this->access.'-edit', ['only' => ['edit','update','status']]);
-        $this->middleware('permission:'.$this->access.'-delete', ['only' => ['destroy']]);
+        $this->middleware('permission:'.$this->access.'-delete', ['only' => ['destroy', 'unconvert']]);
         $this->middleware('permission:'.$this->access.'-password-print', ['only' => ['printPassword','multiPrintPassword']]);
         $this->middleware('permission:'.$this->access.'-password-change', ['only' => ['passwordChange']]);
         $this->middleware('permission:'.$this->access.'-card', ['only' => ['index','card']]);
@@ -857,9 +857,17 @@ class StudentController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function destroy(Student $student)
+    /**
+     * Remove a student and everything hanging off them.
+     *
+     * Lifted out of destroy() unchanged so that sending a record back to its
+     * application removes exactly what deleting it removes - two copies of this
+     * list would drift, and the one that forgets a table leaves orphans behind.
+     *
+     * Must be called inside a transaction; the caller owns the boundary.
+     */
+    protected function purgeStudent(Student $student): void
     {
-        DB::beginTransaction();
         // Delete
         $this->deleteMultiMedia($this->path, $student, 'photo');
         $this->deleteMultiMedia($this->path, $student, 'signature');
@@ -880,6 +888,66 @@ class StudentController extends Controller
         $student->notes()->delete();
 
         $student->delete();
+    }
+
+    /**
+     * Send a student record that was never enrolled back to its application.
+     *
+     * A student converted onto the wrong programme cannot be edited into the
+     * right one: the programme is stamped onto the student at conversion. This
+     * takes the half-made record away and puts the application back in front of
+     * the admissions officer, who can correct the programme and convert it
+     * again properly.
+     *
+     * It refuses the moment the record has an enrolment, a payment, a credit or
+     * a statement entry - at that point it is part of the school's accounts and
+     * has to be corrected, not deleted.
+     */
+    public function unconvert(Request $request, Student $student)
+    {
+        $service = app(\App\Services\UnconvertStudent::class);
+        $refusals = $service->blockers($student);
+
+        if ($refusals !== []) {
+            Flasher::addError(implode(' ', $refusals), __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        $application = $service->applicationFor($student);
+        $name = trim($student->first_name . ' ' . $student->last_name);
+
+        try {
+            DB::transaction(function () use ($student, $application, $request, $service) {
+                $this->purgeStudent($student);
+
+                $service->revertApplication(
+                    $application,
+                    trim((string) $request->input('reason')) ?: null,
+                    Auth::guard('web')->user()->id
+                );
+            });
+        } catch (\Throwable $e) {
+            \Log::error('Sending a student back to their application failed: ' . $e->getMessage(), [
+                'student_id' => $student->id,
+            ]);
+            Flasher::addError(__('msg_delete_error'), __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        Flasher::addSuccess(__(':name was removed and application #:registration is waiting for admission again.', [
+            'name' => $name,
+            'registration' => $application->registration_no,
+        ]), __('msg_success'));
+
+        return redirect()->route('admin.application.edit', $application->id);
+    }
+
+    public function destroy(Student $student)
+    {
+        DB::beginTransaction();
+        $this->purgeStudent($student);
         DB::commit();
 
         Flasher::addSuccess(__('msg_deleted_successfully'), __('msg_success'));

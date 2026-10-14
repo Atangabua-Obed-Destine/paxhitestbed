@@ -191,7 +191,14 @@ window.addEventListener('load', function () {
 
       setTimeout(function () {
         var over = step.textContent.replace(/\s+/g, ' ');
-        note('warnsOverpayment', /more than the balance due/i.test(over));
+        // More than this fee's balance no longer means "held as credit": the
+        // extra is carried onto the student's other instalments, and only what
+        // is left beyond ALL of them becomes credit. Either way the extra money
+        // must be named - which is what this check has always been about.
+        note('warnsOverpayment',
+          /spread across the student/i.test(over)
+          || /more than every instalment the student owes/i.test(over)
+          || /more than the balance due/i.test(over));
         note('tickResetOnReturn', !tick.checked);
         note('confirmDisabledAgain', confirm.disabled);
         finish();
@@ -280,7 +287,7 @@ section('Amounts that are not the balance are called out');
 // ---------------------------------------------------------------------------
 check('a part payment says so', $is('warnsPartPayment'));
 
-check('an overpayment says so',
+check('money beyond this fee is accounted for, not silently accepted',
     $is('warnsOverpayment'),
     'taking more than is owed should be a decision, not a slip');
 

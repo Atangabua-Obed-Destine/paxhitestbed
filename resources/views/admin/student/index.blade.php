@@ -268,7 +268,21 @@
                                             @endforeach
                                         </td>
                                         <td></td>
-                                        <td></td>
+                                        <td class="text-nowrap">
+                                            @can($access.'-delete')
+                                                {{-- A record like this was never really made: no enrolment, no
+                                                     money, no history. Rather than leave it stranded, it goes
+                                                     back to its application so the programme can be corrected
+                                                     and the admission made properly. --}}
+                                                <button type="button" class="btn btn-sm btn-warning btn-unconvert"
+                                                        data-student="{{ $orphan->id }}"
+                                                        data-name="{{ $orphan->first_name }} {{ $orphan->last_name }}"
+                                                        data-matricule="{{ $orphan->student_id }}"
+                                                        title="{{ __('Send back to the application') }}">
+                                                    <i class="fas fa-undo"></i> {{ __('Send back') }}
+                                                </button>
+                                            @endcan
+                                        </td>
                                     </tr>
                                   @endforeach
                                   @endif
@@ -322,4 +336,90 @@
         }
     });
 </script>
+
+@can($access.'-delete')
+{{-- Sending a record back to its application.
+
+     This deletes a student record, so it follows the same shape as every other
+     screen here that destroys something: say exactly what will happen, name the
+     record, and keep the button dead until a tick box is ticked. --}}
+<div class="modal fade" id="unconvertModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <form method="POST" id="unconvert-form">
+        @csrf
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title">{{ __('Send this record back to its application') }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">
+            {{ __('This removes the student record for') }}
+            <strong id="unconvert-name">&mdash;</strong>
+            (<span id="unconvert-matricule">&mdash;</span>)
+            {{ __('and puts their application back in front of admissions, so the programme can be corrected and the student created again.') }}
+          </p>
+
+          <div class="alert alert-warning mb-3">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ __('The student record itself is deleted. Their application, and everything the applicant submitted, is kept.') }}
+          </div>
+
+          <div class="form-group">
+            <label for="unconvert-reason">{{ __('Why') }}</label>
+            <input type="text" class="form-control" name="reason" id="unconvert-reason" maxlength="500"
+                   placeholder="{{ __('e.g. admitted onto the wrong programme') }}">
+            <small class="form-text text-muted">{{ __('Written onto the application, so admissions can see what happened.') }}</small>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="unconvert-confirm">
+            <label class="form-check-label" for="unconvert-confirm">
+              {{ __('I understand this deletes the student record.') }}
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_close') }}</button>
+          <button type="submit" class="btn btn-warning" id="unconvert-submit" disabled>
+            <i class="fas fa-undo"></i> {{ __('Send back to the application') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+@push('scripts')
+<script>
+(function ($) {
+  "use strict";
+
+  $(document).on('click', '.btn-unconvert', function () {
+    var button = $(this);
+
+    $('#unconvert-name').text(button.data('name'));
+    $('#unconvert-matricule').text(button.data('matricule'));
+    $('#unconvert-reason').val('');
+    $('#unconvert-confirm').prop('checked', false);
+    $('#unconvert-submit').prop('disabled', true);
+    $('#unconvert-form').attr('action',
+      '{{ url('admin/admission/student') }}/' + button.data('student') + '/unconvert');
+
+    $('#unconvertModal').modal('show');
+  });
+
+  $('#unconvert-confirm').on('change', function () {
+    $('#unconvert-submit').prop('disabled', !this.checked);
+  });
+
+  $('#unconvertModal').on('hidden.bs.modal', function () {
+    $('#unconvert-confirm').prop('checked', false);
+    $('#unconvert-submit').prop('disabled', true);
+  });
+})(jQuery);
+</script>
+@endpush
+@endcan
+
 @endsection

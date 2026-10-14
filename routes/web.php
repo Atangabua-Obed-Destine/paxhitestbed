@@ -279,6 +279,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     
     Route::post('admission/student-generate-id', 'StudentController@generateId')->name('student.generate-id');
     Route::resource('admission/student', 'StudentController');
+    Route::post('admission/student/{student}/unconvert', 'StudentController@unconvert')->name('student.unconvert');
     Route::get('admission/student/{id}/impersonate', 'StudentController@impersonate')->name('student.impersonate');
     Route::get('admission/student-card/{id}', 'StudentController@card')->name('student.card');
     // Route::get('admission/student-status/{id}', 'StudentController@status')->name('student.status');
