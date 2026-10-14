@@ -113,7 +113,7 @@ class CourseRegistrationStatus
             ]);
         }
 
-        if (false) {
+        if ($answer['is_resit']) {
             return array_merge($answer, [
                 'state' => self::RESIT,
                 'headline' => __('This is a resit semester.'),

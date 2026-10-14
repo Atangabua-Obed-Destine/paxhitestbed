@@ -169,6 +169,17 @@ class SemesterController extends Controller
      */
     public function destroy(Semester $semester)
     {
+        // student_enrolls cascades on this column, inside MySQL, so a delete
+        // here would erase every enrolment attached to it without a single
+        // audit row - and the students would vanish from the student list.
+        $refusals = app(\App\Services\AcademicDependencyGuard::class)->blockers($semester);
+
+        if ($refusals !== []) {
+            Flasher::addError(implode(' ', $refusals), __('msg_error'));
+
+            return redirect()->back();
+        }
+
         // Delete Data
         $semester->programs()->detach();
         $semester->delete();

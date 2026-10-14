@@ -88,6 +88,25 @@
                         <!-- [ Data table ] start -->
                         <div class="table-responsive">
                             <table id="export-table" class="display table nowrap table-striped table-hover" style="width:100%">
+                                @if(isset($unenrolled) && $unenrolled->count() > 0)
+                                {{-- This list is built entirely from enrolments, so a student whose
+                                     enrolments were erased used to vanish from it without a word.
+                                     Said out loud now, whether or not the filters let them be
+                                     listed below. --}}
+                                <div class="alert alert-danger" role="alert">
+                                    <strong>
+                                        <i class="fas fa-user-slash"></i>
+                                        {{ $unenrolled->count() }} {{ __('student(s) have no enrolment.') }}
+                                    </strong>
+                                    <div class="small mt-1">
+                                        {{ __('They cannot be taught, examined or billed until they are enrolled again. This usually means a programme, session, semester or section was deleted while they were on it.') }}
+                                        @if(!($unenrolled_shown ?? false))
+                                            <br>{{ __('Clear the faculty and programme filters to see them listed below.') }}
+                                        @endif
+                                    </div>
+                                </div>
+                                @endif
+
                                 <thead>
                                     <tr>
                                         <th>#
@@ -228,6 +247,31 @@
                                         </td>
                                     </tr>
                                   @endforeach
+                                  @if(($unenrolled_shown ?? false) && isset($unenrolled))
+                                  @foreach($unenrolled as $orphan)
+                                    <tr class="table-danger">
+                                        <td>&mdash;</td>
+                                        <td>
+                                            <a href="{{ route($route.'.show', $orphan->id) }}">
+                                                <strong style="color: #c0392b;">#{{ $orphan->student_id }}</strong>
+                                            </a>
+                                            <br>
+                                            <span class="badge badge-danger" style="font-size: 9px;">{{ __('No enrolment') }}</span>
+                                        </td>
+                                        <td>{{ $orphan->first_name }} {{ $orphan->last_name }}</td>
+                                        <td colspan="4" class="text-muted">
+                                            {{ __('This student has no enrolment, so they have no programme, session, semester or section.') }}
+                                        </td>
+                                        <td>
+                                            @foreach($orphan->statuses as $status)
+                                            <span class="badge badge-primary">{{ $status->title }}</span><br>
+                                            @endforeach
+                                        </td>
+                                        <td></td>
+                                        <td></td>
+                                    </tr>
+                                  @endforeach
+                                  @endif
                                 </tbody>
                             </table>
                         </div>

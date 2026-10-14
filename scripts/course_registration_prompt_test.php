@@ -190,6 +190,58 @@ if (!$resitStudent) {
     check('and the student is not prompted',
         !$status->needsAttention($answer),
         'state ' . $answer['state']);
+
+    // The courses are stopped by assignableSubjects() either way. What this
+    // branch decides is what the student is TOLD - "it is a resit semester",
+    // not "no courses are open to you", which would send them to the office
+    // asking why.
+    check('and is told it is a resit semester, not that nothing was set up',
+        $answer['state'] === CourseRegistrationStatus::RESIT,
+        'state ' . $answer['state'] . ' — ' . $answer['headline']);
+}
+
+// ---------------------------------------------------------------------------
+section('A course already passed is not offered again');
+// ---------------------------------------------------------------------------
+// No student here currently has a published pass on a course still on offer, so
+// the case is built rather than hoped for.
+if (!$withCourses) {
+    skip('no student with courses to register');
+} else {
+    DB::beginTransaction();
+
+    try {
+        $before = $status->for($withCourses);
+        $enroll = $before['enrollment'];
+        $target = $before['assignable']->first();
+
+        if (!$target) {
+            skip('nothing on offer to mark as passed');
+        } else {
+            DB::table('subject_markings')->insert([
+                'student_enroll_id' => $enroll->id,
+                'subject_id' => $target->id,
+                'total_marks' => 75,
+                'validated' => 1,
+                'status' => 1,
+                'workflow_state' => 'published',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $after = $status->for(Student::find($withCourses->id), StudentEnroll::find($enroll->id));
+
+            check('a course passed at 50% or more drops off the list',
+                !$after['assignable']->contains(fn ($s) => $s->id === $target->id),
+                'course #' . $target->id . ' (' . $target->code . ') is still being offered after a published 75%');
+
+            check('and the count falls by exactly one',
+                $after['available'] === $before['available'] - 1,
+                'was ' . $before['available'] . ', now ' . $after['available']);
+        }
+    } finally {
+        DB::rollBack();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -277,8 +329,17 @@ if (!$withCourses) {
         str_contains($html, __('Register my courses')),
         'a popup that has been dismissed is gone; the banner is what remains');
 
-    check('the popup carries a button to the registration page',
-        str_contains($html, 'course-registration'));
+    // Looked for inside the modal, not anywhere on the page: the banner links
+    // there too, so a page-wide search passes even with the popup's button gone.
+    $modalHtml = '';
+
+    if (preg_match('/id="courseRegistrationModal".*?<\/div>\s*<\/div>\s*<\/div>\s*<\/div>/s', $html, $m)) {
+        $modalHtml = $m[0];
+    }
+
+    check('the popup itself carries a button to the registration page',
+        str_contains($modalHtml, 'course-registration') && str_contains($modalHtml, '<a '),
+        'a popup with no way out of it is just an interruption');
 
     check('it says what happens if they do nothing',
         str_contains($html, __('Until you register, you will not appear on the class list or the exam list for these courses.')),
@@ -326,8 +387,11 @@ if (!$anyStudent) {
         str_contains($html, __('Carry-over')) && str_contains($html, __('University Requirement')),
         'the course list is full of words nobody explains anywhere else');
 
+    // The button renders as "<i class=...></i> Assign", so the old needle
+    // '>Assign<' could never match and the check could never fail.
     check('the button says what it does',
-        !str_contains($html, '>' . __('Assign') . '<'),
+        str_contains($html, __('Register these courses'))
+            && !preg_match('/<button[^>]*>\s*<i[^>]*><\/i>\s*' . preg_quote(__('Assign'), '/') . '\s*<\/button>/', $html),
         '"Assign" is the admin word for this; a student is registering');
 
     // That advice only appears when there IS nothing to choose from, so it has

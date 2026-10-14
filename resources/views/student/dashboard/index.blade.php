@@ -1,660 +1,1294 @@
 @extends('student.layouts.master')
 @section('title', $title)
+
 @section('page_css')
-<link rel="stylesheet" href="{{ asset('dashboard/plugins/select2/css/select2.min.css') }}">
+<link rel="stylesheet" href="{{ asset('dashboard/plugins/fullcalendar/css/fullcalendar.min.css') }}">
+<style>
+    /* ========== ANIMATIONS ========== */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+
+    @keyframes slideInLeft {
+        from {
+            opacity: 0;
+            transform: translateX(-30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+        40% { transform: translateY(-10px); }
+        60% { transform: translateY(-5px); }
+    }
+
+    /* ========== DASHBOARD STYLES ========== */
+    .dashboard-card {
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+        animation: fadeInUp 0.6s ease;
+        border: none;
+        overflow: hidden;
+    }
+
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .stat-card {
+        position: relative;
+        padding: 25px;
+        border-radius: 15px;
+        color: #fff;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: rgba(255,255,255,0.1);
+        transform: rotate(45deg);
+        transition: all 0.5s ease;
+    }
+
+    .stat-card:hover::before {
+        top: -60%;
+        right: -60%;
+    }
+
+    .stat-card .icon-wrapper {
+        width: 70px;
+        height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50%;
+        font-size: 30px;
+        margin-bottom: 15px;
+        animation: pulse 2s infinite;
+    }
+
+    .stat-card h3 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+
+    .stat-card p {
+        margin: 0;
+        opacity: 0.9;
+        font-size: 0.95rem;
+    }
+
+    /* Gradient backgrounds for stat cards */
+    .gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .gradient-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    .gradient-warning {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .gradient-info {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .gradient-danger {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .gradient-purple {
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    }
+
+    /* Quick action buttons */
+    .quick-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 15px 20px;
+        border-radius: 10px;
+        background: #f8f9fa;
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        color: #333;
+        margin-bottom: 10px;
+    }
+
+    .quick-action-btn:hover {
+        border-color: #667eea;
+        background: #fff;
+        transform: translateX(5px);
+        color: #667eea;
+    }
+
+    .quick-action-btn i {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border-radius: 8px;
+        font-size: 18px;
+    }
+
+    /* Progress bars */
+    .custom-progress {
+        height: 8px;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #e9ecef;
+    }
+
+    .custom-progress-bar {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 1s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .custom-progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background-image: linear-gradient(
+            -45deg,
+            rgba(255, 255, 255, .2) 25%,
+            transparent 25%,
+            transparent 50%,
+            rgba(255, 255, 255, .2) 50%,
+            rgba(255, 255, 255, .2) 75%,
+            transparent 75%,
+            transparent
+        );
+        z-index: 1;
+        background-size: 50px 50px;
+        animation: move 2s linear infinite;
+    }
+
+    @keyframes move {
+        0% { background-position: 0 0; }
+        100% { background-position: 50px 50px; }
+    }
+
+    /* List items */
+    .list-item {
+        padding: 15px;
+        border-radius: 10px;
+        background: #f8f9fa;
+        margin-bottom: 10px;
+        transition: all 0.3s ease;
+        border-left: 4px solid transparent;
+    }
+
+    .list-item:hover {
+        background: #fff;
+        border-left-color: #667eea;
+        transform: translateX(5px);
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    /* Section headers */
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .section-header i {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+        border-radius: 8px;
+        font-size: 18px;
+    }
+
+    .section-header h5 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    /* Badge styles */
+    .custom-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    /* Timeline */
+    .timeline-item {
+        position: relative;
+        padding-left: 40px;
+        margin-bottom: 20px;
+    }
+
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: 8px;
+        top: 25px;
+        bottom: -20px;
+        width: 2px;
+        background: #e9ecef;
+    }
+
+    .timeline-item:last-child::before {
+        display: none;
+    }
+
+    .timeline-icon {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #667eea;
+        border: 3px solid #fff;
+        box-shadow: 0 0 0 2px #667eea;
+    }
+
+    /* Animated loader */
+    .metric-loader {
+        display: inline-block;
+        animation: bounce 1s ease-in-out;
+    }
+
+    /* Welcome banner */
+    .welcome-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 30px;
+        border-radius: 15px;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 30px;
+        animation: fadeIn 0.6s ease;
+    }
+
+    .welcome-banner::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: rgba(255,255,255,0.05);
+        transform: rotate(45deg);
+    }
+
+    .welcome-banner h2 {
+        font-size: 2rem;
+        margin-bottom: 10px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .welcome-banner p {
+        margin: 0;
+        opacity: 0.9;
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Responsive animations */
+    .fade-in-up { animation: fadeInUp 0.6s ease; }
+    .fade-in-left { animation: slideInLeft 0.6s ease; }
+    .fade-in-right { animation: slideInRight 0.6s ease; }
+    
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+    .delay-5 { animation-delay: 0.5s; }
+
+    /* Card icon backgrounds */
+    .card-icon-bg {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        font-size: 24px;
+        margin-right: 15px;
+    }
+
+    .bg-primary-light {
+        background: rgba(102, 126, 234, 0.1);
+        color: #667eea;
+    }
+
+    .bg-success-light {
+        background: rgba(17, 153, 142, 0.1);
+        color: #11998e;
+    }
+
+    .bg-warning-light {
+        background: rgba(240, 147, 251, 0.1);
+        color: #f093fb;
+    }
+
+    .bg-info-light {
+        background: rgba(79, 172, 254, 0.1);
+        color: #4facfe;
+    }
+
+    .bg-danger-light {
+        background: rgba(250, 112, 154, 0.1);
+        color: #fa709a;
+    }
+
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+
+    /* Hover effects */
+    .hover-scale {
+        transition: transform 0.3s ease;
+    }
+
+    .hover-scale:hover {
+        transform: scale(1.02);
+    }
+</style>
 @endsection
+
 @section('content')
 
 <!-- Start Content-->
 <div class="main-body">
     <div class="page-wrapper">
         <!-- [ Main Content ] start -->
-        <div class="row">
-            <div class="col-sm-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>{{ $title }}</h5>
+
+        {{-- Courses still to register.
+
+             Said twice on purpose: once as a popup the moment the dashboard
+             opens, because a student who misses registration misses the class
+             and exam lists; and once as a banner that stays put, because a
+             popup that has been dismissed is gone. --}}
+        @php
+            $needsRegistration = isset($registrationStatus)
+                && in_array($registrationStatus['state'], ['open', 'partly_done'], true);
+        @endphp
+
+        @if($needsRegistration)
+        <div class="alert alert-warning shadow-sm mb-4" role="alert" style="border-left: 5px solid #ffc107;">
+            <div class="d-flex align-items-center flex-wrap">
+                <div class="mr-3 mb-2 mb-md-0">
+                    <i class="fas fa-clipboard-list fa-2x text-warning"></i>
+                </div>
+                <div class="flex-grow-1 mb-2 mb-md-0">
+                    <h6 class="mb-1 font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
+                    <p class="mb-0 small">{{ $registrationStatus['detail'] }}</p>
+                </div>
+                <a href="{{ route('student.course-registration.index') }}" class="btn btn-warning">
+                    <i class="fas fa-arrow-right"></i> {{ __('Register my courses') }}
+                </a>
+            </div>
+        </div>
+
+        <div class="modal fade" id="courseRegistrationModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning">
+                        <h5 class="modal-title">
+                            <i class="fas fa-clipboard-list"></i> {{ __('Course registration is open') }}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="card-block">
-                        {{-- How to do this.
+                    <div class="modal-body">
+                        <h6 class="font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
+                        <p>{{ $registrationStatus['detail'] }}</p>
 
-                             Written for a student who has never registered
-                             courses before and does not know what "assign" or
-                             "carry-over" mean. It says what the page is for,
-                             what to do in order, and what happens if they do
-                             nothing - which is the part that actually costs
-                             them. --}}
-                        <div class="alert alert-info" role="alert">
-                            <h5 class="alert-heading mb-2">
-                                <i class="fas fa-question-circle"></i>
-                                {{ __('How to register your courses') }}
-                            </h5>
-                            <p>
-                                {{ __('Registering tells the school which classes you are taking this semester. Until you do it, you will not appear on the class list or the exam list for those courses, and no marks can be recorded for you.') }}
-                            </p>
-
-                            @if(isset($registrationStatus) && in_array($registrationStatus['state'], ['open', 'partly_done'], true))
-                                <p class="mb-2">
-                                    <strong>{{ $registrationStatus['headline'] }}</strong>
-                                    {{ $registrationStatus['detail'] }}
-                                </p>
+                        @if($registrationStatus['enrollment'] && $registrationStatus['enrollment']->semester)
+                        <p class="mb-2 text-muted small">
+                            {{ __('field_semester') }}:
+                            <strong>{{ $registrationStatus['enrollment']->semester->title }}</strong>
+                            @if($registrationStatus['enrollment']->session)
+                                &mdash; {{ $registrationStatus['enrollment']->session->title }}
                             @endif
-
-                            <ol class="mb-2">
-                                <li>
-                                    {{ __('Look at') }} <strong>{{ __('My Courses') }}</strong>
-                                    {{ __('further down this page. Those are the courses you are already registered for. If a course is missing from it, you still need to register it.') }}
-                                </li>
-                                <li>
-                                    {{ __('In') }} <strong>{{ __('Choose your courses') }}</strong>,
-                                    {{ __('click the box and pick every course you want to take. You can pick several at once; click each one you want.') }}
-                                </li>
-                                <li>
-                                    {{ __('Check the list you have picked, then click') }}
-                                    <strong>{{ __('Register these courses') }}</strong>.
-                                    {{ __('You will be asked to confirm before anything is saved.') }}
-                                </li>
-                                <li>
-                                    {{ __('The courses then appear under') }} <strong>{{ __('My Courses') }}</strong>.
-                                    {{ __('That is how you know it worked.') }}
-                                </li>
-                            </ol>
-
-                            <hr>
-
-                            <p class="mb-1"><strong>{{ __('What the labels mean') }}</strong></p>
-                            <ul class="mb-2">
-                                <li><strong>{{ __('Compulsory') }}</strong> &mdash; {{ __('you must take it to complete your programme.') }}</li>
-                                <li><strong>{{ __('University Requirement') }}</strong> &mdash; {{ __('required of every student, whatever the programme.') }}</li>
-                                <li><strong>{{ __('Optional') }}</strong> &mdash; {{ __('you choose whether to take it.') }}</li>
-                                <li><strong>{{ __('Carry-over') }}</strong> &mdash; {{ __('a course from an earlier year that you have not passed yet. Register it again to retake it.') }}</li>
-                            </ul>
-
-                            <p class="mb-1"><strong>{{ __('If something looks wrong') }}</strong></p>
-                            <ul class="mb-0">
-                                <li>{{ __('Nothing in the list to choose from? Either you are already registered for everything open to you, or the school has not set the courses for your semester yet. Speak to your department.') }}</li>
-                                <li>{{ __('Registered the wrong course? Use the Drop button beside it in My Courses, as long as no marks have been recorded yet.') }}</li>
-                                @if(!is_null($maxCreditLimit))
-                                <li>{{ __('You may register up to :limit credits this semester. Picking more than that will be refused.', ['limit' => $maxCreditLimit]) }}</li>
-                                @endif
-                            </ul>
-                        </div>
-
-                        @if(!$currentEnroll)
-                            <div class="alert alert-warning mb-0" role="alert">
-                                {{ __('You are not currently enrolled in a semester, so course registration is unavailable.') }}
-                            </div>
-                        @else
-                            {{-- REMOVED: Old CGPA calculation that counted ALL programs
-                                 Now using $performanceSummary from controller which filters by current program --}}
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <fieldset class="row gx-2 scheduler-border">
-                                        <legend>{{ __('tab_basic_info') }}</legend>
-                                        <p><mark class="text-primary">{{ __('field_matricule') }}:</mark> 
-                                            <strong style="font-size: 15px; color: #667eea;">#{{ $currentEnroll->matricule ?? $student->student_id }}</strong>
-                                            @if($currentEnroll && $currentEnroll->program)
-                                                <span class="badge" style="background: {{ $currentEnroll->program->academic_level == 'M' ? '#f5576c' : ($currentEnroll->program->academic_level == 'D' ? '#00f2fe' : '#38f9d7') }}; color: white; font-size: 10px;">
-                                                    {{ $currentEnroll->program->academic_level == 'A' ? 'UG' : ($currentEnroll->program->academic_level == 'M' ? 'MS' : 'PhD') }}
-                                                </span>
-                                            @endif
-                                        </p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_name') }}:</mark> {{ $student->first_name }} {{ $student->last_name }}</p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_gender') }}:</mark>
-                                            @if($student->gender == 1)
-                                                {{ __('gender_male') }}
-                                            @elseif($student->gender == 2)
-                                                {{ __('gender_female') }}
-                                            @elseif($student->gender == 3)
-                                                {{ __('gender_other') }}
-                                            @endif
-                                        </p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_total_credit_hour') }}:</mark> 
-                                            {{ isset($performanceSummary) ? number_format($performanceSummary['total_credits_attempted'], 2) : '0.00' }}
-                                        </p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_cumulative_gpa') }}:</mark>
-                                            {{ isset($performanceSummary) ? number_format($performanceSummary['cgpa'], 2) : '0.00' }}
-                                        </p>
-                                        <hr/>
-                                    </fieldset>
-                                </div>
-                                <div class="col-md-6">
-                                    <fieldset class="row gx-2 scheduler-border">
-                                        <legend>{{ __('field_academic_information') }}</legend>
-                                        <p><mark class="text-primary">{{ __('field_batch') }}:</mark> {{ $student->batch->title ?? '' }}</p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_program') }}:</mark> {{ $currentEnroll->program->title ?? '' }}</p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_session') }}:</mark> {{ $currentEnroll->session->title ?? '' }}</p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_semester') }}:</mark> {{ $currentEnroll->semester->title ?? '' }}</p>
-                                        <hr/>
-
-                                        <p><mark class="text-primary">{{ __('field_section') }}:</mark> {{ $currentEnroll->section->title ?? '' }}</p>
-                                        <hr/>
-                                    </fieldset>
-                                </div>
-                            </div>
+                        </p>
                         @endif
+
+                        <div class="alert alert-light border mb-0 small">
+                            <i class="fas fa-info-circle"></i>
+                            {{ __('Until you register, you will not appear on the class list or the exam list for these courses.') }}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            {{ __('I will do it later') }}
+                        </button>
+                        <a href="{{ route('student.course-registration.index') }}" class="btn btn-warning">
+                            <i class="fas fa-arrow-right"></i> {{ __('Take me there') }}
+                        </a>
                     </div>
                 </div>
             </div>
+        </div>
 
-            @if($currentEnroll && isset($performanceSummary))
-                <!-- Performance Summary Section -->
-                <div class="col-sm-12">
-                    <div class="card">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0"><i class="fas fa-chart-line"></i> {{ __('Academic Performance Summary') }}</h5>
+        @push('scripts')
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var modalEl = document.getElementById('courseRegistrationModal');
+
+            // Bootstrap 5 dropped the jQuery plugin, so $(...).modal('show')
+            // does nothing here - the native API is what this version answers to.
+            if (!modalEl || typeof bootstrap === 'undefined') { return; }
+
+            // Shown once a visit rather than on every dashboard load. The banner
+            // above stays put, so nothing is lost by closing this.
+            var seen = null;
+
+            try {
+                seen = sessionStorage.getItem('courseRegistrationPrompt');
+            } catch (e) {
+                // Private browsing, blocked storage: fall through and show it.
+            }
+
+            if (seen === '{{ $registrationStatus['available'] }}') { return; }
+
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+            try {
+                sessionStorage.setItem('courseRegistrationPrompt', '{{ $registrationStatus['available'] }}');
+            } catch (e) {
+                // Nothing to do: it will simply show again next time.
+            }
+        });
+        </script>
+        @endpush
+        @endif
+
+        <!-- Progression Status Alert -->
+        @if(isset($progressionStatus) && $progressionStatus['status'] == 'waiting_for_session')
+        <div class="alert alert-info alert-dismissible fade show shadow-sm mb-4" role="alert" style="border-left: 5px solid #17a2b8;">
+            <div class="d-flex align-items-center">
+                <div class="mr-3">
+                    <i class="fas fa-clock fa-2x text-info"></i>
+                </div>
+                <div>
+                    <h5 class="alert-heading mb-1"><i class="fas fa-hourglass-half"></i> Semester Completed!</h5>
+                    <p class="mb-0">{{ $progressionStatus['message'] }}</p>
+                    <small class="text-muted">You have met all requirements for progression. Your dashboard will automatically update once the new academic session begins.</small>
+                </div>
+            </div>
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+        @endif
+
+        <!-- Welcome Banner -->
+        <div class="welcome-banner">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2><i class="fas fa-hand-sparkles"></i> Welcome back, {{ $student->first_name }}!</h2>
+                    <p>{{ Carbon\Carbon::now()->format('l, F j, Y') }}</p>
+                    @if(isset($currentEnroll))
+                    <p class="mb-0">
+                        <i class="fas fa-graduation-cap"></i> {{ $currentEnroll->program->title ?? 'N/A' }} | 
+                        <i class="fas fa-calendar-alt"></i> {{ $currentEnroll->semester->title ?? 'N/A' }} | 
+                        <i class="fas fa-users"></i> {{ $currentEnroll->section->title ?? 'N/A' }}
+                    </p>
+                    @endif
+                </div>
+                <div class="col-md-4 text-md-right">
+                    <img src="{{ asset('dashboard/images/graduation-cap.png') }}" alt="Education" style="max-width: 150px; opacity: 0.2;" onerror="this.style.display='none'">
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards Row -->
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6 fade-in-up delay-1">
+                <div class="stat-card gradient-primary">
+                    <div class="icon-wrapper">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="metric-loader">{{ number_format($cgpa ?? 0, 2) }}</h3>
+                    <p>Cumulative GPA</p>
+                    <small style="opacity: 0.8;">{{ $totalCredits ?? 0 }} Credits Earned</small>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 fade-in-up delay-2">
+                <div class="stat-card gradient-success">
+                    <div class="icon-wrapper">
+                        <i class="fas fa-book-reader"></i>
+                    </div>
+                    <h3 class="metric-loader">{{ $passedCourses ?? 0 }}/{{ $totalCourses ?? 0 }}</h3>
+                    <p>Courses Passed</p>
+                    <small style="opacity: 0.8;">
+                        @php
+                            $completion = $totalCourses > 0 ? ($passedCourses / $totalCourses) * 100 : 0;
+                        @endphp
+                        Of {{ $totalCourses ?? 0 }} Courses Attempted • {{ number_format($completion, 1) }}% Complete
+                    </small>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 fade-in-up delay-3">
+                <div class="stat-card gradient-info">
+                    <div class="icon-wrapper">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <h3 class="metric-loader">{{ number_format($attendancePercentage ?? 0, 1) }}%</h3>
+                    <p>Attendance Rate</p>
+                    <small style="opacity: 0.8;">{{ $presentAttendance ?? 0 }}/{{ $totalAttendance ?? 0 }} Classes</small>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 fade-in-up delay-4">
+                <div class="stat-card gradient-warning">
+                    <div class="icon-wrapper">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </div>
+                    <h3 class="metric-loader">{{ number_format($dueFees ?? 0, 0) }}</h3>
+                    <p>Fees Balance (XAF)</p>
+                    <small style="opacity: 0.8;">Paid: {{ number_format($paidFees ?? 0, 0) }} XAF</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Classes Widget - PROMINENT POSITION -->
+        @php
+            // Check for live class sessions
+            $liveClasses = collect();
+            $enrollmentId = session('selected_enrollment_id');
+            if($enrollmentId) {
+                $enrollment = \App\Models\StudentEnroll::find($enrollmentId);
+                if($enrollment) {
+                    $liveClasses = \App\Models\ClassSession::where('status', 'in_progress')
+                        ->where('program_id', $enrollment->program_id)
+                        ->where('semester_id', $enrollment->semester_id)
+                        ->where('session_id', $enrollment->session_id)
+                        ->where(function($q) use ($enrollment) {
+                            $q->whereNull('section_id')
+                              ->orWhere('section_id', $enrollment->section_id);
+                        })
+                        ->with(['subject', 'teacher'])
+                        ->get();
+                }
+            }
+        @endphp
+        @if($liveClasses->count() > 0)
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card dashboard-card" style="border: 3px solid #28a745; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); animation: pulse 2s infinite;">
+                    <div class="card-body">
+                        <div class="section-header d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center">
+                                <span class="badge badge-success mr-2 px-3 py-2" style="font-size: 14px; animation: pulse 1.5s infinite;">
+                                    <i class="fas fa-broadcast-tower mr-1"></i> {{ $liveClasses->count() }} LIVE CLASS{{ $liveClasses->count() > 1 ? 'ES' : '' }}
+                                </span>
+                                <h5 class="mb-0" style="color: #28a745;"><i class="fas fa-video mr-2"></i>Classes In Progress</h5>
+                            </div>
+                            <a href="{{ route('student.class-hub.index') }}" class="btn btn-success btn-sm">
+                                <i class="fas fa-broadcast-tower mr-1"></i> Go to Class Hub
+                            </a>
                         </div>
-                        <div class="card-block">
-                            <div class="row">
-                                <!-- CGPA Card -->
-                                <div class="col-md-3">
-                                    <div class="card bg-light border-0">
-                                        <div class="card-body text-center">
-                                            <h6 class="text-muted mb-2">{{ __('field_cumulative_gpa') }}</h6>
-                                            <h2 class="mb-2 
-                                                @if($performanceSummary['performance_status'] == 'excellent') text-success
-                                                @elseif($performanceSummary['performance_status'] == 'very_good') text-info
-                                                @elseif($performanceSummary['performance_status'] == 'good') text-primary
-                                                @elseif($performanceSummary['performance_status'] == 'satisfactory') text-warning
-                                                @else text-danger
-                                                @endif">
-                                                {{ number_format($performanceSummary['cgpa'], 2) }}
-                                            </h2>
-                                            <span class="badge 
-                                                @if($performanceSummary['performance_status'] == 'excellent') bg-success
-                                                @elseif($performanceSummary['performance_status'] == 'very_good') bg-info
-                                                @elseif($performanceSummary['performance_status'] == 'good') bg-primary
-                                                @elseif($performanceSummary['performance_status'] == 'satisfactory') bg-warning
-                                                @else bg-danger
-                                                @endif">
-                                                @if($performanceSummary['performance_status'] == 'excellent') {{ __('Excellent') }}
-                                                @elseif($performanceSummary['performance_status'] == 'very_good') {{ __('Very Good') }}
-                                                @elseif($performanceSummary['performance_status'] == 'good') {{ __('Good') }}
-                                                @elseif($performanceSummary['performance_status'] == 'satisfactory') {{ __('Satisfactory') }}
-                                                @else {{ __('Needs Improvement') }}
-                                                @endif
-                                            </span>
-                                        </div>
+                        @foreach($liveClasses as $liveClass)
+                        <div class="list-item" style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px; border-left: 4px solid #28a745;">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="card-icon-bg mr-3" style="background: rgba(40, 167, 69, 0.2); width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-broadcast-tower fa-lg" style="color: #28a745;"></i>
                                     </div>
-                                </div>
-
-                                <!-- Credits Card -->
-                                <div class="col-md-3">
-                                    <div class="card bg-light border-0">
-                                        <div class="card-body text-center">
-                                            <h6 class="text-muted mb-2">{{ __('Credits Progress') }}</h6>
-                                            <h3 class="mb-2 text-info">{{ number_format($performanceSummary['total_credits_earned'], 1) }}</h3>
-                                            <small class="text-muted">{{ __('of') }} {{ number_format($performanceSummary['total_credits_attempted'], 1) }} {{ __('attempted') }}</small>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Course Completion Card -->
-                                <div class="col-md-3">
-                                    <div class="card bg-light border-0">
-                                        <div class="card-body text-center">
-                                            <h6 class="text-muted mb-2">{{ __('Course Completion') }}</h6>
-                                            <h3 class="mb-2 text-success">{{ number_format($performanceSummary['completion_percentage'], 1) }}%</h3>
-                                            <small class="text-muted">{{ $performanceSummary['passed_courses'] }}/{{ $performanceSummary['total_courses'] }} {{ __('courses') }}</small>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Graduation Status Card -->
-                                <div class="col-md-3">
-                                    <div class="card bg-light border-0">
-                                        <div class="card-body text-center">
-                                            <h6 class="text-muted mb-2">{{ __('Graduation Status') }}</h6>
-                                            @if($performanceSummary['graduation_ready'])
-                                                <h3 class="mb-2 text-success"><i class="fas fa-check-circle"></i></h3>
-                                                <span class="badge bg-success">{{ __('Ready') }}</span>
-                                            @else
-                                                <h3 class="mb-2 text-warning"><i class="fas fa-clock"></i></h3>
-                                                <span class="badge bg-warning">{{ __('In Progress') }}</span>
+                                    <div>
+                                        <strong style="font-size: 16px;">{{ $liveClass->subject->title ?? 'Class in Session' }}</strong>
+                                        <span class="badge badge-success ml-2" style="animation: pulse 1s infinite;">LIVE NOW</span>
+                                        <br><small class="text-muted">
+                                            <i class="fas fa-user-tie"></i> {{ $liveClass->teacher->first_name ?? '' }} {{ $liveClass->teacher->last_name ?? 'Lecturer' }}
+                                            @if($liveClass->actual_start_time)
+                                            | <i class="fas fa-clock"></i> Started {{ \Carbon\Carbon::parse($liveClass->actual_start_time)->diffForHumans() }}
                                             @endif
-                                        </div>
+                                            @if($liveClass->topic_covered)
+                                            <br><i class="fas fa-book"></i> Topic: {{ Str::limit($liveClass->topic_covered, 50) }}
+                                            @endif
+                                        </small>
                                     </div>
                                 </div>
+                                <a href="{{ route('student.class-hub.live-room', $liveClass->id) }}" class="btn btn-success">
+                                    <i class="fas fa-sign-in-alt mr-1"></i> Join Now
+                                </a>
                             </div>
+                        </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
 
-                            <!-- Detailed Breakdown -->
-                            <div class="row mt-3">
-                                <div class="col-md-12">
-                                    <div class="alert alert-info" role="alert">
-                                        <h6 class="alert-heading"><i class="fas fa-info-circle"></i> {{ __('Course Type Breakdown') }}</h6>
-                                        <div class="row">
-                                            <div class="col-md-4">
-                                                <strong>{{ __('subject_type_compulsory') }}:</strong>
-                                                <span class="badge bg-{{ $performanceSummary['compulsory_passed'] == $performanceSummary['compulsory_total'] ? 'success' : 'warning' }}">
-                                                    {{ $performanceSummary['compulsory_passed'] }}/{{ $performanceSummary['compulsory_total'] }}
-                                                </span>
-                                                @if(($performanceSummary['compulsory_failed'] ?? 0) > 0)
-                                                    <small class="text-danger">({{ $performanceSummary['compulsory_failed'] }} {{ __('failed') }})</small>
-                                                @endif
-                                                @if(($performanceSummary['compulsory_missing'] ?? 0) > 0)
-                                                    <small class="text-warning">({{ $performanceSummary['compulsory_missing'] }} {{ __('not attempted') }})</small>
-                                                @endif
-                                            </div>
-                                            <div class="col-md-4">
-                                                <strong>{{ __('subject_type_university_requirement') }}:</strong>
-                                                <span class="badge bg-{{ $performanceSummary['university_req_passed'] == $performanceSummary['university_req_total'] ? 'success' : 'warning' }}">
-                                                    {{ $performanceSummary['university_req_passed'] }}/{{ $performanceSummary['university_req_total'] }}
-                                                </span>
-                                                @if(($performanceSummary['university_req_failed'] ?? 0) > 0)
-                                                    <small class="text-danger">({{ $performanceSummary['university_req_failed'] }} {{ __('failed') }})</small>
-                                                @endif
-                                                @if(($performanceSummary['university_req_missing'] ?? 0) > 0)
-                                                    <small class="text-warning">({{ $performanceSummary['university_req_missing'] }} {{ __('not attempted') }})</small>
-                                                @endif
-                                            </div>
-                                            <div class="col-md-4">
-                                                <strong>{{ __('subject_type_optional') }}:</strong>
-                                                <span class="badge bg-primary">
-                                                    {{ $performanceSummary['optional_passed'] }}/{{ $performanceSummary['optional_total'] }}
-                                                </span>
-                                                @if(($performanceSummary['optional_failed'] ?? 0) > 0)
-                                                    <small class="text-danger">({{ $performanceSummary['optional_failed'] }} {{ __('failed') }})</small>
-                                                @endif
-                                                @if(($performanceSummary['optional_missing'] ?? 0) > 0)
-                                                    <small class="text-warning">({{ $performanceSummary['optional_missing'] }} {{ __('not attempted') }})</small>
-                                                @endif
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+        <!-- Course Breakdown -->
+        @if(isset($courseBreakdown) && count($courseBreakdown) > 0)
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card dashboard-card fade-in-up">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="section-header mb-0 border-0 pb-0">
+                                <i class="fas fa-book-open"></i>
+                                <h5 class="mb-0">Complete Course Overview</h5>
                             </div>
+                            <button class="btn btn-sm btn-outline-primary" type="button" id="toggleCourseBreakdown">
+                                <i class="fas fa-chevron-down"></i> Expand
+                            </button>
+                        </div>
+                        <p class="text-muted small mb-3">View all courses organized by semester with detailed information including validation status, attempts, and schedules</p>
+                        
+                        <div class="collapse" id="courseBreakdownCollapse">
+                            @foreach($courseBreakdown as $semesterData)
+                            <div class="mb-4">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="badge badge-{{ $semesterData['is_resit'] ? 'warning' : 'primary' }} mr-2">
+                                        {{ $semesterData['is_resit'] ? 'RESIT' : 'REGULAR' }}
+                                    </div>
+                                    <h6 class="mb-0">
+                                        <strong>{{ $semesterData['semester']->title }}</strong>
+                                        @if($semesterData['session'])
+                                        <span class="text-muted"> - {{ $semesterData['session']->title }}</span>
+                                        @endif
+                                    </h6>
+                                </div>
 
-                            <!-- Performance Feedback -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="alert 
-                                        @if($performanceSummary['performance_status'] == 'excellent' || $performanceSummary['performance_status'] == 'very_good') alert-success
-                                        @elseif($performanceSummary['performance_status'] == 'good') alert-primary
-                                        @elseif($performanceSummary['performance_status'] == 'satisfactory') alert-warning
-                                        @else alert-danger
-                                        @endif" role="alert">
-                                        <h6 class="alert-heading"><i class="fas fa-lightbulb"></i> {{ __('Performance Feedback') }}</h6>
-                                        <ul class="mb-0">
-                                            @if($performanceSummary['performance_status'] == 'excellent')
-                                                <li>{{ __('Outstanding performance! You are maintaining an excellent CGPA. Keep up the excellent work!') }}</li>
-                                            @elseif($performanceSummary['performance_status'] == 'very_good')
-                                                <li>{{ __('Very good performance! You are doing well academically. Continue your efforts!') }}</li>
-                                            @elseif($performanceSummary['performance_status'] == 'good')
-                                                <li>{{ __('Good performance. You are on the right track. Consider ways to improve further.') }}</li>
-                                            @elseif($performanceSummary['performance_status'] == 'satisfactory')
-                                                <li>{{ __('Satisfactory performance. Focus on improving your grades in upcoming semesters.') }}</li>
-                                            @else
-                                                <li>{{ __('Your performance needs improvement. Please seek academic advising and support to enhance your grades.') }}</li>
-                                            @endif
-                                            
-                                            @if($performanceSummary['failed_courses'] > 0)
-                                                <li class="text-danger">
-                                                    <strong>{{ __('Important:') }}</strong> {{ __('You have') }} {{ $performanceSummary['failed_courses'] }} {{ __('unvalidated course(s) (below 50%). These courses must be retaken and validated for graduation.') }}
-                                                </li>
-                                            @endif
-
-                                            @if(!$performanceSummary['graduation_ready'])
-                                                <li>
-                                                    <strong>{{ __('Graduation Status:') }}</strong> {{ __('Not eligible yet') }}
-                                                    @if(isset($performanceSummary['graduation_reasons']) && !empty($performanceSummary['graduation_reasons']))
-                                                        <ul class="mt-2">
-                                                            @foreach($performanceSummary['graduation_reasons'] as $reason)
-                                                                <li>{{ $reason }}</li>
-                                                            @endforeach
-                                                        </ul>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>Code</th>
+                                                <th>Course Name</th>
+                                                <th>Credits</th>
+                                                <th>Type</th>
+                                                <th>Status</th>
+                                                <th>Grade</th>
+                                                <th>Attempts</th>
+                                                <th>Schedule</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($semesterData['courses'] as $course)
+                                            <tr>
+                                                <td><code>{{ $course['code'] }}</code></td>
+                                                <td>
+                                                    <strong>{{ $course['name'] }}</strong>
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-info">{{ $course['credits'] }} CR</span>
+                                                </td>
+                                                <td>
+                                                    @php
+                                                        $typeMap = [
+                                                            0 => ['label' => 'Optional', 'class' => 'secondary'],
+                                                            1 => ['label' => 'Compulsory', 'class' => 'danger'],
+                                                            2 => ['label' => 'University Req.', 'class' => 'warning']
+                                                        ];
+                                                        $typeInfo = $typeMap[$course['type']] ?? ['label' => 'Unknown', 'class' => 'secondary'];
+                                                    @endphp
+                                                    <small class="badge badge-{{ $typeInfo['class'] }}">{{ $typeInfo['label'] }}</small>
+                                                </td>
+                                                <td>
+                                                    @if($course['validated'])
+                                                        @if($course['marks']['passed'])
+                                                            <span class="badge badge-success">
+                                                                <i class="fas fa-check-circle"></i> Passed
+                                                            </span>
+                                                        @else
+                                                            <span class="badge badge-danger">
+                                                                <i class="fas fa-times-circle"></i> Failed
+                                                            </span>
+                                                        @endif
+                                                    @else
+                                                        <span class="badge badge-secondary">
+                                                            <i class="fas fa-hourglass-half"></i> Pending
+                                                        </span>
                                                     @endif
-                                                </li>
-                                            @else
-                                                <li class="text-success">
-                                                    <strong>{{ __('Congratulations!') }}</strong> {{ __('You have validated all required courses and are eligible for graduation.') }}
-                                                </li>
-
-                                                {{-- While the next academic year is still being set up, "all
-                                                     required courses" means every course that exists so far.
-                                                     Saying so stops a student reading this as the end of their
-                                                     programme when their remaining courses simply have not been
-                                                     configured yet. --}}
-                                                @if(!empty($progressionPaused))
-                                                    <li class="text-warning mt-2">
-                                                        <i class="fas fa-info-circle"></i>
-                                                        <strong>{{ __('Not final yet.') }}</strong>
-                                                        {{ __('Courses for the next academic year are still being set up, so this is based only on the courses published so far. It may change once they are added.') }}
-                                                    </li>
-                                                @endif
-                                            @endif
-                                        </ul>
-                                    </div>
+                                                </td>
+                                                <td>
+                                                    @if($course['validated'] && $course['marks'])
+                                                        <span class="font-weight-bold">{{ $course['marks']['grade'] ?? 'N/A' }}</span>
+                                                        <br><small class="text-muted">{{ $course['marks']['marks'] }}% ({{ $course['marks']['grade_point'] }} GP)</small>
+                                                    @else
+                                                        <span class="text-muted">-</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    <span class="badge badge-{{ $course['attempts'] > 1 ? 'warning' : 'light' }}">
+                                                        {{ $course['attempts'] }}{{ $course['attempts'] == 1 ? 'st' : ($course['attempts'] == 2 ? 'nd' : 'th') }}
+                                                    </span>
+                                                    @if($course['resit_info'])
+                                                        <br><small class="text-warning"><i class="fas fa-redo"></i> Resit</small>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    @if(count($course['class_routines']) > 0)
+                                                        <button class="btn btn-sm btn-outline-info" type="button" data-toggle="collapse" data-target="#schedule-{{ $course['id'] }}-{{ $semesterData['semester']->id }}">
+                                                            <i class="fas fa-clock"></i> {{ count($course['class_routines']) }}
+                                                        </button>
+                                                        <div class="collapse mt-2" id="schedule-{{ $course['id'] }}-{{ $semesterData['semester']->id }}">
+                                                            <div class="card card-body p-2" style="font-size: 0.85rem;">
+                                                                @foreach($course['class_routines'] as $routine)
+                                                                <div class="mb-1">
+                                                                    <strong>{{ $routine['day'] }}</strong>: 
+                                                                    {{ date('g:i A', strtotime($routine['start_time'])) }} - {{ date('g:i A', strtotime($routine['end_time'])) }}
+                                                                    @if($routine['room'])
+                                                                        <br><small class="text-muted"><i class="fas fa-door-open"></i> {{ $routine['room'] }}</small>
+                                                                    @endif
+                                                                    @if($routine['teacher'])
+                                                                        <br><small class="text-muted"><i class="fas fa-chalkboard-teacher"></i> {{ $routine['teacher'] }}</small>
+                                                                    @endif
+                                                                </div>
+                                                                @if(!$loop->last)<hr class="my-1">@endif
+                                                                @endforeach
+                                                            </div>
+                                                        </div>
+                                                    @else
+                                                        <span class="text-muted small">No schedule</span>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
                                 </div>
+                            </div>
+                            @if(!$loop->last)
+                            <hr class="my-4">
+                            @endif
+                            @endforeach
+                            
+                            <div class="text-center mt-4 pt-3 border-top">
+                                <a href="{{ route('student.transcript.index') }}" class="btn btn-primary btn-sm mr-2">
+                                    <i class="fas fa-file-alt"></i> View Full Transcript
+                                </a>
+                                <a href="{{ route('student.class-routine.index') }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-calendar-alt"></i> View Class Routine
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        <!-- Main Content Grid -->
+        <div class="row">
+            
+            <!-- Left Column -->
+            <div class="col-xl-8">
+                
+                <!-- Quick Actions -->
+                <div class="card dashboard-card mb-4 fade-in-left">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-bolt"></i>
+                            <h5>Quick Actions</h5>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <a href="{{ route('student.course-registration.index') }}" class="quick-action-btn">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    <div>
+                                        <strong>Course Registration</strong>
+                                        <br><small>Manage courses</small>
+                                    </div>
+                                </a>
+                            </div>
+                            <div class="col-md-4">
+                                <a href="{{ route('student.class-routine.index') }}" class="quick-action-btn">
+                                    <i class="fas fa-calendar-day"></i>
+                                    <div>
+                                        <strong>Class Routine</strong>
+                                        <br><small>View schedule</small>
+                                    </div>
+                                </a>
+                            </div>
+                            <div class="col-md-4">
+                                <a href="{{ route('student.exam-results.index') }}" class="quick-action-btn">
+                                    <i class="fas fa-award"></i>
+                                    <div>
+                                        <strong>Exam Results</strong>
+                                        <br><small>Check grades</small>
+                                    </div>
+                                </a>
+                            </div>
+                            <div class="col-md-4">
+                                <a href="{{ route('student.fees.index') }}" class="quick-action-btn">
+                                    <i class="fas fa-wallet"></i>
+                                    <div>
+                                        <strong>Fees Payment</strong>
+                                        <br><small>Pay fees</small>
+                                    </div>
+                                </a>
+                            </div>
+                            <div class="col-md-4">
+                                <a href="{{ route('student.assignment.index') }}" class="quick-action-btn">
+                                    <i class="fas fa-tasks"></i>
+                                    <div>
+                                        <strong>Assignments</strong>
+                                        <br><small>{{ $pendingAssignments ?? 0 }} pending</small>
+                                    </div>
+                                </a>
+                            </div>
+                            <div class="col-md-4">
+                                <a href="{{ route('student.e-library.index') }}" class="quick-action-btn">
+                                    <i class="fas fa-book"></i>
+                                    <div>
+                                        <strong>E-Library</strong>
+                                        <br><small>Browse books</small>
+                                    </div>
+                                </a>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Carry-Over Courses Section -->
-                @if(isset($carryOverCourses) && count($carryOverCourses) > 0)
-                <div class="col-sm-12">
-                    <div class="card border-warning">
-                        <div class="card-header bg-warning text-dark">
-                            <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> {{ __('Carry-Over Courses (Courses to Retake)') }}</h5>
-                            <small>{{ __('These courses from previous semesters with the same semester type need to be retaken and validated (≥50%) for graduation.') }}</small>
+                @if(isset($todayClasses) && count($todayClasses) > 0)
+                <div class="card dashboard-card mb-4 fade-in-left delay-1">
+                    <div class="card-body">
+                        <div class="section-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-chalkboard-teacher"></i>
+                                <h5>Today's Classes</h5>
+                            </div>
+                            <a href="{{ route('student.class-hub.index') }}" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-broadcast-tower mr-1"></i> Class Hub
+                            </a>
                         </div>
-                        <div class="card-block">
-                            <div class="alert alert-warning" role="alert">
-                                <strong><i class="fas fa-info-circle"></i> {{ __('What are Carry-Over Courses?') }}</strong>
-                                <p class="mb-0">{{ __('Carry-over courses are courses from the same semester type (First Semester or Second Semester) that you attempted in previous years but did not validate (scored less than 50%). You should register these courses again this semester to improve your grades and work towards graduation.') }}</p>
+                        @foreach($todayClasses as $class)
+                        <div class="list-item">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="card-icon-bg bg-primary-light">
+                                        <i class="fas fa-book-open"></i>
+                                    </div>
+                                    <div>
+                                        <strong>{{ $class->subject->title ?? 'N/A' }}</strong>
+                                        <br><small class="text-muted">
+                                            <i class="fas fa-clock"></i> {{ date('h:i A', strtotime($class->start_time)) }} - {{ date('h:i A', strtotime($class->end_time)) }}
+                                            @if($class->room)
+                                            | <i class="fas fa-door-open"></i> {{ $class->room }}
+                                            @endif
+                                        </small>
+                                    </div>
+                                </div>
+                                <span class="custom-badge bg-primary text-white">
+                                    {{ $class->subject->code ?? '' }}
+                                </span>
                             </div>
+                        </div>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
 
-                            <div class="table-responsive">
-                                <table class="display table table-striped table-bordered">
-                                    <thead class="bg-light">
-                                        <tr>
-                                            <th>{{ __('field_code') }}</th>
-                                            <th>{{ __('field_subject') }}</th>
-                                            <th>{{ __('field_subject_type') }}</th>
-                                            <th>{{ __('field_credit_hour') }}</th>
-                                            <th>{{ __('Best Score') }}</th>
-                                            <th>{{ __('field_grade') }}</th>
-                                            <th>{{ __('Attempts') }}</th>
-                                            <th>{{ __('Last Taken') }}</th>
-                                            <th>{{ __('field_status') }}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($carryOverCourses as $course)
-                                        <tr class="
-                                            @if($course['subject_type'] == 1) table-danger
-                                            @elseif($course['subject_type'] == 2) table-warning
-                                            @endif">
-                                            <td><strong>{{ $course['subject']->code }}</strong></td>
-                                            <td>{{ $course['subject']->title }}</td>
-                                            <td>
-                                                @if($course['subject_type'] == 1)
-                                                    <span class="badge bg-danger">{{ __('subject_type_compulsory') }}</span>
-                                                @elseif($course['subject_type'] == 2)
-                                                    <span class="badge bg-warning">{{ __('subject_type_university_requirement') }}</span>
-                                                @else
-                                                    <span class="badge bg-secondary">{{ __('subject_type_optional') }}</span>
-                                                @endif
-                                            </td>
-                                            <td>{{ number_format($course['credit_hours'], 1) }}</td>
-                                            <td>
-                                                <span class="badge bg-danger">{{ number_format($course['best_marks'], 1) }}%</span>
-                                            </td>
-                                            <td>{{ $course['grade'] }}</td>
-                                            <td>
-                                                <span class="badge bg-info">{{ $course['attempts'] }}x</span>
-                                            </td>
-                                            <td>
-                                                <small>{{ $course['session_title'] }}<br/>{{ $course['semester_title'] }}</small>
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-danger">{{ __('Not Validated') }}</span>
-                                                @if($course['subject_type'] == 1 || $course['subject_type'] == 2)
-                                                    <br/><small class="text-danger"><strong>{{ __('Required for Graduation') }}</strong></small>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                        @endforeach
-                                    </tbody>
-                                    <tfoot>
-                                        <tr class="bg-light">
-                                            <td colspan="9">
-                                                <strong>{{ __('Total Carry-Over Courses:') }}</strong> {{ count($carryOverCourses) }}
-                                                <span class="ms-3">
-                                                    <span class="badge bg-danger">{{ __('Compulsory:') }} {{ collect($carryOverCourses)->where('subject_type', 1)->count() }}</span>
-                                                    <span class="badge bg-warning">{{ __('University Req:') }} {{ collect($carryOverCourses)->where('subject_type', 2)->count() }}</span>
-                                                    <span class="badge bg-secondary">{{ __('Optional:') }} {{ collect($carryOverCourses)->where('subject_type', 0)->count() }}</span>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                <!-- Recent Assignments -->
+                @if(isset($assignments) && count($assignments) > 0)
+                <div class="card dashboard-card mb-4 fade-in-left delay-2">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-clipboard-check"></i>
+                            <h5>Recent Assignments</h5>
+                        </div>
+                        @foreach($assignments as $assignment)
+                        @if($assignment->assignment && $assignment->assignment->status == 1)
+                        <div class="list-item">
+                            <div class="d-flex align-items-start justify-content-between">
+                                <div class="d-flex align-items-start flex-grow-1">
+                                    <div class="card-icon-bg {{ $assignment->attendance == 1 ? 'bg-success-light' : 'bg-warning-light' }}">
+                                        <i class="fas {{ $assignment->attendance == 1 ? 'fa-check-circle' : 'fa-clock' }}"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <a href="{{ route('student.assignment.show', $assignment->id) }}" class="text-dark">
+                                            <strong>{{ $assignment->assignment->title ?? 'N/A' }}</strong>
+                                        </a>
+                                        <br><small class="text-muted">
+                                            <i class="fas fa-book"></i> {{ $assignment->assignment->subject->code ?? '' }}
+                                            | <i class="fas fa-calendar"></i> Due: {{ date('M d, Y', strtotime($assignment->assignment->end_date)) }}
+                                        </small>
+                                    </div>
+                                </div>
+                                @if($assignment->attendance == 1)
+                                <span class="custom-badge bg-success text-white">Submitted</span>
+                                @else
+                                <span class="custom-badge bg-warning text-white">Pending</span>
+                                @endif
                             </div>
-
-                            <div class="alert alert-info mt-3" role="alert">
-                                <h6 class="alert-heading"><i class="fas fa-graduation-cap"></i> {{ __('Action Required') }}</h6>
-                                <ul class="mb-0">
-                                    <li>{{ __('Register these courses in the "Course Registration" section below to retake them this semester.') }}</li>
-                                    <li>{{ __('Focus especially on compulsory and university requirement courses as they are mandatory for graduation.') }}</li>
-                                    <li>{{ __('Aim to score at least 50% to validate each course.') }}</li>
-                                    <li>{{ __('Courses marked in red (Compulsory) and orange (University Requirement) are critical priorities.') }}</li>
-                                </ul>
-                            </div>
+                        </div>
+                        @endif
+                        @endforeach
+                        <div class="text-center mt-3">
+                            <a href="{{ route('student.assignment.index') }}" class="btn btn-outline-primary btn-sm">
+                                View All Assignments <i class="fas fa-arrow-right ml-2"></i>
+                            </a>
                         </div>
                     </div>
                 </div>
                 @endif
-            @endif
 
-            @if($currentEnroll)
-                <div class="col-sm-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5>{{ __('status_current') }} {{ __('field_session') }}: {{ $currentEnroll->session->title ?? '' }} | {{ $currentEnroll->semester->title ?? '' }} | {{ $currentEnroll->section->title ?? '' }}</h5>
+                <!-- Recent Exam Results -->
+                @if(isset($latestMarks) && count($latestMarks) > 0)
+                <div class="card dashboard-card mb-4 fade-in-left delay-3">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-chart-bar"></i>
+                            <h5>Recent Exam Results</h5>
                         </div>
-                        <div class="card-block">
-                            <div class="table-responsive">
-                                <table class="display table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>{{ __('field_code') }}</th>
-                                            <th>{{ __('field_subject') }}</th>
-                                            <th>{{ __('field_credit_hour') }}</th>
-                                            <th>{{ __('field_point') }}</th>
-                                            <th>{{ __('field_grade') }}</th>
-                                            <th>{{ __('field_action') }}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @php
-                                            $semesterCredits = 0;
-                                            $semesterCgpa = 0;
-                                        @endphp
-                                        @forelse($currentEnroll->subjects ?? collect() as $subject)
-                                            @php
-                                                $creditHour = (float) ($subject->credit_hour ?? 0);
-                                                $semesterCredits += $creditHour;
-                                                $subjectGrade = null;
-                                                $subjectPoint = null;
-                                                $hasMarks = false;
-                                            @endphp
-                                            <tr>
-                                                <td>{{ $subject->code }}</td>
-                                                <td>
-                                                    {{ $subject->title }}
-                                                    @if($subject->subject_type == 0)
-                                                        ({{ __('subject_type_optional') }})
-                                                    @elseif($subject->subject_type == 2)
-                                                        ({{ __('subject_type_university_requirement') }})
-                                                    @endif
-                                                </td>
-                                                <td>{{ number_format($creditHour, 2) }}</td>
-                                                <td>
-                                                    @if(isset($currentEnroll->subjectMarks))
-                                                        @foreach($currentEnroll->subjectMarks as $mark)
-                                                            @if($mark->subject_id == $subject->id)
-                                                                @php
-                                                                    // Check if mark is published (visible to student + publish date/time reached)
-                                                                    $publishDate = date('Y-m-d', strtotime($mark->publish_date));
-                                                                    $publishTime = date('H:i:s', strtotime($mark->publish_time));
-                                                                    $currentDate = date('Y-m-d');
-                                                                    $currentTime = date('H:i:s');
-                                                                    $isPublished = $mark->is_visible_to_student && 
-                                                                        (($publishDate == $currentDate && $publishTime <= $currentTime) || $publishDate < $currentDate);
-                                                                    
-                                                                    // Only set hasMarks if the mark is published
-                                                                    if($isPublished) {
-                                                                        $hasMarks = true;
-                                                                        $marksPer = round($mark->total_marks);
-                                                                    }
-                                                                @endphp
-                                                                @if($isPublished)
-                                                                    @foreach($grades as $grade)
-                                                                        @if($marksPer >= $grade->min_mark && $marksPer <= $grade->max_mark)
-                                                                            @php
-                                                                                $subjectPoint = $grade->point * $creditHour;
-                                                                                $semesterCgpa += $subjectPoint;
-                                                                                $subjectGrade = $grade->title;
-                                                                            @endphp
-                                                                            {{ number_format((float) $subjectPoint, 2, '.', '') }}
-                                                                            @break
-                                                                        @endif
-                                                                    @endforeach
-                                                                @endif
-                                                            @endif
-                                                        @endforeach
-                                                    @endif
-                                                </td>
-                                                <td>{{ $subjectGrade ?? '' }}</td>
-                                                <td>
-                                                    @if($hasMarks)
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ __('Cannot drop: Marks have been submitted') }}">
-                                                            <i class="fas fa-lock"></i> {{ __('Locked') }}
-                                                        </button>
-                                                    @elseif($isResitSemester)
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ __('Cannot drop courses during a resit semester') }}">
-                                                            <i class="fas fa-lock"></i> {{ __('Locked') }}
-                                                        </button>
-                                                    @elseif(($subject->subject_type == 1 || $subject->subject_type == 2) && in_array($subject->id, $currentSemesterEnrolledSubjectIds))
-                                                        @php
-                                                            $subjectTypeName = $subject->subject_type == 1 ? __('subject_type_compulsory') : __('subject_type_university_requirement');
-                                                        @endphp
-                                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ __('Cannot drop:') }} {{ $subjectTypeName }} {{ __('for this semester') }}">
-                                                            <i class="fas fa-ban"></i> {{ __('Required') }}
-                                                        </button>
-                                                    @else
-                                                        <button type="button" class="btn btn-sm btn-outline-danger btn-drop-subject" data-subject="{{ $subject->id }}" data-title="{{ $subject->code }} - {{ $subject->title }}">
-                                                            <i class="fas fa-minus-circle"></i> {{ __('Drop') }}
-                                                        </button>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                        @empty
-                                            <tr>
-                                                <td colspan="6" class="text-center">{{ __('no_result_found') }}</td>
-                                            </tr>
-                                        @endforelse
-                                    </tbody>
-                                    <tfoot>
-                                        <tr>
-                                            <th colspan="2">{{ __('field_term_total') }}</th>
-                                            <th>{{ number_format((float) $semesterCredits, 2, '.', '') }}</th>
-                                            <th>{{ number_format((float) $semesterCgpa, 2, '.', '') }}</th>
-                                            <th></th>
-                                            <th></th>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                        @foreach($latestMarks as $mark)
+                        <div class="list-item">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <strong>{{ $mark->subject->title ?? 'N/A' }}</strong>
+                                <span class="custom-badge {{ $mark->total_marks >= 50 ? 'bg-success' : 'bg-danger' }} text-white">
+                                    {{ number_format($mark->total_marks, 2) }}%
+                                </span>
+                            </div>
+                            <div class="custom-progress">
+                                <div class="custom-progress-bar {{ $mark->total_marks >= 50 ? 'bg-success' : 'bg-danger' }}" 
+                                     style="width: {{ $mark->total_marks }}%"></div>
                             </div>
                         </div>
+                        @endforeach
+                        <div class="text-center mt-3">
+                            <a href="{{ route('student.exam-results.index') }}" class="btn btn-outline-primary btn-sm">
+                                View All Results <i class="fas fa-arrow-right ml-2"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
+                @endif
 
-                <div class="col-sm-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5>{{ __('Choose your courses') }}</h5>
+            </div>
+
+            <!-- Right Column -->
+            <div class="col-xl-4">
+                
+                <!-- Academic Performance Summary -->
+                @if(isset($graduationEligibility))
+                <div class="card dashboard-card mb-4 fade-in-right">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-graduation-cap"></i>
+                            <h5>Graduation Status</h5>
                         </div>
-                        <div class="card-block">
-                            @if($isResitSemester)
-                                <div class="alert alert-warning mb-0" role="alert">
-                                    <i class="fas fa-exclamation-triangle"></i> 
-                                    <strong>{{ __('Resit Semester') }}</strong><br>
-                                    {{ __('Course registration is not available during resit semesters. Students cannot register courses by themselves during this period.') }}
-                                </div>
+                        <div class="text-center py-3">
+                            @if($graduationEligibility['is_eligible'])
+                            <i class="fas fa-check-circle text-success" style="font-size: 48px;"></i>
+                            <h6 class="mt-3 text-success">Eligible for Graduation!</h6>
                             @else
-                                @php
-                                    $hasAssignableSubjects = isset($assignableSubjects) && $assignableSubjects->isNotEmpty();
-                                    $prefilledSubjects = collect(old('subjects', []))->map(fn ($id) => (string) $id)->toArray();
-                                @endphp
-                                @if(!is_null($maxCreditLimit))
-                                    <div class="alert alert-warning">
-                                        <i class="fas fa-info-circle"></i> {{ __('You may register up to :limit credits this semester.', ['limit' => $maxCreditLimit]) }}
-                                    </div>
-                                @endif
-                                @if(!$hasAssignableSubjects)
-                                    <div class="alert alert-info mb-0" role="alert">
-                                        <i class="fas fa-info-circle"></i> 
-                                        {{ __('No subjects are currently available for registration. This may be because:') }}
-                                        <ul class="mb-0 mt-2">
-                                            <li>{{ __('You have already validated all available courses (marks ≥ 50%)') }}</li>
-                                            <li>{{ __('You are already registered for all available courses') }}</li>
-                                            <li>{{ __('No courses have been assigned to your current semester and section') }}</li>
-                                        </ul>
-                                        <hr class="my-2">
-                                        <p class="mb-0">
-                                            {{ __('If you believe courses should be listed here, speak to your department - only the school can set which courses your semester offers.') }}
-                                        </p>
-                                    </div>
-                                @else
-                                    <div class="alert alert-info">
-                                        <i class="fas fa-info-circle"></i> 
-                                        <strong>{{ __('Available Courses') }}:</strong><br>
-                                        {{ __('Showing courses from your current semester and previous years of the same semester type that you have not yet validated (marks < 50%).') }}
-                                    </div>
-                                    <form class="needs-validation" novalidate action="{{ route($route . '.update') }}" method="post">
-                                        @csrf
-                                        <div class="row">
-                                            <div class="form-group col-md-12">
-                                                <label for="subjects">{{ __('field_subject') }} <span>* ({{ __('select_multiple') }})</span></label>
-                                                <select class="form-control select2-multiple" name="subjects[]" id="subjects" multiple required>
-                                                    @foreach($assignableSubjects as $subject)
-                                                        <option value="{{ $subject->id }}" @if(in_array((string) $subject->id, $prefilledSubjects, true)) selected @endif>
-                                                            {{ $subject->code }} - {{ $subject->title }}
-                                                            @if($subject->subject_type == 0)
-                                                                ({{ __('Optional') }})
-                                                            @elseif($subject->subject_type == 1)
-                                                                ({{ __('Compulsory') }})
-                                                            @elseif($subject->subject_type == 2)
-                                                                ({{ __('University Requirement') }})
-                                                            @endif
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-
-                                                <div class="invalid-feedback">
-                                                    {{ __('required_field') }} {{ __('field_subject') }}
-                                                </div>
-                                                @error('subjects')
-                                                    <small class="text-danger d-block">{{ $message }}</small>
-                                                @enderror
-                                            </div>
-
-                                            <div class="form-group col-md-12">
-                                                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#confirmModal">
-                                                    <i class="fas fa-check"></i> {{ __('Register these courses') }}
-                                                </button>
-                                                @include('student.course-registration.confirm')
-                                            </div>
-                                        </div>
-                                    </form>
-                                @endif
+                            <i class="fas fa-hourglass-half text-warning" style="font-size: 48px;"></i>
+                            <h6 class="mt-3 text-warning">Not Yet Eligible</h6>
                             @endif
                         </div>
+                        <hr>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Compulsory Courses</span>
+                                <strong>{{ $graduationEligibility['compulsory']['passed_subjects'] }}/{{ $graduationEligibility['compulsory']['total_subjects'] }}</strong>
+                            </div>
+                            <div class="custom-progress">
+                                @php
+                                    $compPer = $graduationEligibility['compulsory']['total_subjects'] > 0 
+                                        ? ($graduationEligibility['compulsory']['passed_subjects'] / $graduationEligibility['compulsory']['total_subjects']) * 100 
+                                        : 0;
+                                @endphp
+                                <div class="custom-progress-bar bg-primary" style="width: {{ $compPer }}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>University Requirements</span>
+                                <strong>{{ $graduationEligibility['university_requirement']['passed_subjects'] }}/{{ $graduationEligibility['university_requirement']['total_subjects'] }}</strong>
+                            </div>
+                            <div class="custom-progress">
+                                @php
+                                    $uniPer = $graduationEligibility['university_requirement']['total_subjects'] > 0 
+                                        ? ($graduationEligibility['university_requirement']['passed_subjects'] / $graduationEligibility['university_requirement']['total_subjects']) * 100 
+                                        : 0;
+                                @endphp
+                                <div class="custom-progress-bar bg-info" style="width: {{ $uniPer }}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Total Credits</span>
+                                <strong>{{ $graduationEligibility['completed_credits'] }}/{{ $graduationEligibility['total_credits'] }}</strong>
+                            </div>
+                            <div class="custom-progress">
+                                @php
+                                    $creditPer = $graduationEligibility['total_credits'] > 0 
+                                        ? ($graduationEligibility['completed_credits'] / $graduationEligibility['total_credits']) * 100 
+                                        : 0;
+                                @endphp
+                                <div class="custom-progress-bar bg-success" style="width: {{ $creditPer }}%"></div>
+                            </div>
+                        </div>
+                        @if(!$graduationEligibility['is_eligible'] && isset($graduationEligibility['reasons']))
+                        <div class="alert alert-warning mb-0" style="font-size: 0.9rem;">
+                            <strong>Requirements:</strong>
+                            <ul class="mb-0 pl-3 mt-2">
+                                @foreach($graduationEligibility['reasons'] as $reason)
+                                <li>{{ $reason }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                        @endif
                     </div>
                 </div>
-                <form method="post" action="{{ route($route . '.drop') }}" id="drop-subject-form">
-                    @csrf
-                    <input type="hidden" name="subject_id" id="drop-subject-id" value="">
-                </form>
-                @include('student.course-registration.drop-confirm')
-            @endif
+                @endif
+
+                <!-- Upcoming Exams -->
+                @if(isset($upcomingExams) && count($upcomingExams) > 0)
+                <div class="card dashboard-card mb-4 fade-in-right delay-1">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-file-alt"></i>
+                            <h5>Upcoming Exams</h5>
+                        </div>
+                        @foreach($upcomingExams as $exam)
+                        <div class="timeline-item">
+                            <div class="timeline-icon"></div>
+                            <div class="list-item mb-0">
+                                <strong>{{ $exam->subject->title ?? 'N/A' }}</strong>
+                                <br><small class="text-muted">
+                                    <i class="fas fa-calendar"></i> {{ date('M d, Y', strtotime($exam->exam_date)) }}
+                                    <br><i class="fas fa-clock"></i> {{ date('h:i A', strtotime($exam->start_time)) }}
+                                    @if($exam->room)
+                                    <br><i class="fas fa-door-open"></i> {{ $exam->room }}
+                                    @endif
+                                </small>
+                            </div>
+                        </div>
+                        @endforeach
+                        <div class="text-center mt-3">
+                            <a href="{{ route('student.exam-routine.index') }}" class="btn btn-outline-primary btn-sm">
+                                View Full Schedule <i class="fas fa-arrow-right ml-2"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                <!-- Latest Notices -->
+                @if(isset($latestNotices) && count($latestNotices) > 0)
+                <div class="card dashboard-card mb-4 fade-in-right delay-2">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-bullhorn"></i>
+                            <h5>Latest Notices</h5>
+                        </div>
+                        @foreach($latestNotices->take(3) as $notice)
+                        <div class="list-item">
+                            <a href="{{ route('student.notice.index') }}" class="text-dark">
+                                <strong>{{ Str::limit($notice->title, 50) }}</strong>
+                            </a>
+                            <br><small class="text-muted">
+                                <i class="fas fa-calendar"></i> {{ date('M d, Y', strtotime($notice->created_at)) }}
+                            </small>
+                        </div>
+                        @endforeach
+                        <div class="text-center mt-3">
+                            <a href="{{ route('student.notice.index') }}" class="btn btn-outline-primary btn-sm">
+                                View All Notices <i class="fas fa-arrow-right ml-2"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                <!-- Payment Reminders -->
+                @if($dueFees > 0)
+                <div class="card dashboard-card mb-4 fade-in-right delay-3" style="border-left: 4px solid #f5576c;">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h5>Payment Reminder</h5>
+                        </div>
+                        <div class="alert alert-warning mb-3">
+                            <strong>Outstanding Balance:</strong> {{ number_format($dueFees, 0) }} XAF
+                        </div>
+                        @if(isset($upcomingPayments) && count($upcomingPayments) > 0)
+                        <p class="mb-2"><strong>Pending Payments:</strong></p>
+                        @foreach($upcomingPayments as $payment)
+                        <div class="list-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ $payment->description ?? 'Payment Plan' }}</span>
+                                <span class="custom-badge bg-warning text-white">Pending</span>
+                            </div>
+                        </div>
+                        @endforeach
+                        @endif
+                        <div class="text-center mt-3">
+                            <a href="{{ route('student.fees.index') }}" class="btn btn-warning btn-sm">
+                                <i class="fas fa-credit-card mr-2"></i> Make Payment
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                <!-- E-Library Quick Access -->
+                @if(isset($recentEBooks) && count($recentEBooks) > 0)
+                <div class="card dashboard-card mb-4 fade-in-right delay-4">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-book-reader"></i>
+                            <h5>E-Library</h5>
+                        </div>
+                        <div class="row">
+                            @foreach($recentEBooks as $book)
+                            <div class="col-6 mb-3">
+                                <a href="{{ route('student.e-library.show', $book->id) }}" class="text-decoration-none">
+                                    <div class="hover-scale" style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                        @if($book->cover_image)
+                                        <img src="{{ asset('uploads/e-library/'.$book->cover_image) }}" alt="{{ $book->title }}" style="width: 100%; height: 150px; object-fit: cover;">
+                                        @else
+                                        <div style="width: 100%; height: 150px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: #fff;">
+                                            <i class="fas fa-book" style="font-size: 48px;"></i>
+                                        </div>
+                                        @endif
+                                        <div class="p-2 bg-light">
+                                            <small class="text-dark"><strong>{{ Str::limit($book->title, 20) }}</strong></small>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            @endforeach
+                        </div>
+                        <div class="text-center mt-2">
+                            <a href="{{ route('student.e-library.index') }}" class="btn btn-outline-primary btn-sm">
+                                Browse Library <i class="fas fa-arrow-right ml-2"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                <!-- Upcoming Events -->
+                <div class="card dashboard-card mb-4 fade-in-right delay-5">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-calendar-star"></i>
+                            <h5>Upcoming Events</h5>
+                        </div>
+                        @if(isset($latest_events) && count($latest_events) > 0)
+                            @foreach($latest_events->take(3) as $event)
+                            <div class="list-item">
+                                <div class="d-flex align-items-start">
+                                    <div style="width: 50px; height: 50px; background: {{ $event->color }}20; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 15px; border: 2px solid {{ $event->color }};">
+                                        <i class="fas fa-calendar-check" style="color: {{ $event->color }}; font-size: 20px;"></i>
+                                    </div>
+                                    <div>
+                                        <strong>{{ $event->title }}</strong>
+                                        <br><small class="text-muted">
+                                            {{ date('M d', strtotime($event->start_date)) }} 
+                                            @if($event->start_date != $event->end_date)
+                                            - {{ date('M d, Y', strtotime($event->end_date)) }}
+                                            @else
+                                            , {{ date('Y', strtotime($event->start_date)) }}
+                                            @endif
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            @endforeach
+                        @else
+                        <div class="empty-state">
+                            <i class="fas fa-calendar"></i>
+                            <p>No upcoming events</p>
+                        </div>
+                        @endif
+                    </div>
+                </div>
+
+            </div>
         </div>
+
+        <!-- Calendar Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card dashboard-card fade-in-up">
+                    <div class="card-body">
+                        <div class="section-header">
+                            <i class="fas fa-calendar-alt"></i>
+                            <h5>Academic Calendar</h5>
+                        </div>
+                        <div id='calendar' class='calendar'></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- [ Main Content ] end -->
     </div>
 </div>
@@ -663,50 +1297,106 @@
 @endsection
 
 @section('page_js')
-<script src="{{ asset('dashboard/plugins/select2/js/select2.full.min.js') }}"></script>
+<!-- Full calendar js -->
+<script src="{{ asset('dashboard/plugins/fullcalendar/js/lib/moment.min.js') }}"></script>
+<script src="{{ asset('dashboard/plugins/fullcalendar/js/lib/jquery-ui.min.js') }}"></script>
+<script src="{{ asset('dashboard/plugins/fullcalendar/js/fullcalendar.min.js') }}"></script>
+
 <script type="text/javascript">
-"use strict";
-(function($){
-    if(typeof $ === 'undefined'){
-        return;
-    }
-
-    $(function(){
-        const $subjectSelect = $('#subjects');
-        if($subjectSelect.length && typeof $.fn.select2 !== 'undefined'){
-            $subjectSelect.select2({
-                width: '100%',
-                placeholder: "{{ __('Select subjects to assign') }}",
-                closeOnSelect: false,
-                allowClear: true
-            });
-        }
-
-        const $modal = $('#dropConfirmModal');
-        const $subjectInput = $('#drop-subject-id');
-        const $subjectLabel = $('#drop-subject-label');
-
-        $('.btn-drop-subject').on('click', function(e){
-            e.preventDefault();
-            const subjectId = $(this).data('subject');
-            const subjectTitle = $(this).data('title');
-            $subjectInput.val(subjectId);
-            $subjectLabel.text(subjectTitle);
-            $modal.modal('show');
-        });
-
-        $modal.on('hidden.bs.modal', function(){
-            $subjectInput.val('');
-            $subjectLabel.text('');
-        });
-
-        $('#confirm-drop-button').on('click', function(){
-            if(!$subjectInput.val()){
-                return;
-            }
-            $('#drop-subject-form').trigger('submit');
+    // Full calendar
+    $(window).on('load', function() {
+        "use strict";
+        $('#calendar').fullCalendar({
+            header: {
+                left: 'prev,next',
+                center: 'title',
+                right: 'today'
+            },
+            defaultDate: '@php echo date("Y-m-d"); @endphp',
+            editable: false,
+            droppable: false,
+            events: [
+                @php
+                    foreach($events as $key => $row){
+                        echo "{
+                                title: '".$row->title."',
+                                start: '".$row->start_date."',
+                                end: '".$row->end_date."',
+                                borderColor: '".$row->color."',
+                                backgroundColor: '".$row->color."',
+                                textColor: '#fff'
+                            }, ";
+                    }
+                @endphp
+            ],
         });
     });
-})(window.jQuery);
+
+    // Animate progress bars on load
+    $(document).ready(function() {
+        $('.custom-progress-bar').each(function() {
+            const width = $(this).attr('style').match(/width:\s*(\d+(\.\d+)?%)/);
+            if (width) {
+                $(this).css('width', '0%');
+                setTimeout(() => {
+                    $(this).css('width', width[1]);
+                }, 300);
+            }
+        });
+
+        // Add fade-in animation to elements as they come into view
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        // Observe all animated elements
+        document.querySelectorAll('.fade-in-up, .fade-in-left, .fade-in-right').forEach(el => {
+            el.style.opacity = '0';
+            observer.observe(el);
+        });
+
+        // Course breakdown expand/collapse functionality
+        setTimeout(function() {
+            var $toggleBtn = $('#toggleCourseBreakdown');
+            var $collapseDiv = $('#courseBreakdownCollapse');
+            
+            console.log('Toggle button found:', $toggleBtn.length);
+            console.log('Collapse div found:', $collapseDiv.length);
+            console.log('Bootstrap collapse is available');
+            
+            // Manual click handler to trigger collapse
+            $toggleBtn.on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Button clicked!');
+                $collapseDiv.collapse('toggle');
+            });
+            
+            // Listen for collapse events
+            $collapseDiv.on('show.bs.collapse', function () {
+                console.log('Collapse showing');
+                $toggleBtn.html('<i class="fas fa-chevron-up"></i> Collapse');
+            });
+
+            $collapseDiv.on('hide.bs.collapse', function () {
+                console.log('Collapse hiding');
+                $toggleBtn.html('<i class="fas fa-chevron-down"></i> Expand');
+            });
+            
+            $collapseDiv.on('shown.bs.collapse', function () {
+                console.log('Collapse shown (animation complete)');
+            });
+        }, 100);
+    });
 </script>
 @endsection

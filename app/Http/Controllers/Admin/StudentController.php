@@ -268,8 +268,33 @@ class StudentController extends Controller
             $data['rows'] = $uniqueMatricules->sortByDesc(function($enrollment){
                return $enrollment->matricule ?? $enrollment->student->student_id;
             })->all();
+
+            // Students with no enrolment at all.
+            //
+            // This list is built entirely from enrolments, so a student whose
+            // enrolments were erased - which is what deleting a programme used
+            // to do, silently, through a database cascade - simply stopped
+            // appearing, with nothing said. They are surfaced here instead, so
+            // the registrar sees a problem rather than a shorter list.
+            //
+            // The programme and faculty filters read the enrolment, which is
+            // the very thing these students lack, so they are listed only when
+            // neither filter is narrowing the view. The count is stated either
+            // way.
+            $data['unenrolled'] = Student::where('status', '1')
+                ->whereDoesntHave('studentEnrolls')
+                ->when($request->student_id, function ($query) use ($request) {
+                    $query->where('student_id', 'LIKE', '%'.$request->student_id.'%');
+                })
+                ->orderBy('student_id')
+                ->get();
+
+            $data['unenrolled_shown'] = ($faculty == 0 && $program == 0);
         }
 
+
+        $data['unenrolled'] = $data['unenrolled'] ?? collect();
+        $data['unenrolled_shown'] = $data['unenrolled_shown'] ?? false;
 
         $data['print'] = IdCardSetting::where('slug', 'student-card')->first();
 
