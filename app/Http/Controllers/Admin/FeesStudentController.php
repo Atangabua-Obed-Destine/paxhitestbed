@@ -8,6 +8,8 @@ use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Support\Facades\DB;
 use App\Models\StudentEnroll;
 use Illuminate\Http\Request;
+use App\Services\FeePaymentRecorder;
+use App\Services\FeePaymentDistribution;
 use App\Models\PrintSetting;
 use App\Models\FeesCategory;
 use App\Models\Transaction;
@@ -47,7 +49,7 @@ class FeesStudentController extends Controller
         $this->middleware('permission:'.$this->access.'-due', ['only' => ['index']]);
         $this->middleware('permission:'.$this->access.'-quick-assign', ['only' => ['quickAssign','quickAssignStore']]);
         $this->middleware('permission:'.$this->access.'-quick-received', ['only' => ['quickReceived','quickReceivedStore']]);
-        $this->middleware('permission:'.$this->access.'-action', ['only' => ['index','pay','unpay','cancel']]);
+        $this->middleware('permission:'.$this->access.'-action', ['only' => ['index','pay','unpay','cancel','splitPreview']]);
         $this->middleware('permission:'.$this->access.'-report', ['only' => ['report']]);
         $this->middleware('permission:'.$this->access.'-print', ['only' => ['report','print','multiPrint']]);
     }
@@ -283,174 +285,139 @@ class FeesStudentController extends Controller
             }
         }
 
-        // Discount Calculation
-        $discount_amount = 0;
-        $today = date('Y-m-d');
+        // The discount, the fine and the write itself all live in
+        // FeePaymentRecorder now. They were lifted out of here unchanged so that
+        // a payment spread across a student's instalments records each leg
+        // EXACTLY as an ordinary payment is recorded - two copies of this
+        // sequence would drift, and a leg recorded almost-like a payment is the
+        // kind of fault only an audit finds.
+        $recorder = app(FeePaymentRecorder::class);
 
-        if(isset($fee->category)){
-        foreach($fee->category->discounts->where('status', '1') as $discount){
-
-        $availability = \App\Models\FeesDiscount::availability($discount->id, $fee->studentEnroll->student_id);
-
-            if(isset($availability)){
-            if($discount->start_date <= $today && $discount->end_date >= $today){
-                if($discount->type == '1'){
-                    $discount_amount = $discount_amount + $discount->amount;
-                }
-                else{
-                    $discount_amount = $discount_amount + ( ($fee->fee_amount / 100) * $discount->amount);
-                }
-            }}
-        }}
-
-
-        // Fine Calculation
-        $fine_amount = 0;
-        if(empty($fee->pay_date) || $fee->due_date < $fee->pay_date){
-
-            $due_date = strtotime($fee->due_date);
-            $today = strtotime(date('Y-m-d'));
-            $days = (int)(($today - $due_date)/86400);
-
-            if($fee->due_date < date("Y-m-d")){
-                if(isset($fee->category)){
-                foreach($fee->category->fines->where('status', '1') as $fine){
-                if($fine->start_day <= $days && $fine->end_day >= $days){
-                    if($fine->type == '1'){
-                        $fine_amount = $fine_amount + $fine->amount;
-                    }
-                    else{
-                        $fine_amount = $fine_amount + ( ($fee->fee_amount / 100) * $fine->amount);
-                    }
-                }
-                }}
-            }
-        }
-
-
-        // Net Amount Calculation
-        $net_amount = ($fee->fee_amount - $discount_amount) + $fine_amount;
-
+        $discount_amount = $recorder->discountFor($fee);
+        $fine_amount = $recorder->fineFor($fee);
+        $net_amount = $recorder->netAmount($fee, $discount_amount, $fine_amount);
 
         DB::beginTransaction();
-        
+
         try {
-            // Get current paid amount and new payment
             $current_paid = $fee->paid_amount ?? 0;
             $new_payment = $request->paid_amount;
             $total_paid = $current_paid + $new_payment;
-            
-            // Calculate remaining balance after this payment
-            $remaining_after_payment = $net_amount - $total_paid;
-            
-            // Check for overpayment
+
+            // Whether money beyond this fee's balance may be taken at all, and
+            // what becomes of it, stays here: it is policy, and it differs
+            // between a single payment and a distributed one.
             $overpayment_amount = 0;
             $allow_overpayment = $request->allow_overpayment == '1';
-            
+
             if ($total_paid > $net_amount) {
                 if (!$allow_overpayment) {
                     DB::rollBack();
                     Flasher::addError(__('overpayment_not_allowed'));
                     return redirect()->back();
                 }
-                
-                // Calculate overpayment amount, subtracting any credits already issued from previous overpayments on this fee
-                $previously_credited = \App\Models\StudentCredit::where('source_fee_id', $fee->id)
-                    ->where('source_type', \App\Models\StudentCredit::SOURCE_OVERPAYMENT)
-                    ->sum('original_amount');
-                $overpayment_amount = ($total_paid - $net_amount) - $previously_credited;
-                
-                // Only create credit if there's a net new overpayment
-                if ($overpayment_amount < 0) {
-                    $overpayment_amount = 0;
-                }
+
             }
-            
-            // Determine status based on payment
-            if ($total_paid >= $net_amount) {
-                $status = '1'; // Fully paid (including overpaid)
+
+            // Where the money actually goes.
+            //
+            // Students here pay toward the year, not toward an instalment, so
+            // more than this fee's balance is the ordinary case rather than a
+            // mistake. Rather than booking the excess as credit for somebody to
+            // apply by hand later - which is what overstated the ledger - it is
+            // carried onto the student's other instalments now.
+            $distributor = app(FeePaymentDistribution::class);
+
+            if ($request->filled('allocation')) {
+                // The bursar moved money between the instalments themselves.
+                // Taken as submitted, then checked again below - never trusted.
+                $legs = collect($request->input('allocation'))
+                    ->map(fn ($leg) => [
+                        'fee_id' => (int) ($leg['fee_id'] ?? 0),
+                        'applied' => round((float) ($leg['applied'] ?? 0), 2),
+                    ])
+                    ->filter(fn ($leg) => $leg['applied'] > 0.005)
+                    ->values()
+                    ->all();
+
+                $leftover = round($new_payment - collect($legs)->sum('applied'), 2);
             } else {
-                $status = '2'; // Partially paid
+                $proposal = $distributor->propose($fee, (float) $new_payment);
+                $legs = $proposal['legs'];
+                $leftover = $proposal['leftover'];
             }
-            
-            // Update Data - store the ACTUAL paid amount (can exceed net_amount)
-            $fee->discount_amount = $discount_amount;
-            $fee->fine_amount = $fine_amount;
-            $fee->paid_amount = $total_paid; // Store actual total paid (including overpayment)
-            $fee->pay_date = $request->pay_date;
-            $fee->payment_method = $request->payment_method;
-            $fee->payment_account_id = $request->payment_account_id;
-            $fee->note = $request->note;
-            $fee->status = $status;
-            $fee->updated_by = Auth::guard('web')->user()->id;
-            $fee->save();
 
+            $refusals = $distributor->blockers($fee, $legs, (float) $new_payment);
 
-            // Transaction (Student Ledger)
-            $transaction = new Transaction;
-            $transaction->transaction_id = Str::random(16);
-            $transaction->amount = $new_payment; // Record the actual payment amount
-            $transaction->type = '1';
-            $transaction->created_by = Auth::guard('web')->user()->id;
-            $fee->studentEnroll->student->transactions()->save($transaction);
+            if ($refusals !== []) {
+                DB::rollBack();
+                Flasher::addError(implode(' ', $refusals));
+                return redirect()->back();
+            }
 
-            // Create Payment Receipt record for tracking in unlinked transactions report
-            $paymentReceipt = PaymentReceipt::create([
-                'fee_id' => $fee->id,
-                'student_id' => $fee->studentEnroll->student_id,
-                'payment_reference' => 'ADMIN-' . date('Ymd') . '-' . $fee->id . '-' . Str::random(4),
-                'payment_date' => $request->pay_date,
-                'amount' => $new_payment,
+            // Money beyond every instalment the student owes is a genuine
+            // prepayment. It still becomes credit, as it always did, but never
+            // by accident: the bursar has to say so deliberately.
+            if ($leftover > 0.005 && $request->allow_leftover_credit != '1') {
+                DB::rollBack();
+                Flasher::addError(__('leftover_needs_confirmation', [
+                    'amount' => number_format($leftover, 2),
+                ]));
+                return redirect()->back();
+            }
+
+            // One handover, several receipts. The group ties them together so a
+            // receipt can show every instalment this payment settled.
+            $paymentGroup = count($legs) > 1 ? (string) Str::uuid() : null;
+
+            $paymentData = [
+                'pay_date' => $request->pay_date,
                 'payment_method' => $request->payment_method,
-                'verification_status' => 'approved', // Admin payments are auto-approved
-                'verified_by' => Auth::guard('web')->user()->id,
-                'verified_at' => now(),
-                'payment_account_id' => $request->payment_account_id, // May be null - will show in unlinked if null
-                'student_note' => 'Direct payment recorded by admin',
-                'verification_note' => 'Admin direct payment',
-            ]);
+                'payment_account_id' => $request->payment_account_id,
+                'note' => $request->note,
+                'user_id' => Auth::guard('web')->user()->id,
+                'payment_group' => $paymentGroup,
+            ];
 
-            // Create Payment Account Transaction if account is selected
-            if ($request->payment_account_id) {
-                $payment_account = PaymentAccount::findOrFail($request->payment_account_id);
-                
-                // Calculate new balance
-                $new_balance = $payment_account->current_balance + $new_payment;
-                
-                // Create transaction record
-                $account_transaction = new PaymentAccountTransaction;
-                $account_transaction->payment_account_id = $request->payment_account_id;
-                $account_transaction->transaction_type = 'credit'; // Money coming IN
-                $account_transaction->amount = $new_payment;
-                $account_transaction->transaction_date = $request->pay_date;
-                $account_transaction->title = 'Fee Payment - ' . ($fee->studentEnroll->student->first_name ?? '') . ' ' . ($fee->studentEnroll->student->last_name ?? '');
-                $account_transaction->description = 'Fee payment for ' . ($fee->category->title ?? 'Fee');
-                $account_transaction->payment_method = $request->payment_method;
-                $account_transaction->reference_type = 'fees';
-                $account_transaction->reference_id = $fee->id;
-                $account_transaction->balance_after = $new_balance;
-                $account_transaction->created_by = Auth::guard('web')->user()->id;
-                $account_transaction->save();
-                
-                // Update account balance
-                $payment_account->current_balance = $new_balance;
-                $payment_account->save();
+            $applied = [];
+
+            foreach ($legs as $leg) {
+                // Re-read each one inside the transaction: the figures the
+                // browser had are not the figures money is moved against.
+                $target = $leg['fee_id'] === $fee->id
+                    ? $fee
+                    : Fee::with(['category', 'studentEnroll.student'])->findOrFail($leg['fee_id']);
+
+                $recorder->record($target, (float) $leg['applied'], $paymentData);
+
+                $applied[] = ($target->category->title ?? __('field_fees')) . ' '
+                    . number_format($leg['applied'], 2);
             }
-            
+
+            if (count($legs) > 1) {
+                Flasher::addSuccess(__('Payment split across :count fees: :detail', [
+                    'count' => count($legs),
+                    'detail' => implode(', ', $applied),
+                ]), __('msg_success'));
+            }
+
+            // Only what is left once every instalment is settled becomes credit.
+            $overpayment_amount = $leftover > 0.005 ? round($leftover, 2) : 0;
+
             // Handle overpayment - create student credit
             if ($overpayment_amount > 0) {
-                $creditService = new \App\Services\StudentCreditService();
+                $creditService = app(\App\Services\StudentCreditService::class);
                 $credit = $creditService->createFromOverpayment(
-                    $fee, 
-                    $overpayment_amount, 
+                    $fee,
+                    $overpayment_amount,
                     Auth::guard('web')->user()->id
                 );
-                
+
                 // Add note about credit created
-                $fee->note = ($fee->note ? $fee->note . ' | ' : '') . 
+                $fee->note = ($fee->note ? $fee->note . ' | ' : '') .
                     "Overpayment of " . number_format($overpayment_amount, 2) . " credited (Credit ID: {$credit->id})";
                 $fee->save();
-                
+
                 Flasher::addInfo(__('overpayment_credit_created', ['amount' => number_format($overpayment_amount, 2)]));
             }
 
@@ -796,6 +763,35 @@ class FeesStudentController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
+    /**
+     * AJAX: how a given amount would be spread across this student's instalments.
+     *
+     * Answered by the server rather than worked out in the browser, so the
+     * figures the bursar is shown are the figures the money will actually move
+     * against - a second copy of the arithmetic in JavaScript is how the modal
+     * and the till end up disagreeing.
+     */
+    public function splitPreview(Request $request, $id)
+    {
+        $fee = Fee::with(['category', 'studentEnroll.student', 'paymentPlan', 'resitRequest'])
+            ->findOrFail($id);
+
+        $amount = round((float) $request->input('amount', 0), 2);
+        $distributor = app(FeePaymentDistribution::class);
+        $proposal = $distributor->propose($fee, $amount);
+
+        return response()->json([
+            'fee_id' => $fee->id,
+            'amount' => $amount,
+            'legs' => $proposal['legs'],
+            'leftover' => $proposal['leftover'],
+            // What this fee alone could take, so the modal can tell "a part
+            // payment" from "this spills onto the next instalment".
+            'outstanding' => app(FeePaymentRecorder::class)->outstanding($fee),
+            'currency' => optional(\App\Models\Setting::first())->currency_symbol,
+        ]);
+    }
+
     public function print($id)
     {
         //
@@ -826,6 +822,47 @@ class FeesStudentController extends Controller
             })
             ->firstOrFail();
 
+
+        // What this receipt is actually for.
+        //
+        // A receipt used to be a statement of one fee, with the overpayment
+        // clamped out of it. Now it says what the payment settled - one handover
+        // can settle more than one instalment - and shows the student's whole
+        // instalment position, so they can see where they stand from one sheet.
+        $data['receipts'] = collect();
+        $data['siblings'] = collect();
+        $data['credits'] = collect();
+
+        $latest = \App\Models\PaymentReceipt::where('fee_id', $data['row']->id)
+            ->orderByDesc('payment_date')->orderByDesc('id')->first();
+
+        if ($latest) {
+            $data['receipts'] = $latest->payment_group
+                ? \App\Models\PaymentReceipt::with('fee.category')
+                    ->where('payment_group', $latest->payment_group)
+                    ->orderBy('id')->get()
+                : collect([$latest->loadMissing('fee.category')]);
+        }
+
+        $studentId = optional($data['row']->studentEnroll)->student_id;
+
+        if ($studentId) {
+            // Found by student, not by enrolment: for the 2025/2026 intake the
+            // second instalment was raised against the second-semester
+            // enrolment, so looking by enrolment finds nothing at all.
+            $data['siblings'] = Fee::with(['category', 'studentEnroll.session'])
+                ->whereHas('studentEnroll', fn ($query) => $query->where('student_id', $studentId))
+                ->whereHas('category', function ($query) {
+                    $query->where('is_first_installment', 1)->orWhere('is_second_installment', 1);
+                })
+                ->where('status', '!=', '3')
+                ->orderByDesc('category_id')
+                ->get()
+                ->sortBy(fn ($fee) => optional($fee->category)->is_first_installment ? 0 : 1)
+                ->values();
+
+            $data['credits'] = \App\Models\StudentCredit::where('source_fee_id', $data['row']->id)->get();
+        }
 
         return view($this->view.'.print', $data);
     }

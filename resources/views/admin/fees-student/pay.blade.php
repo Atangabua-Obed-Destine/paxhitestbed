@@ -291,18 +291,64 @@
                     </div>
                     @endif
 
-                    <!-- Overpayment Warning (hidden by default) -->
+                    {{-- More than this instalment needs.
+
+                         Students here pay toward the year, not toward an
+                         instalment, so this is the ordinary case. Rather than
+                         booking the excess as credit for somebody to apply by
+                         hand later, it is carried onto the student's other
+                         instalments - and the split is shown, and can be
+                         changed, before anything is recorded. --}}
                     <div class="alert alert-warning d-none" id="overpayment-warning-{{ $row->id }}">
                         <h6 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> {{ __('overpayment_warning') }}</h6>
                         <p class="mb-1">{{ __('overpayment_message') }}</p>
                         <hr class="my-2">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong>{{ __('overpayment_amount') }}:</strong> 
-                                <span id="overpayment-amount-{{ $row->id }}" class="text-danger font-weight-bold">0.00</span> {!! $setting->currency_symbol !!}
-                            </div>
-                            <div class="col-md-6">
-                                <small class="text-muted">{{ __('overpayment_credit_note') }}</small>
+                        <div class="mb-2">
+                            <strong>{{ __('overpayment_amount') }}:</strong>
+                            <span id="overpayment-amount-{{ $row->id }}" class="text-danger font-weight-bold">0.00</span> {!! $setting->currency_symbol !!}
+                        </div>
+
+                        <div id="split-loading-{{ $row->id }}" class="text-muted small d-none">
+                            <i class="fas fa-spinner fa-spin"></i> {{ __('Working out how this is spread...') }}
+                        </div>
+
+                        <table class="table table-sm mb-2 bg-white d-none" id="split-table-{{ $row->id }}">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('field_fees_type') }}</th>
+                                    <th>{{ __('field_due_date') }}</th>
+                                    <th class="text-right">{{ __('field_remaining_balance') }}</th>
+                                    <th class="text-right" style="width:170px">{{ __('field_amount_to_pay') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="split-rows-{{ $row->id }}"></tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="3" class="text-right">{{ __('field_total') }}</th>
+                                    <th class="text-right" id="split-total-{{ $row->id }}">0.00</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <div id="split-mismatch-{{ $row->id }}" class="alert alert-danger py-2 small mb-2 d-none"></div>
+
+                        {{-- Money beyond every instalment the student owes. It
+                             still becomes credit, as it always did, but never by
+                             accident. --}}
+                        <div class="alert alert-danger mb-0 d-none" id="leftover-{{ $row->id }}">
+                            <strong>
+                                <i class="fas fa-exclamation-circle"></i>
+                                <span id="leftover-amount-{{ $row->id }}">0.00</span> {!! $setting->currency_symbol !!}
+                                {{ __('is more than every instalment this student owes.') }}
+                            </strong>
+                            <p class="mb-2 mt-1 small">{{ __('overpayment_credit_note') }}</p>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       id="allow_leftover_credit-{{ $row->id }}"
+                                       name="allow_leftover_credit" value="1">
+                                <label class="form-check-label" for="allow_leftover_credit-{{ $row->id }}">
+                                    {{ __('I have checked this with the student. Hold the remainder as credit.') }}
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -457,26 +503,153 @@
         const allowOverpaymentField = document.getElementById('allow_overpayment-' + feeId);
         const submitBtn = document.getElementById('submit-btn-' + feeId);
         const maxAmount = {{ round(max(0, $row->remaining_balance ?? 0), 2) }};
+        const SPLIT_URL      = {!! json_encode(url('admin/fees-student-split')) !!};
+        const SPLIT_TOO_MUCH = {!! json_encode(__('The split comes to more than the amount received.')) !!};
+        const SPLIT_FAILED   = {!! json_encode(__('Could not work out how this payment is spread. Close and try again.')) !!};
+        const THIS_FEE       = {!! json_encode(__('this fee')) !!};
+        const CONFIRM_LABEL  = {!! json_encode(__('btn_confirm_overpayment')) !!};
+        const RECEIVED_LABEL = {!! json_encode(__('btn_received')) !!};
         
+        // --- Spreading the payment across the student's instalments ---------
+        //
+        // How the money divides is NOT worked out here. The browser asks the
+        // server, which runs the one class that knows the rule, so what the
+        // bursar is shown is what the money will actually move against. A second
+        // copy of this arithmetic in JavaScript is exactly how the modal and the
+        // till end up disagreeing.
+        const splitTable    = document.getElementById('split-table-' + feeId);
+        const splitRows     = document.getElementById('split-rows-' + feeId);
+        const splitTotal    = document.getElementById('split-total-' + feeId);
+        const splitLoading  = document.getElementById('split-loading-' + feeId);
+        const splitMismatch = document.getElementById('split-mismatch-' + feeId);
+        const leftoverBox   = document.getElementById('leftover-' + feeId);
+        const leftoverSpan  = document.getElementById('leftover-amount-' + feeId);
+        const leftoverTick  = document.getElementById('allow_leftover_credit-' + feeId);
+
+        let splitTimer = null;
+
+        const asMoney = function (value) {
+            return (parseFloat(value) || 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2, maximumFractionDigits: 2
+            });
+        };
+
+        function totalAllocated() {
+            let sum = 0;
+            splitRows.querySelectorAll('.split-amount').forEach(function (input) {
+                sum += parseFloat(input.value) || 0;
+            });
+            return Math.round(sum * 100) / 100;
+        }
+
+        // The bursar may move money between the instalments. Whatever they do,
+        // the figures have to agree before the form may be sent.
+        function refreshSplitTotals() {
+            const entered = parseFloat(paymentAmountField.value) || 0;
+            const allocated = totalAllocated();
+            const leftover = Math.round((entered - allocated) * 100) / 100;
+
+            splitTotal.textContent = asMoney(allocated);
+
+            if (allocated - entered > 0.005) {
+                splitMismatch.classList.remove('d-none');
+                splitMismatch.textContent = SPLIT_TOO_MUCH
+                    + ' (' + asMoney(allocated) + ' / ' + asMoney(entered) + ')';
+            } else {
+                splitMismatch.classList.add('d-none');
+            }
+
+            if (leftover > 0.005) {
+                leftoverBox.classList.remove('d-none');
+                leftoverSpan.textContent = asMoney(leftover);
+            } else {
+                leftoverBox.classList.add('d-none');
+                if (leftoverTick) { leftoverTick.checked = false; }
+            }
+        }
+
+        function renderSplit(data) {
+            const legs = data.legs || [];
+            splitRows.innerHTML = '';
+
+            legs.forEach(function (leg, index) {
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + (leg.category || '') + (leg.is_origin
+                        ? ' <span class="badge badge-info">' + THIS_FEE + '</span>'
+                        : '') + '</td>'
+                    + '<td>' + (leg.due_date || '&mdash;') + '</td>'
+                    + '<td class="text-right">' + asMoney(leg.outstanding) + '</td>'
+                    + '<td class="text-right">'
+                    + '<input type="hidden" name="allocation[' + index + '][fee_id]" value="' + leg.fee_id + '">'
+                    + '<input type="number" step="0.01" min="0" max="' + leg.outstanding + '"'
+                    + ' class="form-control form-control-sm text-right split-amount"'
+                    + ' name="allocation[' + index + '][applied]" value="' + Number(leg.applied).toFixed(2) + '">'
+                    + '</td>';
+                splitRows.appendChild(tr);
+            });
+
+            splitRows.querySelectorAll('.split-amount').forEach(function (input) {
+                input.addEventListener('input', refreshSplitTotals);
+            });
+
+            splitTable.classList.toggle('d-none', legs.length < 2);
+            refreshSplitTotals();
+        }
+
+        function askForSplit() {
+            const entered = parseFloat(paymentAmountField.value) || 0;
+
+            clearTimeout(splitTimer);
+            splitTimer = setTimeout(function () {
+                splitLoading.classList.remove('d-none');
+
+                fetch(SPLIT_URL + '/' + feeId + '?amount=' + entered,
+                      { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (data) {
+                        splitLoading.classList.add('d-none');
+                        // The bursar may have typed on while this was in flight.
+                        if (Math.abs((parseFloat(paymentAmountField.value) || 0) - entered) > 0.005) { return; }
+                        renderSplit(data);
+                    })
+                    .catch(function () {
+                        splitLoading.classList.add('d-none');
+                        splitMismatch.classList.remove('d-none');
+                        splitMismatch.textContent = SPLIT_FAILED;
+                    });
+            }, 300);
+        }
+
+        function clearSplit() {
+            splitRows.innerHTML = '';
+            splitTable.classList.add('d-none');
+            splitMismatch.classList.add('d-none');
+            leftoverBox.classList.add('d-none');
+            if (leftoverTick) { leftoverTick.checked = false; }
+        }
+
         if(paymentAmountField) {
             paymentAmountField.addEventListener('input', function() {
                 let paymentAmount = parseFloat(this.value) || 0;
-                
+
                 if(paymentAmount > maxAmount) {
-                    // Show overpayment warning
+                    // More than this instalment needs: show where the rest goes.
                     let overpaymentAmount = paymentAmount - maxAmount;
                     overpaymentWarning.classList.remove('d-none');
                     overpaymentAmountSpan.textContent = overpaymentAmount.toFixed(2);
                     allowOverpaymentField.value = '1';
-                    submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> {{ __("btn_confirm_overpayment") }}';
+                    submitBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + CONFIRM_LABEL;
                     submitBtn.classList.remove('btn-success');
                     submitBtn.classList.add('btn-warning');
+                    askForSplit();
                 } else {
-                    // Hide overpayment warning
+                    // Within this fee's balance: nothing to spread.
                     overpaymentWarning.classList.add('d-none');
                     overpaymentAmountSpan.textContent = '0.00';
                     allowOverpaymentField.value = '0';
-                    submitBtn.innerHTML = '<i class="fas fa-money-check"></i> {{ __("btn_received") }}';
+                    clearSplit();
+                    submitBtn.innerHTML = '<i class="fas fa-money-check"></i> ' + RECEIVED_LABEL;
                     submitBtn.classList.remove('btn-warning');
                     submitBtn.classList.add('btn-success');
                 }

@@ -234,8 +234,14 @@
                 </th>
             </tr>
             @php
-                $display_paid = min((float)$row->paid_amount, (float)$row->total_amount);
-                $display_balance = max(0, $row->remaining_balance);
+                // What was actually paid, and what is actually left. These used
+                // to be clamped - min(paid, total) and max(0, balance) - so a
+                // receipt for an overpayment printed as if the extra money had
+                // never been handed over. A receipt that denies money the
+                // student gave you is worse than no receipt.
+                $display_paid = (float) $row->paid_amount;
+                $display_balance = (float) $row->remaining_balance;
+                $display_overpaid = max(0, -$display_balance);
             @endphp
             <tr class="border-bottom">
                 <td><strong>{{ __('field_amount_paid') }}</strong></td>
@@ -248,17 +254,29 @@
                     {!! $setting->currency_symbol !!}
                 </strong></td>
             </tr>
-            <tr class="tfoot" style="background-color: {{ $display_balance > 0 ? '#fff3cd' : '#d4edda' }};">
-                <th style="color: {{ $display_balance > 0 ? '#856404' : '#155724' }};">{{ __('field_remaining_balance') }}:</th>
-                <th style="color: {{ $display_balance > 0 ? '#856404' : '#155724' }};">= 
+            <tr class="tfoot" style="background-color: {{ $display_balance > 0.005 ? '#fff3cd' : '#d4edda' }};">
+                <th style="color: {{ $display_balance > 0.005 ? '#856404' : '#155724' }};">{{ __('field_remaining_balance') }}:</th>
+                <th style="color: {{ $display_balance > 0.005 ? '#856404' : '#155724' }};">= 
                     @if(isset($setting->decimal_place))
-                    {{ number_format((float)$display_balance, $setting->decimal_place, '.', '') }} 
+                    {{ number_format((float) max(0, $display_balance), $setting->decimal_place, '.', '') }} 
                     @else
-                    {{ number_format((float)$display_balance, 2, '.', '') }} 
+                    {{ number_format((float) max(0, $display_balance), 2, '.', '') }} 
                     @endif 
                     {!! $setting->currency_symbol !!}
                 </th>
             </tr>
+            @if($display_overpaid > 0.005)
+            <tr class="border-bottom">
+                <td><strong>{{ __('overpayment_amount') }}</strong></td>
+                <td><strong>{{ number_format($display_overpaid, 2, '.', '') }} {!! $setting->currency_symbol !!}</strong></td>
+            </tr>
+            @endif
+            @foreach($credits ?? [] as $credit)
+            <tr class="border-bottom">
+                <td>{{ __('overpayment_credit_generated') }}</td>
+                <td>{{ number_format((float) $credit->original_amount, 2, '.', '') }} {!! $setting->currency_symbol !!}</td>
+            </tr>
+            @endforeach
             <tr>
                 <td colspan="2" style="text-align: center; padding-top: 15px;">
                     @if($row->status == 1)
@@ -284,6 +302,70 @@
         </tbody>
     </table>
     <!-- Header Section -->
+
+    @if(isset($receipts) && $receipts->count() > 1)
+    {{-- One handover, several instalments. Without this the student is handed a
+         receipt for 150,000 having given 350,000. --}}
+    <table class="table-no-border receipt">
+        <thead>
+            <tr>
+                <th class="width2">{{ __('This payment settled') }}</th>
+                <th>{{ __('field_amount') }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($receipts as $leg)
+            <tr class="border-bottom">
+                <td>{{ optional(optional($leg->fee)->category)->title ?? __('field_fees') }}</td>
+                <td>{{ number_format((float) $leg->amount, 2, '.', '') }} {!! $setting->currency_symbol !!}</td>
+            </tr>
+            @endforeach
+            <tr class="tfoot">
+                <th>{{ __('field_total') }}:</th>
+                <th>= {{ number_format((float) $receipts->sum('amount'), 2, '.', '') }} {!! $setting->currency_symbol !!}</th>
+            </tr>
+        </tbody>
+    </table>
+    @endif
+
+    @if(isset($siblings) && $siblings->count() > 1)
+    {{-- The student's whole instalment position, so one sheet answers "where do
+         I stand" instead of needing a receipt per instalment. --}}
+    <table class="table-no-border receipt">
+        <thead>
+            <tr>
+                <th class="width2">{{ __('Your instalments') }}</th>
+                <th>{{ __('field_amount') }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($siblings as $instalment)
+            @php
+                $instalmentPaid = (float) $instalment->paid_amount;
+                $instalmentDue = (float) $instalment->total_amount;
+                $instalmentLeft = max(0, $instalmentDue - $instalmentPaid);
+            @endphp
+            <tr class="border-bottom">
+                <td>
+                    {{ optional($instalment->category)->title }}
+                    @if($instalment->due_date)
+                        <br><small>{{ __('field_due_date') }}: {{ \Carbon\Carbon::parse($instalment->due_date)->format('d M Y') }}</small>
+                    @endif
+                </td>
+                <td>
+                    {{ __('field_fee') }}: {{ number_format($instalmentDue, 2, '.', '') }} {!! $setting->currency_symbol !!}
+                    <br>{{ __('field_amount_paid') }}: {{ number_format($instalmentPaid, 2, '.', '') }} {!! $setting->currency_symbol !!}
+                    <br><strong>{{ __('field_remaining_balance') }}: {{ number_format($instalmentLeft, 2, '.', '') }} {!! $setting->currency_symbol !!}</strong>
+                </td>
+            </tr>
+            @endforeach
+            <tr class="tfoot">
+                <th>{{ __('field_remaining_balance') }}:</th>
+                <th>= {{ number_format((float) $siblings->sum(function ($f) { return max(0, (float) $f->total_amount - (float) $f->paid_amount); }), 2, '.', '') }} {!! $setting->currency_symbol !!}</th>
+            </tr>
+        </tbody>
+    </table>
+    @endif
 
     @if($row->resitRequest && $row->resitRequest->subject)
     {{-- ── Resit Course Details ── --}}

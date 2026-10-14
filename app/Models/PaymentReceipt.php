@@ -20,6 +20,9 @@ class PaymentReceipt extends Model
         'applicant_id',
         'receipt_file',
         'payment_reference',
+        // Which handover this receipt belongs to, when one payment settled
+        // several fees. Null for an ordinary single-fee payment.
+        'payment_group',
         'payment_date',
         'amount',
         'payment_method',

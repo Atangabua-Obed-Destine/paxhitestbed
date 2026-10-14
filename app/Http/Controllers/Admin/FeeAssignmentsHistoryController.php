@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 use App\Services\StaffAssignmentService;
+use App\Services\FeeAssignmentAmount;
+use App\Services\FeeAssignmentDueDate;
 use App\Services\StudentCreditService;
 
 use App\Models\Faculty;
@@ -47,6 +49,7 @@ class FeeAssignmentsHistoryController extends Controller
         $this->middleware('permission:' . $this->access . '-view',     ['only' => ['index']]);
         $this->middleware('permission:' . $this->access . '-delete',   ['only' => ['destroy']]);
         $this->middleware('permission:' . $this->access . '-transfer', ['only' => ['transferTargets', 'transfer']]);
+        $this->middleware('permission:' . $this->access . '-edit',     ['only' => ['amountDetails', 'updateAmount', 'dueDateDetails', 'updateDueDate', 'cohort', 'applyCohort']]);
     }
 
     /**
@@ -137,6 +140,366 @@ class FeeAssignmentsHistoryController extends Controller
 
         \Toastr::success(__('payment_transferred_successfully'), __('msg_success'));
         return redirect()->back();
+    }
+
+    /**
+     * AJAX: what the correction modal needs to show for one fee.
+     *
+     * Returns the figures and, separately, why the amount cannot be moved. The
+     * screen can then say what is wrong before the bursar types anything,
+     * rather than refusing after they have.
+     */
+    public function amountDetails($id)
+    {
+        $fee = Fee::with(['studentEnroll.student', 'studentEnroll.program', 'category', 'paymentPlan', 'resitRequest'])
+            ->findOrFail($id);
+
+        $service = app(FeeAssignmentAmount::class);
+
+        return response()->json([
+            'id' => $fee->id,
+            'student' => trim(optional(optional($fee->studentEnroll)->student)->first_name . ' '
+                . optional(optional($fee->studentEnroll)->student)->last_name),
+            'matricule' => optional($fee->studentEnroll)->matricule
+                ?? optional(optional($fee->studentEnroll)->student)->student_id,
+            'programme' => optional(optional($fee->studentEnroll)->program)->title,
+            'category' => optional($fee->category)->title,
+            'fee_amount' => round((float) $fee->fee_amount, 2),
+            'paid_amount' => round((float) $fee->paid_amount, 2),
+            'balance' => round((float) $fee->remaining_balance, 2),
+            'due_date' => $fee->due_date ? \Carbon\Carbon::parse($fee->due_date)->format('Y-m-d') : null,
+            // Asked with the amount unchanged, so the answer is "what stops
+            // this fee being corrected at all" rather than "is this particular
+            // number allowed". The equal-amount reason is dropped for that.
+            'blockers' => array_values(array_filter(
+                $service->blockers($fee, (float) $fee->fee_amount + 1),
+                fn ($reason) => !str_contains($reason, __('That is already the amount on this fee.'))
+            )),
+        ]);
+    }
+
+    /**
+     * Correct the amount on one fee assignment.
+     */
+    public function updateAmount(Request $request, $id)
+    {
+        $request->validate([
+            'fee_amount' => 'required|numeric|min:0.01',
+            'reason'     => 'required|string|min:3|max:500',
+        ]);
+
+        $fee = Fee::with(['paymentPlan', 'resitRequest'])->findOrFail($id);
+
+        try {
+            $result = app(FeeAssignmentAmount::class)->apply(
+                $fee,
+                (float) $request->input('fee_amount'),
+                trim((string) $request->input('reason')),
+                Auth::guard('web')->id()
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Fee amount correction failed: ' . $e->getMessage(), ['fee_id' => $id]);
+            \Toastr::error(__('msg_failed') . ': ' . $e->getMessage(), __('msg_failed'));
+
+            return redirect()->back();
+        }
+
+        if (!$result['changed']) {
+            \Toastr::error(implode(' ', $result['reasons']), __('msg_failed'));
+
+            return redirect()->back();
+        }
+
+        \Toastr::success(__('Fee changed from :old to :new. :owing', [
+            'old' => number_format($result['old'], 2),
+            'new' => number_format($result['new'], 2),
+            'owing' => $result['balance'] > 0.005
+                ? __('The student now owes :amount.', ['amount' => number_format($result['balance'], 2)])
+                : __('Nothing is outstanding on it.'),
+        ]), __('msg_success'));
+
+        if ($result['credit_applied'] > 0) {
+            \Toastr::info(__(':amount of the student\'s own credit was applied to the increase.', [
+                'amount' => number_format($result['credit_applied'], 2),
+            ]), __('msg_success'));
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * AJAX: what the deadline modal needs to show for one fee.
+     *
+     * With ?due_date= it also answers what the late fee would be on that date,
+     * worked out by the one class that knows the rule rather than repeated in
+     * the browser - the modal asks as the bursar picks, so the figure it shows
+     * is the figure the till will charge.
+     */
+    public function dueDateDetails(Request $request, $id)
+    {
+        $fee = Fee::with(['studentEnroll.student', 'studentEnroll.program', 'category.fines', 'paymentPlan', 'resitRequest'])
+            ->findOrFail($id);
+
+        $service = app(FeeAssignmentDueDate::class);
+
+        $current = $fee->due_date ? \Carbon\Carbon::parse($fee->due_date)->format('Y-m-d') : null;
+        $proposed = $request->input('due_date');
+
+        return response()->json([
+            'id' => $fee->id,
+            'student' => trim(optional(optional($fee->studentEnroll)->student)->first_name . ' '
+                . optional(optional($fee->studentEnroll)->student)->last_name),
+            'matricule' => optional($fee->studentEnroll)->matricule
+                ?? optional(optional($fee->studentEnroll)->student)->student_id,
+            'programme' => optional(optional($fee->studentEnroll)->program)->title,
+            'category' => optional($fee->category)->title,
+            'fee_amount' => round((float) $fee->fee_amount, 2),
+            'paid_amount' => round((float) $fee->paid_amount, 2),
+            'balance' => round((float) $fee->remaining_balance, 2),
+            'assign_date' => $fee->assign_date ? \Carbon\Carbon::parse($fee->assign_date)->format('Y-m-d') : null,
+            'due_date' => $current,
+            'fine_now' => $service->fineIfPaidToday($fee, $current),
+            'fine_proposed' => $proposed ? $service->fineIfPaidToday($fee, $proposed) : null,
+            'has_fines' => optional($fee->category)->fines
+                ? $fee->category->fines->where('status', '1')->count() > 0
+                : false,
+            // Asked against a date that is certainly different, so the answer
+            // is "what stops this deadline being moved at all" rather than
+            // "is this particular date allowed".
+            'blockers' => array_values(array_filter(
+                $service->blockers($fee, \Carbon\Carbon::parse($current ?: 'today')->addYears(5)->format('Y-m-d')),
+                fn ($reason) => !str_contains($reason, __('That is already the deadline on this fee.'))
+            )),
+        ]);
+    }
+
+    /**
+     * Correct the payment deadline on one fee assignment.
+     */
+    public function updateDueDate(Request $request, $id)
+    {
+        $request->validate([
+            'due_date' => 'required|date',
+            'reason'   => 'required|string|min:3|max:500',
+        ]);
+
+        $fee = Fee::with(['category.fines', 'paymentPlan', 'resitRequest'])->findOrFail($id);
+
+        try {
+            $result = app(FeeAssignmentDueDate::class)->apply(
+                $fee,
+                (string) $request->input('due_date'),
+                trim((string) $request->input('reason')),
+                Auth::guard('web')->id()
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Fee deadline correction failed: ' . $e->getMessage(), ['fee_id' => $id]);
+            \Toastr::error(__('msg_failed') . ': ' . $e->getMessage(), __('msg_failed'));
+
+            return redirect()->back();
+        }
+
+        if (!$result['changed']) {
+            \Toastr::error(implode(' ', $result['reasons']), __('msg_failed'));
+
+            return redirect()->back();
+        }
+
+        \Toastr::success(__('Deadline moved from :old to :new.', [
+            'old' => $result['old'] ? \Carbon\Carbon::parse($result['old'])->format('d M Y') : __('none'),
+            'new' => \Carbon\Carbon::parse($result['new'])->format('d M Y'),
+        ]), __('msg_success'));
+
+        // The part a bursar would otherwise only discover at the till.
+        if (abs($result['fine_after'] - $result['fine_before']) > 0.005) {
+            \Toastr::info($result['fine_after'] < $result['fine_before']
+                ? __('The late fee if they pay today drops from :before to :after.', [
+                    'before' => number_format($result['fine_before'], 2),
+                    'after' => number_format($result['fine_after'], 2),
+                ])
+                : __('The late fee if they pay today rises from :before to :after.', [
+                    'before' => number_format($result['fine_before'], 2),
+                    'after' => number_format($result['fine_after'], 2),
+                ]), __('msg_success'));
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * The cohort screen: every assignment of one category, programme and
+     * session, with what each student has paid and what stops any of them being
+     * corrected.
+     *
+     * This is the screen the problem actually needs. A wrong figure comes from
+     * the programme's fee structure, so it is wrong for the whole intake at
+     * once - correcting them one row at a time is twenty careful edits of live
+     * money.
+     */
+    public function cohort(Request $request)
+    {
+        $data['title']  = __('Correct a fee amount');
+        $data['route']  = $this->route;
+        $data['view']   = $this->view;
+        $data['access'] = $this->access;
+
+        $data['categories'] = FeesCategory::orderBy('title')->get();
+        $data['programs']   = Program::orderBy('title')->get();
+        $data['sessions']   = Session::orderBy('id', 'desc')->get();
+
+        $data['selected_category'] = $request->input('category');
+        $data['selected_program']  = $request->input('program');
+        $data['selected_session']  = $request->input('session');
+        $data['new_amount']        = $request->input('new_amount');
+        $data['new_due_date']      = $request->input('new_due_date');
+
+        $data['rows'] = collect();
+
+        if ($data['selected_category'] && $data['selected_program']) {
+            $service = app(FeeAssignmentAmount::class);
+            $dates = app(FeeAssignmentDueDate::class);
+            $proposed = (float) ($data['new_amount'] ?: 0);
+            $proposedDate = $data['new_due_date'] ?: null;
+
+            $data['rows'] = Fee::with(['studentEnroll.student', 'studentEnroll.session', 'paymentPlan', 'resitRequest', 'category'])
+                ->where('category_id', $data['selected_category'])
+                ->whereHas('studentEnroll', function ($query) use ($data) {
+                    $query->where('program_id', $data['selected_program']);
+
+                    if ($data['selected_session']) {
+                        $query->where('session_id', $data['selected_session']);
+                    }
+                })
+                ->get()
+                ->map(function (Fee $fee) use ($service, $dates, $proposed, $proposedDate) {
+                    $currentDate = $fee->due_date
+                        ? \Carbon\Carbon::parse($fee->due_date)->format('Y-m-d')
+                        : null;
+
+                    return [
+                        'fee' => $fee,
+                        'blockers' => $proposed > 0 ? $service->blockers($fee, $proposed) : [],
+                        'would_change' => $proposed > 0
+                            && abs($proposed - (float) $fee->fee_amount) >= 0.005,
+                        // Kept apart from the amount's, because the two refuse
+                        // for different reasons: a fee frozen on its amount can
+                        // still have the wrong date on it.
+                        'due_blockers' => $proposedDate ? $dates->blockers($fee, $proposedDate) : [],
+                        'due_would_change' => $proposedDate && $proposedDate !== $currentDate,
+                        'due_date' => $currentDate,
+                        'fine_now' => $dates->fineIfPaidToday($fee, $currentDate),
+                        'fine_after' => $proposedDate ? $dates->fineIfPaidToday($fee, $proposedDate) : null,
+                    ];
+                })
+                ->sortBy(fn ($row) => optional(optional($row['fee']->studentEnroll)->student)->student_id)
+                ->values();
+        }
+
+        return view($this->view . '.correct-cohort', $data);
+    }
+
+    /**
+     * Apply the correction to the fees ticked on the cohort screen.
+     */
+    public function applyCohort(Request $request)
+    {
+        $request->validate([
+            'fees'       => 'required|array|min:1',
+            'fees.*'     => 'integer|exists:fees,id',
+            'fee_amount' => 'nullable|numeric|min:0.01',
+            'due_date'   => 'nullable|date',
+            'reason'     => 'required|string|min:3|max:500',
+        ]);
+
+        $amount = $request->filled('fee_amount') ? (float) $request->input('fee_amount') : null;
+        $dueDate = $request->filled('due_date') ? (string) $request->input('due_date') : null;
+
+        if ($amount === null && $dueDate === null) {
+            \Toastr::error(__('Give an amount, a deadline, or both.'), __('msg_failed'));
+
+            return redirect()->back();
+        }
+
+        $service = app(FeeAssignmentAmount::class);
+        $dates = app(FeeAssignmentDueDate::class);
+        $reason = trim((string) $request->input('reason'));
+        $userId = Auth::guard('web')->id();
+
+        $changed = 0;
+        $datesChanged = 0;
+        $creditApplied = 0.0;
+        $refused = [];
+
+        foreach (Fee::with(['studentEnroll.student', 'category.fines', 'paymentPlan', 'resitRequest'])
+                     ->whereIn('id', $request->input('fees'))->get() as $fee) {
+            // The amount first: a deadline that refuses must not stop the
+            // amount being corrected, nor the other way round.
+            if ($amount !== null) {
+                try {
+                    $result = $service->apply($fee, $amount, $reason, $userId);
+
+                    if ($result['changed']) {
+                        $changed++;
+                        $creditApplied += $result['credit_applied'];
+                    } else {
+                        // Named one by one. A count of failures tells a bursar
+                        // nothing about which student to go and look at.
+                        $refused[] = $this->rowLabel($fee) . ': ' . implode(' ', $result['reasons']);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::error('Cohort fee correction failed: ' . $e->getMessage(), ['fee_id' => $fee->id]);
+                    $refused[] = $this->rowLabel($fee) . ': ' . $e->getMessage();
+                }
+            }
+
+            if ($dueDate !== null) {
+                try {
+                    $result = $dates->apply($fee->fresh(), $dueDate, $reason, $userId);
+
+                    if ($result['changed']) {
+                        $datesChanged++;
+                    } else {
+                        $refused[] = $this->rowLabel($fee) . ': ' . implode(' ', $result['reasons']);
+                    }
+                } catch (\Throwable $e) {
+                    \Log::error('Cohort deadline correction failed: ' . $e->getMessage(), ['fee_id' => $fee->id]);
+                    $refused[] = $this->rowLabel($fee) . ': ' . $e->getMessage();
+                }
+            }
+        }
+
+        if ($changed > 0) {
+            \Toastr::success(__(':count fee(s) corrected to :amount.', [
+                'count' => $changed,
+                'amount' => number_format($amount, 2),
+            ]) . ($creditApplied > 0
+                ? ' ' . __(':credit of student credit was applied.', ['credit' => number_format($creditApplied, 2)])
+                : ''), __('msg_success'));
+        }
+
+        if ($datesChanged > 0) {
+            \Toastr::success(__(':count deadline(s) moved to :date.', [
+                'count' => $datesChanged,
+                'date' => \Carbon\Carbon::parse($dueDate)->format('d M Y'),
+            ]), __('msg_success'));
+        }
+
+        foreach (array_slice($refused, 0, 10) as $line) {
+            \Toastr::warning($line, __('msg_failed'));
+        }
+
+        if (count($refused) > 10) {
+            \Toastr::warning(__(':count more were not changed.', ['count' => count($refused) - 10]), __('msg_failed'));
+        }
+
+        return redirect()->back();
+    }
+
+    protected function rowLabel(Fee $fee): string
+    {
+        return (string) (optional($fee->studentEnroll)->matricule
+            ?? optional(optional($fee->studentEnroll)->student)->student_id
+            ?? ('fee #' . $fee->id));
     }
 
     /**
@@ -460,7 +823,17 @@ class FeeAssignmentsHistoryController extends Controller
             return 'resit';
         }
 
-        $note = strtolower((string) ($fee->note ?? ''));
+        // Corrections are appended to the note, and the bursar writes the
+        // reason in their own words. A reason mentioning a transfer would
+        // otherwise reclassify the row as a transfer-in - changing what the
+        // screen says the fee is, and hiding the very buttons that made the
+        // correction. Only the note the fee was raised with decides its origin.
+        $note = strtolower(implode(' ', array_filter(
+            preg_split('/\r\n|\r|\n/', (string) ($fee->note ?? '')),
+            fn ($line) => !str_starts_with(trim($line), \App\Services\FeeAssignmentAmount::MARKER)
+                && !str_starts_with(trim($line), \App\Services\FeeAssignmentDueDate::MARKER)
+        )));
+
         if ($note !== '') {
             if (str_contains($note, 'progression') || str_contains($note, 'auto-assigned') || str_contains($note, 'auto generated') || str_contains($note, 'auto-generated')) {
                 return 'auto_progression';

@@ -20,6 +20,9 @@ use App\Models\Field;
 use App\Models\Program;
 use App\Models\Student;
 use App\Models\Batch;
+use App\Models\Session;
+use App\Models\Semester;
+use App\Models\Section;
 use App\Models\StatusType;
 use App\Models\Setting;
 use Carbon\Carbon;
@@ -723,6 +726,12 @@ class ApplicationController extends Controller
             'setting' => Setting::where('status', '1')->first(),
         ];
 
+        // The conversion modal's session, semester and section lists, built
+        // here rather than fetched when it opens. The programme is already
+        // known at this point, so there is nothing to wait for - the lists are
+        // in the page the admin is already looking at.
+        $data += $this->conversionLists((int) old('program', $application->program_id));
+
         return view($this->view.'.edit', $data);
     }
 
@@ -733,6 +742,80 @@ class ApplicationController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
+    /**
+     * The sessions, semesters and sections a programme offers.
+     *
+     * The same three queries FilterController answers over AJAX, asked here
+     * instead. The modal used to open empty and fill itself from three requests
+     * chained one behind the other - programme, then semester, then section -
+     * so on a slow link the admin saw empty lists, closed the modal, reloaded,
+     * and only then found them populated. Rendered with the page, there is no
+     * window in which they can be empty.
+     *
+     * The two defaults match the shared filter script exactly, so a programme
+     * changed inside the modal lands on the same choices this does: the
+     * earliest non-resit semester, and the section called "All" (or the only
+     * one there is).
+     */
+    protected function conversionLists(int $programId): array
+    {
+        $lists = [
+            'convert_sessions' => collect(),
+            'convert_semesters' => collect(),
+            'convert_sections' => collect(),
+            'convert_default_semester' => null,
+            'convert_default_section' => null,
+        ];
+
+        if (!$programId) {
+            return $lists;
+        }
+
+        $forProgram = function ($query) use ($programId) {
+            $query->where('program_id', $programId);
+        };
+
+        $lists['convert_sessions'] = Session::where('status', 1)
+            ->whereHas('programs', $forProgram)
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $lists['convert_semesters'] = Semester::where('status', 1)
+            ->whereHas('programs', $forProgram)
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $default = $lists['convert_semesters']
+            ->reject(function ($semester) {
+                return (bool) $semester->is_resit;
+            })
+            ->sortBy([['year', 'asc'], ['id', 'asc']])
+            ->first();
+
+        if (!$default) {
+            return $lists;
+        }
+
+        $lists['convert_default_semester'] = $default->id;
+
+        $lists['convert_sections'] = Section::where('status', 1)
+            ->whereHas('semesterPrograms', function ($query) use ($programId, $default) {
+                $query->where('program_id', $programId)->where('semester_id', $default->id);
+            })
+            ->orderBy('title', 'asc')
+            ->get();
+
+        $all = $lists['convert_sections']->first(function ($section) {
+            return strtolower(trim((string) $section->title)) === 'all';
+        });
+
+        $lists['convert_default_section'] = optional(
+            $all ?: ($lists['convert_sections']->count() === 1 ? $lists['convert_sections']->first() : null)
+        )->id;
+
+        return $lists;
+    }
+
     public function update(Request $request, Application $application)
     {
         $degreeType = $application->degreeType;

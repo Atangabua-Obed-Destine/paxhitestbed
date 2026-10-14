@@ -2903,5 +2903,19 @@
     "max": "Most you can apply",
     "no_unpaid_fees_found": "This student has no fee with a balance, so there is nothing to apply this credit to. It will be applied automatically to their next fee, or it can be refunded.",
     "apply_credit": "Apply Credit",
-    "error_403_title": "You do not have permission to open this page. If you think you should, ask an administrator to grant it to your role."
+    "error_403_title": "You do not have permission to open this page. If you think you should, ask an administrator to grant it to your role.",
+    "fee_summary": "Fee summary",
+    "balance_due": "Balance due",
+    "optional_note": "Optional note",
+    "fee_not_found": "That fee could not be found.",
+    "overpayment_warning": "More than this fee's balance",
+    "overpayment_message": "This is more than this instalment needs. The extra is carried onto the student's other instalments below.",
+    "overpayment_amount": "Amount over this instalment",
+    "overpayment_credit_note": "Anything left once every instalment is settled is held as credit for this student.",
+    "overpayment_not_allowed": "This is more than the fee's balance. Confirm the overpayment before recording it.",
+    "overpayment_credit_created": "Credit of :amount was created for this student.",
+    "overpayment_credit_generated": "Credit was generated from an overpayment on this fee",
+    "add_overpayment": "Record a payment",
+    "btn_confirm_overpayment": "Confirm and record",
+    "leftover_needs_confirmation": ":amount is more than every instalment this student owes. Tick the box to hold it as credit."
 }

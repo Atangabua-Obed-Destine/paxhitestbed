@@ -1254,8 +1254,12 @@
             </div>
             <div class="form-group col-md-6">
               <label for="convert_session">{{ __('field_session') }} <span>*</span></label>
+              @php $selectedSessionId = (int) old('session', $row->session_id); @endphp
               <select class="form-control session @error('session') is-invalid @enderror" id="convert_session" name="session" data-selected="{{ old('session', $row->session_id) }}" required>
                 <option value="">{{ __('select') }}</option>
+                @foreach($convert_sessions as $convertSession)
+                  <option value="{{ $convertSession->id }}" {{ $selectedSessionId === (int) $convertSession->id ? 'selected' : '' }}>{{ $convertSession->title }}</option>
+                @endforeach
               </select>
               @error('session')
                 <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1266,8 +1270,12 @@
               {{-- A student being admitted starts at the first teaching semester,
                    in the only section there is, so both are chosen for the admin.
                    data-default applies only when nothing has been picked. --}}
+              @php $selectedSemesterId = (int) (old('semester') ?: $convert_default_semester); @endphp
               <select class="form-control semester @error('semester') is-invalid @enderror" id="convert_semester" name="semester" data-selected="{{ old('semester') }}" data-default="first-non-resit" required>
                 <option value="">{{ __('select') }}</option>
+                @foreach($convert_semesters as $convertSemester)
+                  <option value="{{ $convertSemester->id }}" {{ $selectedSemesterId === (int) $convertSemester->id ? 'selected' : '' }}>{{ $convertSemester->title }}</option>
+                @endforeach
               </select>
               @error('semester')
                 <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1275,8 +1283,12 @@
             </div>
             <div class="form-group col-md-6">
               <label for="convert_section">{{ __('field_section') }} <span>*</span></label>
+              @php $selectedSectionId = (int) (old('section') ?: $convert_default_section); @endphp
               <select class="form-control section @error('section') is-invalid @enderror" id="convert_section" name="section" data-selected="{{ old('section') }}" data-default="all" required>
                 <option value="">{{ __('select') }}</option>
+                @foreach($convert_sections as $convertSection)
+                  <option value="{{ $convertSection->id }}" {{ $selectedSectionId === (int) $convertSection->id ? 'selected' : '' }}>{{ $convertSection->title }}</option>
+                @endforeach
               </select>
               @error('section')
                 <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -1728,6 +1740,16 @@
       var $program = $('#convert_program');
 
       if (!$program.val() || (conversionListsLoaded && !force)) {
+        return;
+      }
+
+      // Normally there is nothing to do: the controller renders these three
+      // lists with the page, for the programme already on the application. This
+      // only runs where it could not - an application with no programme on it -
+      // and when the admin changes the programme, which is the one case the
+      // server cannot have answered in advance.
+      if (!force && $('#convert_session option').length > 1 && $('#convert_semester option').length > 1) {
+        conversionListsLoaded = true;
         return;
       }
 

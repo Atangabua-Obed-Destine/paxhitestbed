@@ -35,6 +35,7 @@ class UndocumentedPermissionsSeeder extends Seeder
             ['name' => 'fee-assignments-history-transfer', 'title' => 'Transfer Fee History', 'group' => 'Fee Assignments History'],
             ['name' => 'fee-assignments-history-delete', 'title' => 'Delete Fee History', 'group' => 'Fee Assignments History'],
             ['name' => 'fee-assignments-history-view', 'title' => 'View Fee History', 'group' => 'Fee Assignments History'],
+            ['name' => 'fee-assignments-history-edit', 'title' => 'Correct a Fee Amount', 'group' => 'Fee Assignments History'],
             ['name' => 'partial-payment-report-view', 'title' => 'View Partial Payment Report', 'group' => 'Accounting Reports'],
 
             // 5. Library / Inventory

@@ -162,6 +162,11 @@
                                     <button type="submit" class="btn btn-info">
                                         <i class="fas fa-search"></i> {{ __('btn_filter') }}
                                     </button>
+                                    @can('fee-assignments-history-edit')
+                                        <a href="{{ route($route.'.cohort') }}" class="btn btn-warning">
+                                            <i class="fas fa-pen"></i> {{ __('Correct a whole programme') }}
+                                        </a>
+                                    @endcan
                                     <a href="{{ route($route.'.index') }}" class="btn btn-secondary">
                                         <i class="fas fa-redo"></i> {{ __('reset') }}
                                     </a>
@@ -253,7 +258,7 @@
                                             <th>{{ __('field_due_date') }}</th>
                                             <th>{{ __('status') }}</th>
                                             <th>{{ __('assignment_origin') }}</th>
-                                            @canany(['fee-assignments-history-delete', 'fee-assignments-history-transfer'])
+                                            @canany(['fee-assignments-history-delete', 'fee-assignments-history-transfer', 'fee-assignments-history-edit'])
                                             <th class="text-center">{{ __('action') }}</th>
                                             @endcanany
                                         </tr>
@@ -306,7 +311,7 @@
                                                     @endif
                                                 </td>
                                                 <td><span class="badge {{ $row->origin_badge }}">{{ $origins[$row->origin] ?? $row->origin }}</span></td>
-                                                @canany(['fee-assignments-history-delete', 'fee-assignments-history-transfer'])
+                                                @canany(['fee-assignments-history-delete', 'fee-assignments-history-transfer', 'fee-assignments-history-edit'])
                                                 @php
                                                     $deletable = $paid <= 0
                                                         && !in_array((int) $row->status, [1, 2], true)
@@ -317,6 +322,26 @@
                                                         && !$row->resitRequest;
                                                 @endphp
                                                 <td class="text-center text-nowrap">
+                                                    @can('fee-assignments-history-edit')
+                                                        {{-- Only where the amount came from a configured source. A
+                                                             resit fee is set by the resit flow, and a transferred-in
+                                                             row is a payment record rather than a charge of its own. --}}
+                                                        @if(in_array($row->origin, ['program_semester_fee', 'fees_master', 'manual', 'auto_progression'], true))
+                                                            <button type="button" class="btn btn-sm btn-primary btn-correct-amount"
+                                                                    data-fee-id="{{ $row->id }}"
+                                                                    title="{{ __('Correct the amount') }}">
+                                                                <i class="fas fa-pen"></i>
+                                                            </button>
+                                                            {{-- Its own button, not a second field on the amount one:
+                                                                 a fee whose amount is frozen can still have the wrong
+                                                                 date on it, and the two refuse for different reasons. --}}
+                                                            <button type="button" class="btn btn-sm btn-info btn-correct-due-date"
+                                                                    data-fee-id="{{ $row->id }}"
+                                                                    title="{{ __('Correct the payment deadline') }}">
+                                                                <i class="fas fa-calendar-alt"></i>
+                                                            </button>
+                                                        @endif
+                                                    @endcan
                                                     @can('fee-assignments-history-transfer')
                                                         @if($transferable)
                                                             <button type="button" class="btn btn-sm btn-success btn-transfer"
@@ -509,4 +534,375 @@
 </script>
 @endpush
 @endcan
+
+@can('fee-assignments-history-edit')
+{{-- Correcting an amount.
+
+     The figures are read back before anything is written, and the confirm
+     button stays dead until the tick box is ticked - the same shape every other
+     screen in this system that moves money now uses. --}}
+<div class="modal fade" id="correctAmountModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <form method="POST" id="correct-amount-form">
+        @csrf
+        <div class="modal-header">
+          <h5 class="modal-title">{{ __('Correct the fee amount') }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="correct-amount-blockers"></div>
+
+          <table class="table table-sm">
+            <tbody>
+              <tr><th class="fw-normal text-muted w-50">{{ __('field_name') }}</th><td class="fw-bold" id="ca-student">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_matricule') }}</th><td id="ca-matricule">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_fees_type') }}</th><td id="ca-category">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('Current amount') }}</th><td class="fw-bold" id="ca-current">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_already_paid') }}</th><td id="ca-paid">&mdash;</td></tr>
+            </tbody>
+          </table>
+
+          <div class="form-group">
+            <label for="ca-amount">{{ __('New amount') }} <span>*</span></label>
+            <input type="number" step="0.01" min="0.01" class="form-control" name="fee_amount" id="ca-amount" required>
+            <small class="form-text text-muted" id="ca-hint"></small>
+          </div>
+
+          <div class="form-group">
+            <label for="ca-reason">{{ __('Why') }} <span>*</span></label>
+            <input type="text" class="form-control" name="reason" id="ca-reason" minlength="3" maxlength="500"
+                   placeholder="{{ __('e.g. wrong amount on the programme fee structure') }}" required>
+            <small class="form-text text-muted">{{ __('Written onto the fee, so the correction can be traced later.') }}</small>
+          </div>
+
+          <div class="alert alert-warning mb-0" id="ca-effect"></div>
+
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="ca-confirm">
+            <label class="form-check-label" for="ca-confirm">
+              {{ __('I have checked this against the programme fee structure and it is the correct amount.') }}
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_close') }}</button>
+          <button type="submit" class="btn btn-primary" id="ca-submit" disabled>
+            <i class="fas fa-check"></i> {{ __('Change the amount') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+@push('scripts')
+{{-- Correcting a payment deadline.
+
+     Quieter than changing an amount - nothing already recorded moves - but it
+     decides the late fee the student will be charged when they next pay. That
+     figure is worked out by the server, on the date being picked, and shown
+     before anything is written. --}}
+<div class="modal fade" id="correctDueDateModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <form method="POST" id="correct-due-date-form">
+        @csrf
+        <div class="modal-header">
+          <h5 class="modal-title">{{ __('Correct the payment deadline') }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="correct-due-date-blockers"></div>
+
+          <table class="table table-sm">
+            <tbody>
+              <tr><th class="fw-normal text-muted w-50">{{ __('field_name') }}</th><td class="fw-bold" id="cd-student">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_matricule') }}</th><td id="cd-matricule">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_fees_type') }}</th><td id="cd-category">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_amount') }}</th><td id="cd-amount">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_already_paid') }}</th><td id="cd-paid">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('field_assign_date') }}</th><td id="cd-assigned">&mdash;</td></tr>
+              <tr><th class="fw-normal text-muted">{{ __('Current deadline') }}</th><td class="fw-bold" id="cd-current">&mdash;</td></tr>
+            </tbody>
+          </table>
+
+          <div class="form-group">
+            <label for="cd-date">{{ __('New deadline') }} <span>*</span></label>
+            <input type="date" class="form-control" name="due_date" id="cd-date" required>
+            <small class="form-text text-muted" id="cd-hint"></small>
+          </div>
+
+          <div class="form-group">
+            <label for="cd-reason">{{ __('Why') }} <span>*</span></label>
+            <input type="text" class="form-control" name="reason" id="cd-reason" minlength="3" maxlength="500"
+                   placeholder="{{ __('e.g. the deadline was never set on this fee') }}" required>
+            <small class="form-text text-muted">{{ __('Written onto the fee, so the correction can be traced later.') }}</small>
+          </div>
+
+          <div class="alert alert-warning mb-0" id="cd-effect"></div>
+
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="cd-confirm">
+            <label class="form-check-label" for="cd-confirm">
+              {{ __('I have checked this date against what the student was told, and it is correct.') }}
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_close') }}</button>
+          <button type="submit" class="btn btn-primary" id="cd-submit" disabled>
+            <i class="fas fa-check"></i> {{ __('Change the deadline') }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function ($) {
+  "use strict";
+
+  var modalEl = document.getElementById('correctAmountModal');
+  if (!modalEl) { return; }
+
+  var current = 0;
+  var paid = 0;
+
+  function money(value) {
+    return (parseFloat(value) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  function describeEffect() {
+    var next = parseFloat($('#ca-amount').val());
+    var $effect = $('#ca-effect');
+
+    if (isNaN(next) || next <= 0) {
+      $effect.removeClass('alert-danger alert-info').addClass('alert-warning')
+             .text({!! json_encode(__('Enter the amount this fee should be.')) !!});
+      return;
+    }
+
+    if (next > current) {
+      // Said in money rather than left for the bursar to work out: this is the
+      // number the student will be asked for.
+      $effect.removeClass('alert-danger alert-warning').addClass('alert-info')
+             .text({!! json_encode(__('The charge goes up by')) !!} + ' ' + money(next - current) + '. '
+                 + {!! json_encode(__('Outstanding after this:')) !!} + ' ' + money(Math.max(0, next - paid)) + '.');
+    } else if (next < current && paid > 0.005) {
+      $effect.removeClass('alert-info alert-warning').addClass('alert-danger')
+             .text({!! json_encode(__('This fee cannot be lowered: the student has already paid against it.')) !!});
+    } else if (next < current) {
+      $effect.removeClass('alert-danger alert-info').addClass('alert-warning')
+             .text({!! json_encode(__('The charge goes down. Allowed only because nothing has been paid against it.')) !!});
+    } else {
+      $effect.removeClass('alert-danger alert-info').addClass('alert-warning')
+             .text({!! json_encode(__('That is already the amount on this fee.')) !!});
+    }
+  }
+
+  $(document).on('click', '.btn-correct-amount', function () {
+    var id = $(this).data('fee-id');
+
+    // Cleared first, so a slow or failed load can never leave the previous
+    // fee's figures on screen beside this one's id.
+    $('#ca-student, #ca-matricule, #ca-category, #ca-current, #ca-paid').text('\u2014');
+    $('#ca-amount, #ca-reason').val('');
+    $('#ca-confirm').prop('checked', false);
+    $('#ca-submit').prop('disabled', true);
+    $('#correct-amount-blockers').empty();
+    $('#ca-effect').removeClass('alert-danger alert-info').addClass('alert-warning').text('');
+    $('#correct-amount-form').attr('action', '{{ url('admin/fee-assignments-history') }}/' + id + '/amount');
+
+    $('#correctAmountModal').modal('show');
+
+    $.get('{{ url('admin/fee-assignments-history') }}/' + id + '/amount', function (fee) {
+      current = parseFloat(fee.fee_amount) || 0;
+      paid = parseFloat(fee.paid_amount) || 0;
+
+      $('#ca-student').text(fee.student || '\u2014');
+      $('#ca-matricule').text(fee.matricule || '\u2014');
+      $('#ca-category').text((fee.category || '\u2014') + ' \u2014 ' + (fee.programme || ''));
+      $('#ca-current').text(money(current));
+      $('#ca-paid').text(money(paid));
+      $('#ca-amount').val(current.toFixed(2));
+      $('#ca-hint').text(paid > 0.005
+        ? {!! json_encode(__('Can only be raised: money has been paid against this fee.')) !!}
+        : {!! json_encode(__('Nothing has been paid yet, so this can go either way.')) !!});
+
+      if (fee.blockers && fee.blockers.length) {
+        // Said before anything is typed, not after it is submitted.
+        var list = fee.blockers.map(function (reason) {
+          return '<li>' + $('<div>').text(reason).html() + '</li>';
+        }).join('');
+        $('#correct-amount-blockers').html(
+          '<div class="alert alert-danger"><strong>' +
+          {!! json_encode(__('This fee cannot be corrected here')) !!} +
+          '</strong><ul class="mb-0 mt-1 ps-3">' + list + '</ul></div>');
+        $('#ca-amount, #ca-reason, #ca-confirm').prop('disabled', true);
+      } else {
+        $('#ca-amount, #ca-reason, #ca-confirm').prop('disabled', false);
+      }
+
+      describeEffect();
+    }).fail(function () {
+      $('#correct-amount-blockers').html('<div class="alert alert-danger">' +
+        {!! json_encode(__('Could not load this fee. Close and try again.')) !!} + '</div>');
+    });
+  });
+
+  $('#ca-amount').on('input', describeEffect);
+
+  $('#ca-confirm').on('change', function () {
+    $('#ca-submit').prop('disabled', !this.checked);
+  });
+
+  $('#correctAmountModal').on('hidden.bs.modal', function () {
+    $('#ca-confirm').prop('checked', false);
+    $('#ca-submit').prop('disabled', true);
+  });
+
+  // ---------------------------------------------------------------------
+  // The payment deadline.
+  // ---------------------------------------------------------------------
+
+  var dueCurrent = null;
+  var dueAssigned = null;
+  var dueFineNow = 0;
+  var dueHasFines = false;
+  var dueFeeId = null;
+  var dueTimer = null;
+
+  function dateText(value) {
+    if (!value) { return {!! json_encode(__('Not set')) !!}; }
+    var parts = String(value).split('-');
+    var d = new Date(parts[0], (parts[1] || 1) - 1, parts[2] || 1);
+    return isNaN(d.getTime()) ? value : d.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+  }
+
+  // What the late fee would be is NOT worked out here. The browser asks the
+  // server, which runs the one class that knows the rule, so the figure shown
+  // is the figure the till will charge - a second copy of the arithmetic in
+  // JavaScript is exactly how the two drift apart.
+  function describeDueEffect() {
+    var picked = $('#cd-date').val();
+    var $effect = $('#cd-effect');
+
+    if (!picked) {
+      $effect.removeClass('alert-danger alert-info').addClass('alert-warning')
+             .text({!! json_encode(__('Pick the date this fee should fall due.')) !!});
+      return;
+    }
+
+    if (dueAssigned && picked < dueAssigned) {
+      $effect.removeClass('alert-info alert-warning').addClass('alert-danger')
+             .text({!! json_encode(__('That is before the fee was assigned on')) !!} + ' ' + dateText(dueAssigned) + '.');
+      return;
+    }
+
+    $effect.removeClass('alert-danger alert-info').addClass('alert-warning')
+           .text({!! json_encode(__('Working out the late fee...')) !!});
+
+    clearTimeout(dueTimer);
+    dueTimer = setTimeout(function () {
+      $.get('{{ url('admin/fee-assignments-history') }}/' + dueFeeId + '/due-date', {due_date: picked}, function (fee) {
+        // The modal may have moved on while this was in flight.
+        if (String(fee.id) !== String(dueFeeId) || $('#cd-date').val() !== picked) { return; }
+
+        var after = parseFloat(fee.fine_proposed) || 0;
+        var before = parseFloat(fee.fine_now) || 0;
+        var said = {!! json_encode(__('Deadline:')) !!} + ' ' + dateText(dueCurrent) + ' \u2192 ' + dateText(picked) + '.';
+
+        if (Math.abs(after - before) < 0.005) {
+          $effect.removeClass('alert-danger alert-warning').addClass('alert-info')
+                 .text(said + ' ' + (after > 0.005
+                   ? {!! json_encode(__('The late fee if they pay today is unchanged at')) !!} + ' ' + money(after) + '.'
+                   : {!! json_encode(__('No late fee either way.')) !!}));
+        } else if (after > before) {
+          $effect.removeClass('alert-info alert-warning').addClass('alert-danger')
+                 .text(said + ' ' + {!! json_encode(__('The late fee if they pay today rises from')) !!} + ' '
+                     + money(before) + ' ' + {!! json_encode(__('to')) !!} + ' ' + money(after) + '.');
+        } else {
+          $effect.removeClass('alert-danger alert-warning').addClass('alert-info')
+                 .text(said + ' ' + {!! json_encode(__('The late fee if they pay today drops from')) !!} + ' '
+                     + money(before) + ' ' + {!! json_encode(__('to')) !!} + ' ' + money(after) + '.');
+        }
+      }).fail(function () {
+        $effect.removeClass('alert-info alert-warning').addClass('alert-danger')
+               .text({!! json_encode(__('Could not work out the late fee. Close and try again.')) !!});
+      });
+    }, 350);
+  }
+
+  $(document).on('click', '.btn-correct-due-date', function () {
+    var id = $(this).data('fee-id');
+    dueFeeId = id;
+
+    $('#cd-student, #cd-matricule, #cd-category, #cd-amount, #cd-paid, #cd-assigned, #cd-current').text('\u2014');
+    $('#cd-date, #cd-reason').val('');
+    $('#cd-confirm').prop('checked', false);
+    $('#cd-submit').prop('disabled', true);
+    $('#correct-due-date-blockers').empty();
+    $('#cd-effect').removeClass('alert-danger alert-info').addClass('alert-warning').text('');
+    $('#correct-due-date-form').attr('action', '{{ url('admin/fee-assignments-history') }}/' + id + '/due-date');
+
+    $('#correctDueDateModal').modal('show');
+
+    $.get('{{ url('admin/fee-assignments-history') }}/' + id + '/due-date', function (fee) {
+      dueCurrent = fee.due_date;
+      dueAssigned = fee.assign_date;
+      dueFineNow = parseFloat(fee.fine_now) || 0;
+      dueHasFines = !!fee.has_fines;
+
+      $('#cd-student').text(fee.student || '\u2014');
+      $('#cd-matricule').text(fee.matricule || '\u2014');
+      $('#cd-category').text((fee.category || '\u2014') + ' \u2014 ' + (fee.programme || ''));
+      $('#cd-amount').text(money(fee.fee_amount));
+      $('#cd-paid').text(money(fee.paid_amount));
+      $('#cd-assigned').text(dateText(fee.assign_date));
+      $('#cd-current').text(dateText(fee.due_date));
+      $('#cd-date').val(fee.due_date || '');
+      if (fee.assign_date) { $('#cd-date').attr('min', fee.assign_date); }
+
+      $('#cd-hint').text(dueHasFines
+        ? {!! json_encode(__('This fee type charges a late fee, so the date decides what they pay.')) !!}
+        : {!! json_encode(__('This fee type charges no late fee. The date decides the reminders and the overdue lists.')) !!});
+
+      if (fee.blockers && fee.blockers.length) {
+        var list = fee.blockers.map(function (reason) {
+          return '<li>' + $('<div>').text(reason).html() + '</li>';
+        }).join('');
+        $('#correct-due-date-blockers').html(
+          '<div class="alert alert-danger"><strong>' +
+          {!! json_encode(__('This deadline cannot be changed here')) !!} +
+          '</strong><ul class="mb-0 mt-1 ps-3">' + list + '</ul></div>');
+        $('#cd-date, #cd-reason, #cd-confirm').prop('disabled', true);
+      } else {
+        $('#cd-date, #cd-reason, #cd-confirm').prop('disabled', false);
+      }
+
+      describeDueEffect();
+    }).fail(function () {
+      $('#correct-due-date-blockers').html('<div class="alert alert-danger">' +
+        {!! json_encode(__('Could not load this fee. Close and try again.')) !!} + '</div>');
+    });
+  });
+
+  $('#cd-date').on('change input', describeDueEffect);
+
+  $('#cd-confirm').on('change', function () {
+    $('#cd-submit').prop('disabled', !this.checked);
+  });
+
+  $('#correctDueDateModal').on('hidden.bs.modal', function () {
+    clearTimeout(dueTimer);
+    $('#cd-confirm').prop('checked', false);
+    $('#cd-submit').prop('disabled', true);
+  });
+})(jQuery);
+</script>
+@endpush
+@endcan
+
 @endsection

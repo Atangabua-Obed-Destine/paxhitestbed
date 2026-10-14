@@ -544,6 +544,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('fees-student-unpay/{id}', 'FeesStudentController@unpay')->name('fees-student.unpay');
     Route::post('fees-student-cancel/{id}', 'FeesStudentController@cancel')->name('fees-student.cancel');
     Route::get('fees-student-report', 'FeesStudentController@report')->name('fees-student.report');
+    Route::get('fees-student-split/{id}', 'FeesStudentController@splitPreview')->name('fees-student.split');
     Route::get('fees-student-print/{id}', 'FeesStudentController@print')->name('fees-student.print');
 
     // Admission Fees Report (applicant-scoped; separate from student fees report)
@@ -599,6 +600,15 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::delete('fee-assignments-history/{id}', 'FeeAssignmentsHistoryController@destroy')->name('fee-assignments-history.destroy');
     Route::get('fee-assignments-history/{id}/transfer-targets', 'FeeAssignmentsHistoryController@transferTargets')->name('fee-assignments-history.transfer-targets');
     Route::post('fee-assignments-history/{id}/transfer', 'FeeAssignmentsHistoryController@transfer')->name('fee-assignments-history.transfer');
+    // Correcting an amount that was configured wrongly on the programme's fee
+    // structure. The structure is copied onto each student at enrolment and
+    // never read again, so a wrong figure can only be put right here.
+    Route::get('fee-assignments-history/{id}/amount', 'FeeAssignmentsHistoryController@amountDetails')->name('fee-assignments-history.amount');
+    Route::post('fee-assignments-history/{id}/amount', 'FeeAssignmentsHistoryController@updateAmount')->name('fee-assignments-history.amount.update');
+    Route::get('fee-assignments-history/{id}/due-date', 'FeeAssignmentsHistoryController@dueDateDetails')->name('fee-assignments-history.due-date');
+    Route::post('fee-assignments-history/{id}/due-date', 'FeeAssignmentsHistoryController@updateDueDate')->name('fee-assignments-history.due-date.update');
+    Route::get('fee-assignments-correct', 'FeeAssignmentsHistoryController@cohort')->name('fee-assignments-history.cohort');
+    Route::post('fee-assignments-correct', 'FeeAssignmentsHistoryController@applyCohort')->name('fee-assignments-history.cohort.apply');
     
     // Program Semester Fee Configuration Routes
     Route::get('program-semester-fee/get-programs', 'ProgramSemesterFeeController@getPrograms')->name('program-semester-fee.get-programs');
