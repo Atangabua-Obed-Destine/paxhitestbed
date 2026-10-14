@@ -199,3 +199,13 @@
 
     {{-- Page specific scripts --}}
     @stack('scripts')
+@if(config('pwa.enabled'))
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register({!! json_encode(route('student.pwa.sw')) !!})
+                .catch(function (error) { console.warn('Portal install unavailable:', error); });
+        });
+    }
+</script>
+@endif

@@ -3,6 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    {{-- Installing the portal.
+
+         The manifest and the worker both live under the student prefix, so the
+         worker's scope is the student portal and it cannot touch an admin or
+         applicant page. --}}
+    @if(config('pwa.enabled'))
+        <link rel="manifest" href="{{ route('student.pwa.manifest') }}">
+        <meta name="theme-color" content="{{ config('pwa.theme_color') }}">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="{{ $setting->title ?? config('app.name') }}">
+        <link rel="apple-touch-icon" href="{{ asset('pwa/icon-192.png') }}">
+    @endif
+
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>@yield('title') - {{ institution_name() }}</title>
     
@@ -608,5 +624,22 @@
             offset: 50
         });
     </script>
+
+@if(config('pwa.enabled'))
+<script>
+    // Registered from the login page and the portal only. The worker is served
+    // from under /student, so its scope is the student portal and it can never
+    // see an admin request.
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+            navigator.serviceWorker.register({!! json_encode(route('student.pwa.sw')) !!})
+                .catch(function (error) {
+                    // Never block the login page over this.
+                    console.warn('Portal install unavailable:', error);
+                });
+        });
+    }
+</script>
+@endif
 </body>
 </html>

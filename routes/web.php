@@ -1309,6 +1309,18 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 // Student Login Routes
 Route::prefix('student')->name('student.')->namespace('Student')->group(function(){
 
+    /*
+     * Installing the portal.
+     *
+     * Served from under the student prefix on purpose: a service worker's scope
+     * is its own directory, so this one cannot intercept an admin or applicant
+     * request at all. Open to guests, because the login page is where the
+     * install is offered.
+     */
+    Route::get('/manifest.webmanifest', 'PwaController@manifest')->name('pwa.manifest');
+    Route::get('/sw.js', 'PwaController@serviceWorker')->name('pwa.sw');
+    Route::get('/offline', 'PwaController@offline')->name('pwa.offline');
+
     Route::namespace('Auth')->group(function(){
 
         // Login Routes

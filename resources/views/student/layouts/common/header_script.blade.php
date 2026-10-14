@@ -4,6 +4,22 @@
         <meta name="robots" content="noindex" />
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
+    {{-- Installing the portal.
+
+         The manifest and the worker both live under the student prefix, so the
+         worker's scope is the student portal and it cannot touch an admin or
+         applicant page. --}}
+    @if(config('pwa.enabled'))
+        <link rel="manifest" href="{{ route('student.pwa.manifest') }}">
+        <meta name="theme-color" content="{{ config('pwa.theme_color') }}">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="default">
+        <meta name="apple-mobile-web-app-title" content="{{ $setting->title ?? config('app.name') }}">
+        <link rel="apple-touch-icon" href="{{ asset('pwa/icon-192.png') }}">
+    @endif
+
+
         @if(isset($setting))
         <!-- App Title -->
         <title>@yield('title') | {{ $setting->meta_title ?? '' }}</title>
