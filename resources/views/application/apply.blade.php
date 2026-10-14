@@ -3308,19 +3308,125 @@
                 updateDocumentStatus(key, hasExisting || hasNewFile, hasExisting);
             });
 
+            // Saying what happened, next to the document it happened to.
+            const documentFeedback = (key) => ({
+                state: $('[data-document-state="' + key + '"]'),
+                error: $('[data-document-error="' + key + '"]'),
+                progress: $('[data-document-progress="' + key + '"]')
+            });
+
+            const showDocumentError = (key, message) => {
+                const parts = documentFeedback(key);
+                parts.progress.addClass('d-none');
+                parts.error.text(message).removeClass('d-none');
+            };
+
+            const showDocumentUploaded = (key, viewUrl) => {
+                const parts = documentFeedback(key);
+                parts.progress.addClass('d-none');
+                parts.error.addClass('d-none').text('');
+                if (viewUrl) {
+                    parts.state.find('.document-state-view').attr('href', viewUrl);
+                }
+                parts.state.removeClass('d-none');
+            };
+
             $inputs.on('change', function() {
-                const key = $(this).data('document-key');
-                const hasExisting = $(this).data('has-existing') === 1 || $(this).data('has-existing') === '1';
-                const maxMb = parseFloat($(this).data('max-size-mb')) || 10;
+                const input = this;
+                const $input = $(this);
+                const key = $input.data('document-key');
+                const hasExisting = $input.data('has-existing') === 1 || $input.data('has-existing') === '1';
+                const maxMb = parseFloat($input.data('max-size-mb')) || 10;
+                const uploadUrl = $input.data('upload-url');
                 const file = this.files && this.files[0];
-                if (file && file.size > maxMb * 1024 * 1024) {
-                    alert('"' + file.name + '" is ' + (file.size / 1024 / 1024).toFixed(1) + ' MB. Maximum allowed is ' + maxMb + ' MB.');
-                    this.value = '';
+                const parts = documentFeedback(key);
+
+                parts.error.addClass('d-none').text('');
+
+                if (!file) {
                     updateDocumentStatus(key, hasExisting, hasExisting, false);
                     return;
                 }
-                const hasNewFile = this.files && this.files.length > 0;
-                updateDocumentStatus(key, hasExisting || hasNewFile, hasExisting, hasNewFile);
+
+                // Caught here rather than after a long upload that was never
+                // going to be accepted.
+                if (file.size > maxMb * 1024 * 1024) {
+                    showDocumentError(key, '"' + file.name + '" is '
+                        + (file.size / 1024 / 1024).toFixed(1) + ' MB. The most that can be uploaded is '
+                        + maxMb + ' MB. Please use a smaller scan.');
+                    input.value = '';
+                    updateDocumentStatus(key, hasExisting, hasExisting, false);
+                    return;
+                }
+
+                if (file.size === 0) {
+                    showDocumentError(key, '"' + file.name + '" is empty. Please choose the file again.');
+                    input.value = '';
+                    updateDocumentStatus(key, hasExisting, hasExisting, false);
+                    return;
+                }
+
+                // No application to attach it to yet (the form has not been
+                // started), so fall back to sending it with the form.
+                if (!uploadUrl) {
+                    updateDocumentStatus(key, true, hasExisting, true);
+                    return;
+                }
+
+                const payload = new FormData();
+                payload.append('file', file);
+                payload.append('_token', $('meta[name="csrf-token"]').attr('content') || $('input[name="_token"]').val());
+
+                parts.progress.removeClass('d-none');
+                $input.prop('disabled', true);
+
+                $.ajax({
+                    url: uploadUrl,
+                    type: 'POST',
+                    data: payload,
+                    processData: false,
+                    contentType: false
+                }).done(function (response) {
+                    $input.prop('disabled', false);
+
+                    if (response && response.ok) {
+                        $input.data('has-existing', '1');
+                        showDocumentUploaded(key, response.view_url);
+                        updateDocumentStatus(key, true, true, false);
+                        // It is on the server now, so it must not be sent again
+                        // with the next autosave.
+                        input.value = '';
+                        return;
+                    }
+
+                    showDocumentError(key, (response && response.message)
+                        || 'The document could not be uploaded. Please try again.');
+                    updateDocumentStatus(key, hasExisting, hasExisting, false);
+                }).fail(function (xhr) {
+                    $input.prop('disabled', false);
+                    input.value = '';
+                    updateDocumentStatus(key, hasExisting, hasExisting, false);
+
+                    // Each of these fails differently and needs a different
+                    // answer from the applicant, so they are not lumped together.
+                    let message;
+
+                    if (xhr.status === 413) {
+                        message = 'The server refused the file because it is too large. Please upload a smaller scan.';
+                    } else if (xhr.status === 419) {
+                        message = 'Your session has expired. Please reload the page and try again.';
+                    } else if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    } else if (xhr.status === 403) {
+                        message = 'You are not allowed to upload to this application.';
+                    } else if (xhr.status === 0) {
+                        message = 'The upload did not reach the server. Check your connection and try again.';
+                    } else {
+                        message = 'The document could not be uploaded. Please try again.';
+                    }
+
+                    showDocumentError(key, message);
+                });
             });
         };
 

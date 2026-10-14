@@ -1450,6 +1450,98 @@ class ApplicationController extends Controller
         return $totalFields > 0 ? round(($filledFields / $totalFields) * 100) : 0;
     }
 
+    /**
+     * Upload one document, on its own, the moment the applicant picks it.
+     *
+     * Until now a file only reached the server when the whole form was saved,
+     * and the applicant was told "New file ready" - which is not the same thing
+     * as uploaded. If the save then failed, quietly or otherwise, they had no
+     * way of knowing their document had not arrived.
+     *
+     * Sending one file at a time also keeps the request small. The autosave
+     * ships every pending document together, so a handful of scans can exceed a
+     * server body limit that no single document would have come near.
+     *
+     * Answers JSON, always: either it is stored, or it says plainly why not.
+     */
+    public function uploadDocument(Request $request, Application $application, string $key)
+    {
+        $this->authorizeApplication($application);
+
+        $requirements = $this->documentRequirements($application->degreeType);
+
+        if (!isset($requirements[$key])) {
+            return response()->json([
+                'ok' => false,
+                'message' => __('That document is not part of this application.'),
+            ], 422);
+        }
+
+        $document = $requirements[$key];
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+        ], [
+            'file.mimes' => __('The file must be a JPG, PNG or PDF.'),
+            'file.max' => __('That file is too large. The most that can be uploaded is 10 MB.'),
+            'file.required' => __('No file was received. It may have been too large for the server.'),
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'ok' => false,
+                'message' => $validator->errors()->first('file'),
+            ], 422);
+        }
+
+        try {
+            $filePath = $this->uploadMedia($request, 'file', $this->path);
+
+            if (!$filePath) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => __('The file could not be saved. Please try again.'),
+                ], 500);
+            }
+
+            DB::transaction(function () use ($application, $document, $key, $filePath) {
+                if (isset($document['assign_to_column'])) {
+                    $application->{$document['assign_to_column']} = $filePath;
+                    $application->save();
+                }
+
+                $application->documents()->updateOrCreate(
+                    ['document_type' => $key],
+                    [
+                        'file_path' => $filePath,
+                        'is_received' => true,
+                        'is_optional' => !$document['required'],
+                        // A replacement answers whatever was asked for again.
+                        'needs_resubmission' => false,
+                        'resubmitted_at' => now(),
+                    ]
+                );
+            });
+        } catch (\Throwable $e) {
+            \Log::error('Document upload failed: ' . $e->getMessage(), [
+                'application_id' => $application->id,
+                'document' => $key,
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => __('The file could not be saved. Please try again.'),
+            ], 500);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => __('Uploaded'),
+            'view_url' => asset('uploads/' . $this->path . '/' . $filePath),
+            'label' => $document['label'] ?? $key,
+        ]);
+    }
+
     /** Resubmit documents an admin flagged for a specific application. */
     public function resubmitDocuments(Request $request, Application $application)
     {

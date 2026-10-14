@@ -107,6 +107,7 @@ Route::middleware(['XSS'])->namespace('Web')->group(function () {
         Route::get('application/{application}/edit', 'ApplicationController@edit')->name('application.edit');
         Route::post('application/{application}', 'ApplicationController@update')->name('application.update');
         Route::post('application/{application}/save-draft', 'ApplicationController@saveDraft')->name('application.save-draft');
+        Route::post('application/{application}/documents/{key}', 'ApplicationController@uploadDocument')->name('application.document.upload');
         Route::post('application/{application}/resubmit-documents', 'ApplicationController@resubmitDocuments')->name('application.resubmit-documents');
         Route::get('application/{application}/timeline', 'ApplicationController@timeline')->name('application.timeline');
         Route::get('application/{application}/print', 'ApplicationController@printPreview')->name('application.print');
