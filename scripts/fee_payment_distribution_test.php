@@ -124,20 +124,90 @@ check('only instalments are offered',
         || optional($t->category)->is_second_installment),
     'an admission or resit charge is settled on purpose, not swept up by tuition');
 
-$planFee = Fee::whereNotNull('payment_plan_id')
-    ->whereHas('paymentPlan', fn ($q) => $q->where('status', 'active'))->first();
+// Both of these are constructed on the student's OWN second instalment. Looking
+// for somebody else's plan-backed fee proves nothing: the student filter would
+// have excluded it whatever the rule said.
+DB::beginTransaction();
 
-if (!$planFee) {
-    skip('no fee on an active payment plan to exclude');
-} else {
+try {
+    $plan = \App\Models\PaymentPlan::create([
+        'fee_id' => $second->id,
+        'student_id' => $studentId,
+        'total_amount' => $secondDue,
+        'installments_count' => 2,
+        'status' => 'active',
+    ]);
+    Fee::where('id', $second->id)->update(['payment_plan_id' => $plan->id]);
+
     check('a fee on an active payment plan is never offered',
-        !$targets->contains(fn ($t) => $t->id === $planFee->id),
-        'a plan carries its own dates and its own screen');
+        !$distribution->targets(Fee::find($first->id))->contains(fn ($t) => $t->id === $second->id),
+        'a plan carries its own instalment dates and its own screen');
+} finally {
+    DB::rollBack();
 }
 
-check('a resit fee is never offered',
-    !$targets->contains(fn ($t) => (bool) $t->resitRequest),
-    'resit charges must be paid in full, deliberately');
+DB::beginTransaction();
+
+try {
+    $anySubject = \App\Models\Subject::first();
+
+    if (!$anySubject) {
+        skip('no subject to hang a resit request on');
+    } else {
+        \App\Models\ResitRequest::create([
+            'student_enroll_id' => $second->student_enroll_id,
+            'subject_id' => $anySubject->id,
+            'session_id' => optional($second->studentEnroll)->session_id ?? 1,
+            'fee_amount' => $secondDue,
+            'fee_id' => $second->id,
+        ]);
+
+        check('a fee tied to a resit request is never offered',
+            !$distribution->targets(Fee::find($first->id))->contains(fn ($t) => $t->id === $second->id),
+            'resit charges must be paid in full, deliberately, on their own');
+    }
+} finally {
+    DB::rollBack();
+}
+
+// ---------------------------------------------------------------------------
+section('The cohort whose instalments live on different enrolments');
+// ---------------------------------------------------------------------------
+// For the 2026/2027 intake both instalments sit on one enrolment. For 2025/2026
+// the second was raised months later against the second-semester enrolment. 62
+// students are shaped that way, and looking by enrolment instead of by student
+// finds nothing at all for any of them.
+$crossFirst = null;
+$crossSecond = null;
+
+foreach (Fee::with(['category', 'studentEnroll'])
+    ->whereHas('category', fn ($q) => $q->where('is_first_installment', 1))
+    ->whereHas('studentEnroll.student')
+    ->orderBy('id')->get() as $candidate) {
+
+    $sibling = Fee::whereHas('studentEnroll', fn ($q) => $q->where('student_id', $candidate->studentEnroll->student_id))
+        ->whereHas('category', fn ($q) => $q->where('is_second_installment', 1))
+        ->where('student_enroll_id', '!=', $candidate->student_enroll_id)
+        ->whereRaw('COALESCE(paid_amount, 0) < fee_amount')
+        ->whereNull('payment_plan_id')
+        ->first();
+
+    if ($sibling) {
+        $crossFirst = $candidate;
+        $crossSecond = $sibling;
+        break;
+    }
+}
+
+if (!$crossFirst) {
+    skip('no student carries instalments on two different enrolments');
+} else {
+    check('the second instalment is found even on another enrolment',
+        $distribution->targets($crossFirst)->contains(fn ($t) => $t->id === $crossSecond->id),
+        'first #' . $crossFirst->id . ' on enrolment ' . $crossFirst->student_enroll_id
+            . ', second #' . $crossSecond->id . ' on enrolment ' . $crossSecond->student_enroll_id
+            . ' - looked up by enrolment this finds nothing, and 62 students are shaped this way');
+}
 
 // ---------------------------------------------------------------------------
 section('How an amount is spread');
@@ -176,6 +246,10 @@ if (count($spread['legs']) === 2) {
         'got fee #' . $spread['legs'][1]['fee_id']);
 }
 
+// A limitation worth stating rather than hiding: no student here carries more
+// than two outstanding instalments, so the ordering of targets BEYOND the fee
+// being paid is never exercised. First-before-second is correct by reading, not
+// by measurement.
 check('the legs account for every franc',
     abs(collect($spread['legs'])->sum('applied') + $spread['leftover'] - $spill) < 0.005,
     'legs ' . collect($spread['legs'])->sum('applied') . ' + leftover ' . $spread['leftover']
@@ -467,6 +541,37 @@ if (!$admin) {
     } finally {
         DB::rollBack();
     }
+}
+
+// ---------------------------------------------------------------------------
+section('The screen tells one story, not two');
+// ---------------------------------------------------------------------------
+// The split table said the extra went to the Second Instalment while the
+// confirmation step still said it was held as credit. Both were on screen at
+// once. A bursar reading contradictory sentences about the same money will
+// believe the wrong one.
+if (!isset($admin) || !$admin) {
+    skip('no Super Admin to render the screen as');
+} else {
+    $request = Illuminate\Http\Request::create(
+        '/admin/fees-student-report?faculty=0&program=0&session=0&semester=0&section=0&student_id=', 'GET');
+    $request->setLaravelSession(app('session.store'));
+    $page = $kernel->handle($request)->getContent();
+
+    check('the modal no longer claims an overpayment is simply held as credit',
+        !str_contains($page, 'This is more than the balance due. The extra is held as credit for this student.'),
+        'that sentence contradicts the split table directly above it');
+
+    check('the confirmation names the instalments the payment is spread over',
+        str_contains($page, 'This payment is spread across the student'),
+        'the confirmation must describe the same split the table shows');
+
+    check('credit is only mentioned for money beyond every instalment',
+        str_contains($page, 'This is more than every instalment the student owes. The remainder is held as credit.'));
+
+    check('the confirmation reads the split rather than recomputing it',
+        str_contains($page, "splitRows.querySelectorAll('tr')"),
+        'two independent descriptions of one payment is how they drift apart');
 }
 
 // ---------------------------------------------------------------------------

@@ -514,6 +514,15 @@ class DashboardController extends Controller
             }
         }
 
+        // ========== COURSE REGISTRATION ==========
+        // Asked of the same class the registration page asks, so the popup here
+        // and the guide there can never say different things about the same
+        // semester. It also knows WHY a student cannot register - telling
+        // someone to go and register when the portal is about to redirect them
+        // to the payment page is worse than saying nothing.
+        $data['registrationStatus'] = app(\App\Services\CourseRegistrationStatus::class)
+            ->for($student, $enroll ?? null);
+
         return view($this->view.'.index', $data);
     }
 

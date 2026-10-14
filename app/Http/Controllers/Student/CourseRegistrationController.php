@@ -8,6 +8,7 @@ use App\Models\ProgramSessionMaxCredit;
 use App\Models\Student;
 use App\Models\StudentEnroll;
 use App\Models\Subject;
+use App\Services\CourseRegistrationStatus;
 use App\Http\Controllers\Student\FormA3Controller;
 use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Http\Request;
@@ -45,138 +46,21 @@ class CourseRegistrationController extends Controller
             'studentEnrolls.section',
         ]);
 
-        // Get selected enrollment from session (set by SelectEnrollmentMiddleware)
-        $selectedEnrollmentId = session('selected_enrollment_id');
-        
-        $currentEnroll = null;
-        if($selectedEnrollmentId) {
-            $currentEnroll = StudentEnroll::with([
-                'subjects',
-                'subjectMarks.subject',
-                'session',
-                'semester',
-                'section',
-                'program',
-            ])->where('id', $selectedEnrollmentId)
-              ->where('student_id', $student->id)
-              ->first();
-        }
-        
-        // Fallback to currentEnroll relationship if no selection
-        if(!$currentEnroll) {
-            $student->load([
-                'currentEnroll.subjects',
-                'currentEnroll.subjectMarks.subject',
-                'currentEnroll.session',
-                'currentEnroll.semester',
-                'currentEnroll.section',
-                'currentEnroll.program',
-            ]);
-            $currentEnroll = $student->currentEnroll;
-        }
+        // Which enrolment, which courses are still open, and why not - all
+        // answered by CourseRegistrationStatus. The dashboard asks the same
+        // class, so the popup and this page can never tell the student
+        // different things about the same semester.
+        $status = app(CourseRegistrationStatus::class)->for($student);
 
-        // Check if current semester is a resit semester
-        $isResitSemester = false;
-        if ($currentEnroll && $currentEnroll->semester) {
-            $isResitSemester = (bool) $currentEnroll->semester->is_resit;
-        }
-
-        $availableSubjects = collect();
-        if ($currentEnroll && !$isResitSemester && $student->program_id) {
-            $currentSemester = $currentEnroll->semester;
-            $currentYear = $currentSemester->year;
-            $currentSemesterType = $currentSemester->semester_type ?? 1;
-
-            // Get subjects for current semester (program + semester + section)
-            $enrollSubject = \App\Models\EnrollSubject::where('program_id', $currentEnroll->program_id)
-                ->where('semester_id', $currentEnroll->semester_id)
-                ->where('section_id', $currentEnroll->section_id)
-                ->first();
-
-            if ($enrollSubject) {
-                // Get subjects assigned to this enrollment
-                $currentSemesterSubjectIds = $enrollSubject->subjects()->pluck('subject_id')->toArray();
-            } else {
-                $currentSemesterSubjectIds = [];
-            }
-
-            // Get subjects from same semester type but previous years
-            $previousYearsSemesterIds = \App\Models\Semester::where('status', 1)
-                ->where('semester_type', $currentSemesterType)
-                ->where('year', '<=', $currentYear)
-                ->where('id', '!=', $currentEnroll->semester_id)
-                ->pluck('id')
-                ->toArray();
-
-            $previousYearsSubjectIds = [];
-            if (!empty($previousYearsSemesterIds)) {
-                $previousEnrollSubjects = \App\Models\EnrollSubject::where('program_id', $currentEnroll->program_id)
-                    ->whereIn('semester_id', $previousYearsSemesterIds)
-                    ->where('section_id', $currentEnroll->section_id)
-                    ->get();
-
-                foreach ($previousEnrollSubjects as $enrollSub) {
-                    $subjectIds = $enrollSub->subjects()->pluck('subject_id')->toArray();
-                    $previousYearsSubjectIds = array_merge($previousYearsSubjectIds, $subjectIds);
-                }
-            }
-
-            // Combine all eligible subject IDs
-            $allEligibleSubjectIds = array_unique(array_merge($currentSemesterSubjectIds, $previousYearsSubjectIds));
-
-            if (!empty($allEligibleSubjectIds)) {
-                // Get all subjects
-                $allSubjects = Subject::whereIn('id', $allEligibleSubjectIds)
-                    ->where('status', '1')
-                    ->orderBy('code', 'asc')
-                    ->get();
-
-                // Filter out subjects that have been validated (total_marks >= 50%)
-                // Only check enrollments for the CURRENT PROGRAM and only count PUBLISHED marks
-                $validatedSubjectIds = [];
-                foreach ($student->studentEnrolls as $enroll) {
-                    // Only check enrollments for the current program
-                    if ($enroll->program_id != $currentEnroll->program_id) {
-                        continue;
-                    }
-                    
-                    if (isset($enroll->subjectMarks)) {
-                        foreach ($enroll->subjectMarks as $mark) {
-                            // Only count published marks
-                            if ($mark->is_visible_to_student && $mark->total_marks >= 50) {
-                                $validatedSubjectIds[] = $mark->subject_id;
-                            }
-                        }
-                    }
-                }
-                $validatedSubjectIds = array_unique($validatedSubjectIds);
-
-                // Filter available subjects (exclude validated ones)
-                $availableSubjects = $allSubjects->reject(function ($subject) use ($validatedSubjectIds) {
-                    return in_array($subject->id, $validatedSubjectIds);
-                })->values();
-            }
-        }
+        $currentEnroll = $status['enrollment'];
+        $isResitSemester = $status['is_resit'];
+        $assignableSubjects = $status['assignable'];
+        $maxCreditLimit = $status['max_credit'];
 
         $grades = Grade::where('status', '1')->orderBy('min_mark', 'desc')->get();
         $selectedSubjectIds = $currentEnroll
             ? $currentEnroll->subjects->pluck('id')->map(fn ($id) => (string) $id)->toArray()
             : [];
-        $assignedSubjectIds = array_map('intval', $selectedSubjectIds);
-        $assignableSubjects = $availableSubjects->reject(function ($subject) use ($assignedSubjectIds) {
-            return in_array((int) $subject->id, $assignedSubjectIds, true);
-        })->values();
-
-
-        $maxCreditLimit = null;
-        if ($currentEnroll) {
-            $facultyId = $currentEnroll->program->faculty_id ?? null;
-            $maxCreditLimit = ProgramSessionMaxCredit::resolveLimit(
-                (int) $currentEnroll->program_id,
-                (int) $currentEnroll->session_id,
-                $facultyId ? (int) $facultyId : null
-            );
-        }
 
         // Prepare performance summary and carry-over courses data
         $performanceSummary = $this->preparePerformanceSummary($student, $currentEnroll, $grades);
@@ -209,6 +93,10 @@ class CourseRegistrationController extends Controller
             'performanceSummary' => $performanceSummary,
             'carryOverCourses' => $carryOverCourses,
             'currentSemesterEnrolledSubjectIds' => $currentSemesterEnrolledSubjectIds,
+
+            // The same answer the dashboard popup is built from, so the guide
+            // on this page says exactly what the popup said.
+            'registrationStatus' => $status,
 
             // Whether the year ahead is still being set up. A graduation
             // verdict reached while courses are missing is not a final one, and

@@ -16,6 +16,70 @@
                         <h5>{{ $title }}</h5>
                     </div>
                     <div class="card-block">
+                        {{-- How to do this.
+
+                             Written for a student who has never registered
+                             courses before and does not know what "assign" or
+                             "carry-over" mean. It says what the page is for,
+                             what to do in order, and what happens if they do
+                             nothing - which is the part that actually costs
+                             them. --}}
+                        <div class="alert alert-info" role="alert">
+                            <h5 class="alert-heading mb-2">
+                                <i class="fas fa-question-circle"></i>
+                                {{ __('How to register your courses') }}
+                            </h5>
+                            <p>
+                                {{ __('Registering tells the school which classes you are taking this semester. Until you do it, you will not appear on the class list or the exam list for those courses, and no marks can be recorded for you.') }}
+                            </p>
+
+                            @if(isset($registrationStatus) && in_array($registrationStatus['state'], ['open', 'partly_done'], true))
+                                <p class="mb-2">
+                                    <strong>{{ $registrationStatus['headline'] }}</strong>
+                                    {{ $registrationStatus['detail'] }}
+                                </p>
+                            @endif
+
+                            <ol class="mb-2">
+                                <li>
+                                    {{ __('Look at') }} <strong>{{ __('My Courses') }}</strong>
+                                    {{ __('further down this page. Those are the courses you are already registered for. If a course is missing from it, you still need to register it.') }}
+                                </li>
+                                <li>
+                                    {{ __('In') }} <strong>{{ __('Choose your courses') }}</strong>,
+                                    {{ __('click the box and pick every course you want to take. You can pick several at once; click each one you want.') }}
+                                </li>
+                                <li>
+                                    {{ __('Check the list you have picked, then click') }}
+                                    <strong>{{ __('Register these courses') }}</strong>.
+                                    {{ __('You will be asked to confirm before anything is saved.') }}
+                                </li>
+                                <li>
+                                    {{ __('The courses then appear under') }} <strong>{{ __('My Courses') }}</strong>.
+                                    {{ __('That is how you know it worked.') }}
+                                </li>
+                            </ol>
+
+                            <hr>
+
+                            <p class="mb-1"><strong>{{ __('What the labels mean') }}</strong></p>
+                            <ul class="mb-2">
+                                <li><strong>{{ __('Compulsory') }}</strong> &mdash; {{ __('you must take it to complete your programme.') }}</li>
+                                <li><strong>{{ __('University Requirement') }}</strong> &mdash; {{ __('required of every student, whatever the programme.') }}</li>
+                                <li><strong>{{ __('Optional') }}</strong> &mdash; {{ __('you choose whether to take it.') }}</li>
+                                <li><strong>{{ __('Carry-over') }}</strong> &mdash; {{ __('a course from an earlier year that you have not passed yet. Register it again to retake it.') }}</li>
+                            </ul>
+
+                            <p class="mb-1"><strong>{{ __('If something looks wrong') }}</strong></p>
+                            <ul class="mb-0">
+                                <li>{{ __('Nothing in the list to choose from? Either you are already registered for everything open to you, or the school has not set the courses for your semester yet. Speak to your department.') }}</li>
+                                <li>{{ __('Registered the wrong course? Use the Drop button beside it in My Courses, as long as no marks have been recorded yet.') }}</li>
+                                @if(!is_null($maxCreditLimit))
+                                <li>{{ __('You may register up to :limit credits this semester. Picking more than that will be refused.', ['limit' => $maxCreditLimit]) }}</li>
+                                @endif
+                            </ul>
+                        </div>
+
                         @if(!$currentEnroll)
                             <div class="alert alert-warning mb-0" role="alert">
                                 {{ __('You are not currently enrolled in a semester, so course registration is unavailable.') }}
@@ -504,7 +568,7 @@
                 <div class="col-sm-12">
                     <div class="card">
                         <div class="card-header">
-                            <h5>{{ __('field_assign') }} {{ __('field_subject') }}</h5>
+                            <h5>{{ __('Choose your courses') }}</h5>
                         </div>
                         <div class="card-block">
                             @if($isResitSemester)
@@ -532,6 +596,10 @@
                                             <li>{{ __('You are already registered for all available courses') }}</li>
                                             <li>{{ __('No courses have been assigned to your current semester and section') }}</li>
                                         </ul>
+                                        <hr class="my-2">
+                                        <p class="mb-0">
+                                            {{ __('If you believe courses should be listed here, speak to your department - only the school can set which courses your semester offers.') }}
+                                        </p>
                                     </div>
                                 @else
                                     <div class="alert alert-info">
@@ -569,7 +637,7 @@
 
                                             <div class="form-group col-md-12">
                                                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#confirmModal">
-                                                    <i class="fas fa-check"></i> {{ __('Assign') }}
+                                                    <i class="fas fa-check"></i> {{ __('Register these courses') }}
                                                 </button>
                                                 @include('student.course-registration.confirm')
                                             </div>

@@ -700,7 +700,36 @@
                 ? escapeHtml(account)
                 : '<span class="text-muted">' + {!! json_encode(__('select_payment_account_optional')) !!} + '</span>';
 
-            const after = maxAmount - amount;
+            // What the split above actually says, read back from it rather than
+            // recomputed - two descriptions of one payment is how a bursar ends
+            // up reading contradictory stories on one screen.
+            const legs = [];
+            splitRows.querySelectorAll('tr').forEach(function (tr) {
+                const input = tr.querySelector('.split-amount');
+                const label = tr.querySelector('td');
+                if (!input) { return; }
+                const value = parseFloat(input.value) || 0;
+                if (value > 0.005) {
+                    legs.push({
+                        // The cell carries a "this fee" badge after the name;
+                        // only the name belongs in a sentence.
+                        label: (label && label.firstChild ? label.firstChild.textContent : '')
+                            .replace(/\s+/g, ' ').trim(),
+                        amount: value
+                    });
+                }
+            });
+
+            const splitting = legs.length > 1;
+            // This fee's own share: its leg when the payment is being spread,
+            // otherwise the whole amount.
+            const toThisFee = splitting ? legs[0].amount : amount;
+            const allocated = legs.reduce(function (sum, leg) { return sum + leg.amount; }, 0);
+            const leftover = splitting
+                ? Math.round((amount - allocated) * 100) / 100
+                : Math.round((amount - maxAmount) * 100) / 100;
+
+            const after = maxAmount - toThisFee;
             document.getElementById('pay-confirm-balance-' + feeId).textContent =
                 money(Math.max(0, after)) + ' {!! $setting->currency_symbol !!}';
 
@@ -708,13 +737,23 @@
             // left for them to work out from the numbers.
             const notes = [];
 
-            if (amount > maxAmount + 0.005) {
+            if (splitting) {
+                notes.push({
+                    level: 'info',
+                    text: {!! json_encode(__('This payment is spread across the student\'s instalments:')) !!}
+                        + ' ' + legs.map(function (leg) {
+                            return leg.label + ' ' + money(leg.amount);
+                        }).join(', ') + ' {!! $setting->currency_symbol !!}'
+                });
+            }
+
+            if (leftover > 0.005) {
                 notes.push({
                     level: 'danger',
-                    text: {!! json_encode(__('This is more than the balance due. The extra is held as credit for this student.')) !!}
-                        + ' (' + money(amount - maxAmount) + ' {!! $setting->currency_symbol !!})'
+                    text: {!! json_encode(__('This is more than every instalment the student owes. The remainder is held as credit.')) !!}
+                        + ' (' + money(leftover) + ' {!! $setting->currency_symbol !!})'
                 });
-            } else if (amount > 0 && amount < maxAmount - 0.005) {
+            } else if (!splitting && amount > 0 && amount < maxAmount - 0.005) {
                 notes.push({
                     level: 'info',
                     text: {!! json_encode(__('This is a part payment. The rest stays outstanding.')) !!}
