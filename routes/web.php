@@ -187,6 +187,7 @@ Route::middleware(['XSS'])->group(function () {
     Route::get('verify-receipt/{receipt_number}', 'Admin\FeesStudentController@verify')->name('verify-receipt');
     Route::get('verify-staff/{staff_identifier}', 'Admin\StaffIdCardController@verify')->name('verify-staff');
     Route::get('verify-form-a3/{code}', 'Admin\StudentFormA3Controller@verify')->name('verify-form-a3');
+    Route::get('verify-fee/{receipt}', 'Admin\FeesStudentController@publicVerify')->name('verify-fee');
     Route::get('verify-admission-fee/{receipt}', 'Admin\AdmissionFeesReportController@publicVerify')->name('verify-admission-fee');
     Route::get('verify-transcript/{code}', 'Admin\MarksheetController@verify')->name('verify-transcript');
 });

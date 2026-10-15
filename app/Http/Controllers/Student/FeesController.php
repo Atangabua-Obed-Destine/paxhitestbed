@@ -206,27 +206,21 @@ class FeesController extends Controller
      */
     public function print($id)
     {
-        //
-        $data['title'] = trans_choice('module_fees_report', 1);
-        $data['path'] = 'print-setting';
+        $student = Auth::guard('student')->user()->id;
 
-        $user = Auth::guard('student')->user()->id;
-
-        // View - Allow printing for fully paid, partially paid, and fees with payment plans
-        $data['print'] = \App\Models\PrintSetting::where('slug', 'fees-receipt')->firstOrFail();
-        
-        $fees = Fee::with(['paymentPlan.installments.payments'])
-            ->where('id', $id)
-            ->whereHas('studentEnroll', function ($query) use ($user) {
-                $query->where('student_id', $user);
-            })
-            ->where(function($query) {
+        $fee = Fee::where('id', $id)
+            ->whereHas('studentEnroll', fn ($query) => $query->where('student_id', $student))
+            ->where(function ($query) {
                 $query->whereIn('status', ['1', '2'])
                       ->orWhereNotNull('payment_plan_id');
-            });
-        
-        $data['row'] = $fees->firstOrFail();
+            })
+            ->firstOrFail();
 
-        return view('admin.fees-student.print', $data);
+        // The same service the office uses, so the student downloads exactly the
+        // sheet the bursar prints.
+        return view('admin.fees-student.print', array_merge(
+            app(\App\Services\FeeReceipt::class)->for($fee),
+            ['title' => trans_choice('module_fees_report', 1)]
+        ));
     }
 }

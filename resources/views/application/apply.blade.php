@@ -3396,6 +3396,13 @@
                         // It is on the server now, so it must not be sent again
                         // with the next autosave.
                         input.value = '';
+                        // ...and the browser must stop treating this as an
+                        // unanswered required field. The file input is empty
+                        // again, so without this the step refuses to submit
+                        // until the page is reloaded - the document is uploaded,
+                        // yet the applicant is told to provide it.
+                        input.required = false;
+                        $input.closest('.document-field').find('.document-required-flag').remove();
                         return;
                     }
 

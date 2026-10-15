@@ -792,79 +792,53 @@ class FeesStudentController extends Controller
         ]);
     }
 
+    /**
+     * Publicly verify a fee receipt, no login required.
+     *
+     * The same scheme the admission receipt uses, so a scanner needs to know
+     * only one. The code is an HMAC over the receipt's stable attributes, so a
+     * printed sheet whose figures were altered will not verify.
+     */
+    public function publicVerify(Request $request, \App\Models\PaymentReceipt $receipt)
+    {
+        abort_unless($receipt->student_id || optional($receipt->fee)->student_enroll_id, 404);
+
+        $receipt->load(['fee.category', 'fee.studentEnroll.student', 'fee.studentEnroll.program', 'verifier']);
+
+        $service = app(\App\Services\FeeReceipt::class);
+        $expected = $service->verificationCodeFor($receipt);
+        $supplied = strtoupper(trim((string) $request->query('code', '')));
+
+        return view('admin.fees-student.verify', [
+            'receipt' => $receipt,
+            'student' => optional(optional($receipt->fee)->studentEnroll)->student,
+            'setting' => \App\Models\Setting::first(),
+            'currency' => $service->currency(),
+            'verificationCode' => $expected,
+            'codeProvided' => $supplied !== '',
+            'isValid' => $supplied !== '' && hash_equals($expected, $supplied),
+        ]);
+    }
+
     public function print($id)
     {
-        //
-        $data['title'] = trans_choice('module_fees_report', 1);
-        $data['route'] = $this->route;
-        $data['view'] = $this->view;
-        $data['path'] = 'print-setting';
-
-        // View - Allow printing for fully paid, partially paid, and fees with payment plans
-        $data['print'] = PrintSetting::where('slug', 'fees-receipt')->firstOrFail();
-        
-        // Allow printing for status 1 (paid), 2 (partial), or fees with payment plans (regardless of status)
-        $data['row'] = Fee::with([
-                'paymentPlan.installments.payments',
-                'resitRequest.subject',
-                'resitRequest.session',
-                'resitRequest.resitSession',
-                'resitRequest.resitSemester',
-                'resitRequest.studentEnroll',
-                'studentEnroll.student',
-                'studentEnroll.program',
-                'studentEnroll.section',
-            ])
-            ->where('id', $id)
-            ->where(function($query) {
+        // Allow printing for status 1 (paid), 2 (partial), or fees on a payment
+        // plan regardless of status.
+        $fee = Fee::where('id', $id)
+            ->where(function ($query) {
                 $query->whereIn('status', ['1', '2'])
                       ->orWhereNotNull('payment_plan_id');
             })
             ->firstOrFail();
 
-
-        // What this receipt is actually for.
-        //
-        // A receipt used to be a statement of one fee, with the overpayment
-        // clamped out of it. Now it says what the payment settled - one handover
-        // can settle more than one instalment - and shows the student's whole
-        // instalment position, so they can see where they stand from one sheet.
-        $data['receipts'] = collect();
-        $data['siblings'] = collect();
-        $data['credits'] = collect();
-
-        $latest = \App\Models\PaymentReceipt::where('fee_id', $data['row']->id)
-            ->orderByDesc('payment_date')->orderByDesc('id')->first();
-
-        if ($latest) {
-            $data['receipts'] = $latest->payment_group
-                ? \App\Models\PaymentReceipt::with('fee.category')
-                    ->where('payment_group', $latest->payment_group)
-                    ->orderBy('id')->get()
-                : collect([$latest->loadMissing('fee.category')]);
-        }
-
-        $studentId = optional($data['row']->studentEnroll)->student_id;
-
-        if ($studentId) {
-            // Found by student, not by enrolment: for the 2025/2026 intake the
-            // second instalment was raised against the second-semester
-            // enrolment, so looking by enrolment finds nothing at all.
-            $data['siblings'] = Fee::with(['category', 'studentEnroll.session'])
-                ->whereHas('studentEnroll', fn ($query) => $query->where('student_id', $studentId))
-                ->whereHas('category', function ($query) {
-                    $query->where('is_first_installment', 1)->orWhere('is_second_installment', 1);
-                })
-                ->where('status', '!=', '3')
-                ->orderByDesc('category_id')
-                ->get()
-                ->sortBy(fn ($fee) => optional($fee->category)->is_first_installment ? 0 : 1)
-                ->values();
-
-            $data['credits'] = \App\Models\StudentCredit::where('source_fee_id', $data['row']->id)->get();
-        }
-
-        return view($this->view.'.print', $data);
+        // Everything the receipt says is assembled by one service, which the
+        // student's own portal also uses - the two used to pass this view
+        // different data, so the sheet a bursar printed and the one a student
+        // downloaded were not the same document.
+        return view($this->view . '.print', array_merge(
+            app(\App\Services\FeeReceipt::class)->for($fee),
+            ['title' => trans_choice('module_fees_report', 1), 'route' => $this->route, 'view' => $this->view]
+        ));
     }
 
     /**

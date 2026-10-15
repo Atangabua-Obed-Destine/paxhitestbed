@@ -173,6 +173,39 @@ if (!$key) {
 }
 
 // ---------------------------------------------------------------------------
+section('An uploaded document stops blocking the step');
+// ---------------------------------------------------------------------------
+// The file input is cleared once the file is safely on the server, so it must
+// also stop being `required` - otherwise the browser refuses to submit the step
+// over a document that HAS been uploaded, and the applicant is told to provide
+// something they just provided. Only a reload cleared it.
+check('the handler stops marking the input required once the file is stored',
+    str_contains($html, 'input.required = false'),
+    'without this, uploading a required document blocks Save and continue until the page is reloaded');
+
+$successAt = strpos($html, 'response && response.ok');
+$clearedAt = strpos($html, 'input.required = false');
+$failureAt = $successAt === false ? false : strpos($html, 'xhr.status === 413', $successAt);
+
+// The partial is included from three places - Identification, the Documents
+// step, and each qualification card - so a document area added later could
+// easily miss the upload wiring and quietly go back to the old behaviour.
+preg_match_all('/<input type="file"[^>]*class="form-control document-input"[\s\S]{0,800}?>/', $html, $inputs);
+$documentInputs = $inputs[0];
+$missingUrl = array_filter($documentInputs, fn ($tag) => !str_contains($tag, 'data-upload-url="http'));
+
+check('every document input on the form uploads on its own',
+    count($documentInputs) > 0 && $missingUrl === [],
+    count($missingUrl) . ' of ' . count($documentInputs)
+        . ' have no upload url — those would still ride on the whole form');
+
+check('and it does so only after the server confirmed the upload',
+    substr_count($html, 'input.required = false') === 1
+        && $successAt !== false && $clearedAt !== false && $failureAt !== false
+        && $clearedAt > $successAt && $clearedAt < $failureAt,
+    'clearing it on a failed upload would let the applicant past without the document');
+
+// ---------------------------------------------------------------------------
 section('A document that cannot be stored says why');
 // ---------------------------------------------------------------------------
 // Each of these needs a different response from the applicant, so none of them
