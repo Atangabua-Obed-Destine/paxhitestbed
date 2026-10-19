@@ -54,6 +54,14 @@ class FeesController extends Controller
         // Build filter options from ALL enrollments
         $data['sessions'] = $allEnrollments->unique('session_id');
         $data['semesters'] = $allEnrollments->unique('semester_id');
+        // The Year select in front of this filter needs the semesters
+        // themselves, not the enrolment rows the list is drawn from.
+        $data['semesterOptions'] = \App\Services\Academic\SemesterYearOptions::fromCollection(
+            collect($data['semesters'])->map(function ($row) {
+                return $row->semester ?? null;
+            })->filter()->unique('id')->values()
+        );
+
         
         // Build program list for filter (unique programs by matricule)
         $data['programs'] = $allEnrollments->groupBy('matricule')->map(function ($group) {

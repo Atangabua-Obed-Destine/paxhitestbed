@@ -34,9 +34,14 @@ class ClassSessionController extends Controller
         $this->path = 'class-session';
         $this->access = 'class-session';
 
-        $this->middleware('permission:'.$this->access.'-view', ['only' => ['index', 'show', 'getDetails', 'getStudents', 'getStats']]);
-        $this->middleware('permission:'.$this->access.'-create', ['only' => ['kiosk', 'startSession', 'endSession', 'createExtraClass', 'scan', 'scanClockOut']]);
-        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['updateLogbook', 'updateClassRep']]);
+        // Every action that reads or writes a session is listed. Four were
+        // missing entirely: approveEarlyClockOut (which can end a class and
+        // finalise the whole room's attendance), getActivity (which returns
+        // the chat and the questioners' identities), toggleDelegation and
+        // sendMessage/answerQuestion.
+        $this->middleware('permission:'.$this->access.'-view', ['only' => ['index', 'show', 'getDetails', 'getStudents', 'getStats', 'getActivity']]);
+        $this->middleware('permission:'.$this->access.'-create', ['only' => ['kiosk', 'startSession', 'endSession', 'createExtraClass', 'scan', 'scanClockOut', 'approveEarlyClockOut']]);
+        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['updateLogbook', 'updateClassRep', 'toggleDelegation', 'sendMessage', 'answerQuestion']]);
         $this->middleware('permission:'.$this->access.'-delete', ['only' => ['cancelSession']]);
     }
 
@@ -368,6 +373,13 @@ class ClassSessionController extends Controller
         }
 
         // Start the session
+            // Three writes follow - the status, the logbook, and one
+            // attendance row per student. class_logbooks is unique on the
+            // session, so a failure there used to leave the class started
+            // with nobody on the register and no way to retry, because
+            // starting demands status = pending.
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
         $session->start();
 
         // Create logbook entry
@@ -430,6 +442,8 @@ class ClassSessionController extends Controller
 
         $session->load(['subject', 'program', 'studentAttendances.studentEnroll.student']);
 
+            \Illuminate\Support\Facades\DB::commit();
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Class session started successfully!',
@@ -442,13 +456,14 @@ class ClassSessionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
             \Log::error('Start session error: ' . $e->getMessage(), [
                 'session_id' => $request->session_id,
                 'trace' => $e->getTraceAsString()
             ]);
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to start session: ' . $e->getMessage()
+                'message' => 'Could not start the session. Please try again.'
             ], 500);
         }
     }
@@ -497,16 +512,9 @@ class ClassSessionController extends Controller
             $jointSession->end();
             $endedCount++;
 
-            // Auto clock out remaining students if enabled
-            if (AttendanceSetting::getValue('auto_clock_out_enabled', true)) {
-                $jointSession->studentAttendances()
-                    ->whereNotNull('clock_in_time')
-                    ->where('has_clocked_out', false)
-                    ->update([
-                        'clock_out_time' => now(),
-                        'has_clocked_out' => true,
-                    ]);
-            }
+            // (The close of anyone still clocked in happens inside end(),
+            // before absentees are marked. It used to be here, after end()
+            // had already finalised everyone, where it could never match.)
 
             // Mark students who never clocked in as absent
             $jointSession->studentAttendances()
@@ -667,6 +675,18 @@ class ClassSessionController extends Controller
         ]);
 
         $session = ClassSession::findOrFail($request->session_id);
+
+        // Only the lecturer taking the class may register attendance for
+        // it. Status was the only gate, so any holder of the permission -
+        // which is every lecturer - could scan students into a colleague's
+        // class, and because clock-in writes straight through to the real
+        // register it was recorded against the colleague's name.
+        if ($session->teacher_id !== Auth::id()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized to scan for this session.'
+            ], 403);
+        }
 
         // Check if session is in progress
         if ($session->status !== ClassSession::STATUS_IN_PROGRESS) {
@@ -838,6 +858,18 @@ class ClassSessionController extends Controller
 
         $attendance = StudentClassAttendance::with(['classSession', 'studentEnroll.student'])->findOrFail($request->attendance_id);
         $session = $attendance->classSession;
+
+        // This endpoint can end a class and finalise the whole room's
+        // attendance, and it carried no permission and no ownership check
+        // at all - only that the attendance id existed. That id is a plain
+        // auto-increment, so any signed-in staff account could walk it and
+        // close somebody else's class.
+        if (!$session || $session->teacher_id !== Auth::id()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized to approve a clock-out for this session.'
+            ], 403);
+        }
         
         // Ensure session is still in progress
         if ($session->status !== ClassSession::STATUS_IN_PROGRESS) {
@@ -1106,6 +1138,19 @@ class ClassSessionController extends Controller
         $session = ClassSession::with(['studentAttendances.studentEnroll.student', 'program'])
             ->findOrFail($sessionId);
 
+        // Resolved once per request, not once per student.
+        $feeGateOn = \App\Http\Middleware\ClassHubFeeGate::enabled();
+        $feeAccess = app(\App\Services\PlatformFeeAccess::class);
+
+        // Scoped to the lecturer whose class it is. Only the kiosk calls
+        // this, and only ever about its own sessions.
+        if ($session->teacher_id !== Auth::id()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized to view this session.'
+            ], 403);
+        }
+
         // For joint classes, get all sessions with same subject/time that are in progress
         $jointSessionIds = [$session->id];
         if ($session->status === ClassSession::STATUS_IN_PROGRESS) {
@@ -1139,6 +1184,13 @@ class ClassSessionController extends Controller
                             'status_label' => $attendance->status_label,
                             'is_late' => $attendance->is_late,
                             'has_clocked_out' => $attendance->has_clocked_out,
+                            // Whether the portal's fee gate is keeping this
+                            // student out of the Class Hub. Shown so that an
+                            // absence is never a mystery; it has no bearing
+                            // on whether they can be marked present here.
+                            'portal_blocked_by_fees' => $feeGateOn
+                                && optional($attendance->studentEnroll)->student
+                                && !$feeAccess->grantsAccess($attendance->studentEnroll->student),
                         ]);
                     }
                 }
@@ -1172,6 +1224,12 @@ class ClassSessionController extends Controller
                 'status_label' => $attendance->status_label,
                 'is_late' => $attendance->is_late,
                 'has_clocked_out' => $attendance->has_clocked_out,
+                // Whether the portal's fee gate is keeping this student out of
+                // the Class Hub. Shown so an absence is never a mystery; it has
+                // no bearing on whether they can be marked present here.
+                'portal_blocked_by_fees' => $feeGateOn
+                    && optional($attendance->studentEnroll)->student
+                    && !$feeAccess->grantsAccess($attendance->studentEnroll->student),
             ];
         });
 
@@ -1191,6 +1249,15 @@ class ClassSessionController extends Controller
     public function getStats($sessionId)
     {
         $session = ClassSession::with('studentAttendances')->findOrFail($sessionId);
+
+        // Scoped to the lecturer whose class it is. Only the kiosk calls
+        // this, and only ever about its own sessions.
+        if ($session->teacher_id !== Auth::id()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized to view this session.'
+            ], 403);
+        }
 
         // For joint classes, get combined stats from all sessions
         $jointSessionIds = [$session->id];
@@ -1435,6 +1502,15 @@ class ClassSessionController extends Controller
     public function getActivity($sessionId)
     {
         $session = ClassSession::findOrFail($sessionId);
+
+        // Scoped to the lecturer whose class it is. Only the kiosk calls
+        // this, and only ever about its own sessions.
+        if ($session->teacher_id !== Auth::id()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized to view this session.'
+            ], 403);
+        }
         
         // For joint classes, get activity from all sessions with same subject/time
         $jointSessionIds = [$session->id];

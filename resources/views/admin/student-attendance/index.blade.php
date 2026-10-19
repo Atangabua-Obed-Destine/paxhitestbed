@@ -22,6 +22,17 @@
         <!-- [ Main Content ] start -->
         <div class="row">
             <div class="col-sm-12">
+                {{-- The lecturer's own scheduled courses, so the filters below are
+                     a fallback rather than the only way in. --}}
+                @include('common.inc.assigned_courses', [
+                    'assignedCourses' => $assignedCourses ?? collect(),
+                    'currentSession' => $assignedSession ?? null,
+                    'assignedAction' => 'admin.student-attendance.index',
+                    'assignedLabel' => __('Take Attendance'),
+                    'assignedIcon' => 'fas fa-user-check',
+                    'assignedDate' => true,
+                ])
+
                 <div class="card">
                     <div class="card-header">
                         <h5>{{ $title }}</h5>

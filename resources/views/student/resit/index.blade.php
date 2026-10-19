@@ -75,9 +75,13 @@
                                     </div>
                                 </div>
 
+                                @include('common.inc.semester_year_field', [
+                                    'year_target' => '.resit-semester',
+                                    'selected_semester' => $selected_semester ?? '',
+                                ])
                                 <div class="form-group col-md-4">
                                     <label for="semester_id">{{ __('field_semester') }} <span>*</span></label>
-                                    <select class="form-control" name="semester_id" id="semester_id" required>
+                                    <select class="form-control resit-semester" name="semester_id" id="semester_id" required>
                                         <option value="">{{ __('select') }}</option>
                                         @foreach($semesters as $semester)
                                         <option value="{{ $semester->id }}" @if($selected_semester == $semester->id) selected @endif>

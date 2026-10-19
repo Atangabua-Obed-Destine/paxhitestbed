@@ -470,6 +470,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('exam/subject-marking/{subject_marking}/transition', 'SubjectMarkingController@transition')->name('subject-marking.transition');
     Route::post('exam/subject-marking-bulk-transition', 'SubjectMarkingController@bulkTransition')->name('subject-marking.bulk-transition');
     Route::post('exam/subject-marking-bulk-unpublish', 'SubjectMarkingController@bulkUnpublishStudent')->name('subject-marking.bulk-unpublish');
+    Route::get('exam/subject-marking/{subject_marking}/direct-edit', 'SubjectMarkingController@directEditDetails')->name('subject-marking.direct-edit.details');
+    Route::post('exam/subject-marking/{subject_marking}/direct-edit', 'SubjectMarkingController@directEdit')->name('subject-marking.direct-edit');
     Route::post('exam/subject-marking/{subject_marking}/unpublish', 'SubjectMarkingController@unpublishStudent')->name('subject-marking.unpublish');
     Route::post('exam/subject-marking/{subject_marking}/republish', 'SubjectMarkingController@republishStudent')->name('subject-marking.republish');
     Route::get('exam/subject-result', 'SubjectMarkingController@result')->name('subject-result');
@@ -1488,41 +1490,48 @@ Route::middleware(['auth:student', 'XSS'])->prefix('student')->name('student.')-
     Route::get('download/{id}', 'DownloadCenterController@show')->name('download.show');
 
     // Class Hub Routes (Student Live Class Interaction)
-    Route::prefix('class-hub')->name('class-hub.')->group(function () {
-        // Main Views
-        Route::get('/', 'ClassHubController@index')->name('index');
-        Route::get('/live-room/{classSession}', 'ClassHubController@liveRoom')->name('live-room');
-        Route::get('/history', 'ClassHubController@history')->name('history');
-        Route::get('/my-notes', 'ClassHubController@myNotes')->name('my-notes');
-        Route::get('/session/{classSession}', 'ClassHubController@sessionDetails')->name('session-details');
-        Route::get('/export-notes', 'ClassHubController@exportNotes')->name('export-notes');
-        
-        // Real-time Chat
-        Route::post('/session/{classSession}/message', 'ClassHubController@sendMessage')->name('send-message');
-        Route::get('/session/{classSession}/messages', 'ClassHubController@getMessages')->name('get-messages');
-        
-        // Notes
-        Route::post('/session/{classSession}/note', 'ClassHubController@saveNote')->name('save-note');
-        Route::delete('/notes/{note}', 'ClassHubController@deleteNote')->name('delete-note');
-        
-        // Alerts
-        Route::post('/session/{classSession}/alert', 'ClassHubController@createAlert')->name('create-alert');
-        Route::post('/alert/{alert}/upvote', 'ClassHubController@upvoteAlert')->name('upvote-alert');
-        
-        // Questions
-        Route::post('/session/{classSession}/question', 'ClassHubController@submitQuestion')->name('submit-question');
-        
-        // Presence
-        Route::get('/session/{classSession}/presence', 'ClassHubController@getPresence')->name('get-presence');
-        
-        // Logbook (delegated class rep)
-        Route::post('/session/{classSession}/logbook', 'ClassHubController@saveLogbook')->name('save-logbook');
-        
-        // Attendance (delegated class rep)
-        Route::post('/session/{classSession}/mark-attendance', 'ClassHubController@markAttendance')->name('mark-attendance');
-    });
 
     }); // End of platform fee middleware group
+
+    // The class hub applies the fee checks through a gate that can be
+    // switched off, so a school may let a student who is sitting in the
+    // lecture room follow the class whatever their balance. Attendance
+    // itself is never fee-gated - the lecturer takes it from the ID card.
+    Route::middleware(['select.enrollment', 'class.hub.fees'])->group(function () {
+        Route::prefix('class-hub')->name('class-hub.')->group(function () {
+            // Main Views
+            Route::get('/', 'ClassHubController@index')->name('index');
+            Route::get('/live-room/{classSession}', 'ClassHubController@liveRoom')->name('live-room');
+            Route::get('/history', 'ClassHubController@history')->name('history');
+            Route::get('/my-notes', 'ClassHubController@myNotes')->name('my-notes');
+            Route::get('/session/{classSession}', 'ClassHubController@sessionDetails')->name('session-details');
+            Route::get('/export-notes', 'ClassHubController@exportNotes')->name('export-notes');
+        
+            // Real-time Chat
+            Route::post('/session/{classSession}/message', 'ClassHubController@sendMessage')->name('send-message');
+            Route::get('/session/{classSession}/messages', 'ClassHubController@getMessages')->name('get-messages');
+        
+            // Notes
+            Route::post('/session/{classSession}/note', 'ClassHubController@saveNote')->name('save-note');
+            Route::delete('/notes/{note}', 'ClassHubController@deleteNote')->name('delete-note');
+        
+            // Alerts
+            Route::post('/session/{classSession}/alert', 'ClassHubController@createAlert')->name('create-alert');
+            Route::post('/alert/{alert}/upvote', 'ClassHubController@upvoteAlert')->name('upvote-alert');
+        
+            // Questions
+            Route::post('/session/{classSession}/question', 'ClassHubController@submitQuestion')->name('submit-question');
+        
+            // Presence
+            Route::get('/session/{classSession}/presence', 'ClassHubController@getPresence')->name('get-presence');
+        
+            // Logbook (delegated class rep)
+            Route::post('/session/{classSession}/logbook', 'ClassHubController@saveLogbook')->name('save-logbook');
+        
+            // Attendance (delegated class rep)
+            Route::post('/session/{classSession}/mark-attendance', 'ClassHubController@markAttendance')->name('mark-attendance');
+        });
+    });
 
     // Profile Routes (EXCLUDED from platform fee middleware - students can always access profile)
     Route::resource('profile','ProfileController');

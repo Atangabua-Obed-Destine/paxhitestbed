@@ -44,9 +44,10 @@
                                         @endforeach
                                     </select>
                                 </div>
+                                @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
                                 <div class="form-group col-md-4">
                                     <label for="semester">{{ __('Semester') }}</label>
-                                    <select class="form-control" name="semester" id="semester">
+                                    <select class="form-control sy-semester" name="semester" id="semester">
                                         <option value="0">{{ __('All Semesters') }}</option>
                                         @foreach($semesters as $sem)
                                         <option value="{{ $sem->id }}" @if($selected_semester == $sem->id) selected @endif>{{ $sem->title }}</option>

@@ -115,11 +115,13 @@ class HostelStudentController extends Controller
         $data['sessions'] = $sessions->orderBy('id', 'desc')->get();}
 
         if(!empty($request->program) && $request->program != '0'){
-        $semesters = Semester::where('status', 1);
-        $semesters->with('programs')->whereHas('programs', function ($query) use ($program){
-            $query->where('program_id', $program);
-        });
-        $data['semesters'] = $semesters->orderBy('id', 'asc')->get();}
+        $semesterCollection = \App\Services\Academic\SemesterYearOptions::collectionForProgram($program);
+        $data['semesters'] = $semesterCollection;
+        // Without this the Year select in the shared filter renders empty, and
+        // because the semester list is gated behind it, nothing can be chosen
+        // at all. Built from the same collection passed as `semesters`, so a
+        // bookmarked ?semester=N can still be traced back to its year.
+        $data['semesterOptions'] = \App\Services\Academic\SemesterYearOptions::fromCollection($semesterCollection);}
 
         if(!empty($request->program) && $request->program != '0' && !empty($request->semester) && $request->semester != '0'){
         $sections = Section::where('status', 1);

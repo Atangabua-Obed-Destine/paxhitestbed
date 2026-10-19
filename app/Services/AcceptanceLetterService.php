@@ -526,12 +526,20 @@ class AcceptanceLetterService
             . '</ul>';
 
         // Normalise the template first, then substitute (keeps the sample table intact).
+        //
+        // prepare() rather than normalise alone: it also rewrites the editor's
+        // relative image paths, which dompdf cannot resolve. Without it this
+        // preview printed "Image not found" in place of the letterhead logo
+        // while the letter actually sent to the applicant carried it - so the
+        // one screen an admin checks their letter on was the one that lied.
         $pdf = Pdf::loadView('admin.acceptance-letter.pdf', [
-            'body' => strtr($this->normalizeLetterHtml($html), $sample),
+            'body' => strtr(\App\Services\DocumentHtml::prepare($html, true), $sample),
             'student' => null,
             'setting' => $setting,
         ]);
         $pdf->setPaper('a4', 'portrait');
+        // Matches the sent letter, so the preview renders through the same parser.
+        $pdf->setOption('isHtml5ParserEnabled', true);
 
         return $pdf;
     }

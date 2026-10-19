@@ -209,81 +209,12 @@
           }
         };
 
-        const sortYearKeys = (lookup) => {
-          return Object.keys(lookup).sort((a, b) => Number(a) - Number(b));
-        };
-
-        const buildYearOptions = (lookup, selected = '') => {
-          resetDropdown($year);
-          sortYearKeys(lookup).forEach((yearKey) => {
-            const option = $('<option/>', {
-              value: yearKey,
-              text: translationYear + ' ' + yearKey
-            });
-            if(selected && String(selected) === String(yearKey)){
-              option.attr('selected', 'selected');
-            }
-            $year.append(option);
-          });
-        };
-
-        const buildSemesterOptions = (lookup, yearKey, selected = '') => {
-          resetDropdown($semester, translationSelect, allowSemesterAll);
-          if(!yearKey || !lookup[yearKey]){
-            return;
-          }
-          lookup[yearKey].forEach((item) => {
-            const option = $('<option/>', {
-              value: item.id,
-              text: item.title
-            });
-            if(selected && String(selected) === String(item.id)){
-              option.attr('selected', 'selected');
-            }
-            $semester.append(option);
-          });
-          if(allowSemesterAll && selected === '0'){
-            $semester.val('0');
-          }
-        };
-
-        const deriveYearForSemester = (lookup, semesterId) => {
-          if(!semesterId){
-            return '';
-          }
-          let derivedYear = '';
-          Object.keys(lookup).some((yearKey) => {
-            const match = lookup[yearKey].some((item) => String(item.id) === String(semesterId));
-            if(match){
-              derivedYear = yearKey;
-              return true;
-            }
-            return false;
-          });
-          return derivedYear;
-        };
-
-        const transformSemesterResponse = (rows) => {
-          const grouped = {};
-          if(Array.isArray(rows)){
-            rows.forEach((item) => {
-              if(item && item.year !== null && item.year !== undefined){
-                const yearKey = item.year;
-                if(!grouped[yearKey]){
-                  grouped[yearKey] = [];
-                }
-                grouped[yearKey].push({
-                  id: item.id,
-                  title: item.title
-                });
-              }
-            });
-            Object.keys(grouped).forEach((key) => {
-              grouped[key].sort((a, b) => Number(a.id) - Number(b.id));
-            });
-          }
-          return grouped;
-        };
+        // The year logic lives in common/js/semester_year_select, so the
+        // legacy filter partials can share the one implementation rather
+        // than growing their own. attach() owns the Year select, the
+        // gating of the Semester select behind it, and working the year
+        // back out of a bookmarked ?semester=N.
+        let yearHandle = null;
 
         const refreshSectionOptions = (items) => {
           resetDropdown($section, translationSelect, allowSectionAll);
@@ -336,11 +267,9 @@
           $.post("{{ route('filter-semester') }}", {
             program: programId
           }, function(response){
-            semesterLookup = transformSemesterResponse(response);
-            selectedYear = '';
-            selectedSemester = '';
-            buildYearOptions(semesterLookup, '');
-            buildSemesterOptions(semesterLookup, '', '');
+            if(yearHandle){
+              yearHandle.setLookup(response);
+            }
           });
         };
 
@@ -354,13 +283,23 @@
           selectedSection = '';
         };
 
-        const initialYear = selectedYear || deriveYearForSemester(semesterLookup, selectedSemester);
-        if(initialYear && initialYear !== '0'){
-          selectedYear = initialYear;
-        }
-
-        buildYearOptions(semesterLookup, selectedYear);
-        buildSemesterOptions(semesterLookup, selectedYear, selectedSemester);
+        yearHandle = window.SemesterYearSelect.attach({
+          $year: $year,
+          $semester: $semester,
+          lookup: semesterLookup,
+          selectLabel: translationSelect,
+          yearLabel: translationYear,
+          allLabel: translationAll,
+          includeSemesterAll: allowSemesterAll,
+          selectedYear: selectedYear,
+          selectedSemester: selectedSemester,
+          onYearChange: function(){
+            // Changing the year invalidates the section below it.
+            selectedSemester = '';
+            selectedSection = '';
+            resetDropdown($section, translationSelect, allowSectionAll);
+          }
+        });
 
         if(selectedProgram && selectedSemester && !$section.children('option[value!=""]').length){
           fetchSections(selectedSemester, selectedProgram);
@@ -399,15 +338,6 @@
           }
           fetchSessions(programId);
           fetchSemesters(programId);
-        });
-
-        $year.on('change', function(e){
-          e.preventDefault();
-          selectedYear = $(this).val() || '';
-          selectedSemester = '';
-          selectedSection = '';
-          buildSemesterOptions(semesterLookup, selectedYear, '');
-          resetDropdown($section, translationSelect, allowSectionAll);
         });
 
         $semester.on('change', function(e){

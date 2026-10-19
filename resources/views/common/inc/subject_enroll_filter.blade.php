@@ -28,6 +28,7 @@
 		{{ __('required_field') }} {{ __('field_program') }}
 	</div>
 </div>
+@include('common.inc.semester_year_field')
 <div class="form-group">
   <label for="semester">{{ __('field_semester') }} <span>*</span></label>
   <select class="form-control semester" name="semester" id="semester" required>
@@ -111,15 +112,23 @@
           program:$(this).val()
         },
         success:function(response){
-            // var jsonData=JSON.parse(response);
-            $('option', semester).remove();
-            $('.semester').append('<option value="">{{ __("select") }}</option>');
-            $.each(response, function(){
-              $('<option/>', {
-                'value': this.id,
-                'text': this.title
-              }).appendTo('.semester');
-            });
+            // Handed to the shared year/semester module, which regroups the
+            // flat response by year and keeps the Year select in step. The
+            // endpoint already returns `year` on every row, so nothing on the
+            // server had to change for this.
+            var handle = $('.semester').data('semesterYearHandle');
+            if (handle) {
+              handle.setLookup(response);
+            } else {
+              $('option', semester).remove();
+              $('.semester').append('<option value="">{{ __("select") }}</option>');
+              $.each(response, function(){
+                $('<option/>', {
+                  'value': this.id,
+                  'text': this.title
+                }).appendTo('.semester');
+              });
+            }
           }
 
       });

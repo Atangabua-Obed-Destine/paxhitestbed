@@ -884,6 +884,7 @@
                             @endforeach
                         </select>
                     </div>
+                    @include('common.inc.semester_year_field', ['year_target' => '#extraSemester'])
                     <div class="form-group">
                         <label>Semester <span class="text-danger">*</span></label>
                         <select class="form-control" name="semester_id" id="extraSemester" required>
@@ -1677,8 +1678,9 @@
         item.className = 'student-item ' + statusClass;
         item.innerHTML = `
             <div>
-                <strong>${student.name}</strong><br>
-                <small>${student.matricule}</small>
+                <strong>${escapeText(student.name)}</strong><br>
+                <small>${escapeText(student.matricule)}</small>
+                ${student.portal_blocked_by_fees ? `<br><small class="text-warning" title="This student cannot open the Class Hub until their fees are settled. It does not stop you marking them present."><i class="fas fa-lock"></i> Portal locked (fees)</small>` : ''}
                 ${showProgram && student.program ? `<br><small class="text-info">${student.program}</small>` : ''}
             </div>
             <div class="text-right">
@@ -2491,6 +2493,18 @@
     };
     
     // Load student activity
+    function escapeText(value) {
+        // Student-authored text goes through here before it reaches innerHTML.
+        // The XSS middleware permits <img>, so an onerror payload survives
+        // input filtering; nothing below may be trusted as markup.
+        return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function loadStudentActivity() {
         if (!activeSessionId) return;
         
@@ -2528,7 +2542,7 @@
                         ${msg.is_lecturer ? '<span class="badge badge-primary ml-1">Lecturer</span>' : ''}
                         ${msg.program && !msg.is_lecturer ? `<span class="badge badge-info ml-1">${msg.program}</span>` : ''}
                     </div>
-                    <div class="chat-text">${msg.message}</div>
+                    <div class="chat-text">${escapeText(msg.message)}</div>
                     <div class="chat-time">${msg.formatted_time}</div>
                 </div>
             </div>
@@ -2543,7 +2557,7 @@
         }
         
         container.innerHTML = questions.map(q => `
-            <div class="question-item ${q.is_answered ? 'answered' : ''}" onclick="${!q.is_answered ? `selectQuestionToAnswer(${q.id}, '${q.question.replace(/'/g, "\\'")}')` : ''}">
+            <div class="question-item ${q.is_answered ? 'answered' : ''}" data-question-id="${q.is_answered ? '' : q.id}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <strong>${q.is_anonymous ? 'Anonymous' : q.student_name}</strong>
@@ -2554,7 +2568,7 @@
                     </div>
                     <small class="text-muted">${q.formatted_time}</small>
                 </div>
-                <p class="mb-1 mt-2">${q.question}</p>
+                <p class="mb-1 mt-2">${escapeText(q.question)}</p>
                 ${q.is_answered && q.answer ? `<div class="alert alert-success py-1 px-2 mt-2 mb-0"><small><strong>Answer:</strong> ${q.answer}</small></div>` : ''}
             </div>
         `).join('');
@@ -2582,7 +2596,7 @@
                 </div>
                 <div class="flex-grow-1">
                     <div class="d-flex justify-content-between">
-                        <strong>${a.title}</strong>
+                        <strong>${escapeText(a.title)}</strong>
                         <span class="badge badge-secondary">${a.upvotes || 0} upvotes</span>
                     </div>
                     <p class="mb-1 small">${a.content || ''}</p>
@@ -2644,9 +2658,31 @@
     window.selectQuestionToAnswer = function(questionId, questionText) {
         selectedQuestionId = questionId;
         document.getElementById('answerSection').style.display = 'block';
-        document.getElementById('answeringQuestion').innerHTML = `<strong>Answering:</strong> ${questionText}`;
+        // escapeText: this wrote the student's question straight into innerHTML.
+        document.getElementById('answeringQuestion').innerHTML =
+            '<strong>Answering:</strong> ' + escapeText(questionText);
         document.getElementById('lecturerAnswerInput').focus();
     };
+
+    // The question list used to carry its text in an inline onclick
+    // attribute, escaping only single quotes. The item now carries its id
+    // alone and the text is read back from the DOM, already escaped.
+    document.addEventListener('click', function (event) {
+        const item = event.target.closest('[data-question-id]');
+
+        if (!item) {
+            return;
+        }
+
+        const questionId = item.getAttribute('data-question-id');
+
+        if (!questionId) {
+            return; // already answered
+        }
+
+        const text = item.querySelector('p');
+        window.selectQuestionToAnswer(questionId, text ? text.textContent : '');
+    });
     
     window.cancelAnswer = function() {
         selectedQuestionId = null;

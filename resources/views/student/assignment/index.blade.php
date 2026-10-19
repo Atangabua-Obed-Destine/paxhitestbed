@@ -28,9 +28,13 @@
                                         {{ __('required_field') }} {{ __('field_session') }}
                                     </div>
                                 </div>
+                                @include('common.inc.semester_year_field', [
+                                    'year_target' => '.student-semester',
+                                    'include_year_all' => true,
+                                ])
                                 <div class="form-group col-md-3">
                                     <label for="semester">{{ __('field_semester') }}</label>
-                                    <select class="form-control" name="semester" id="semester">
+                                    <select class="form-control student-semester" name="semester" id="semester">
                                         <option value="0">{{ __('all') }}</option>
                                         @foreach( $semesters as $semester )
                                         <option value="{{ $semester->semester_id }}" @if( $selected_semester == $semester->semester_id) selected @endif>{{ $semester->semester->title ?? 'N/A' }}</option>

@@ -418,6 +418,14 @@
                                                     <button type="button" class="btn btn-icon btn-light btn-sm ml-1" onclick="showHistory({{ $markingRecord->id }})" title="View History">
                                                         <i class="fas fa-history"></i>
                                                     </button>
+                                                    @can('subject-marking-direct-edit')
+                                                        {{-- The privileged shortcut past unpublish -> unlock -> re-entry. --}}
+                                                        <button type="button" class="btn btn-icon btn-outline-danger btn-sm ml-1"
+                                                            onclick="openDirectEdit({{ $markingRecord->id }})"
+                                                            title="{{ __('Correct these marks directly') }}">
+                                                            <i class="fas fa-pen"></i>
+                                                        </button>
+                                                    @endcan
                                                     @if($overallChangedDisplay)
                                                         <small class="d-block text-muted">{{ $overallChangedDisplay }}</small>
                                                     @endif
@@ -951,6 +959,120 @@
             // Let the form submit natively
         });
 
+        // -- Direct mark correction -----------------------------------------
+        //
+        // The components are what get edited, never the total: the total is a
+        // stored sum that the exam observer recomputes, so a typed total would
+        // be undone the next time anything touched this student's exams.
+        var directEditPassMark = 50;
+
+        function directEditEscape(value) {
+            return $('<div>').text(value === null || value === undefined ? '' : value).html();
+        }
+
+        function openDirectEdit(markingId) {
+            var $body = $('#direct-edit-body');
+
+            $('#directEditForm').attr('action', '{{ url("admin/exam/subject-marking") }}/' + markingId + '/direct-edit');
+            $('#direct-edit-reason').val('');
+            $('#direct-edit-confirm').prop('checked', false);
+            $('#direct-edit-submit').prop('disabled', true);
+            $('#direct-edit-footer').show();
+            $body.html('<div class="text-center p-3"><i class="fas fa-spinner fa-spin fa-2x"></i></div>');
+            $('#directEditModal').modal('show');
+
+            $.get('{{ url("admin/exam/subject-marking") }}/' + markingId + '/direct-edit', function (data) {
+                directEditPassMark = parseFloat(data.pass_mark);
+                var html = '';
+
+                // A blocker is said before a figure is typed, not after it is sent.
+                if (data.blockers && data.blockers.length) {
+                    html += '<div class="alert alert-danger"><strong><i class="fas fa-ban"></i> '
+                        + 'These marks cannot be changed:</strong><ul class="mb-0 mt-2">';
+                    $.each(data.blockers, function (i, reason) {
+                        html += '<li>' + directEditEscape(reason) + '</li>';
+                    });
+                    html += '</ul></div>';
+                }
+
+                html += '<p class="mb-2"><strong>' + directEditEscape(data.student) + '</strong>'
+                    + (data.matricule ? ' <span class="text-muted">(' + directEditEscape(data.matricule) + ')</span>' : '')
+                    + '<br><span class="text-muted">' + directEditEscape(data.subject) + '</span></p>';
+
+                if (data.published) {
+                    html += '<div class="alert alert-warning py-2"><i class="fas fa-eye"></i> '
+                        + 'This result is published. The student sees the corrected mark immediately.</div>';
+                }
+
+                html += '<table class="table table-sm table-bordered mb-2"><thead class="thead-light"><tr>'
+                    + '<th>Component</th><th class="text-center">Out of</th><th class="text-center" style="width:130px">Mark</th>'
+                    + '</tr></thead><tbody>';
+
+                $.each(data.components, function (i, c) {
+                    html += '<tr><td>' + directEditEscape(c.type)
+                        + (c.locked ? ' <span class="badge badge-danger" title="Locked"><i class="fas fa-lock"></i></span>' : '')
+                        + '</td><td class="text-center">' + c.marks + '</td>'
+                        + '<td><input type="number" step="0.01" min="0" max="' + c.marks + '" class="form-control form-control-sm direct-edit-mark" '
+                        + 'name="exam_marks[' + c.exam_id + ']" value="' + (c.achieve_marks === null ? '' : c.achieve_marks) + '"></td></tr>';
+                });
+
+                html += '<tr><td>Assignments</td><td class="text-center">&ndash;</td>'
+                    + '<td><input type="number" step="0.01" min="0" name="assignments" class="form-control form-control-sm direct-edit-extra" value="' + data.assignments + '"></td></tr>'
+                    + '<tr><td>Activities</td><td class="text-center">&ndash;</td>'
+                    + '<td><input type="number" step="0.01" min="0" name="activities" class="form-control form-control-sm direct-edit-extra" value="' + data.activities + '"></td></tr>'
+                    + '<tr><td>Attendance (computed, not edited here)</td><td class="text-center">&ndash;</td>'
+                    + '<td class="text-center">' + data.attendances + '</td></tr>'
+                    + '</tbody></table>';
+
+                html += '<div id="direct-edit-preview" class="alert alert-secondary py-2 mb-0"></div>';
+
+                $body.html(html);
+                $body.data('attendances', parseFloat(data.attendances) || 0);
+                $body.data('before', parseFloat(data.total_marks) || 0);
+                updateDirectEditPreview();
+
+                if (data.blockers && data.blockers.length) {
+                    // The server refuses it as well; this only saves the trip.
+                    $body.find('input').prop('disabled', true);
+                    $('#direct-edit-footer').hide();
+                }
+            }).fail(function () {
+                $body.html('<div class="alert alert-danger">Could not load these marks. Please try again.</div>');
+                $('#direct-edit-footer').hide();
+            });
+        }
+
+        function updateDirectEditPreview() {
+            var $body = $('#direct-edit-body');
+            var total = parseFloat($body.data('attendances')) || 0;
+
+            $body.find('.direct-edit-mark, .direct-edit-extra').each(function () {
+                total += parseFloat($(this).val()) || 0;
+            });
+
+            total = Math.round(total * 100) / 100;
+
+            var before = parseFloat($body.data('before')) || 0;
+            var wasPass = before >= directEditPassMark;
+            var nowPass = total >= directEditPassMark;
+            var html = '<strong>Total becomes ' + total.toFixed(2) + '</strong> (was ' + before.toFixed(2) + ') &mdash; '
+                + (nowPass ? 'a pass' : 'a fail') + ', against a pass mark of ' + directEditPassMark + '.';
+
+            if (wasPass !== nowPass) {
+                html += '<br><span class="text-danger"><i class="fas fa-exclamation-triangle"></i> '
+                    + 'This changes the verdict from ' + (wasPass ? 'pass to fail' : 'fail to pass')
+                    + ', which affects carry-overs and progression.</span>';
+            }
+
+            $('#direct-edit-preview').html(html);
+        }
+
+        $(document).on('input', '.direct-edit-mark, .direct-edit-extra', updateDirectEditPreview);
+
+        $(document).on('change', '#direct-edit-confirm', function () {
+            $('#direct-edit-submit').prop('disabled', !$(this).is(':checked'));
+        });
+
         $('#crossProgramToggle').on('change', function() {
             var isChecked = $(this).is(':checked') ? 1 : 0;
             var currentUrl = new URL(window.location.href);
@@ -1089,6 +1211,51 @@
             </div>
         </div>
     </div>
+
+    <!-- Direct Mark Correction Modal -->
+    @can('subject-marking-direct-edit')
+    <div class="modal fade" id="directEditModal" tabindex="-1" role="dialog" aria-labelledby="directEditModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <form id="directEditForm" method="POST" action="">
+                    @csrf
+                    <div class="modal-header bg-light">
+                        <h5 class="modal-title" id="directEditModalLabel">
+                            <i class="fas fa-pen"></i> {{ __('Correct marks directly') }}
+                        </h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body" id="direct-edit-body"></div>
+                    <div class="modal-footer d-block" id="direct-edit-footer">
+                        <div class="form-group">
+                            <label for="direct-edit-reason">{{ __('Why is this being corrected?') }} <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="direct-edit-reason" name="reason" rows="2"
+                                minlength="10" maxlength="500" required
+                                placeholder="{{ __('e.g. the script was re-marked after a remark request') }}"></textarea>
+                            <small class="text-muted">{{ __('Kept in this student history, with your name.') }}</small>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="direct-edit-confirm">
+                            <label class="form-check-label" for="direct-edit-confirm">
+                                {{ __('I am correcting these marks without unpublishing the result first.') }}
+                            </label>
+                        </div>
+                        <div class="text-right">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                                <i class="fas fa-times"></i> {{ __('Cancel') }}
+                            </button>
+                            <button type="submit" class="btn btn-danger" id="direct-edit-submit" disabled>
+                                <i class="fas fa-save"></i> {{ __('Save correction') }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endcan
 
     <!-- History Modal -->
     <div class="modal fade" id="historyModal" tabindex="-1" role="dialog" aria-labelledby="historyModalLabel" aria-hidden="true">

@@ -586,114 +586,17 @@ class ExamRoutineController extends Controller
      *
      * @return \Illuminate\Support\Collection
      */
+    /**
+     * The courses this member of staff teaches in the current session.
+     *
+     * One implementation, in Academic\AssignedCourses - this was a local copy
+     * of it, and the copies had already drifted on who counts as a super admin.
+     */
     protected function getMyAssignedCourses()
     {
-        $teacherId = Auth::guard('web')->id();
-        $currentSession = Session::where('status', '1')->where('current', '1')->first();
-        
-        if (!$currentSession) {
-            return collect([]);
-        }
-
-        // Check if user is super admin or has staff assignments
-        $user = User::where('id', $teacherId)->where('status', '1');
-        $user->with('roles')->whereHas('roles', function ($query){
-            $query->where('slug', 'super-admin');
-        });
-        $isSuperAdmin = $user->first() !== null;
-        $hasAssignments = \App\Models\StaffAssignment::where('user_id', $teacherId)->exists();
-
-        // Build query for class routines
-        $routinesQuery = ClassRoutine::where('session_id', $currentSession->id)
-            ->where('status', '1')
-            ->with([
-                'subject',
-                'program.faculty',
-                'semester',
-                'section',
-            ]);
-
-        // If not super admin and doesn't have staff assignments, filter by teacher
-        if (!$isSuperAdmin && !$hasAssignments) {
-            $routinesQuery->where('teacher_id', $teacherId);
-        }
-
-        // Apply staff assignment filter if user has assignments
-        if ($hasAssignments) {
-            $assignments = \App\Models\StaffAssignment::where('user_id', $teacherId)->get();
-            $allowedFacultyIds = $assignments->pluck('faculty_id')->filter()->unique();
-            $allowedProgramIds = $assignments->pluck('program_id')->filter()->unique();
-            $allowedSubjectIds = $assignments->pluck('subject_id')->filter()->unique();
-
-            $routinesQuery->where(function($query) use ($allowedFacultyIds, $allowedProgramIds, $allowedSubjectIds) {
-                if ($allowedFacultyIds->isNotEmpty()) {
-                    $query->whereHas('program', function($q) use ($allowedFacultyIds) {
-                        $q->whereIn('faculty_id', $allowedFacultyIds);
-                    });
-                }
-                if ($allowedProgramIds->isNotEmpty()) {
-                    $query->orWhereIn('program_id', $allowedProgramIds);
-                }
-                if ($allowedSubjectIds->isNotEmpty()) {
-                    $query->orWhereIn('subject_id', $allowedSubjectIds);
-                }
-            });
-        }
-
-        $routines = $routinesQuery->get();
-
-        // Group by program, then flatten subjects
-        $grouped = $routines->groupBy(function($routine) {
-            return $routine->program_id;
-        })->map(function($programRoutines) {
-            $program = $programRoutines->first()->program;
-            
-            $subjects = $programRoutines->groupBy('subject_id')->map(function($subjectRoutines) {
-                $first = $subjectRoutines->first();
-                $subject = $first->subject;
-                
-                $regularSemesters = $subjectRoutines->pluck('semester')->filter()->unique('id')->sortBy(['year', 'semester_type'])->values();
-                
-                $regularSemesterIds = $regularSemesters->pluck('id')->toArray();
-                $resitSemesters = Semester::where('is_resit', true)
-                    ->whereIn('parent_semester_id', $regularSemesterIds)
-                    ->where('status', 1)
-                    ->orderBy('year')
-                    ->orderBy('semester_type')
-                    ->get();
-                
-                $allSemesters = $regularSemesters->concat($resitSemesters)->sortBy(['year', 'semester_type', 'is_resit'])->values();
-                $years = $allSemesters->pluck('year')->unique()->sort()->values();
-                
-                $sections = $subjectRoutines->pluck('section')->filter()->unique('id')->values();
-                $firstSection = $sections->first();
-                $firstSemester = $regularSemesters->first() ?? $allSemesters->first();
-                
-                return [
-                    'subject_id' => $subject->id,
-                    'subject_code' => $subject->code,
-                    'subject_title' => $subject->title,
-                    'semesters' => $allSemesters,
-                    'years' => $years,
-                    'first_year' => $years->first() ?? 1,
-                    'first_semester_id' => $firstSemester->id ?? null,
-                    'first_section_id' => $firstSection->id ?? null,
-                    'first_section_title' => $firstSection->title ?? 'All',
-                    'sections' => $sections,
-                ];
-            })->sortBy('subject_code')->values();
-
-            return [
-                'program_id' => $program->id,
-                'program_title' => $program->title,
-                'program_code' => $program->short_code ?? $program->title,
-                'faculty_id' => $program->faculty_id,
-                'faculty_title' => $program->faculty->title ?? 'Unknown Faculty',
-                'subjects' => $subjects,
-            ];
-        })->sortBy('program_title')->values();
-
-        return $grouped;
+        return \App\Services\Academic\AssignedCourses::forUser(
+            \Illuminate\Support\Facades\Auth::guard('web')->id()
+        );
     }
 
     /**

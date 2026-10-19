@@ -135,9 +135,10 @@
                         </div>
                     </div>
                     <div class="col-md-2">
+                        @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
                         <div class="form-group">
                             <label>Semester</label>
-                            <select name="semester_id" class="form-control">
+                            <select name="semester_id" class="form-control sy-semester">
                                 <option value="">All Semesters</option>
                                 @foreach($semesters as $semester)
                                 <option value="{{ $semester->id }}" {{ request('semester_id') == $semester->id ? 'selected' : '' }}>

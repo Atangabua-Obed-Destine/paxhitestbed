@@ -1663,24 +1663,13 @@
         }
     });
     
-    // Year dropdown filter - update semesters when year changes
-    $(document).on('change', '.course-year-select', function() {
-        var card = $(this).closest('.course-card, tr');
-        var semesterSelect = card.find('.course-semester-select');
-        var selectedYear = $(this).val();
-        
-        // Show/hide semester options based on year
-        semesterSelect.find('option').each(function() {
-            if ($(this).val() === '' || $(this).data('year') == selectedYear) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
-        });
-        
-        // Reset semester selection
-        semesterSelect.val('');
-    });
+    // Year narrows the semester list on each card.
+    //
+    // This used to be a local handler bound to a class that existed nowhere in
+    // the project, so the Year dropdown on this screen did nothing whatsoever
+    // while looking as though it worked. The markup it should have been
+    // driving is .quick-year, which the shared module binds.
+    SemesterYearSelect.bindCards();
     
     // Take Attendance button click (quick-take-attendance)
     $(document).on('click', '.quick-take-attendance', function() {

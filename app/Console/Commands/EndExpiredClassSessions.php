@@ -35,8 +35,15 @@ class EndExpiredClassSessions extends Command
         $this->info("Processing expired class sessions for {$dateString}...");
         
         // Find all sessions that are still in progress for the given date
+        // Up to and including the given date, not just that date.
+        //
+        // An exact match meant a session left open overnight fell out of scope
+        // at midnight and was never closed by anything again - it simply stayed
+        // in_progress for ever, so its students were never finalised and its
+        // lecturer was never credited.
         $expiredSessions = ClassSession::where('status', ClassSession::STATUS_IN_PROGRESS)
-            ->where('date', $dateString)
+            ->where('date', '<=', $dateString)
+            ->orderBy('date')
             ->get();
         
         if ($expiredSessions->isEmpty()) {

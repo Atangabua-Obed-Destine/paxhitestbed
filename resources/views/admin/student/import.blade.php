@@ -70,6 +70,7 @@
                                     </div>
                                 </div>
 
+                                @include('common.inc.semester_year_field', ['year_target' => '.semester'])
                                 <div class="form-group col-md-3">
                                     <label for="semester">{{ __('field_semester') }} <span>*</span></label>
                                     <select class="form-control semester" name="semester" id="semester" required>

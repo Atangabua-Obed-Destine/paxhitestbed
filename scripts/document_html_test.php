@@ -127,6 +127,157 @@ check('and normalises identically to every other document',
     'two copies of one rule is how they drifted apart in the first place');
 
 // ---------------------------------------------------------------------------
+section('A table set to no borders renders with no borders');
+// ---------------------------------------------------------------------------
+// The document stylesheet gives tables a default border, written against th and
+// td. An editor records "no borders" on the <table> element only, so the cells
+// had nothing to override that default with and the letterhead came out with a
+// box round the logo and a line down the middle of the address block.
+$marks = fn (string $html) => str_contains(
+    (string) DocumentHtml::normalize($html),
+    DocumentHtml::NO_BORDER_CLASS
+);
+
+$cell = '<tr><td>x</td></tr></table>';
+
+// What the editor on this system actually writes.
+check('the spelling the editor writes is recognised',
+    $marks('<table style="border-collapse: collapse; width: 98.75%; border-style: none;">' . $cell),
+    'border-style: none on the table, nothing on its cells');
+
+foreach ([
+    'border-style with no space' => '<table style="border-style:none">',
+    'the border shorthand, none' => '<table style="border: none;">',
+    'the border shorthand, zero' => '<table style="border:0">',
+    'border-style: hidden' => '<table style="border-style: hidden;">',
+    'the border="0" attribute' => '<table border="0">',
+    'border=0 unquoted' => '<table border=0>',
+    'upper case' => '<TABLE STYLE="BORDER-STYLE: NONE">',
+] as $what => $open) {
+    check('it recognises ' . $what, $marks($open . $cell), $open);
+}
+
+// And the other half of the rule: a table that wants a border keeps one.
+foreach ([
+    'a table asking for a border' => '<table style="border: 1px solid #555;">',
+    'a plain table with no styling' => '<table>',
+    'border="1"' => '<table border="1">',
+] as $what => $open) {
+    check('it leaves ' . $what . ' alone', !$marks($open . $cell),
+        'the default border exists for exactly this case - ' . $open);
+}
+
+check('a table marked twice is marked once',
+    substr_count((string) DocumentHtml::normalize(
+        (string) DocumentHtml::normalize('<table style="border: none;">' . $cell)
+    ), DocumentHtml::NO_BORDER_CLASS) === 1,
+    'normalise runs on paths that may already have run');
+
+check('an existing class is kept',
+    str_contains((string) DocumentHtml::normalize(
+        '<table class="fee-breakdown" style="border: none;">' . $cell
+    ), 'fee-breakdown'),
+    'the fee breakdown table carries a class the stylesheet needs');
+
+// The stylesheet has to honour the mark, or none of the above matters.
+$letterCss = (string) file_get_contents(
+    __DIR__ . '/../resources/views/admin/acceptance-letter/pdf.blade.php'
+);
+
+check('the letter stylesheet turns the border off for marked tables',
+    str_contains($letterCss, 'table.' . DocumentHtml::NO_BORDER_CLASS),
+    'the class is only worth setting if something reads it');
+
+check('and it turns it off for their cells, not just the table',
+    str_contains($letterCss, 'table.' . DocumentHtml::NO_BORDER_CLASS . ' td')
+    || str_contains($letterCss, 'table.' . DocumentHtml::NO_BORDER_CLASS . ' th'),
+    'the cells are what was drawing the box in the first place');
+
+// ---------------------------------------------------------------------------
+section('The letter starts where the page margin says, not twice as far down');
+// ---------------------------------------------------------------------------
+// dompdf's built-in stylesheet applies @page { margin: 1.2cm } whenever nothing
+// says otherwise, and the template's own .sheet padding used to land inside it.
+// The two stacked, so every letter began about 2.3cm down the page with nothing
+// in this project having asked for it. Measured on the rendered PDF rather than
+// matched in the CSS, because the number on the page is the thing that matters.
+$firstLineFromTop = function (string $body): ?float {
+    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('admin.acceptance-letter.pdf', [
+        'body' => $body,
+        'student' => null,
+        'setting' => null,
+    ]);
+    $pdf->setPaper('a4', 'portrait');
+    $pdf->setOption('isHtml5ParserEnabled', true);
+
+    preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf->output(), $streams);
+
+    foreach ($streams[1] as $stream) {
+        $content = @gzuncompress($stream);
+        if ($content === false) {
+            $content = @gzinflate($stream);
+        }
+
+        if ($content === false || !str_contains($content, 'BT ')) {
+            continue;
+        }
+
+        preg_match_all('/BT ([\d.]+) ([\d.]+) Td/', $content, $text, PREG_SET_ORDER);
+
+        $highest = 0.0;
+        foreach ($text as $one) {
+            $highest = max($highest, (float) $one[2]);
+        }
+
+        // A4 is 841.89pt tall and PDF y counts up from the bottom.
+        return $highest > 0 ? 841.89 - $highest : null;
+    }
+
+    return null;
+};
+
+$top = $firstLineFromTop('<p>First line.</p>');
+
+if ($top === null) {
+    echo "  SKIP  could not read a text position out of the rendered PDF
+";
+} else {
+    // 1.2cm is 34pt; the baseline sits a line's ascent below the top of the box.
+    check('the first line sits about one page margin down, not two',
+        $top < 60,
+        sprintf('first line is %.1fpt (%.2f in) from the top - a second margin is '
+            . 'stacking inside the page margin', $top, $top / 72));
+
+    check('and it is not jammed against the edge of the page',
+        $top > 20,
+        sprintf('first line is %.1fpt from the top', $top));
+}
+
+// Comments stripped first: the note explaining this rule quotes the very
+// declaration it is looking for, so a plain search matched the prose and the
+// check passed with the rule deleted.
+$letterDeclarations = (string) preg_replace('#/\*.*?\*/#s', '', $letterCss);
+
+check('the letter stylesheet states its page margin',
+    (bool) preg_match('/@page\s*\{[^}]*margin/i', $letterDeclarations),
+    'left unstated, dompdf applies its own 1.2cm and nothing in this project shows where it came from');
+
+// ---------------------------------------------------------------------------
+section('The preview shows what is actually sent');
+// ---------------------------------------------------------------------------
+// The sent letter resolves the editor's relative image paths; the preview did
+// not, so the one screen an admin checks their letter on printed
+// "Image not found" where the applicant's copy carried the logo.
+$service = (string) file_get_contents(__DIR__ . '/../app/Services/AcceptanceLetterService.php');
+$previewAt = strpos($service, 'acceptance-letter-preview');
+$previewAt = $previewAt === false ? strpos($service, 'function previewPdf') : $previewAt;
+
+check('the preview resolves image paths the way the sent letter does',
+    substr_count($service, 'DocumentHtml::prepare') >= 1
+    || substr_count($service, 'DocumentHtml::resolveImages') >= 2,
+    'dompdf cannot resolve the editor\'s relative paths and drops the image silently');
+
+// ---------------------------------------------------------------------------
 section('The letterhead comes out the way it is configured');
 // ---------------------------------------------------------------------------
 $rendered = (string) app(LetterheadService::class)->render(false);

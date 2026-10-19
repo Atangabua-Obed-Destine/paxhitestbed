@@ -558,8 +558,52 @@ class ClassSession extends Model
             'status' => self::STATUS_COMPLETED,
         ]);
         
+        // Anyone still clocked in when the class ends ATTENDED it. Close their
+        // record at the end time first, so markIncompleteAttendances() below
+        // only catches the students who genuinely never arrived.
+        //
+        // This used to sit in the controller AFTER end() had already run, where
+        // it could never match a row, so every attendee was being recorded
+        // absent. Doing it here means the kiosk's End Class, the first
+        // clock-out after the scheduled end, and the nightly command all
+        // behave the same.
+        if (\App\Models\AttendanceSetting::getValue('auto_clock_out_enabled', true)) {
+            $this->autoClockOutRemaining($endTime);
+        }
+
         // Mark students who clocked in but never clocked out as Incomplete/Absent
         $this->markIncompleteAttendances();
+    }
+
+    /**
+     * Close the record of everyone still clocked in, at the class end time.
+     *
+     * Deliberately not StudentClassAttendance::clockOut(): that decides whether
+     * the clock-out should itself end the class, which would recurse straight
+     * back into here.
+     */
+    protected function autoClockOutRemaining($endTime = null)
+    {
+        $endTime = $endTime ?? now();
+
+        $remaining = $this->studentAttendances()
+            ->whereNotNull('clock_in_time')
+            ->where('has_clocked_out', false)
+            ->get();
+
+        foreach ($remaining as $attendance) {
+            $attendance->update([
+                'clock_out_time' => $endTime,
+                'duration_minutes' => $attendance->clock_in_time
+                    ? $attendance->clock_in_time->diffInMinutes($endTime)
+                    : 0,
+                'has_clocked_out' => true,
+            ]);
+
+            // Their presence is already in the register from the scan in; this
+            // keeps the two in step now that the record is closed.
+            $attendance->syncToStudentAttendance();
+        }
     }
 
     /**

@@ -99,7 +99,20 @@ class FormA3Controller extends Controller
                 ->values();
         } else {
             $data['sessions'] = Session::orderBy('id', 'desc')->get();
-            $data['semesters'] = Semester::orderBy('id', 'asc')->get();
+            // Scoped to the semesters this student has actually been enrolled
+            // on. This was every semester in the database, inactive included.
+            $data['semesters'] = StudentEnroll::where('student_id', $user->id)
+                ->with('semester')
+                ->get()
+                ->pluck('semester')
+                ->filter()
+                ->unique('id')
+                ->sortBy('id')
+                ->values();
+
+            if ($data['semesters']->isEmpty()) {
+                $data['semesters'] = Semester::where('status', 1)->orderBy('id', 'asc')->get();
+            }
         }
         
         // Get Form A3 records for the SELECTED program only

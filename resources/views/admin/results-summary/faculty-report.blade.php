@@ -79,9 +79,10 @@
                                     </select>
                                 </div>
 
+                                @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
                                 <div class="form-group col-md-2">
                                     <label for="semester">{{ __('field_semester') }} <span class="text-danger">*</span></label>
-                                    <select class="form-control" name="semester" id="semester" required>
+                                    <select class="form-control sy-semester" name="semester" id="semester" required>
                                         <option value="">{{ __('select') }}</option>
                                         @if(isset($semesters))
                                         @foreach($semesters->sortBy('id') as $sem)

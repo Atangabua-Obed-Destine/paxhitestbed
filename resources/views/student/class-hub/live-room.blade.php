@@ -1303,6 +1303,18 @@ function sendMessage() {
     .catch(error => console.error('Send message error:', error));
 }
 
+function escapeText(value) {
+    // Student-authored text goes through here before it reaches innerHTML.
+    // The XSS middleware permits <img>, so an onerror payload survives
+    // input filtering; nothing below may be trusted as markup.
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function appendMessage(msg, isOwn = false) {
     const container = document.getElementById('chatMessages');
     const div = document.createElement('div');
@@ -1310,8 +1322,8 @@ function appendMessage(msg, isOwn = false) {
     div.innerHTML = `
         <div class="chat-avatar">${msg.sender_name.charAt(0).toUpperCase()}</div>
         <div class="chat-bubble">
-            <div class="chat-sender">${msg.sender_name}</div>
-            <div class="chat-text">${msg.message}</div>
+            <div class="chat-sender">${escapeText(msg.sender_name)}</div>
+            <div class="chat-text">${escapeText(msg.message)}</div>
             <div class="chat-time">${msg.formatted_time || new Date().toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}</div>
         </div>
     `;

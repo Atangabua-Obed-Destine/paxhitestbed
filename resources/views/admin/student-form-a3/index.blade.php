@@ -88,9 +88,10 @@
 
                                     <!-- Semester -->
                                     <div class="col-md-3">
+                                        @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
                                         <div class="form-group">
                                             <label for="semester">{{ trans_choice('module_semester', 1) }} <span class="text-danger">*</span></label>
-                                            <select class="form-control" name="semester" id="semester">
+                                            <select class="form-control sy-semester" name="semester" id="semester">
                                                 <option value="">{{ __('All') }}</option>
                                                 @foreach($semesters as $semesterItem)
                                                 <option value="{{ $semesterItem->id }}" @if($selected_semester == $semesterItem->id) selected @endif>{{ $semesterItem->title }}</option>

@@ -25,6 +25,7 @@ use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class SubjectMarkingController extends Controller
@@ -50,7 +51,11 @@ class SubjectMarkingController extends Controller
         $this->weightService = $weightService;
         $this->workflowService = $workflowService;
 
-        $this->middleware('permission:'.$this->access.'-marking', ['only' => ['index', 'store']]);
+        // autosave writes marks exactly as store() does, so it is gated exactly as
+        // store() is. It carried no permission at all, which meant any signed-in
+        // admin user could change a mark whatever their role.
+        $this->middleware('permission:'.$this->access.'-marking', ['only' => ['index', 'store', 'autosave']]);
+        $this->middleware('permission:subject-marking-direct-edit', ['only' => ['directEdit', 'directEditDetails']]);
         $this->middleware('permission:'.$this->access.'-result', ['only' => ['result']]);
         $this->middleware('permission:subject-marking-submit|subject-marking-check|subject-marking-approve|subject-marking-publish', ['only' => ['transition']]);
     }
@@ -469,7 +474,17 @@ class SubjectMarkingController extends Controller
             }
 
             $weights = $resolvedWeights[$cacheKey];
-            $totalMarks = (float) ($request->total_marks[$key] ?? 0);
+
+            // Summed here rather than taken from the request. The total input is
+            // readonly in the page, but a readonly field still posts whatever the
+            // browser says it holds, so the figure was the client's to choose.
+            $totalMarks = round(
+                (float) ($request->exam_marks[$key] ?? 0)
+                + (float) ($request->attendances[$key] ?? 0)
+                + (float) ($request->assignments[$key] ?? 0)
+                + (float) ($request->activities[$key] ?? 0),
+                2
+            );
             $validated = $totalMarks >= 50;
 
             $subjectMarking = SubjectMarking::firstOrNew([
@@ -1357,6 +1372,176 @@ class SubjectMarkingController extends Controller
     /**
      * Check if current user can manage publish overrides.
      */
+    /**
+     * AJAX: what the correction modal needs to show for one student.
+     */
+    public function directEditDetails($id)
+    {
+        $marking = SubjectMarking::with(['studentEnroll.student', 'studentEnroll.semester', 'subject'])
+            ->findOrFail($id);
+
+        $exams = \App\Models\Exam::with('type')
+            ->where('student_enroll_id', $marking->student_enroll_id)
+            ->where('subject_id', $marking->subject_id)
+            ->get();
+
+        $guard = app(\App\Services\Assessment\MarkChangeGuard::class);
+
+        return response()->json([
+            'id' => $marking->id,
+            'student' => trim(optional(optional($marking->studentEnroll)->student)->first_name . ' '
+                . optional(optional($marking->studentEnroll)->student)->last_name),
+            'matricule' => optional($marking->studentEnroll)->matricule
+                ?? optional(optional($marking->studentEnroll)->student)->student_id,
+            'subject' => optional($marking->subject)->title,
+            'assignments' => (float) $marking->assignments,
+            'activities' => (float) $marking->activities,
+            'exam_marks' => (float) $marking->exam_marks,
+            'attendances' => (float) $marking->attendances,
+            'total_marks' => (float) $marking->total_marks,
+            'pass_mark' => app(\App\Services\Academic\OutstandingCourses::class)->passMark($marking->subject),
+            'passes' => $guard->passes($marking->subject, (float) $marking->total_marks),
+            'published' => $marking->is_visible_to_student,
+            'components' => $exams->map(fn ($exam) => [
+                'exam_id' => $exam->id,
+                'type' => optional($exam->type)->title,
+                'achieve_marks' => $exam->achieve_marks === null ? null : (float) $exam->achieve_marks,
+                'marks' => (float) $exam->marks,
+                'contribution' => (float) $exam->contribution,
+                'locked' => (bool) $exam->marks_locked,
+            ])->values(),
+            // Said before anything is typed, not after it is submitted.
+            'blockers' => $guard->blockers(
+                $marking->studentEnroll,
+                $marking->subject,
+                (float) $marking->total_marks
+            ),
+        ]);
+    }
+
+    /**
+     * Correct a mark in place, without unpublishing it first.
+     *
+     * The ordinary route is to unpublish, unlock the exam rows and have the
+     * lecturer type the mark again. This is the deliberate shortcut for a holder
+     * of subject-marking-direct-edit: the components are corrected here and the
+     * total is recomputed by the same service the lecturer's screen uses.
+     *
+     * Writing the COMPONENTS rather than the total is the whole point.
+     * subject_markings.total_marks is a stored sum that ExamObserver and
+     * ExamMarksSyncService recompute from the exam rows, so a hand-typed total
+     * would be silently reverted the next time anything touched this student's
+     * exams - a correction that appears to work and then quietly undoes itself.
+     */
+    public function directEdit(Request $request, $id)
+    {
+        $request->validate([
+            'reason' => 'required|string|min:10|max:500',
+            'assignments' => 'nullable|numeric|min:0',
+            'activities' => 'nullable|numeric|min:0',
+            'exam_marks' => 'nullable|array',
+            'exam_marks.*' => 'nullable|numeric|min:0',
+        ]);
+
+        $marking = SubjectMarking::with(['studentEnroll.semester', 'subject'])->findOrFail($id);
+        $guard = app(\App\Services\Assessment\MarkChangeGuard::class);
+
+        $before = [
+            'exam_marks' => (float) $marking->exam_marks,
+            'attendances' => (float) $marking->attendances,
+            'assignments' => (float) $marking->assignments,
+            'activities' => (float) $marking->activities,
+            'total_marks' => (float) $marking->total_marks,
+        ];
+
+        try {
+            $after = DB::transaction(function () use ($request, $marking, $guard) {
+                foreach ((array) $request->input('exam_marks', []) as $examId => $value) {
+                    $exam = \App\Models\Exam::where('id', $examId)
+                        ->where('student_enroll_id', $marking->student_enroll_id)
+                        ->where('subject_id', $marking->subject_id)
+                        ->first();
+
+                    if (!$exam) {
+                        continue;
+                    }
+
+                    if ($value !== null && $value !== '' && (float) $value > (float) $exam->marks) {
+                        throw new \App\Services\Assessment\MarkChangeRefused(__('A mark of :given is more than the :max this component is out of.', [
+                            'given' => $value,
+                            'max' => $exam->marks,
+                        ]));
+                    }
+
+                    // Deliberately ignores marks_locked. That lock is what forces
+                    // the unpublish-and-unlock detour, and stepping past it is
+                    // exactly what this permission buys.
+                    $exam->achieve_marks = ($value === null || $value === '') ? null : $value;
+                    $exam->updated_by = Auth::id();
+                    $exam->save();
+                }
+
+                if ($request->filled('assignments')) {
+                    $marking->assignments = (float) $request->input('assignments');
+                }
+
+                if ($request->filled('activities')) {
+                    $marking->activities = (float) $request->input('activities');
+                }
+
+                $marking->updated_by = Auth::id();
+                $marking->save();
+
+                // The one computation of the total in this system, rather than a
+                // fourth copy of the weighted sum.
+                \App\Services\ExamMarksSyncService::sync(
+                    (int) $marking->student_enroll_id,
+                    (int) $marking->subject_id
+                );
+
+                $fresh = $marking->fresh();
+
+                // Checked against the figure that would actually be stored, not
+                // against a guess at it.
+                $refusals = $guard->blockers(
+                    $fresh->studentEnroll,
+                    $fresh->subject,
+                    (float) $fresh->total_marks
+                );
+
+                if ($refusals !== []) {
+                    throw new \App\Services\Assessment\MarkChangeRefused(implode(' ', $refusals));
+                }
+
+                return $fresh;
+            });
+        } catch (\App\Services\Assessment\MarkChangeRefused $e) {
+            // Only a refusal is reported as one. Catching \Throwable here once
+            // turned a missing import into a message the admin would have read
+            // as a considered answer, while the correction silently did nothing.
+            \Illuminate\Support\Facades\Log::warning('Direct mark edit refused: ' . $e->getMessage(), ['marking' => $id]);
+            Flasher::addError($e->getMessage(), __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        \App\Models\SubjectMarkingPublishLog::create([
+            'subject_marking_id' => $marking->id,
+            'action' => 'direct_edit',
+            'reason' => $request->input('reason'),
+            'performed_by' => Auth::id(),
+            'previous_state' => 'total ' . number_format($before['total_marks'], 2),
+            'new_state' => 'total ' . number_format((float) $after->total_marks, 2),
+        ]);
+
+        Flasher::addSuccess(__('Mark corrected: :before to :after.', [
+            'before' => number_format($before['total_marks'], 2),
+            'after' => number_format((float) $after->total_marks, 2),
+        ]), __('msg_success'));
+
+        return redirect()->back();
+    }
+
     private function canManagePublishOverride()
     {
         $user = Auth::user();

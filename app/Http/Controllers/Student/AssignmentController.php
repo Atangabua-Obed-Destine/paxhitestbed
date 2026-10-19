@@ -71,6 +71,14 @@ class AssignmentController extends Controller
         } else {
             $data['sessions'] = StudentEnroll::where('student_id', $user->id)->groupBy('session_id')->get();
             $data['semesters'] = StudentEnroll::where('student_id', $user->id)->groupBy('semester_id')->get();
+        // The Year select in front of this filter needs the semesters
+        // themselves, not the enrolment rows the list is drawn from.
+        $data['semesterOptions'] = \App\Services\Academic\SemesterYearOptions::fromCollection(
+            collect($data['semesters'])->map(function ($row) {
+                return $row->semester ?? null;
+            })->filter()->unique('id')->values()
+        );
+
         }
 
 

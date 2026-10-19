@@ -206,6 +206,7 @@
                                         </select>
                                         <div class="invalid-feedback">{{ __('Select a session') }}</div>
                                     </div>
+                                    @include('common.inc.semester_year_field', ['year_target' => '.semester'])
                                     <div class="form-group col-md-4">
                                         <label for="semester">{{ __('field_semester') }} <span>*</span></label>
                                         <select class="form-control semester" name="semester" id="semester" data-selected="{{ old('semester') }}" required>

@@ -31,6 +31,44 @@ class ClassHubController extends Controller
     /**
      * Get current student and enrollment
      */
+    /**
+     * Is this session one of the student's own classes?
+     *
+     * The same rule index() uses to build the list: the programme, semester and
+     * academic session must match the enrolment, and the class must either be
+     * for the whole year group (no section) or for the student's own section.
+     *
+     * It lives here because seven actions need it and four of them had no
+     * check at all - a rule copied seven times is a rule that drifts.
+     */
+    private function studentMayAccess($session, $enrollment): bool
+    {
+        if (!$session || !$enrollment) {
+            return false;
+        }
+
+        if ((int) $session->program_id !== (int) $enrollment->program_id
+            || (int) $session->semester_id !== (int) $enrollment->semester_id
+            || (int) $session->session_id !== (int) $enrollment->session_id) {
+            return false;
+        }
+
+        // A class with no section is taught to the whole year group.
+        return $session->section_id === null
+            || (int) $session->section_id === (int) $enrollment->section_id;
+    }
+
+    /**
+     * The session named in the URL, once it is established to be the
+     * student's own. Returns null when it is not.
+     */
+    private function ownSessionOrNull($sessionId, $enrollment)
+    {
+        $session = \App\Models\ClassSession::find($sessionId);
+
+        return $this->studentMayAccess($session, $enrollment) ? $session : null;
+    }
+
     private function getStudentData()
     {
         $student = Auth::guard('student')->user();
@@ -200,10 +238,11 @@ class ClassHubController extends Controller
             }
         ])->findOrFail($sessionId);
 
-        // Verify student has access to this session
-        if ($session->program_id != $enrollment->program_id || 
-            $session->semester_id != $enrollment->semester_id ||
-            $session->session_id != $enrollment->session_id) {
+        // Verify student has access to this session.
+        //
+        // This used to compare programme, semester and academic session but not
+        // the SECTION, so a Section A student could open Section B's room.
+        if (!$this->studentMayAccess($session, $enrollment)) {
             return redirect()->route('student.class-hub.index')
                            ->with('error', 'You do not have access to this class');
         }
@@ -312,6 +351,15 @@ class ClassHubController extends Controller
             'subject', 'teacher', 'program', 'section', 'semester',
             'logbook', 'alerts.student', 'questions.student', 'attendances'
         ])->findOrFail($sessionId);
+
+        // This checked only that the caller HAD an enrolment, never that
+        // the session belonged to it - so any student could read any
+        // class's roster with clock-in times, its whole chat history, and
+        // the names behind its "anonymous" questions.
+        if (!$this->studentMayAccess($session, $enrollment)) {
+            return redirect()->route('student.class-hub.index')
+                           ->with('error', 'You do not have access to this class');
+        }
 
         // Get student's attendance and note
         $attendance = StudentClassAttendance::where('class_session_id', $session->id)
@@ -450,6 +498,19 @@ class ClassHubController extends Controller
         ]);
 
         $data = $this->getStudentData();
+
+        // The session is named in the request body; before this it was
+        // used as given, so any student could post into any class in the
+        // institution - and that text is rendered on the lecturer kiosk.
+        if (!$this->studentMayAccess(
+            \App\Models\ClassSession::find($request->session_id),
+            $data['enrollment']
+        )) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You do not have access to this class'
+            ], 403);
+        }
         $session = ClassSession::findOrFail($request->session_id);
 
         // Check if chat is enabled
@@ -487,6 +548,14 @@ class ClassHubController extends Controller
         $lastId = $request->input('last_id', 0);
         
         $session = ClassSession::find($sessionId);
+
+        // Was unscoped: any class's chat could be polled by id.
+        if (!$this->studentMayAccess($session, $this->getStudentData()['enrollment'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You do not have access to this class'
+            ], 403);
+        }
         if (!$session) {
             return response()->json(['status' => 'error', 'message' => 'Session not found'], 404);
         }
@@ -531,6 +600,19 @@ class ClassHubController extends Controller
         ]);
 
         $data = $this->getStudentData();
+
+        // The session is named in the request body; before this it was
+        // used as given, so any student could post into any class in the
+        // institution - and that text is rendered on the lecturer kiosk.
+        if (!$this->studentMayAccess(
+            \App\Models\ClassSession::find($request->session_id),
+            $data['enrollment']
+        )) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You do not have access to this class'
+            ], 403);
+        }
         
         $note = StudentClassNote::updateOrCreate(
             [
@@ -565,6 +647,19 @@ class ClassHubController extends Controller
         ]);
 
         $data = $this->getStudentData();
+
+        // The session is named in the request body; before this it was
+        // used as given, so any student could post into any class in the
+        // institution - and that text is rendered on the lecturer kiosk.
+        if (!$this->studentMayAccess(
+            \App\Models\ClassSession::find($request->session_id),
+            $data['enrollment']
+        )) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You do not have access to this class'
+            ], 403);
+        }
         $session = ClassSession::findOrFail($request->session_id);
 
         // Check if alerts are enabled
@@ -600,6 +695,15 @@ class ClassHubController extends Controller
     {
         $data = $this->getStudentData();
         $alert = ClassSessionAlert::findOrFail($alertId);
+
+        // Was unscoped: any alert in the system could be upvoted by id.
+        if (!$this->studentMayAccess($alert->classSession ?? null,
+            $this->getStudentData()['enrollment'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You do not have access to this class'
+            ], 403);
+        }
         
         $added = $alert->toggleUpvote($data['student']->id);
         
@@ -622,6 +726,19 @@ class ClassHubController extends Controller
         ]);
 
         $data = $this->getStudentData();
+
+        // The session is named in the request body; before this it was
+        // used as given, so any student could post into any class in the
+        // institution - and that text is rendered on the lecturer kiosk.
+        if (!$this->studentMayAccess(
+            \App\Models\ClassSession::find($request->session_id),
+            $data['enrollment']
+        )) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You do not have access to this class'
+            ], 403);
+        }
         $session = ClassSession::findOrFail($request->session_id);
 
         // Check if questions are enabled

@@ -1298,47 +1298,12 @@
             $('.course-cards-view').addClass('d-none');
         });
 
-        // Year dropdown change handler - Filter semester options by selected year
-        $(document).on('change', '.quick-year', function() {
-            var $yearSelect = $(this);
-            var uniqueId = $yearSelect.data('unique');
-            var selectedYear = parseInt($yearSelect.val());
-            var $semesterSelect = $('#semester_' + uniqueId);
-            
-            // Get all semesters data from the semester dropdown
-            var allSemesters = $semesterSelect.data('semesters');
-            
-            if (allSemesters && Array.isArray(allSemesters)) {
-                // Show only semesters matching the selected year
-                $semesterSelect.find('option').each(function() {
-                    var $option = $(this);
-                    var optionYear = parseInt($option.data('year'));
-                    
-                    if (optionYear === selectedYear) {
-                        $option.show();
-                    } else {
-                        $option.hide();
-                    }
-                });
-                
-                // Check if current selected option is still visible
-                var $currentOption = $semesterSelect.find('option:selected');
-                if ($currentOption.css('display') === 'none' || parseInt($currentOption.data('year')) !== selectedYear) {
-                    // Select first visible option
-                    var $firstVisible = $semesterSelect.find('option:visible:first');
-                    if ($firstVisible.length) {
-                        $semesterSelect.val($firstVisible.val());
-                    }
-                }
-            }
-        });
-
-        // Initialize: Filter semesters on page load to match the default year selection
-        $(document).ready(function() {
-            $('.quick-year').each(function() {
-                $(this).trigger('change');
-            });
-        });
+        // Year narrows the semester list on each card.
+        //
+        // Was a local copy that narrowed with $option.hide(). Hiding an
+        // <option> does nothing in Safari or on iOS, so hidden semesters
+        // stayed selectable there; the module rebuilds the list instead.
+        SemesterYearSelect.bindCards();
 
         // Quick Enter Marks button handler - Auto-populate filter and submit
         $(document).on('click', '.quick-enter-marks', function(e) {

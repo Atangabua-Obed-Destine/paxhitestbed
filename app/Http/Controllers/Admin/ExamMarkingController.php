@@ -451,6 +451,80 @@ class ExamMarkingController extends Controller
         $currentUserId = Auth::guard('web')->id();
         $syncPairs = collect();
 
+        // Would any of these marks contradict a resit that is already decided?
+        //
+        // Nothing in this system re-decides a resit once it is completed, so a
+        // mark that disagrees with one leaves the record arguing with itself for
+        // ever. The proposed marks are applied inside a transaction that is
+        // always rolled back, purely to learn what the totals would become -
+        // that uses the real sync service rather than a second copy of the
+        // weighted sum, and it means a refusal lands before anything is written.
+        $markGuard = app(\App\Services\Assessment\MarkChangeGuard::class);
+        $markRefusals = [];
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+
+        try {
+            $touched = [];
+
+            foreach ($allExams as $dryExam) {
+                if (!array_key_exists($dryExam->id, $marks)) {
+                    continue;
+                }
+
+                // Skip exactly what the save loop below skips. Asking about a
+                // mark that would never be written means refusing a sheet over
+                // a row the lecturer was not changing.
+                if ($dryExam->marks_locked) {
+                    continue;
+                }
+
+                if (($dryExam->type->is_final ?? false) && !$dryExam->scriptCode) {
+                    continue;
+                }
+
+                $proposed = $marks[$dryExam->id];
+                $dryExam->achieve_marks = ($proposed === null || $proposed === '') ? null : $proposed;
+                $dryExam->save();
+                $touched[$dryExam->student_enroll_id . '-' . $dryExam->subject_id] =
+                    ['enroll' => $dryExam->student_enroll_id, 'subject' => $dryExam->subject_id];
+            }
+
+            foreach ($touched as $pair) {
+                \App\Services\ExamMarksSyncService::sync((int) $pair['enroll'], (int) $pair['subject']);
+
+                $peek = \App\Models\SubjectMarking::with(['studentEnroll.semester', 'studentEnroll.student', 'subject'])
+                    ->where('student_enroll_id', $pair['enroll'])
+                    ->where('subject_id', $pair['subject'])
+                    ->first();
+
+                if (!$peek || !$peek->studentEnroll) {
+                    continue;
+                }
+
+                foreach ($markGuard->blockers($peek->studentEnroll, $peek->subject, (float) $peek->total_marks) as $reason) {
+                    $markRefusals[] = trim(optional($peek->studentEnroll->student)->first_name . ' '
+                        . optional($peek->studentEnroll->student)->last_name) . ': ' . $reason;
+                }
+            }
+        } finally {
+            // Always. This transaction exists only to ask the question.
+            \Illuminate\Support\Facades\DB::rollBack();
+        }
+
+        if ($markRefusals !== []) {
+            Flasher::addError(implode(' ', array_slice(array_unique($markRefusals), 0, 3)), __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        // The dry run mutated these in memory; reload before the real save.
+        //
+        // keyBy('id') must be rebuilt: the save loop below looks each exam up by
+        // id, so reindexing this collection stops every mark being written -
+        // silently, with the screen still reporting success.
+        $allExams = $allExams->map(fn ($exam) => $exam->fresh())->filter()->keyBy('id');
+
         // ── Wrap in a DB transaction for atomicity ──
         \Illuminate\Support\Facades\DB::beginTransaction();
         try {
@@ -859,141 +933,41 @@ class ExamMarkingController extends Controller
      *
      * @return \Illuminate\Support\Collection
      */
+    /**
+     * The courses this lecturer teaches in the current session.
+     *
+     * The gathering is Academic\AssignedCourses - this was a local copy of it.
+     * What stays here is particular to this screen: courses whose results are
+     * already fully published are dropped, so the quick list shows what still
+     * needs doing. They remain reachable through the filters below, and the
+     * "Show all" toggle brings them back.
+     */
     protected function getMyAssignedCourses($showAll = false)
     {
-        $teacherId = Auth::guard('web')->id();
-        $currentSession = Session::where('status', '1')->where('current', '1')->first();
-        
-        if (!$currentSession) {
-            return collect([]);
+        $currentSession = \App\Services\Academic\AssignedCourses::currentSession();
+        $grouped = \App\Services\Academic\AssignedCourses::forUser(
+            \Illuminate\Support\Facades\Auth::guard('web')->id()
+        );
+
+        // Drives the "Show all" toggle and the empty state.
+        $this->myAssignedUnfilteredCount = \App\Services\Academic\AssignedCourses::countCourses($grouped);
+
+        if ($showAll || !$currentSession) {
+            return $grouped;
         }
 
-        // Check if user is super admin or has staff assignments
-        $authUser = User::find($teacherId);
-        $isSuperAdmin = $authUser ? $authUser->hasRole('Super Admin') : false;
-        $hasAssignments = \App\Models\StaffAssignment::where('user_id', $teacherId)->exists();
+        $sessionId = $currentSession->id;
 
-        // Build query for class routines
-        $routinesQuery = ClassRoutine::where('session_id', $currentSession->id)
-            ->where('status', '1')
-            ->with([
-                'subject',
-                'program.faculty',
-                'semester',
-                'section',
-            ]);
-
-        // If not super admin and doesn't have staff assignments, filter by teacher
-        if (!$isSuperAdmin && !$hasAssignments) {
-            $routinesQuery->where('teacher_id', $teacherId);
-        }
-
-        // Apply staff assignment filter if user has assignments
-        if ($hasAssignments) {
-            // Get staff assignment restrictions
-            $assignments = \App\Models\StaffAssignment::where('user_id', $teacherId)->get();
-            $allowedFacultyIds = $assignments->pluck('faculty_id')->filter()->unique();
-            $allowedProgramIds = $assignments->pluck('program_id')->filter()->unique();
-            $allowedSubjectIds = $assignments->pluck('subject_id')->filter()->unique();
-
-            $routinesQuery->where(function($query) use ($allowedFacultyIds, $allowedProgramIds, $allowedSubjectIds) {
-                // Filter by faculty if specified
-                if ($allowedFacultyIds->isNotEmpty()) {
-                    $query->whereHas('program', function($q) use ($allowedFacultyIds) {
-                        $q->whereIn('faculty_id', $allowedFacultyIds);
-                    });
-                }
-                // Filter by program if specified
-                if ($allowedProgramIds->isNotEmpty()) {
-                    $query->orWhereIn('program_id', $allowedProgramIds);
-                }
-                // Filter by subject if specified
-                if ($allowedSubjectIds->isNotEmpty()) {
-                    $query->orWhereIn('subject_id', $allowedSubjectIds);
-                }
-            });
-        }
-
-        $routines = $routinesQuery->get();
-
-        // Group by program, then flatten subjects (each subject gets its own entry with year dropdown options)
-        $grouped = $routines->groupBy(function($routine) {
-            return $routine->program_id;
-        })->map(function($programRoutines) {
-            $program = $programRoutines->first()->program;
-            
-            // Group by subject to get unique subjects with all their year/semester options
-            $subjects = $programRoutines->groupBy('subject_id')->map(function($subjectRoutines) {
-                $first = $subjectRoutines->first();
-                $subject = $first->subject;
-                
-                // Get all unique regular semesters for this subject (contains year info)
-                $regularSemesters = $subjectRoutines->pluck('semester')->filter()->unique('id')->sortBy(['year', 'semester_type'])->values();
-                
-                // Get resit semesters for each regular semester
-                $regularSemesterIds = $regularSemesters->pluck('id')->toArray();
-                $resitSemesters = Semester::where('is_resit', true)
-                    ->whereIn('parent_semester_id', $regularSemesterIds)
-                    ->where('status', 1)
-                    ->orderBy('year')
-                    ->orderBy('semester_type')
-                    ->get();
-                
-                // Combine regular and resit semesters
-                $allSemesters = $regularSemesters->concat($resitSemesters)->sortBy(['year', 'semester_type', 'is_resit'])->values();
-                
-                // Get unique years from all semesters
-                $years = $allSemesters->pluck('year')->unique()->sort()->values();
-                
-                // Get first available section
-                $sections = $subjectRoutines->pluck('section')->filter()->unique('id')->values();
-                $firstSection = $sections->first();
-                
-                // Default to first semester (prefer regular over resit)
-                $firstSemester = $regularSemesters->first() ?? $allSemesters->first();
-                
-                return [
-                    'subject_id' => $subject->id,
-                    'subject_code' => $subject->code,
-                    'subject_title' => $subject->title,
-                    'semesters' => $allSemesters,
-                    'years' => $years,
-                    'first_year' => $years->first() ?? 1,
-                    'first_semester_id' => $firstSemester->id ?? null,
-                    'first_section_id' => $firstSection->id ?? null,
-                    'first_section_title' => $firstSection->title ?? 'All',
-                    'sections' => $sections,
-                ];
-            })->sortBy('subject_code')->values();
-
-            return [
-                'program_id' => $program->id,
-                'program_title' => $program->title,
-                'program_code' => $program->short_code ?? $program->title,
-                'faculty_id' => $program->faculty_id,
-                'faculty_title' => $program->faculty->title ?? 'Unknown Faculty',
-                'subjects' => $subjects,
-            ];
-        })->sortBy('program_title')->values();
-
-        // Remember how many courses exist before filtering (drives the "Show all" toggle/empty state)
-        $this->myAssignedUnfilteredCount = $grouped->sum(fn($p) => $p['subjects']->count());
-
-        // Declutter: drop courses already fully published (every configured exam type published
-        // across all regular semesters/sections taught this session), then drop empty programs.
-        // Hidden courses remain reachable via the manual filters — this only trims the quick list.
-        // Skipped entirely when the lecturer toggles "Show all".
-        if (!$showAll) {
-            $sessionId = $currentSession->id;
-            $grouped = $grouped->map(function ($p) use ($sessionId) {
-                $p['subjects'] = $p['subjects']
-                    ->reject(fn($s) => $this->isCourseFullyPublished($p['program_id'], $sessionId, $s))
+        return $grouped
+            ->map(function ($program) use ($sessionId) {
+                $program['subjects'] = $program['subjects']
+                    ->reject(fn ($subject) => $this->isCourseFullyPublished($program['program_id'], $sessionId, $subject))
                     ->values();
-                return $p;
-            })->filter(fn($p) => $p['subjects']->isNotEmpty())->values();
-        }
 
-        return $grouped;
+                return $program;
+            })
+            ->filter(fn ($program) => $program['subjects']->isNotEmpty())
+            ->values();
     }
 
     /**

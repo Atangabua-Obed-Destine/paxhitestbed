@@ -76,7 +76,21 @@ class ResitController extends Controller
         
         // Get sessions and semesters for dropdowns
         $data['sessions'] = Session::orderBy('id', 'desc')->get();
-        $data['semesters'] = Semester::orderBy('id', 'asc')->get();
+        // Scoped to the student's own programme and to active semesters. This
+        // was Semester::orderBy('id')->get() - every semester in the database,
+        // inactive ones included, in a required field.
+        $resitProgramId = optional($currentEnrollment)->program_id ?? $student->program_id;
+        $semesterCollection = \App\Services\Academic\SemesterYearOptions::collectionForProgram($resitProgramId);
+
+        if ($semesterCollection->isEmpty()) {
+            // A student whose programme has no semesters linked must still be
+            // able to ask for a resit, so fall back to the active list rather
+            // than an empty one - but never to the inactive ones.
+            $semesterCollection = Semester::where('status', 1)->orderBy('id', 'asc')->get();
+        }
+
+        $data['semesters'] = $semesterCollection;
+        $data['semesterOptions'] = \App\Services\Academic\SemesterYearOptions::fromCollection($semesterCollection);
         
         // Determine which session/semester to show (from request or default to current enrollment)
         if (!empty($request->session_id) || !empty($request->semester_id)) {

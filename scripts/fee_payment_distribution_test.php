@@ -509,11 +509,24 @@ if (!$admin) {
             str_contains($html, __('Your instalments')),
             'the student should see where they stand from one sheet');
 
-        check('both instalment amounts appear on it',
-            str_contains($html, number_format($firstDue, 2, '.', ''))
-                && str_contains($html, number_format($secondDue, 2, '.', '')),
-            'first ' . number_format($firstDue, 2, '.', '')
-                . ', second ' . number_format($secondDue, 2, '.', ''));
+        // Looked for inside the instalments table itself, not anywhere on the
+        // page: these figures also appear in the "this payment settled" lines,
+        // so a page-wide search passed even with the table's own amount column
+        // emptied. Either spelling counts - the redesigned receipt prints money
+        // with thousands separators, as the admission receipt it matches does.
+        $tableAt = strpos($html, __('Your instalments'));
+        $table = $tableAt === false ? '' : substr($html, $tableAt,
+            max(0, (strpos($html, '</table>', $tableAt) ?: strlen($html)) - $tableAt));
+
+        $printed = function (float $amount) use ($table) {
+            return str_contains($table, number_format($amount, 2))
+                || str_contains($table, number_format($amount, 2, '.', ''));
+        };
+
+        check('both instalment amounts appear in the instalments table',
+            $printed($firstDue) && $printed($secondDue),
+            'first ' . number_format($firstDue, 2) . ', second ' . number_format($secondDue, 2)
+                . ($table === '' ? ' - no instalments table found at all' : ''));
     } finally {
         DB::rollBack();
     }

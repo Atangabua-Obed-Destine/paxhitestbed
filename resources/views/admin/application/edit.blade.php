@@ -1265,6 +1265,7 @@
                 <div class="invalid-feedback d-block">{{ $message }}</div>
               @enderror
             </div>
+            @include('common.inc.semester_year_field', ['year_target' => '#convert_semester'])
             <div class="form-group col-md-6">
               <label for="convert_semester">{{ __('field_semester') }} <span>*</span></label>
               {{-- A student being admitted starts at the first teaching semester,

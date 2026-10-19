@@ -20,6 +20,9 @@ namespace App\Services;
  */
 class DocumentHtml
 {
+    /** Put on a table whose author turned its borders off. */
+    public const NO_BORDER_CLASS = 'dochtml-no-borders';
+
     /**
      * Point every local image at something the destination can actually open.
      *
@@ -162,10 +165,81 @@ class DocumentHtml
         $html = preg_replace_callback("/\s(width|height)\s*=\s*('[^']*')/i", $keepPercentAttribute, $html);
         $html = preg_replace_callback('/\s(width|height)\s*=\s*([0-9.]+%?)/i', $keepPercentAttribute, $html);
 
-        return preg_replace_callback(
+        $html = preg_replace_callback(
             '/<!--dochtml-img-(\d+)-->/',
             fn ($match) => $images[(int) $match[1]] ?? '',
             $html
+        );
+
+        return static::markBorderlessTables($html);
+    }
+
+    /**
+     * Mark tables whose author turned borders off.
+     *
+     * A document stylesheet gives tables a default border, because a table
+     * pasted in with no styling at all should still read as a table. That
+     * default is written against th and td, and a rich-text editor records
+     * "no borders" on the <table> element only - the cells it writes carry no
+     * border declaration to override it with. So a table explicitly set to no
+     * borders still came out with a line around every cell.
+     *
+     * The intent is read off the table tag and handed to the stylesheet as a
+     * class, rather than guessed at in CSS with a substring match on the style
+     * attribute, which would turn on whitespace.
+     */
+    public static function markBorderlessTables(?string $html): ?string
+    {
+        if ($html === null || $html === '') {
+            return $html;
+        }
+
+        return preg_replace_callback('/<table\b[^>]*>/i', function ($match) {
+            $tag = $match[0];
+
+            if (stripos($tag, static::NO_BORDER_CLASS) !== false) {
+                return $tag;
+            }
+
+            if (!static::declaresNoBorder($tag)) {
+                return $tag;
+            }
+
+            // Into an existing class attribute, or a new one.
+            $withClass = preg_replace(
+                '/(\bclass\s*=\s*)(["\'])(.*?)\2/i',
+                '$1$2$3 ' . static::NO_BORDER_CLASS . '$2',
+                $tag,
+                1,
+                $count
+            );
+
+            if ($count > 0) {
+                return $withClass;
+            }
+
+            return preg_replace('/^<table\b/i', '<table class="' . static::NO_BORDER_CLASS . '"', $tag, 1);
+        }, $html);
+    }
+
+    /** Does this opening tag say the table has no border? */
+    protected static function declaresNoBorder(string $tag): bool
+    {
+        // The HTML attribute, which is how older editors and Word say it.
+        if (preg_match('/\bborder\s*=\s*["\']?0["\']?/i', $tag)) {
+            return true;
+        }
+
+        if (!preg_match('/\bstyle\s*=\s*(["\'])(.*?)\1/is', $tag, $style)) {
+            return false;
+        }
+
+        // border-style:none / hidden, or the shorthand set to none or zero.
+        // A shorthand carrying a real width and style (1px solid #555) is an
+        // author asking FOR a border, so it is left alone.
+        return (bool) preg_match(
+            '/(?:^|;)\s*border(?:-style)?\s*:\s*(?:none|hidden|0(?:px|pt|em|rem)?)\s*(?:;|$)/i',
+            trim($style[2])
         );
     }
 

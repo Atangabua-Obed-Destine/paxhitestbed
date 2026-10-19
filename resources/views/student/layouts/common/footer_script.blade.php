@@ -2,6 +2,8 @@
     <script src="{{ asset('dashboard/plugins/jquery/js/jquery.min.js') }}"></script>
     <script src="{{ asset('dashboard/plugins/popper/js/popper.min.js') }}"></script>
     <script src="{{ asset('dashboard/plugins/bootstrap/js/bootstrap.min.js') }}"></script>
+    @include('common.js.semester_year_select')
+
     <script src="{{ asset('dashboard/plugins/jquery-scrollbar/js/perfect-scrollbar.min.js') }}"></script>
     <script src="{{ asset('dashboard/js/pcoded.min.js') }}"></script>
 

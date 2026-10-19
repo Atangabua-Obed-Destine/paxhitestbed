@@ -119,9 +119,10 @@
                                                     @enderror
                                                 </div>
 
+                                                @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
                                                 <div class="form-group col-md-4">
                                                     <label for="semester">{{ __('field_semester') }} <span class="text-danger">*</span></label>
-                                                    <select class="form-control @error('semester') is-invalid @enderror" name="semester" id="semester" required>
+                                                    <select class="form-control sy-semester @error('semester') is-invalid @enderror" name="semester" id="semester" required>
                                                         <option value="">{{ __('select') }}</option>
                                                         @foreach($semesters as $semester)
                                                         <option value="{{ $semester->id }}" {{ old('semester') == $semester->id ? 'selected' : '' }}>{{ $semester->title }} @if($semester->year)(Year {{ $semester->year }})@endif</option>

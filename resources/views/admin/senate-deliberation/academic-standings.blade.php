@@ -59,9 +59,10 @@
                                         @endforeach
                                     </select>
                                 </div>
+                                @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
                                 <div class="form-group col-md-2">
                                     <label for="semester">{{ __('Semester') }} <span class="text-danger">*</span></label>
-                                    <select class="form-control" name="semester" id="semester" required>
+                                    <select class="form-control sy-semester" name="semester" id="semester" required>
                                         <option value="">{{ __('select') }}</option>
                                         @foreach($semesters as $sem)
                                         <option value="{{ $sem->id }}" @if($selected_semester == $sem->id) selected @endif>{{ $sem->title }}@if(!empty($sem->is_resit)) (Resit)@endif</option>

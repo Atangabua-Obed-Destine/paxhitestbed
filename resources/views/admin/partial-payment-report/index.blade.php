@@ -130,9 +130,10 @@
                                     </select>
                                 </div>
 
+                                @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
                                 <div class="form-group col-md-3">
                                     <label for="semester_id">{{ __('field_semester') }}</label>
-                                    <select class="form-control" name="semester_id" id="semester_id">
+                                    <select class="form-control sy-semester" name="semester_id" id="semester_id">
                                         <option value="">{{ __('select') }}</option>
                                         @foreach($semesters as $semester)
                                         <option value="{{ $semester->id }}" {{ request('semester_id') == $semester->id ? 'selected' : '' }}>

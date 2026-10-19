@@ -111,11 +111,13 @@ class AdmitCardController extends Controller
         $data['sessions'] = $sessions->orderBy('id', 'desc')->get();}
 
         if(!empty($request->program) && $request->program != '0'){
-        $semesters = Semester::where('status', 1);
-        $semesters->with('programs')->whereHas('programs', function ($query) use ($program){
-            $query->where('program_id', $program);
-        });
-        $data['semesters'] = $semesters->orderBy('id', 'asc')->get();}
+        $semesterCollection = \App\Services\Academic\SemesterYearOptions::collectionForProgram($program);
+        $data['semesters'] = $semesterCollection;
+        // Without this the Year select in the shared filter renders empty, and
+        // because the semester list is gated behind it, nothing can be chosen
+        // at all. Built from the same collection passed as `semesters`, so a
+        // bookmarked ?semester=N can still be traced back to its year.
+        $data['semesterOptions'] = \App\Services\Academic\SemesterYearOptions::fromCollection($semesterCollection);}
 
         if(!empty($request->program) && $request->program != '0' && !empty($request->semester) && $request->semester != '0'){
         $sections = Section::where('status', 1);
@@ -156,7 +158,7 @@ class AdmitCardController extends Controller
                           });
                 });
             }
-            $rows = $students->orderBy('matricule', 'asc')->get();
+            $rows = $students->orderBy('student_id', 'asc')->get();
 
             // Array Sorting
             $data['rows'] = $rows->sortBy(function($query){
@@ -187,7 +189,7 @@ class AdmitCardController extends Controller
         $data['path'] = $this->path;
 
         // View
-        $data['rows'] = Student::where('id', $id)->orderBy('matricule', 'asc')->get();
+        $data['rows'] = Student::where('id', $id)->orderBy('student_id', 'asc')->get();
         $data['print'] = PrintSetting::where('slug', 'admit-card')->firstOrFail();
 
         return view($this->view.'.print', $data);
@@ -209,7 +211,7 @@ class AdmitCardController extends Controller
         $students = explode(",",$request->students);
 
         // View
-        $data['rows'] = Student::whereIn('id', $students)->orderBy('matricule', 'asc')->get();
+        $data['rows'] = Student::whereIn('id', $students)->orderBy('student_id', 'asc')->get();
         $data['print'] = PrintSetting::where('slug', 'admit-card')->firstOrFail();
 
         return view($this->view.'.print', $data);

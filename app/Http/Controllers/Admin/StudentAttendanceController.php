@@ -197,6 +197,21 @@ class StudentAttendanceController extends Controller
             $subjects = StaffAssignmentService::filterCourses($subjects);
             
             $subjectsCollection = $subjects->orderBy('code', 'asc')->get();
+
+            // A subject reached from the "My Assigned Courses" block must be
+            // offered here even when the subject-to-programme pivot does not
+            // list it: the class routine is what says it is being taught, and
+            // the two disagree often enough that the lecturer would otherwise
+            // land on a screen with an empty Subject dropdown. The exam-marking
+            // screen does exactly this, for exactly this reason.
+            if (!empty($subject) && $subject !== '0' && !$subjectsCollection->contains('id', (int) $subject)) {
+                $linkedSubject = Subject::where('id', $subject)->where('status', '1')->first();
+
+                if ($linkedSubject) {
+                    $subjectsCollection = $subjectsCollection->push($linkedSubject)->sortBy('code')->values();
+                }
+            }
+
             $data['subjects'] = $subjectsCollection;
         }
 
@@ -278,6 +293,14 @@ class StudentAttendanceController extends Controller
             $data['attendances'] = $attendances->orderBy('id', 'asc')->get();
         }
 
+
+        // The courses this member of staff actually teaches this session, so a
+        // lecturer does not have to work the filters above to reach their own
+        // subjects. Same source as the exam-marking screen's block.
+        $data['assignedCourses'] = \App\Services\Academic\AssignedCourses::forUser(
+            \Illuminate\Support\Facades\Auth::guard('web')->id()
+        );
+        $data['assignedSession'] = \App\Services\Academic\AssignedCourses::currentSession();
 
         return view($this->view.'.index', $data);
     }
