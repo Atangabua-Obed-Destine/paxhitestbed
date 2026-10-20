@@ -81,7 +81,7 @@ class ClassTimetable
             $cells = [];
 
             foreach (array_keys(self::DAYS) as $day) {
-                $cells[$day] = $inBand->where('day', (string) ($day % 7 + 1))
+                $cells[$day] = $inBand->where('day', (string) $day)
                     ->sortBy('start_time')
                     ->values();
             }
