@@ -24,40 +24,12 @@
                     <div class="card-block">
                       <div class="row">
                         <!-- Form Start -->
-                        <div class="form-group col-md-4">
-                            <label for="category">{{ __('field_category') }} <span>*</span></label>
-                            <select class="form-control" name="category" id="category" required>
-                                <option value="">{{ __('select') }}</option>
-                                @foreach( $categories as $category )
-                                <option value="{{ $category->id }}" @if(old('category') == $category->id) selected @endif>{{ $category->title }}</option>
-                                @endforeach
-                            </select>
+                        {{-- Heading, then the categories filed under it. The
+                             Income & Expenditure sheet's own order, so a figure
+                             cannot be recorded against a category that reaches
+                             no line of it. --}}
+                        @include('common.inc.budget_line_category')
 
-                            <div class="invalid-feedback">
-                              {{ __('required_field') }} {{ __('field_category') }}
-                            </div>
-                        </div>
-
-                        <div class="form-group col-md-4">
-                            <label for="budget_id">{{ __('field_budget') }}</label>
-                            <select class="form-control" name="budget_id" id="budget_id">
-                                <option value="">{{ __('select_optional') }}</option>
-                                @foreach( $activeBudgets as $budget )
-                                <option value="{{ $budget->id }}" @if(old('budget_id') == $budget->id) selected @endif>
-                                    {{ $budget->code }} - {{ $budget->title }}
-                                </option>
-                                @endforeach
-                            </select>
-                            <small class="form-text text-muted">{{ __('link_expense_to_budget') }}</small>
-                        </div>
-
-                        <div class="form-group col-md-4">
-                            <label for="budget_allocation_id">{{ __('field_budget_allocation') }}</label>
-                            <select class="form-control" name="budget_allocation_id" id="budget_allocation_id">
-                                <option value="">{{ __('select_budget_first') }}</option>
-                            </select>
-                            <small class="form-text text-muted" id="allocation-remaining"></small>
-                        </div>
 
                         <div class="form-group col-md-4">
                             <label for="title">{{ __('field_title') }} <span>*</span></label>
@@ -166,102 +138,4 @@
 </div>
 <!-- End Content-->
 
-@endsection
-
-@section('scripts')
-<script>
-    // Test if script loads
-    console.log('=== EXPENSE FORM SCRIPT LOADED ===');
-    
-    $(document).ready(function() {
-        console.log('jQuery ready event fired');
-        console.log('Budget dropdown found:', $('#budget_id').length);
-        console.log('Allocation dropdown found:', $('#budget_allocation_id').length);
-        
-        // Load allocations when budget is selected
-        $('#budget_id').on('change', function() {
-            const budgetId = $(this).val();
-            console.log('=== BUDGET CHANGED ===');
-            console.log('Budget changed to:', budgetId);
-            const allocationSelect = $('#budget_allocation_id');
-            const categorySelect = $('#category');
-            
-            allocationSelect.html('<option value="">{{ __("loading") }}...</option>');
-            $('#allocation-remaining').text('');
-            
-            if (budgetId) {
-                $.ajax({
-                    url: '{{ url("admin/budget") }}/' + budgetId + '/allocations-data',
-                    method: 'GET',
-                    success: function(data) {
-                        console.log('Allocations loaded:', data);
-                        allocationSelect.html('<option value="">{{ __("select_allocation") }}</option>');
-                        
-                        // Filter allocations by selected category
-                        const selectedCategory = categorySelect.val();
-                        
-                        data.forEach(function(allocation) {
-                            if (!selectedCategory || allocation.expense_category_id == selectedCategory) {
-                                allocationSelect.append(
-                                    '<option value="' + allocation.id + '" ' +
-                                    'data-remaining="' + allocation.remaining_amount + '">' +
-                                    allocation.category_title + ' - Remaining: ' + 
-                                    allocation.remaining_formatted + 
-                                    '</option>'
-                                );
-                            }
-                        });
-                        
-                        if (allocationSelect.find('option').length === 1) {
-                            allocationSelect.html('<option value="">{{ __("no_allocations_available") }}</option>');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error loading allocations:', xhr.responseText);
-                        allocationSelect.html('<option value="">{{ __("error_loading_allocations") }}</option>');
-                    }
-                });
-            } else {
-                allocationSelect.html('<option value="">{{ __("select_budget_first") }}</option>');
-            }
-        });
-        
-        // Update remaining amount display when allocation is selected
-        $('#budget_allocation_id').on('change', function() {
-            const selected = $(this).find('option:selected');
-            const remaining = parseFloat(selected.data('remaining'));
-            
-            if (!isNaN(remaining)) {
-                $('#allocation-remaining').text('{{ __("remaining_amount") }}: ' + remaining.toFixed(2));
-                
-                // Set max validation on amount field
-                $('#amount').attr('max', remaining);
-            } else {
-                $('#allocation-remaining').text('');
-                $('#amount').removeAttr('max');
-            }
-        });
-        
-        // Validate amount against remaining allocation
-        $('form').on('submit', function(e) {
-            const allocationId = $('#budget_allocation_id').val();
-            const amount = parseFloat($('#amount').val().replace(/,/g, '')) || 0;
-            const selected = $('#budget_allocation_id').find('option:selected');
-            const remaining = selected.data('remaining');
-            
-            if (allocationId && remaining !== undefined && amount > remaining) {
-                e.preventDefault();
-                alert('{{ __("expense_exceeds_allocation") }}: ' + remaining.toFixed(2));
-                return false;
-            }
-        });
-        
-        // Also filter allocations when category changes
-        $('#category').on('change', function() {
-            if ($('#budget_id').val()) {
-                $('#budget_id').trigger('change');
-            }
-        });
-    });
-</script>
 @endsection

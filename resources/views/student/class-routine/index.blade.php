@@ -171,6 +171,12 @@
                         &nbsp;<i class="fas fa-door-open"></i> {{ $current->room->title }}
                     @endif
                 </div>
+                @if(optional($current->teacher)->first_name)
+                    <div class="tt-meta">
+                        <i class="fas fa-user"></i>
+                        {{ trim(($current->teacher->first_name ?? '').' '.($current->teacher->last_name ?? '')) }}
+                    </div>
+                @endif
                 @if($next)
                     <div class="tt-meta mt-2 pt-2" style="border-top:1px dashed var(--tt-line)">
                         <strong>{{ __('Then') }}:</strong>
@@ -312,6 +318,9 @@
                                             <div class="t">{{ $fmt($row->start_time) }} &ndash; {{ $fmt($row->end_time) }}</div>
                                             @if(optional($row->room)->title)
                                                 <div class="t">{{ $row->room->title }}</div>
+                                            @endif
+                                            @if(optional($row->teacher)->first_name)
+                                                <div class="t">{{ trim(($row->teacher->first_name ?? '').' '.($row->teacher->last_name ?? '')) }}</div>
                                             @endif
                                         </div>
                                     @empty

@@ -383,6 +383,15 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     // Student Enroll Routes
     Route::resource('student/student-note', 'StudentNoteController');
     Route::post('student/single-enroll/validate-program-swap', 'StudentSingleEnrollController@validateProgramSwap')->name('single-enroll.validate-swap');
+    // Moving a student to another programme. The preview is read-only and says
+    // exactly what the apply would do; both carry their own permission, because
+    // this reissues a matricule and rewrites assigned fees.
+    Route::get('student/single-enroll/programme-change/preview', 'StudentSingleEnrollController@programmeChangePreview')
+        ->middleware('permission:student-enroll-programme-change')
+        ->name('single-enroll.programme-change.preview');
+    Route::post('student/single-enroll/programme-change', 'StudentSingleEnrollController@programmeChange')
+        ->middleware('permission:student-enroll-programme-change')
+        ->name('single-enroll.programme-change');
     Route::resource('student/single-enroll', 'StudentSingleEnrollController');
     Route::resource('student/group-enroll', 'StudentGroupEnrollController');
     Route::resource('student/subject-adddrop', 'SubjectAddDropController');
@@ -435,6 +444,10 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('routine/class-routine-joint', 'ClassRoutineController@jointCreate')->name('class-routine.joint');
     Route::post('routine/class-routine-joint', 'ClassRoutineController@jointStore')->name('class-routine.joint.store');
     Route::post('routine/class-routine/print', 'ClassRoutineController@print')->name('class-routine.print');
+    // The whole session on one page, and the same thing as a workbook. Both
+    // read only, so they sit behind the view permission rather than create.
+    Route::get('routine/class-routine-overview', 'ClassRoutineController@overview')->name('class-routine.overview');
+    Route::get('routine/class-routine-export', 'ClassRoutineController@export')->name('class-routine.export');
     Route::resource('routine/exam-routine', 'ExamRoutineController');
     Route::get('routine/exam-routine-joint', 'ExamRoutineController@jointCreate')->name('exam-routine.joint');
     Route::post('routine/exam-routine-joint', 'ExamRoutineController@jointStore')->name('exam-routine.joint.store');

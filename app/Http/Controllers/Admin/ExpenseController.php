@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
+use App\Services\Accounting\BudgetLineChoices;
 use Illuminate\Support\Facades\DB;
 use Flasher\Laravel\Facade\Flasher;
 use App\Models\ExpenseCategory;
@@ -17,6 +18,9 @@ use App\Models\PaymentAccountTransaction;
 class ExpenseController extends Controller
 {
     use FileUploader;
+
+    /** Which side of the Income & Expenditure sheet this screen feeds. */
+    protected const MAPPING_TYPE = BudgetLineChoices::EXPENSE;
 
     protected $title, $route, $view, $path, $access;
 
@@ -114,16 +118,18 @@ class ExpenseController extends Controller
         $data['route'] = $this->route;
         $data['view'] = $this->view;
 
-        $data['categories'] = ExpenseCategory::where('status', '1')
-                            ->orderBy('title', 'asc')->get();
-        
-        // Get active budgets for dropdown
-        // Departmental budgets only. The Income and Expenditure sheet reports
-        // spending through its category mappings, so charging an expense
-        // directly against it would count that spending twice.
-        $data['activeBudgets'] = \App\Models\Budget::whereIn('status', ['active', 'approved'])
-                            ->where('is_institutional', false)
-                            ->orderBy('created_at', 'desc')->get();
+        // Headings and the categories filed under them, so a figure cannot be
+        // recorded against a category that reaches no line of the sheet.
+        $data = array_merge($data, (new BudgetLineChoices())->formData(self::MAPPING_TYPE));
+        $data['bl_selected'] = old('category');
+
+        // No budget or allocation here. An expense reaches the Income and
+        // Expenditure sheet through its category's budget line, which the two
+        // dropdowns above now settle, so the screen asked twice for where the
+        // money belongs. Nothing was using the answer either: of 558 expenses
+        // none carries a budget_id or a budget_allocation_id, and no budget is
+        // active and non-institutional, so the dropdown was always empty.
+        // The edit screen still offers them, and store() still accepts them.
 
         return view($this->view.'.create', $data);
     }
@@ -147,6 +153,12 @@ class ExpenseController extends Controller
             'budget_allocation_id' => 'nullable|exists:budget_allocations,id',
             'payment_account_id' => 'nullable|exists:payment_accounts,id',
         ]);
+
+        // A category that reaches no line of the sheet is refused outright:
+        // the figure would be recorded and then reported nowhere.
+        if ($refusal = $this->refuseUnfiledCategory($request)) {
+            return $refusal;
+        }
 
         // Validate budget allocation if provided
         if ($request->filled('budget_allocation_id')) {
@@ -273,8 +285,14 @@ class ExpenseController extends Controller
         $data['path'] = $this->path;
 
         $data['row'] = $expense;
-        $data['categories'] = ExpenseCategory::where('status', '1')
-                            ->orderBy('title', 'asc')->get();
+
+        // The category already on this record stays selectable even if it is
+        // no longer one this rule allows, so the record can still be edited.
+        $data = array_merge($data, (new BudgetLineChoices())->formData(
+            self::MAPPING_TYPE,
+            $expense->category_id
+        ));
+        $data['bl_selected'] = old('category', $expense->category_id);
         
         // Get active budgets for dropdown
         // Departmental budgets only. The Income and Expenditure sheet reports
@@ -306,6 +324,12 @@ class ExpenseController extends Controller
             'budget_id' => 'nullable|exists:budgets,id',
             'budget_allocation_id' => 'nullable|exists:budget_allocations,id',
         ]);
+
+        // The category already on the record stays allowed, so a record saved
+        // before this rule existed can still be corrected.
+        if ($refusal = $this->refuseUnfiledCategory($request, $expense->getOriginal('category_id'))) {
+            return $refusal;
+        }
 
         // Validate budget allocation if provided
         if ($request->filled('budget_allocation_id')) {
@@ -386,5 +410,43 @@ class ExpenseController extends Controller
         Flasher::addSuccess(__('msg_deleted_successfully'), __('msg_success'));
 
         return redirect()->back();
+    }
+
+    /**
+     * Refuse a category that reaches no line of the Income & Expenditure
+     * sheet.
+     *
+     * The dropdown only offers filed categories, but a request can name any
+     * id, so this is where the rule actually lives. $original is the category
+     * already on the record: it stays allowed so a record saved before this
+     * rule existed can still be corrected, which on this installation covers
+     * four income records carrying 20,254,000.
+     *
+     * @return \Illuminate\Http\RedirectResponse|null
+     */
+    protected function refuseUnfiledCategory(Request $request, $original = null)
+    {
+        $chosen = $request->category;
+
+        if ($original !== null && (string) $chosen === (string) $original) {
+            return null;
+        }
+
+        $choices = new BudgetLineChoices();
+
+        if ($choices->isUsable(self::MAPPING_TYPE, $chosen)) {
+            return null;
+        }
+
+        $reason = $choices->unlinked(self::MAPPING_TYPE)->firstWhere('id', (int) $chosen);
+
+        Flasher::addError(
+            $reason
+                ? __('That category is not filed under a budget line, so money recorded against it would appear on no line of the Income & Expenditure sheet. :reason File it under a line first.', ['reason' => $reason['reason']])
+                : __('Choose a category that is filed under a budget line.'),
+            __('msg_error')
+        );
+
+        return redirect()->back()->withInput();
     }
 }

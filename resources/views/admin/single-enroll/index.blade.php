@@ -106,6 +106,18 @@
                                             </span>
                                         @endif
                                     </p>
+
+                                    @can('student-enroll-programme-change')
+                                    {{-- Moving the student to another programme reissues their
+                                         matricule and rewrites their assigned fees, so it is its
+                                         own permission and its own confirmation. --}}
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            id="openProgrammeChange"
+                                            data-enrolment="{{ $displayEnroll->id }}"
+                                            data-programme="{{ $displayEnroll->program_id }}">
+                                        <i class="fas fa-exchange-alt"></i> {{ __('Change Programme') }}
+                                    </button>
+                                    @endcan
                                     <hr/>
                                     @endif
 
@@ -483,6 +495,107 @@
     </div>
 </div>
 <!-- End Content-->
+
+
+@can('student-enroll-programme-change')
+{{-- Change Programme --}}
+<div class="modal fade" id="programmeChangeModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <form method="POST" action="{{ route('admin.single-enroll.programme-change') }}" id="programmeChangeForm">
+        @csrf
+        <input type="hidden" name="enrolment" id="pcEnrolment">
+
+        <div class="modal-header bg-light">
+          <h5 class="modal-title"><i class="fas fa-exchange-alt"></i> {{ __('Change Programme') }}</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="pcProgram">{{ __('Move this enrolment to') }} <span class="text-danger">*</span></label>
+            <select class="form-control" name="program" id="pcProgram" required>
+              <option value="">{{ __('select') }}</option>
+              @php
+                  // The faculty the student is in now. A programme change is
+                  // only possible within it, so nothing else is offered.
+                  $pcFaculty = optional(optional($displayEnroll)->program)->faculty_id;
+                  $pcChoices = $pcFaculty
+                      ? \App\Models\Program::where('status', '1')
+                          ->where('faculty_id', $pcFaculty)
+                          ->where('id', '!=', optional($displayEnroll)->program_id)
+                          ->orderBy('title')->get()
+                      : collect();
+              @endphp
+              @forelse($pcChoices as $pcProgram)
+                <option value="{{ $pcProgram->id }}">{{ $pcProgram->title }}</option>
+              @empty
+                <option value="" disabled>{{ __('No other programme in this faculty') }}</option>
+              @endforelse
+            </select>
+            <small class="text-muted">{{ __('The preview below updates as soon as you choose.') }}</small>
+          </div>
+
+          <div id="pcPreview" class="d-none">
+            <div id="pcBlockers"></div>
+            <div id="pcWarnings"></div>
+
+            <div class="alert alert-light border">
+              <div><strong>{{ __('New matricule') }}:</strong> <span id="pcMatricule">&mdash;</span></div>
+              <div><strong>{{ __('Registered courses') }}:</strong> <span id="pcCourses">&mdash;</span></div>
+            </div>
+
+            <h6 class="mt-3" style="font-weight:700">{{ __('What happens to the fees') }}</h6>
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered mb-0">
+                <thead class="thead-light">
+                  <tr>
+                    <th>{{ __('field_fees_category') }}</th>
+                    <th class="text-right">{{ __('Now') }}</th>
+                    <th class="text-right">{{ __('Becomes') }}</th>
+                    <th>{{ __('Why') }}</th>
+                  </tr>
+                </thead>
+                <tbody id="pcFees"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="pcLoading" class="text-center p-3 d-none">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+          </div>
+        </div>
+
+        <div class="modal-footer d-block" id="pcFooter">
+          <div class="form-group">
+            <label for="pcReason">{{ __('Why is this student changing programme?') }} <span class="text-danger">*</span></label>
+            <textarea class="form-control" name="reason" id="pcReason" rows="2"
+                      minlength="10" maxlength="1000" required
+                      placeholder="{{ __('e.g. approved transfer request of 12 March') }}"></textarea>
+            <small class="text-muted">{{ __('Kept on the enrolment and on every fee this changes.') }}</small>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="pcConfirm">
+            <label class="form-check-label" for="pcConfirm">
+              {{ __('I have read what happens above, including the new matricule and the fee changes.') }}
+            </label>
+          </div>
+
+          <div class="text-right">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('Cancel') }}</button>
+            <button type="submit" class="btn btn-danger" id="pcSubmit" disabled>
+              <i class="fas fa-exchange-alt"></i> {{ __('Change Programme') }}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+@endcan
 
 @endsection
 
@@ -1182,6 +1295,138 @@ function buildConfirmationModal() {
     
     $('#confirmModalBody').html(bodyHtml);
 }
+
+// ---------------------------------------------------------------------------
+// Change Programme
+//
+// The preview endpoint is read-only, so choosing a programme here commits to
+// nothing. The submit is armed only once a clean preview is on screen and the
+// admin has ticked to say they read it.
+// ---------------------------------------------------------------------------
+(function () {
+    var openBtn = document.getElementById('openProgrammeChange');
+
+    if (!openBtn) {
+        return; // the admin does not hold the permission
+    }
+
+    var money = function (value) {
+        return Number(value || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2, maximumFractionDigits: 2
+        });
+    };
+
+    var escapeText = function (value) {
+        return $('<div>').text(value === null || value === undefined ? '' : value).html();
+    };
+
+    var canSubmit = false;
+
+    var arm = function () {
+        $('#pcSubmit').prop('disabled', !(canSubmit && $('#pcConfirm').is(':checked')));
+    };
+
+    $(document).on('click', '#openProgrammeChange', function () {
+        $('#pcEnrolment').val($(this).data('enrolment'));
+        $('#pcProgram').val('');
+        $('#pcReason').val('');
+        $('#pcConfirm').prop('checked', false);
+        $('#pcPreview').addClass('d-none');
+        canSubmit = false;
+        arm();
+        $('#programmeChangeModal').modal('show');
+    });
+
+    $(document).on('change', '#pcConfirm', arm);
+
+    $(document).on('change', '#pcProgram', function () {
+        var programme = $(this).val();
+        var enrolment = $('#pcEnrolment').val();
+
+        canSubmit = false;
+        arm();
+        $('#pcPreview').addClass('d-none');
+
+        if (!programme) {
+            return;
+        }
+
+        $('#pcLoading').removeClass('d-none');
+
+        $.get('{{ route('admin.single-enroll.programme-change.preview') }}',
+            { enrolment: enrolment, program: programme })
+            .done(function (data) {
+                $('#pcLoading').addClass('d-none');
+                $('#pcPreview').removeClass('d-none');
+
+                $('#pcMatricule').text(data.matricule || '\u2014');
+                $('#pcCourses').text(
+                    data.courses.kept + ' kept'
+                    + (data.courses.orphans.length
+                        ? ', ' + data.courses.orphans.length + ' not taught by this programme'
+                        : '')
+                );
+
+                // Anything that refuses the move is said before the figures,
+                // because it decides whether the figures matter at all.
+                var blockers = '';
+                if (data.blockers.length) {
+                    blockers = '<div class="alert alert-danger"><strong>'
+                        + '<i class="fas fa-ban"></i> This move cannot be made:</strong><ul class="mb-0 mt-2">';
+                    data.blockers.forEach(function (reason) {
+                        blockers += '<li>' + escapeText(reason) + '</li>';
+                    });
+                    blockers += '</ul></div>';
+                }
+                $('#pcBlockers').html(blockers);
+
+                var warnings = '';
+                data.warnings.forEach(function (warning) {
+                    warnings += '<div class="alert alert-warning py-2">'
+                        + '<i class="fas fa-exclamation-triangle"></i> ' + escapeText(warning) + '</div>';
+                });
+                $('#pcWarnings').html(warnings);
+
+                var rows = '';
+                data.fees.forEach(function (fee) {
+                    rows += '<tr class="' + (fee.changes ? 'table-warning' : '') + '">'
+                        + '<td>' + escapeText(fee.category || '')
+                        + (fee.fee_id ? '' : ' <span class="badge badge-info">new</span>') + '</td>'
+                        + '<td class="text-right">' + money(fee.current) + '</td>'
+                        + '<td class="text-right"><strong>' + money(fee.new) + '</strong></td>'
+                        + '<td><small>' + escapeText(fee.why) + '</small></td>'
+                        + '</tr>';
+                });
+
+                if (!rows) {
+                    rows = '<tr><td colspan="4" class="text-muted text-center">'
+                        + 'No fees to reconcile.</td></tr>';
+                }
+
+                $('#pcFees').html(rows);
+
+                canSubmit = data.blockers.length === 0;
+                arm();
+            })
+            .fail(function (xhr) {
+                $('#pcLoading').addClass('d-none');
+                $('#pcPreview').removeClass('d-none');
+                $('#pcBlockers').html('<div class="alert alert-danger">'
+                    + (xhr.status === 403
+                        ? 'You do not have permission to change a programme.'
+                        : 'The preview could not be loaded. Nothing has been changed.')
+                    + '</div>');
+                $('#pcFees').empty();
+            });
+    });
+
+    // One submit only: this writes.
+    $(document).on('submit', '#programmeChangeForm', function () {
+        $('#pcSubmit').prop('disabled', true)
+            .html('<i class="fas fa-spinner fa-spin"></i> Working...');
+    });
+})();
+
 </script>
 @endif
 @endsection

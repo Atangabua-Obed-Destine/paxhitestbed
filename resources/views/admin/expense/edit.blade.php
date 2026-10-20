@@ -25,19 +25,11 @@
                     <div class="card-block">
                       <div class="row">
                         <!-- Form Start -->
-                        <div class="form-group col-md-4">
-                            <label for="category">{{ __('field_category') }} <span>*</span></label>
-                            <select class="form-control" name="category" id="category" required>
-                                <option value="">{{ __('select') }}</option>
-                                @foreach( $categories as $category )
-                                <option value="{{ $category->id }}" @if( $category->id == $row->category_id ) selected @endif>{{ $category->title }}</option>
-                                @endforeach
-                            </select>
-
-                            <div class="invalid-feedback">
-                              {{ __('required_field') }} {{ __('field_category') }}
-                            </div>
-                        </div>
+                        {{-- Heading, then the categories filed under it. The
+                             Income & Expenditure sheet's own order, so a figure
+                             cannot be recorded against a category that reaches
+                             no line of it. --}}
+                        @include('common.inc.budget_line_category')
 
                         <div class="form-group col-md-4">
                             <label for="budget_id">{{ __('field_budget') }}</label>

@@ -18,6 +18,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\Grade;
 use App\Services\ProgramSwapService;
+use App\Services\Academic\ProgrammeChange;
 
 class StudentSingleEnrollController extends Controller
 {
@@ -366,5 +367,98 @@ class StudentSingleEnrollController extends Controller
 
             return redirect()->back();
         }
+    }
+
+    /**
+     * What moving this student to another programme would do.
+     *
+     * Read-only. It returns exactly what programmeChange() would then carry
+     * out, so the admin confirms a decision rather than a hope.
+     */
+    public function programmeChangePreview(Request $request, ProgrammeChange $service)
+    {
+        $request->validate([
+            'enrolment' => 'required|integer|exists:student_enrolls,id',
+            'program' => 'required|integer|exists:programs,id',
+        ]);
+
+        $enrolment = StudentEnroll::with(['student', 'semester'])->findOrFail($request->enrolment);
+        $preview = $service->preview($enrolment, (int) $request->program);
+
+        return response()->json([
+            'status' => 'success',
+            'from' => optional($preview['from'])->title,
+            'to' => optional($preview['to'])->title,
+            'matricule' => $preview['matricule'],
+            'blockers' => $preview['blockers'],
+            'warnings' => $preview['warnings'],
+            'courses' => [
+                'kept' => $preview['courses']['kept']->count(),
+                'orphans' => $preview['courses']['orphans']->values(),
+            ],
+            'fees' => $preview['fees']->map(function ($line) {
+                return [
+                    'fee_id' => $line['fee'] ? $line['fee']->id : null,
+                    'category' => $line['category'],
+                    'current' => round($line['current'], 2),
+                    'new' => round($line['new'], 2),
+                    'action' => $line['action'],
+                    'why' => $line['why'],
+                    'changes' => in_array($line['action'], ['raise', 'replace', 'add'], true),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Move the student.
+     *
+     * The service refuses on its own if anything blocks, and does the whole
+     * move in one transaction, so there is no half-moved student to clean up.
+     */
+    public function programmeChange(Request $request, ProgrammeChange $service)
+    {
+        $request->validate([
+            'enrolment' => 'required|integer|exists:student_enrolls,id',
+            'program' => 'required|integer|exists:programs,id',
+            'reason' => 'required|string|min:10|max:1000',
+        ]);
+
+        $enrolment = StudentEnroll::findOrFail($request->enrolment);
+
+        try {
+            $result = $service->apply(
+                $enrolment,
+                (int) $request->program,
+                $request->reason,
+                Auth::guard('web')->id()
+            );
+        } catch (\Throwable $e) {
+            Log::error('Programme change failed: ' . $e->getMessage(), [
+                'enrolment' => $enrolment->id,
+                'program' => $request->program,
+            ]);
+
+            Flasher::addError(__('The programme change could not be completed. Nothing was changed.'), __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        if (!$result['moved']) {
+            foreach (array_slice($result['blockers'], 0, 3) as $reason) {
+                Flasher::addError($reason, __('msg_error'));
+            }
+
+            return redirect()->back();
+        }
+
+        $changed = collect($result['fees'])->where('changed', true)->count();
+
+        Flasher::addSuccess(__('Programme changed. New matricule :matricule. :count fee(s) adjusted.', [
+            'matricule' => $result['matricule'],
+            'count' => $changed,
+        ]), __('msg_success'));
+
+        return redirect()->route('admin.single-enroll.index', ['student' => $result['matricule']]);
     }
 }

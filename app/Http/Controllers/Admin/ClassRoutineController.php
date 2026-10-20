@@ -17,10 +17,21 @@ use App\Models\Section;
 use App\Models\Subject;
 use App\User;
 use App\Services\StaffAssignmentService;
+use App\Services\Academic\ClassTimetable;
+use App\Exports\ClassTimetableExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ClassRoutineController extends Controller
 {
     protected $title, $route, $view, $path, $access;
+
+    /**
+     * What a timetable row has to drag along to be printable.
+     *
+     * Named once because five methods load the same rows, and a missing
+     * relation here costs one query per class on a 400-row session.
+     */
+    protected $relations = ['subject', 'teacher', 'room', 'program', 'semester', 'section'];
 
     /**
      * Create a new controller instance.
@@ -37,10 +48,12 @@ class ClassRoutineController extends Controller
         $this->access = 'class-routine';
 
 
-        $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-create|'.$this->access.'-print', ['only' => ['index','show']]);
+        $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-create|'.$this->access.'-print', ['only' => ['index','show','overview']]);
         $this->middleware('permission:'.$this->access.'-create', ['only' => ['create','store','destroy']]);
         $this->middleware('permission:'.$this->access.'-teacher', ['only' => ['teacher']]);
-        $this->middleware('permission:'.$this->access.'-print', ['only' => ['print']]);
+        // Printing and exporting both produce a document that leaves the
+        // screen, so they sit behind the same permission.
+        $this->middleware('permission:'.$this->access.'-print', ['only' => ['print','export']]);
     }
 
     /**
@@ -77,8 +90,11 @@ class ClassRoutineController extends Controller
             $data['selected_session'] = $session = $request->session;
         }
         else{
-            $data['selected_session'] = '0';
-            $session = null;
+            // The academic year in progress is what an admin almost always
+            // wants, so it is offered rather than an empty dropdown. A
+            // session named in the request always wins over this default.
+            $currentSession = Session::where('status', '1')->where('current', '1')->first();
+            $data['selected_session'] = $session = $currentSession->id ?? '0';
         }
 
         if(!empty($request->semester) || $request->semester != null){
@@ -124,6 +140,15 @@ class ClassRoutineController extends Controller
             $programQuery = Program::where('faculty_id', $faculty)->where('status', '1')->orderBy('title', 'asc');
             $programQuery = StaffAssignmentService::filterPrograms($programQuery);
             $data['programs'] = $programQuery->get();
+        }
+
+        // With no programme chosen the cascade leaves the Session dropdown
+        // empty, which hides the current-session default until two other
+        // dropdowns have been used. The sessions are listed straight away so
+        // the default is visible on arrival; choosing a programme narrows the
+        // list to the sessions that programme actually runs in.
+        if(empty($program)){
+            $data['sessions'] = Session::where('status', 1)->orderBy('id', 'desc')->get();
         }
 
         if(!empty($program)){
@@ -183,10 +208,56 @@ class ClassRoutineController extends Controller
             if(!empty($request->section)){
                 $routines->where('section_id', $request->section);
             }
-            $data['rows'] = $routines->orderBy('start_time', 'asc')->get();
+            $data['rows'] = $routines->with($this->relations)
+                ->orderBy('start_time', 'asc')->get();
+
+            $data = array_merge($data, $this->readingOf($data['rows'], $request->session));
         }
 
         return view($this->view.'.index', $data);
+    }
+
+    /**
+     * Everything the screen needs to show a timetable and say what is wrong.
+     *
+     * Conflicts are judged against the wider session, not just these rows: a
+     * room booked at the same hour by another programme is a double-booking
+     * that neither timetable can see on its own. The scope is narrowed in the
+     * database to the days, rooms and lecturers this timetable actually uses,
+     * so the page does not pay for the whole session to find out.
+     */
+    protected function readingOf($rows, $sessionId): array
+    {
+        $timetable = new ClassTimetable();
+
+        if ($rows->isEmpty()) {
+            return [
+                'timetable' => $timetable,
+                'grid' => $timetable->grid($rows),
+                'conflicts' => [],
+                'summary' => $timetable->summary($rows),
+            ];
+        }
+
+        $scope = ClassRoutine::where('status', '1')
+            ->where('session_id', $sessionId)
+            ->whereIn('day', $rows->pluck('day')->unique()->values())
+            ->where(function ($query) use ($rows) {
+                $query->whereIn('id', $rows->pluck('id'))
+                    ->orWhereIn('room_id', $rows->pluck('room_id')->filter()->unique()->values())
+                    ->orWhereIn('teacher_id', $rows->pluck('teacher_id')->filter()->unique()->values());
+            })
+            ->with($this->relations)
+            ->get();
+
+        $conflicts = $timetable->conflicts($scope);
+
+        return [
+            'timetable' => $timetable,
+            'grid' => $timetable->grid($rows),
+            'conflicts' => $conflicts,
+            'summary' => $timetable->summary($rows, $conflicts),
+        ];
     }
 
     /**
@@ -557,31 +628,186 @@ class ClassRoutineController extends Controller
         $data['view'] = $this->view;
         $data['path'] = 'print-setting';
 
-        // View
-        $data['print'] = PrintSetting::where('slug', 'class-routine')->firstOrFail();
+        // A letterhead is optional. This used to be firstOrFail(), so with no
+        // class-routine row configured — and there is none — the Print button
+        // answered 404 instead of a timetable. The sheet now falls back to the
+        // institution's own name and logo, and a configured row still wins.
+        $data['print'] = PrintSetting::where('slug', 'class-routine')->first();
 
-        // Filter Routine
-        if(!empty($request->program) && !empty($request->session) && !empty($request->semester) && !empty($request->section)){
+        // A printed sheet is one class group's week. Without all four of them
+        // named there is no such group, and printing every class in the
+        // institution instead would be worse than printing nothing.
+        $wanted = ['program' => 'program_id', 'session' => 'session_id',
+                   'semester' => 'semester_id', 'section' => 'section_id'];
 
+        $complete = collect($wanted)->keys()
+            ->every(fn ($field) => !empty($request->$field));
+
+        if ($complete) {
             $routines = ClassRoutine::where('status', '1');
 
-            if(!empty($request->program)){
-                $routines->where('program_id', $request->program);
+            foreach ($wanted as $field => $column) {
+                $routines->where($column, $request->$field);
             }
-            if(!empty($request->session)){
-                $routines->where('session_id', $request->session);
-            }
-            if(!empty($request->semester)){
-                $routines->where('semester_id', $request->semester);
-            }
-            if(!empty($request->section)){
-                $routines->where('section_id', $request->section);
-            }
-            $data['rows'] = $routines->orderBy('start_time', 'asc')->get();
+
+            $rows = $routines->with($this->relations)->orderBy('start_time', 'asc')->get();
+        } else {
+            $rows = ClassRoutine::whereRaw('1 = 0')->get();
         }
 
+        $data['rows'] = $rows;
+
+        $data = array_merge($data, $this->readingOf($rows, $request->session));
+
+        // Named on the sheet itself, because a printed timetable with no
+        // programme on it is just a grid of times.
+        $data['heading'] = $rows->isNotEmpty()
+            ? $data['timetable']->label($rows->first())
+            : __('No classes scheduled');
+        $data['session_title'] = $rows->first()->session->title ?? '—';
 
         return view($this->view.'.print', $data);
+    }
+
+    /**
+     * Every timetable in one session, on one page.
+     *
+     * The question this answers is the one no existing screen could: is the
+     * session ready to teach? The per-timetable screen needs a faculty, a
+     * programme, a semester and a section chosen before it shows anything, so
+     * finding the programme nobody has scheduled meant opening all of them.
+     */
+    public function overview(Request $request)
+    {
+        $data['title'] = __('Timetable Overview');
+        $data['route'] = $this->route;
+        $data['view'] = $this->view;
+        $data['access'] = $this->access;
+
+        $data['sessions'] = Session::where('status', '1')->orderBy('id', 'desc')->get();
+
+        $current = Session::where('status', '1')->where('current', '1')->first();
+        $data['selected_session'] = $request->session ?: ($current->id ?? null);
+
+        $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
+        $data['faculties'] = StaffAssignmentService::filterFaculties($facultyQuery)->get();
+        $data['selected_faculty'] = $request->faculty ?: null;
+
+        $data = array_merge($data, $this->overviewOf(
+            $data['selected_session'],
+            $data['selected_faculty']
+        ));
+
+        $data['current_session'] = $current;
+
+        return view($this->view.'.overview', $data);
+    }
+
+    /**
+     * The session's timetables, each reduced to one readable line.
+     *
+     * Shared with the workbook so the screen and the export can never tell
+     * the registry two different stories about the same session.
+     */
+    protected function overviewOf($sessionId, $facultyId = null): array
+    {
+        $timetable = new ClassTimetable();
+
+        $query = ClassRoutine::where('status', '1')->where('session_id', $sessionId);
+
+        if ($facultyId) {
+            $query->whereHas('program', fn ($inner) => $inner->where('faculty_id', $facultyId));
+        }
+
+        $rows = $query->with(array_merge($this->relations, ['program.faculty']))
+            ->orderBy('start_time', 'asc')->get();
+        $conflicts = $timetable->conflicts($rows);
+
+        $groups = $rows->groupBy(fn ($row) =>
+            $row->program_id . '-' . $row->semester_id . '-' . $row->section_id);
+
+        $timetables = $groups->map(function ($group) use ($timetable, $conflicts) {
+            $first = $group->first();
+
+            return [
+                'key' => $first->program_id . '-' . $first->semester_id . '-' . $first->section_id,
+                'program' => $first->program,
+                'semester' => $first->semester,
+                'section' => $first->section,
+                'faculty' => $first->program->faculty->title ?? '—',
+                'rows' => $group,
+                'days' => $timetable->daysUsed($group),
+                'summary' => $timetable->summary($group, $conflicts),
+            ];
+        })->sortBy(function ($entry) {
+            // semesters.year is a nullable VARCHAR, so it has to be padded
+            // before it is compared or year 10 sorts ahead of year 2.
+            return $entry['faculty']
+                . '|' . ($entry['program']->title ?? '')
+                . '|' . str_pad((string) ($entry['semester']->year ?? '0'), 3, '0', STR_PAD_LEFT)
+                . '|' . ($entry['semester']->title ?? '')
+                . '|' . ($entry['section']->title ?? '');
+        })->values();
+
+        // Programmes with a timetable, against programmes that could have one:
+        // the gap is the finding. Reported, never invented — this screen does
+        // not schedule anything.
+        $programQuery = Program::where('status', '1');
+
+        if ($facultyId) {
+            $programQuery->where('faculty_id', $facultyId);
+        }
+
+        $allProgrammes = StaffAssignmentService::filterPrograms($programQuery)
+            ->with('faculty')->orderBy('title')->get();
+
+        $scheduled = $rows->pluck('program_id')->unique();
+
+        return [
+            'timetable' => $timetable,
+            'timetables' => $timetables,
+            'conflicts' => $conflicts,
+            'all_rows' => $rows,
+            'unscheduled' => $allProgrammes->whereNotIn('id', $scheduled)->values(),
+            'programme_count' => $allProgrammes->count(),
+            'totals' => $timetable->summary($rows, $conflicts),
+        ];
+    }
+
+    /**
+     * The whole session as one workbook.
+     *
+     * An overview sheet, a sheet naming every conflict, and then one formatted
+     * grid per timetable — so the registry gets the lot in a single file
+     * instead of opening and printing thirty-nine screens one at a time.
+     */
+    public function export(Request $request)
+    {
+        // A full session is forty-odd formatted sheets and takes the better
+        // part of half a minute to build, which is longer than the default
+        // execution limit. Raised for this request only.
+        if (!ini_get('safe_mode')) {
+            @set_time_limit(300);
+        }
+
+        $current = Session::where('status', '1')->where('current', '1')->first();
+        $sessionId = $request->session ?: ($current->id ?? null);
+        $session = Session::find($sessionId);
+
+        $reading = $this->overviewOf($sessionId, $request->faculty ?: null);
+
+        $faculty = $request->faculty ? Faculty::find($request->faculty) : null;
+
+        $name = 'class-timetable-'
+            . str_replace(['/', ' '], '-', strtolower($session->title ?? 'session'))
+            . ($faculty ? '-' . str_replace(' ', '-', strtolower($faculty->shortcode ?? $faculty->id)) : '')
+            . '-' . now()->format('Ymd-Hi') . '.xlsx';
+
+        return Excel::download(new ClassTimetableExport([
+            'session' => $session,
+            'faculty' => $faculty,
+            'generated_at' => now(),
+        ] + $reading), $name);
     }
 
     /**

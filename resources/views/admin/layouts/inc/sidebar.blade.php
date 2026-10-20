@@ -297,6 +297,10 @@
                 <li class="{{ Request::is('admin/routine/class-routine') ? 'active' : '' }}"><a href="{{ route('admin.class-routine.index') }}" class="">{{ trans_choice('module_class_routine', 2) }}</a></li>
                 @endcanany
 
+                @canany(['class-routine-view', 'class-routine-print'])
+                <li class="{{ Request::is('admin/routine/class-routine-overview') ? 'active' : '' }}"><a href="{{ route('admin.class-routine.overview') }}" class=""><i class="fas fa-th-list text-info"></i> {{ __('Timetable Overview') }}</a></li>
+                @endcanany
+
                 @canany(['exam-routine-create'])
                 <li class="{{ Request::is('admin/routine/exam-routine/create') ? 'active' : '' }}"><a href="{{ route('admin.exam-routine.create') }}" class="">{{ trans_choice('module_manage_exam', 2) }}</a></li>
                 @endcanany

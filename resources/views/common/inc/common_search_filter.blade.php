@@ -6,6 +6,7 @@
   $selectedProgramValue = isset($selected_program) ? (string)$selected_program : '0';
   $selectedSemesterValue = isset($selected_semester) ? (string)$selected_semester : '0';
   $selectedSectionValue = isset($selected_section) ? (string)$selected_section : '0';
+  $selectedSessionValue = isset($selected_session) ? (string)$selected_session : '0';
   $selectedYearValue = isset($selected_semester_year) ? (string)$selected_semester_year : '0';
   $includeSemesterAll = isset($include_semester_all) && $include_semester_all;
   $includeSectionAll = isset($include_section_all) && $include_section_all;
@@ -27,6 +28,7 @@
   data-selected-program="{{ $selectedProgramValue }}"
   data-selected-semester="{{ $selectedSemesterValue }}"
   data-selected-year="{{ $selectedYearValue }}"
+  data-selected-session="{{ $selectedSessionValue }}"
   data-selected-section="{{ $selectedSectionValue }}"
   data-semester-all="{{ $includeSemesterAll ? '1' : '0' }}"
   data-section-all="{{ $includeSectionAll ? '1' : '0' }}">
@@ -149,6 +151,10 @@
         let selectedSemester = ($container.data('selectedSemester') || '').toString();
         let selectedYear = ($container.data('selectedYear') || '').toString();
         let selectedSection = ($container.data('selectedSection') || '').toString();
+        // A screen that knows which session it wants says so. Without this
+        // the Session dropdown lost its value the moment a programme was
+        // chosen, because fetchSessions() rebuilt it and selected nothing.
+        let selectedSession = ($container.data('selectedSession') || '').toString();
         const allowSemesterAll = String($container.data('semesterAll') || '0') === '1';
         const allowSectionAll = String($container.data('sectionAll') || '0') === '1';
         const translationAll = $container.data('allLabel') || 'All';
@@ -164,6 +170,9 @@
         }
         if(selectedSection === '0' && !allowSectionAll){
           selectedSection = '';
+        }
+        if(selectedSession === '0'){
+          selectedSession = '';
         }
 
         const dataNode = document.getElementById(filterId + '-semester-data');
@@ -254,11 +263,20 @@
             resetDropdown($session);
             if(Array.isArray(response)){
               response.forEach((item) => {
-                $session.append($('<option/>', {
+                const option = $('<option/>', {
                   value: item.id,
                   text: item.title
-                }));
+                });
+                // Keep the session the screen asked for, when this programme
+                // actually runs in it. Anything else is left unselected.
+                if(selectedSession && String(selectedSession) === String(item.id)){
+                  option.attr('selected', 'selected');
+                }
+                $session.append(option);
               });
+              if(selectedSession){
+                $session.val(selectedSession);
+              }
             }
           });
         };
@@ -352,6 +370,10 @@
 
         $section.on('change', function(){
           selectedSection = $(this).val() || '';
+        });
+
+        $session.on('change', function(){
+          selectedSession = $(this).val() || '';
         });
       };
 
