@@ -74,14 +74,14 @@ class ClassTimetable
                 return $at >= $start && ($next === null || $at < $next);
             });
 
-            if ($inBand->isEmpty() || $next === null) {
+            if ($inBand->isEmpty()) {
                 continue;
             }
 
             $cells = [];
 
             foreach (array_keys(self::DAYS) as $day) {
-                $cells[$day] = $inBand->where('day', (string) $day)
+                $cells[$day] = $inBand->where('day', (string) ($day % 7 + 1))
                     ->sortBy('start_time')
                     ->values();
             }
