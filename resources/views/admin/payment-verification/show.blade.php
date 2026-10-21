@@ -430,29 +430,13 @@
                                 </table>
 
                                 <h6 class="mb-3 mt-3"><strong>{{ __('receipt_file') }}</strong></h6>
-                                <div class="text-center mb-3">
-                                    @php
-                                        $fileExtension = pathinfo($row->receipt_file, PATHINFO_EXTENSION);
-                                    @endphp
-                                    @if(in_array(strtolower($fileExtension), ['jpg', 'jpeg', 'png']))
-                                        <img src="{{ asset('uploads/'.$path.'/'.$row->receipt_file) }}" alt="Receipt" class="img-fluid" style="max-height: 400px; border: 2px solid #007bff; padding: 10px; cursor: pointer;" onclick="window.open(this.src, '_blank')">
-                                    @elseif(strtolower($fileExtension) == 'pdf')
-                                        <div class="alert alert-info">
-                                            <i class="fas fa-file-pdf fa-4x mb-2 text-danger"></i>
-                                            <p class="mb-0 mt-2">{{ __('pdf_receipt_uploaded') }}</p>
-                                        </div>
-                                    @else
-                                        <div class="alert alert-secondary">
-                                            <i class="fas fa-file fa-4x mb-2"></i>
-                                            <p class="mb-0 mt-2">{{ __('file_uploaded') }}</p>
-                                        </div>
-                                    @endif
-                                </div>
-                                <div class="text-center">
-                                    <a href="{{ asset('uploads/'.$path.'/'.$row->receipt_file) }}" class="btn btn-primary" target="_blank">
-                                        <i class="fas fa-download"></i> {{ __('btn_download_receipt') }}
-                                    </a>
-                                </div>
+                                {{-- Shown here rather than only linked: verifying a
+                                     payment means reading the receipt against the
+                                     figures on this page. --}}
+                                @include('common.inc.receipt_preview', [
+                                    'file' => $row->receipt_file,
+                                    'dir' => $path,
+                                ])
 
                                 @if($row->verification_note)
                                 <div class="mt-4">
