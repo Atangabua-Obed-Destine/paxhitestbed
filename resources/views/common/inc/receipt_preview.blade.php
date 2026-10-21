@@ -24,13 +24,17 @@
     $receiptCompact = $compact ?? false;
 
     $receiptExtension = strtolower(pathinfo($receiptFile, PATHINFO_EXTENSION));
-    $receiptRelative = 'uploads/' . $receiptDir . '/' . $receiptFile;
-    $receiptUrl = $receiptFile !== '' ? asset($receiptRelative) : null;
 
-    // basename() so a stored value containing a path cannot be used to probe
-    // somewhere else on disk; the file always lives in its own directory.
-    $receiptOnDisk = $receiptFile !== ''
-        && is_file(public_path('uploads/' . $receiptDir . '/' . basename($receiptFile)));
+    // Looks where the receipt belongs, then where receipts were once wrongly
+    // put. Applicant receipts went to uploads/student for a while, and their
+    // rows record only a bare filename, so without this every one of them
+    // reads as missing.
+    $receiptFound = \App\Support\ReceiptFile::locate($receiptFile, $receiptDir);
+    $receiptRelative = $receiptFound['relative']
+        ?? \App\Support\ReceiptFile::expectedPath($receiptFile, $receiptDir);
+    $receiptUrl = $receiptFound ? asset($receiptFound['relative']) : null;
+    $receiptOnDisk = (bool) $receiptFound;
+    $receiptLegacy = (bool) ($receiptFound['legacy'] ?? false);
 
     $receiptIsImage = in_array($receiptExtension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
     $receiptIsPdf = $receiptExtension === 'pdf';
@@ -86,6 +90,13 @@
             </div>
         @endif
     </div>
+
+    @if($receiptLegacy)
+    <div class="alert alert-info py-2 mt-2 mb-0" style="font-size:12px">
+        <i class="fas fa-info-circle"></i>
+        {{ __('This receipt is stored in an older folder (:dir). It opens normally; newer receipts are filed with the others.', ['dir' => 'uploads/' . ($receiptFound['dir'] ?? '')]) }}
+    </div>
+    @endif
 
     <div class="text-center mt-2">
         <a href="{{ $receiptUrl }}" class="btn btn-sm btn-primary" target="_blank" rel="noopener">

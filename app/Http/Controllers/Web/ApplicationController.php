@@ -1727,8 +1727,14 @@ class ApplicationController extends Controller
             'student_note' => 'nullable|string|max:500',
         ]);
 
+        // Receipts go with the other receipts, NOT in $this->path. That
+        // property is 'student' — right for an applicant's photograph,
+        // certificates and documents, wrong for this. Sending the receipt
+        // there put every applicant-submitted receipt in uploads/student
+        // while the verification screen read uploads/payment-receipts, so
+        // the bursar got a 404 on each one.
         $receiptPath = $request->hasFile('receipt_file')
-            ? $this->uploadMedia($request, 'receipt_file', $this->path)
+            ? $this->uploadMedia($request, 'receipt_file', 'payment-receipts')
             : null;
 
         $paymentReceipt = new \App\Models\PaymentReceipt();
