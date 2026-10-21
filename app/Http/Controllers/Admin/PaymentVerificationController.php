@@ -308,6 +308,11 @@ class PaymentVerificationController extends Controller
      */
     public function approve(Request $request, $type, $id)
     {
+        // The menu badge reads a cached count. Dropping it here means the
+        // number answers to what this person just did rather than to a
+        // two-minute timer, however this method exits.
+        \App\Support\PendingVerifications::forget();
+
         $request->validate([
             'verification_note' => 'nullable|string|max:1000',
         ]);
@@ -489,6 +494,11 @@ class PaymentVerificationController extends Controller
 
     public function reject(Request $request, $type, $id)
     {
+        // The menu badge reads a cached count. Dropping it here means the
+        // number answers to what this person just did rather than to a
+        // two-minute timer, however this method exits.
+        \App\Support\PendingVerifications::forget();
+
         $request->validate([
             'verification_note' => 'required|string|max:1000',
         ]);

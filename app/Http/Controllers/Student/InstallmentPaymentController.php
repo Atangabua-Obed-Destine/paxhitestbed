@@ -118,6 +118,10 @@ class InstallmentPaymentController extends Controller
         $receipt_file = $this->uploadMedia($request, 'receipt_file', $this->path, 600, 800);
 
         // Create payment receipt record
+        // A new receipt joins the queue; refresh the menu badge now rather
+        // than when the cached count expires.
+        \App\Support\PendingVerifications::forget();
+
         $receipt = new InstallmentPaymentReceipt();
         $receipt->installment_id = $installment->id;
         $receipt->student_id = $user->id;

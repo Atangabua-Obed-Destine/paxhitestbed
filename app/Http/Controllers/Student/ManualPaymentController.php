@@ -180,6 +180,10 @@ class ManualPaymentController extends Controller
         $receiptFile = $this->uploadMedia($request, 'receipt_file', $this->path);
 
         // Create payment receipt record
+        // A new receipt means a new item in the queue, so the menu badge
+        // should show it now rather than when a two-minute cache expires.
+        \App\Support\PendingVerifications::forget();
+
         $receipt = PaymentReceipt::create([
             'fee_id' => $request->fee_id,
             'student_id' => $user->id,

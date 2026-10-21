@@ -486,9 +486,20 @@
 
         @canany(['fees-student-due', 'fees-student-quick-assign', 'fees-student-quick-received', 'fees-student-report', 'fees-student-print', 'fees-master-view', 'fees-master-create', 'fees-category-view', 'fees-category-create', 'fees-discount-view', 'fees-discount-create', 'fees-fine-view', 'fees-fine-create', 'fees-receipt-view', 'payment-receipt-verify', 'payment-plan.index', 'program-semester-fee-view', 'program-semester-fee-create', 'fee-assignments-history-view'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/fees*') || Request::is('admin/payment-plan*') ? 'pcoded-trigger active' : '' }}">
-            <a href="#!" class="nav-link">
+            {{-- Repeated on the parent because this submenu is collapsed most
+                 of the time, and a badge nobody can see is no reminder. --}}
+            @php
+                $pendingOnParent = auth('web')->user() && auth('web')->user()->can('payment-receipt-verify')
+                    ? \App\Support\PendingVerifications::count()
+                    : 0;
+            @endphp
+            <a href="#!" class="nav-link"
+               @if($pendingOnParent > 0) title="{{ \App\Support\PendingVerifications::describe() }}" @endif>
                 <span class="pcoded-micon"><i class="fas fa-money-bill-wave"></i></span>
                 <span class="pcoded-mtext">{{ trans_choice('module_fees_collection', 1) }}</span>
+                @if($pendingOnParent > 0)
+                <span class="badge bg-danger rounded-pill pax-pending-badge">{{ $pendingOnParent > 99 ? '99+' : $pendingOnParent }}</span>
+                @endif
             </a>
             <ul class="pcoded-submenu">
                 @canany(['fees-student-due', 'fees-student-quick-assign', 'fees-student-quick-received', 'fees-student-report', 'fees-student-print'])
@@ -568,7 +579,21 @@
                 @endcanany
 
                 @can('payment-receipt-verify')
-                <li class="{{ Request::is('admin/payment-verification*') ? 'active' : '' }}"><a href="{{ route('admin.payment-verification.index') }}" class="">{{ trans_choice('module_payment_verification', 2) }}</a></li>
+                {{-- The waiting count travels with the link. A receipt a
+                     student uploads is otherwise invisible until somebody
+                     opens this screen and looks, which is how one came to sit
+                     pending for the better part of a month. --}}
+                @php $pendingVerifications = \App\Support\PendingVerifications::count(); @endphp
+                <li class="{{ Request::is('admin/payment-verification*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.payment-verification.index') }}" class=""
+                       @if($pendingVerifications > 0) title="{{ \App\Support\PendingVerifications::describe() }}" @endif>
+                        {{ trans_choice('module_payment_verification', 2) }}
+                        @if($pendingVerifications > 0)
+                        <span class="badge bg-danger rounded-pill pax-pending-badge">{{ $pendingVerifications > 99 ? '99+' : $pendingVerifications }}</span>
+                        <span class="visually-hidden">{{ \App\Support\PendingVerifications::describe() }}</span>
+                        @endif
+                    </a>
+                </li>
                 @endcan
 
                 {{-- Its own permission. This used to hang off payment-receipt-verify,

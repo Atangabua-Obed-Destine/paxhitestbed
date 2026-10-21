@@ -1737,6 +1737,10 @@ class ApplicationController extends Controller
             ? $this->uploadMedia($request, 'receipt_file', 'payment-receipts')
             : null;
 
+        // A new receipt means a new item in the queue, so the menu badge
+        // should show it now rather than when a two-minute cache expires.
+        \App\Support\PendingVerifications::forget();
+
         $paymentReceipt = new \App\Models\PaymentReceipt();
         $paymentReceipt->fee_id = $application->admissionFee->id;
         // Applicants have no Student row yet — track them via applicant_id.
