@@ -44,6 +44,7 @@ class ChatSettingController extends Controller
 
     public function update(Request $request)
     {
+        $providers = implode(',', array_keys(\App\Services\Chat\ChatProviderChain::CATALOGUE));
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:100'],
             'is_enabled' => ['nullable', 'boolean'],
@@ -51,7 +52,14 @@ class ChatSettingController extends Controller
             'enabled_application' => ['nullable', 'boolean'],
             'enabled_student' => ['nullable', 'boolean'],
             'enabled_admin' => ['nullable', 'boolean'],
+            // Three provider slots, tried in order. Only the first is
+            // required; the others are the fallbacks.
+            'provider' => ['required', 'string', 'in:' . $providers],
             'model' => ['required', 'string', 'max:100'],
+            'provider_2' => ['nullable', 'string', 'in:' . $providers],
+            'model_2' => ['nullable', 'string', 'max:100'],
+            'provider_3' => ['nullable', 'string', 'in:' . $providers],
+            'model_3' => ['nullable', 'string', 'max:100'],
             'temperature' => ['required', 'numeric', 'min:0', 'max:2'],
             'max_output_tokens' => ['required', 'integer', 'min:128', 'max:8192'],
             'max_tool_calls' => ['required', 'integer', 'min:1', 'max:8'],

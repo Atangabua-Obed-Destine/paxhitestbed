@@ -21,8 +21,16 @@ class CountApplicationsTool implements ChatTool
 
     public function description(): string
     {
-        return 'Count applications broken down by stage (draft, submitted, under review, approved, '
-            . 'rejected), optionally for one intake. For staff use. Returns totals only, not names.';
+        // The everyday phrasings matter as much as the summary. Without them
+        // the model would not connect "how many applications this session?"
+        // to this tool and answered that it had none — while holding it. The
+        // public tools carry the same kind of examples; these staff ones did
+        // not, which is why only staff questions failed.
+        return 'Count applications, in total and broken down by stage (draft, submitted, under review, '
+            . 'approved, rejected), optionally for one intake or session. For staff use. Returns totals '
+            . 'only, never names. Use for "how many applications this session", "how many applicants do '
+            . 'we have", "application numbers", "how many have been approved", "admission statistics", '
+            . '"how many people applied".';
     }
 
     public function parameters(): array

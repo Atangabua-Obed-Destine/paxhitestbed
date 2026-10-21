@@ -17,6 +17,16 @@
         <meta name="apple-mobile-web-app-status-bar-style" content="default">
         <meta name="apple-mobile-web-app-title" content="{{ $setting->title ?? config('app.name') }}">
         <link rel="apple-touch-icon" href="{{ asset('pwa/icon-192.png') }}">
+        {{-- beforeinstallprompt can fire before the card's own script has
+             run, and an event that is not captured is gone for the life of
+             the page. This holds it until the card is ready. --}}
+        <script>
+            window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                window.__paxInstallPrompt = event;
+            });
+        </script>
+
     @endif
 
 

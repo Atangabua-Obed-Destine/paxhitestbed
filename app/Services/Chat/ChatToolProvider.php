@@ -8,6 +8,7 @@ use App\Services\Chat\Tools\Publics\KnowledgeLookupTool;
 use App\Services\Chat\Tools\Publics\ListProgrammesTool;
 use App\Services\Chat\Tools\Publics\OpenIntakesTool;
 use App\Services\Chat\Tools\Staff\CountApplicationsTool;
+use App\Services\Chat\Tools\Staff\FindScreenTool;
 use App\Services\Chat\Tools\Staff\FindStudentTool;
 use App\Services\Chat\Tools\Student\MyAttendanceTool;
 use App\Services\Chat\Tools\Student\MyClassRoutineTool;
@@ -48,6 +49,9 @@ class ChatToolProvider
             // Staff — additionally gated by an existing Spatie permission.
             new FindStudentTool(),
             new CountApplicationsTool(),
+            // Navigation. Gated per screen rather than by one permission, so
+            // a lecturer holding only exam-marking still gets taken there.
+            new FindScreenTool(),
         ]);
 
         return $registry;

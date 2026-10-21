@@ -56,6 +56,29 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-3.5-flash'),
     ],
 
+    /*
+     * Fallback chat providers. All three speak the OpenAI chat-completions
+     * API, so one client class serves them; the chat module tries them in the
+     * order set on the Chat Settings screen. Keys live here, in .env, rather
+     * than in the database: a secret in a settings table is readable by
+     * anyone with database access and tends to end up on screen.
+     */
+    'groq' => [
+        'api_key' => env('GROQ_API_KEY'),
+    ],
+
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+    ],
+
+    'mistral' => [
+        'api_key' => env('MISTRAL_API_KEY'),
+    ],
+
+    'cerebras' => [
+        'api_key' => env('CEREBRAS_API_KEY'),
+    ],
+
     'google_books' => [
         'api_key' => env('GOOGLE_BOOKS_API_KEY'),
     ],

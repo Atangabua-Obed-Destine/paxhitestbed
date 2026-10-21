@@ -1846,6 +1846,10 @@
     @endif
 
 
+    {{-- Offered here as well, not only on the login page: a student who
+         stays signed in never sees that page again. --}}
+    @include('common.inc.pwa_install', ['variant' => 'floating'])
+
     @include('components.chat-widget')
     {{-- Says a click landed, and stops the same form being sent twice. --}}
     @include('partials.loading-screen')

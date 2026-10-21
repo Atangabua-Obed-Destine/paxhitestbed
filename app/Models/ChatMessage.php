@@ -21,6 +21,7 @@ class ChatMessage extends Model
     public const STATUS_ERROR = 'error';
 
     protected $fillable = [
+        'provider',
         'conversation_id',
         'role',
         'content',

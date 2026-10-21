@@ -30,6 +30,11 @@ class ChatSetting extends Model
         'enabled_admin',
         'provider',
         'model',
+        // Two fallback slots, tried in order when the primary cannot answer.
+        'provider_2',
+        'model_2',
+        'provider_3',
+        'model_3',
         'temperature',
         'max_output_tokens',
         'max_tool_calls',
@@ -65,7 +70,10 @@ class ChatSetting extends Model
      */
     public static function current(): self
     {
-        return static::query()->first() ?? static::create(['title' => 'Ask CATUC']);
+        // Named after this institution. The default used to be "Ask CATUC",
+        // which shipped another school's name into the widget header.
+        return static::query()->first()
+            ?? static::create(['title' => __('Ask :code', ['code' => institution_code()])]);
     }
 
     /** Is the widget switched on for this surface? */

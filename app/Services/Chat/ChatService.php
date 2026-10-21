@@ -15,13 +15,13 @@ use Illuminate\Support\Str;
  */
 class ChatService
 {
-    protected GeminiChatClient $client;
+    protected ChatProviderChain $providers;
     protected ToolRegistry $registry;
     protected ToolExecutor $executor;
 
-    public function __construct(GeminiChatClient $client, ?ToolRegistry $registry = null)
+    public function __construct(?ChatProviderChain $providers = null, ?ToolRegistry $registry = null)
     {
-        $this->client = $client;
+        $this->providers = $providers ?: new ChatProviderChain();
         $this->registry = $registry ?: ChatToolProvider::registry();
         $this->executor = new ToolExecutor($this->registry);
     }
@@ -63,6 +63,7 @@ class ChatService
                 'conversation_id' => $conversation->id,
                 'role' => ChatMessage::ROLE_ASSISTANT,
                 'content' => $reply,
+                'provider' => $this->providers->usedProvider(),
                 'error' => Str::limit($e->getMessage(), 500),
                 'acting_user_id' => $context->actingUserId(),
             ]);
@@ -96,8 +97,18 @@ class ChatService
         $system = $this->systemPrompt($context, $settings);
         $rounds = max(1, (int) $settings->max_tool_calls);
 
+        // Set after the model asks for a tool that does not exist. Measured,
+        // not theorised: asked "how many applications this session?", a
+        // registrar holding every permission got a model that invented
+        // get_current_academic_session, was told the real names, invented
+        // list_academic_sessions, ran out of rounds and reported that it had
+        // no such tool — while holding count_applications the whole time.
+        // The next round is then constrained to the real names.
+        $forceTool = false;
+
         for ($i = 0; $i < $rounds; $i++) {
-            $result = $this->client->generate($contents, $declarations, $system, $settings);
+            $result = $this->providers->generate($contents, $declarations, $system, $settings, $forceTool);
+            $forceTool = false;
 
             if (empty($result['functionCall'])) {
                 $reply = $result['text'] ?: __('I could not find an answer to that.');
@@ -106,6 +117,7 @@ class ChatService
                     'conversation_id' => $conversation->id,
                     'role' => ChatMessage::ROLE_ASSISTANT,
                     'content' => $reply,
+                    'provider' => $this->providers->usedProvider(),
                     'acting_user_id' => $context->actingUserId(),
                 ]);
 
@@ -124,6 +136,12 @@ class ChatService
 
             if (!empty($outcome['payload']['link'])) {
                 $link = $outcome['payload']['link'];
+            }
+
+            // An invented name means the model wants a tool but guessed. Hold
+            // it to the real list rather than let it guess again.
+            if (($outcome['payload']['error'] ?? null) === 'unknown_tool' && !empty($declarations)) {
+                $forceTool = true;
             }
 
             // Cast to objects: an empty PHP array encodes as a JSON list, but
@@ -150,13 +168,14 @@ class ChatService
         }
 
         // Ran out of rounds: ask for a final answer with no tools offered.
-        $final = $this->client->generate($contents, [], $system, $settings);
+        $final = $this->providers->generate($contents, [], $system, $settings);
         $reply = $final['text'] ?: __('I could not complete that request.');
 
         ChatMessage::create([
             'conversation_id' => $conversation->id,
             'role' => ChatMessage::ROLE_ASSISTANT,
             'content' => $reply,
+            'provider' => $this->providers->usedProvider(),
             'acting_user_id' => $context->actingUserId(),
         ]);
 
@@ -169,18 +188,50 @@ class ChatService
      */
     protected function systemPrompt(ChatContext $context, ChatSetting $settings): string
     {
-        $lines = [
-            'You are the assistant for Catholic University of Cameroon, Bamenda (CATUC).',
+        // The institution's own name, never a hardcoded one. This used to say
+        // "Catholic University of Cameroon, Bamenda (CATUC)", which told every
+        // visitor they were talking to a different school — and cost answers
+        // as well as credibility: the model built tool names out of it, asking
+        // for "catuc_portal:get_programmes" instead of the list_programmes
+        // tool it had actually been given, then reported that it could not
+        // list programmes at all.
+        $institution = institution_name();
+        $code = institution_code();
+
+        // The scope rule depends on WHO is asking, and getting this wrong is
+        // not cosmetic. Staff were being handed find_student and
+        // count_applications and then told, in the same breath, that they
+        // could only ever see their own records — so the assistant refused
+        // "how many applications this session?" from a registrar holding
+        // every permission. The tools were gated correctly; the instructions
+        // contradicted the gate, and the model obeyed the instructions.
+        $scopeRules = $context->isStaff()
+            ? [
+                '- The tools you have been given already match this person\'s permissions: their roles were checked before the tools were offered. Use them freely for what they cover.',
+                '- You may look up students and institution-wide figures where a tool exists for it. Report exactly what the tool returns.',
+                '- If you have no tool for something, say so plainly and name the office to ask. Never guess a figure, and never claim a restriction you have not been given.',
+            ]
+            : [
+                '- You can only ever access the records of the person you are speaking with. If asked about anyone else, explain that you can only discuss their own information.',
+            ];
+
+        $lines = array_merge([
+            'You are the assistant for ' . $institution
+                . ($code && $code !== $institution ? ' (' . $code . ')' : '') . '.',
             'You are speaking with ' . $context->describeActor() . '.',
             'Their name is ' . $context->displayName() . '.',
             '',
             'Rules:',
-            '- Answer only from the results of the tools available to you, or from general facts about the university stated below.',
+            '- Answer only from the results of the tools available to you, or from general facts about the institution stated below.',
             '- Never invent figures, dates, balances or statuses. If a tool returns nothing, say so plainly.',
-            '- You can only ever access the records of the person you are speaking with. If asked about anyone else, explain that you can only discuss their own information.',
+        ], $scopeRules, [
             '- Be concise and warm. Use short paragraphs or a small list. Amounts are in FCFA unless stated otherwise.',
             '- If the question is outside what you can look up, say so and suggest contacting the relevant office.',
-        ];
+            // Named explicitly, because a model that invents a tool name burns
+            // a round and then tells the user the capability does not exist.
+            '- Use only the tools listed in this request, by their exact names. Never prefix or namespace a tool name.',
+            '- You may format with **bold**, bullet lists starting "- ", and numbered lists. Do not use tables or headings.',
+        ]);
 
         if ($context->currentPath()) {
             $lines[] = '- The user is currently on the page: /' . ltrim($context->currentPath(), '/');

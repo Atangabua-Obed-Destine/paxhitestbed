@@ -30,11 +30,16 @@ class ToolExecutor
 
         $tool = $this->registry->get($name);
 
-        // Unknown tool: the model invented a name, or one was removed.
+        // Unknown tool: the model invented a name, or one was removed. Saying
+        // only "that does not exist" wastes the round — the model then tells
+        // the user it has no such capability even though it does. Naming what
+        // it may call lets it correct itself on the next turn. Only tools this
+        // actor is allowed are named, so the refusal reveals nothing.
         if (!$tool) {
             return $this->record($conversationId, $name, $args, ChatMessage::STATUS_DENIED, [
                 'error' => 'unknown_tool',
-                'message' => 'That capability does not exist.',
+                'message' => 'There is no tool by that name. Call one of these, by its exact name, '
+                    . 'with no prefix: ' . implode(', ', array_keys($this->registry->availableFor($context))) . '.',
             ], $context, $startedAt);
         }
 

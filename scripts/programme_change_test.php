@@ -569,8 +569,12 @@ check('the dropdown offers only the student\'s own faculty',
     str_contains($enrollView, '->where(' . "'faculty_id', " . '$pcFaculty)'),
     'the admin should never be offered a choice the server would refuse');
 
+// Matched on the exclusion itself rather than on the variable that holds the
+// enrolment: the variable was renamed when the modal was made safe to render
+// with no student selected, and a check pinned to the old name failed while
+// the behaviour was untouched.
 check('and never the programme they are already on',
-    str_contains($enrollView, '->where(' . "'id', '!=', " . 'optional($displayEnroll)->program_id)'));
+    (bool) preg_match('/->where\(\s*\'id\',\s*\'!=\',\s*optional\(\$\w+\)->program_id\s*\)/', $enrollView));
 
 // ---------------------------------------------------------------------------
 section('The screen is gated and does what it says');

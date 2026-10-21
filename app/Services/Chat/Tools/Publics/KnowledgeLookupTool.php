@@ -25,7 +25,9 @@ class KnowledgeLookupTool implements ChatTool
     {
         return 'Search the university\'s published guidance — policies, deadlines, how to apply, '
             . 'office hours, contact details and other frequently asked questions. '
-            . 'Use this whenever the answer is procedural rather than about a specific record.';
+            . 'Use this whenever the answer is procedural rather than about a specific record. '
+            . 'Use for "how do I apply", "what documents do I need", "when is the deadline", '
+            . '"what are the office hours", "how do I contact the bursary", "what is the policy on ...".';
     }
 
     public function parameters(): array

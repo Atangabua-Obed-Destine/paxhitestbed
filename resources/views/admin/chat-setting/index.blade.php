@@ -71,7 +71,77 @@
                     </div>
 
                     <div class="card">
-                        <div class="card-header"><h5>{{ __('Model') }}</h5></div>
+                        <div class="card-header">
+                            <h5>{{ __('Model providers') }}</h5>
+                            <span>{{ __('Tried in order. If the first cannot answer — rate limited, overloaded, down — the next one is asked, so a busy free tier does not stop the assistant.') }}</span>
+                        </div>
+                        <div class="card-block">
+                            @php
+                                $catalogue = \App\Services\Chat\ChatProviderChain::CATALOGUE;
+                                $slots = [
+                                    1 => ['provider', 'model', __('First choice'), true],
+                                    2 => ['provider_2', 'model_2', __('Second choice'), false],
+                                    3 => ['provider_3', 'model_3', __('Third choice'), false],
+                                ];
+                            @endphp
+
+                            @foreach($slots as $n => [$pField, $mField, $slotLabel, $required])
+                            @php
+                                $chosen = old($pField, $row->{$pField});
+                                $spec = $catalogue[$chosen] ?? null;
+                                $hasKey = $spec ? (string) config($spec['config']) !== '' : false;
+                            @endphp
+                            <div class="row align-items-end mb-3">
+                                <div class="form-group col-md-3">
+                                    <label for="{{ $pField }}" class="form-label">
+                                        {{ $slotLabel }} @if($required)<span>*</span>@endif
+                                    </label>
+                                    <select class="form-control" name="{{ $pField }}" id="{{ $pField }}" @if($required) required @endif>
+                                        @unless($required)<option value="">{{ __('None') }}</option>@endunless
+                                        @foreach($catalogue as $key => $info)
+                                        <option value="{{ $key }}" @if($chosen === $key) selected @endif>{{ $info['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="form-group col-md-4">
+                                    <label for="{{ $mField }}" class="form-label">{{ __('Model') }} @if($required)<span>*</span>@endif</label>
+                                    <input type="text" class="form-control" name="{{ $mField }}" id="{{ $mField }}"
+                                           value="{{ old($mField, $row->{$mField}) }}"
+                                           placeholder="{{ $spec['default_model'] ?? '' }}"
+                                           @if($required) required @endif>
+                                </div>
+
+                                <div class="form-group col-md-5">
+                                    @if(!$chosen)
+                                        <span class="text-muted">{{ __('Not used.') }}</span>
+                                    @elseif($hasKey)
+                                        <span style="color:#1b5e20;font-weight:600">
+                                            <i class="fas fa-check-circle"></i> {{ __('API key found') }}
+                                        </span>
+                                        <small class="d-block text-muted">{{ strtoupper(str_replace('services.', '', str_replace('.api_key', '_API_KEY', $spec['config']))) }} {{ __('is set in .env') }}</small>
+                                    @else
+                                        <span style="color:#9a3324;font-weight:600">
+                                            <i class="fas fa-exclamation-triangle"></i> {{ __('No API key — this provider will be skipped') }}
+                                        </span>
+                                        <small class="d-block text-muted">
+                                            {{ __('Add') }} <code>{{ strtoupper(str_replace('services.', '', str_replace('.api_key', '_API_KEY', $spec['config']))) }}</code> {{ __('to your .env file.') }}
+                                            <a href="{{ $spec['docs'] }}" target="_blank" rel="noopener">{{ __('Get a key') }}</a>
+                                        </small>
+                                    @endif
+                                </div>
+                            </div>
+                            @endforeach
+
+                            <div class="alert alert-info py-2 mb-0" style="font-size:13px">
+                                <i class="fas fa-key"></i>
+                                {{ __('API keys are kept in the .env file on the server, never in the database and never shown on this screen. Leave the model box empty to use the provider\'s default.') }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><h5>{{ __('Answer behaviour') }}</h5></div>
                         <div class="card-block">
                             <div class="row">
                                 <div class="form-group col-md-4">

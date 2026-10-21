@@ -28,7 +28,9 @@ class FindStudentTool implements ChatTool
     public function description(): string
     {
         return 'Look up a student by name or registration number and return their programme, '
-            . 'current session and semester. For staff use.';
+            . 'current session and semester. For staff use. Use for "find the student called ...", '
+            . '"look up PAX25...", "which programme is ... on", "what semester is ... in", '
+            . '"search for a student".';
     }
 
     public function parameters(): array

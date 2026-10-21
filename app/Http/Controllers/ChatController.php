@@ -97,7 +97,28 @@ class ChatController extends Controller
      */
     public function reset(Request $request)
     {
+        $settings = ChatSetting::current();
         $context = ChatContext::fromRequest($request);
+
+        // This endpoint used to check neither of these, so any visitor could
+        // create unbounded chat_conversations rows by calling it in a loop.
+        if (!$settings->enabledFor($context->surface())) {
+            return response()->json([
+                'success' => false,
+                'message' => __('The assistant is not available here.'),
+            ], 403);
+        }
+
+        $key = 'chat-reset:' . $context->actorType() . ':' . ($context->actorId() ?? $context->sessionKey());
+
+        if (RateLimiter::tooManyAttempts($key, max(1, (int) $settings->rate_limit_per_minute))) {
+            return response()->json([
+                'success' => false,
+                'message' => __('You are starting new conversations too quickly. Please wait a moment.'),
+            ], 429);
+        }
+
+        RateLimiter::hit($key, 60);
 
         ChatConversation::create([
             'actor_type' => $context->actorType(),

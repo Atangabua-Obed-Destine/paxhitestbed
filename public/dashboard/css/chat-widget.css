@@ -1,154 +1,510 @@
-/* Context-aware chat widget. Deliberately self-contained and prefixed so it
-   cannot collide with the four different portal themes it is injected into. */
+/* ===========================================================================
+   Context-aware chat assistant — widget styling.
+
+   Self-contained and prefixed, because it is injected into four portals with
+   four different stacks and must not collide with any of them. Every colour
+   is a token declared on #pax-chat itself rather than :root, so the widget
+   cannot leak variables into the host page or inherit a clashing one.
+
+   Palette is the institution's own, taken from resources/css/web/app.css:
+   primary #1e3a5f (navy), secondary #0d6e49 (green). It replaced Bootstrap's
+   default #0d6efd, which looked like a third-party bolt-on on every portal.
+   Green is reserved for the "answers from your own records" assurance and is
+   never used as a second accent.
+
+   Each surface gets a tonal variant rather than a different hue: the admin is
+   denser and darker because it sits in a dense UI, the student and public
+   portals are roomier. The structure stays identical so there is one widget
+   to maintain, not four.
+   =========================================================================== */
 
 #pax-chat {
+    /* --- light palette --- */
+    --pc-accent:      #1e3a5f;
+    --pc-accent-hi:   #284d7c;
+    --pc-accent-ink:  #ffffff;
+    --pc-assure:      #0d6e49;
+
+    --pc-panel:       #ffffff;
+    --pc-log:         #f6f8fa;
+    --pc-ink:         #16202c;
+    --pc-ink-soft:    #5b6977;
+    --pc-ink-faint:   #8b97a4;
+    --pc-rule:        #e3e8ed;
+
+    --pc-user-bg:     #1e3a5f;
+    --pc-user-ink:    #ffffff;
+    --pc-bot-bg:      #ffffff;
+    --pc-bot-ink:     #16202c;
+
+    --pc-danger:      #9a3324;
+    --pc-danger-bg:   #fdf0ee;
+    --pc-warn:        #8a5a00;
+    --pc-warn-bg:     #fff8e8;
+
+    --pc-shadow:      0 18px 48px rgba(16, 32, 44, .20);
+    --pc-radius:      16px;
+    --pc-gap:         14px;
+
     position: fixed;
     right: 20px;
     bottom: 20px;
     z-index: 10500;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
+/* The admin sits inside a dense interface: tighter, squarer, darker. */
+#pax-chat[data-surface="admin"] {
+    --pc-accent:    #16293f;
+    --pc-accent-hi: #1f3a58;
+    --pc-radius:    10px;
+    --pc-gap:       11px;
+    font-size: 14px;
+}
+
+/* The student portal is read on phones more than anything else. */
+#pax-chat[data-surface="student"] {
+    --pc-accent:    #1e3a5f;
+    --pc-accent-hi: #284d7c;
+}
+
+/* ---- dark mode -----------------------------------------------------------
+   Keyed to the HOST page, never to the operating system. The widget floats on
+   somebody else's page: a visitor whose OS is dark, reading the light student
+   portal, was getting a dark panel sitting on a light page. The script sets
+   data-scheme from the host's own background luminance, so the widget matches
+   the portal it is in. The host-theme selectors below cover portals that
+   announce their theme themselves. */
+#pax-chat[data-scheme="dark"],
+html[data-theme="dark"] #pax-chat,
+body.dark-mode #pax-chat,
+body.theme-dark #pax-chat {
+    --pc-accent:      #2d568a;
+    --pc-accent-hi:   #39699f;
+    --pc-assure:      #4fb286;
+
+    --pc-panel:       #161b22;
+    --pc-log:         #0f1419;
+    --pc-ink:         #e7edf3;
+    --pc-ink-soft:    #a3b1bf;
+    --pc-ink-faint:   #76838f;
+    --pc-rule:        #27303a;
+
+    --pc-user-bg:     #2d568a;
+    --pc-user-ink:    #ffffff;
+    --pc-bot-bg:      #1d242c;
+    --pc-bot-ink:     #e7edf3;
+
+    --pc-danger:      #e8927f;
+    --pc-danger-bg:   #2c1b18;
+    --pc-warn:        #e0b562;
+    --pc-warn-bg:     #2a2114;
+
+    --pc-shadow:      0 18px 48px rgba(0, 0, 0, .55);
+}
+
+/* ---- the launcher --------------------------------------------------------- */
 #pax-chat-toggle {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    border: none;
+    gap: 9px;
+    border: 0;
     border-radius: 999px;
-    padding: 12px 20px;
-    background: #0d6efd;
-    color: #fff;
-    font-size: .95rem;
+    padding: 13px 20px;
+    background: var(--pc-accent);
+    color: var(--pc-accent-ink);
+    font: inherit;
     font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 6px 20px rgba(13, 110, 253, .35);
+    box-shadow: var(--pc-shadow);
+    transition: background .15s ease, transform .15s ease;
 }
 
-#pax-chat-toggle:hover { background: #0b5ed7; }
-.pax-chat-icon { font-size: 1.1rem; line-height: 1; }
+#pax-chat-toggle:hover { background: var(--pc-accent-hi); }
+#pax-chat-toggle:active { transform: translateY(1px); }
+#pax-chat-toggle:focus-visible,
+#pax-chat button:focus-visible,
+#pax-chat textarea:focus-visible,
+#pax-chat [role="button"]:focus-visible {
+    outline: 3px solid var(--pc-accent);
+    outline-offset: 2px;
+}
 
+.pax-chat-icon { font-size: 1.15rem; line-height: 1; }
+
+/* An unread/attention dot, used when the panel is closed after an answer. */
+#pax-chat-toggle .pax-chat-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--pc-assure); display: none;
+}
+#pax-chat-toggle.has-unread .pax-chat-dot { display: inline-block; }
+
+/* ---- the panel ----------------------------------------------------------- */
 #pax-chat-panel {
-    width: 370px;
+    width: 396px;
     max-width: calc(100vw - 40px);
-    height: 520px;
+    height: 560px;
     max-height: calc(100vh - 120px);
     display: flex;
     flex-direction: column;
-    background: #fff;
-    border: 1px solid #e3e6ea;
-    border-radius: 14px;
+    background: var(--pc-panel);
+    color: var(--pc-ink);
+    border: 1px solid var(--pc-rule);
+    border-radius: var(--pc-radius);
     overflow: hidden;
-    box-shadow: 0 18px 48px rgba(16, 24, 40, .18);
+    box-shadow: var(--pc-shadow);
 }
 
 #pax-chat-panel[hidden] { display: none; }
 
-#pax-chat-panel header {
+#pax-chat-panel > header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 16px;
-    background: #0d6efd;
-    color: #fff;
+    gap: 10px;
+    padding: 13px 15px;
+    background: var(--pc-accent);
+    color: var(--pc-accent-ink);
 }
 
-#pax-chat-panel header small { display: block; opacity: .85; font-size: .75rem; }
+#pax-chat-panel > header strong { font-size: 15px; font-weight: 600; display: block; }
+
+#pax-chat-panel > header small {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    opacity: .92;
+    margin-top: 1px;
+}
+
+/* The assurance line carries a dot in the reserved green, because "answers
+   from your own records" is the one promise the widget makes. */
+#pax-chat-panel > header small::before {
+    content: "";
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--pc-assure);
+    flex: none;
+}
+
+.pax-chat-actions { display: flex; gap: 2px; flex: none; }
 
 .pax-chat-actions button {
     background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 1.1rem;
+    border: 0;
+    color: var(--pc-accent-ink);
+    font-size: 1.05rem;
+    line-height: 1;
     cursor: pointer;
-    padding: 0 4px;
+    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: .9;
 }
+.pax-chat-actions button:hover { background: rgba(255, 255, 255, .16); opacity: 1; }
 
+/* ---- the transcript ------------------------------------------------------ */
 #pax-chat-log {
     flex: 1;
     overflow-y: auto;
-    padding: 14px;
-    background: #f8f9fb;
+    overscroll-behavior: contain;
+    padding: var(--pc-gap);
+    background: var(--pc-log);
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+/* A short thread sits on the composer rather than floating at the top of an
+   empty panel, which is how every chat people already use behaves. The
+   spacer takes the slack when there is any and collapses to nothing when the
+   transcript is longer than the panel, so a long thread still scrolls from
+   its top instead of being clipped. */
+#pax-chat-log::before {
+    content: "";
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .pax-msg {
-    max-width: 85%;
-    margin-bottom: 10px;
+    max-width: 86%;
     padding: 9px 12px;
-    border-radius: 12px;
-    font-size: .88rem;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    border-radius: 13px;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: break-word;
+    min-width: 0;
 }
 
 .pax-msg-user {
-    margin-left: auto;
-    background: #0d6efd;
-    color: #fff;
+    align-self: flex-end;
+    background: var(--pc-user-bg);
+    color: var(--pc-user-ink);
     border-bottom-right-radius: 4px;
 }
 
 .pax-msg-assistant {
-    margin-right: auto;
-    background: #fff;
-    color: #212529;
-    border: 1px solid #e6e8eb;
+    align-self: flex-start;
+    background: var(--pc-bot-bg);
+    color: var(--pc-bot-ink);
+    border: 1px solid var(--pc-rule);
     border-bottom-left-radius: 4px;
 }
 
-.pax-msg-error { background: #fff4f4; border-color: #f3c2c2; color: #842029; }
+/* The reply is built from real <p>, <ul> and <li> elements, which means the
+   HOST page's typography applies to them. A portal with a plain
+   "p { color: #5b6977 }" was repainting every answer — and the user's own
+   white-on-navy bubble — in the portal's body grey. Measured, not guessed:
+   the computed colour inside a bubble came back as the host's, not ours.
+   Each element the renderer can produce therefore states its own typography,
+   at a specificity (#id + class + element) no ordinary host rule can beat. */
+/* The bubble itself is deliberately NOT in this list. It carries the
+   background that says who is speaking, and a "background: none" here would
+   out-specify .pax-msg-user and leave white text on a white bubble. Only the
+   elements the renderer puts INSIDE the bubble are reset. */
+#pax-chat .pax-msg p,
+#pax-chat .pax-msg li,
+#pax-chat .pax-msg ul,
+#pax-chat .pax-msg ol,
+#pax-chat .pax-msg strong,
+#pax-chat .pax-msg em,
+#pax-chat .pax-msg br,
+#pax-chat .pax-msg span {
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    letter-spacing: normal;
+    text-align: left;
+    text-transform: none;
+    text-indent: 0;
+    background: none;
+    float: none;
+}
+
+#pax-chat .pax-msg-user,
+#pax-chat .pax-msg-user p,
+#pax-chat .pax-msg-user li { color: var(--pc-user-ink); }
+
+#pax-chat .pax-msg-assistant,
+#pax-chat .pax-msg-assistant p,
+#pax-chat .pax-msg-assistant li { color: var(--pc-bot-ink); }
+
+#pax-chat .pax-msg-error,
+#pax-chat .pax-msg-error p,
+#pax-chat .pax-msg-error li { color: var(--pc-danger); }
+
+#pax-chat .pax-msg-degraded,
+#pax-chat .pax-msg-degraded p,
+#pax-chat .pax-msg-degraded li { color: var(--pc-warn); }
+
+#pax-chat .pax-msg-time { color: inherit; }
+
+/* Formatting the model is told it may use. Rendered from a strict subset, so
+   the transcript reads as prose rather than as raw asterisks and hyphens. */
+#pax-chat .pax-msg p { margin: 0 0 7px; padding: 0; }
+#pax-chat .pax-msg p:last-child { margin-bottom: 0; }
+#pax-chat .pax-msg strong { font-weight: 700; }
+#pax-chat .pax-msg em { font-style: italic; }
+#pax-chat .pax-msg ul { margin: 5px 0 7px; padding-left: 20px; list-style: disc outside; }
+#pax-chat .pax-msg ol { margin: 5px 0 7px; padding-left: 20px; list-style: decimal outside; }
+#pax-chat .pax-msg li { margin: 2px 0; padding: 0; display: list-item; }
+.pax-msg code {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: .88em;
+    background: rgba(127, 127, 127, .14);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.pax-msg-error {
+    background: var(--pc-danger-bg);
+    border-color: var(--pc-danger);
+    color: var(--pc-danger);
+}
+
+.pax-msg-degraded {
+    background: var(--pc-warn-bg);
+    border-color: var(--pc-warn);
+    color: var(--pc-warn);
+}
+
+.pax-msg-time {
+    display: block;
+    font-size: 10.5px;
+    opacity: .62;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+}
 
 .pax-msg-link {
     display: inline-block;
-    margin-top: 6px;
-    font-size: .82rem;
+    margin-top: 7px;
+    padding: 5px 11px;
+    border-radius: 7px;
+    background: var(--pc-accent);
+    color: var(--pc-accent-ink);
+    font-size: 12.5px;
     font-weight: 600;
-    color: #0d6efd;
     text-decoration: none;
 }
-.pax-msg-link:hover { text-decoration: underline; }
+.pax-msg-link:hover { background: var(--pc-accent-hi); color: var(--pc-accent-ink); }
 
-.pax-typing { display: inline-flex; gap: 3px; }
-.pax-typing span {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: #b6bcc4; animation: pax-bounce 1.2s infinite;
+/* ---- starter questions ---------------------------------------------------
+   A blank box tells a first-time user nothing. These are the questions the
+   assistant can actually answer on this surface, so the first tap succeeds. */
+.pax-starters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+
+.pax-starter {
+    border: 1px solid var(--pc-rule);
+    background: var(--pc-panel);
+    color: var(--pc-accent);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
 }
-.pax-typing span:nth-child(2) { animation-delay: .15s; }
-.pax-typing span:nth-child(3) { animation-delay: .3s; }
-@keyframes pax-bounce { 0%, 60%, 100% { opacity: .3 } 30% { opacity: 1 } }
+.pax-starter:hover { background: var(--pc-log); border-color: var(--pc-accent); }
 
+/* ---- typing indicator ---------------------------------------------------- */
+/* The id is on these selectors deliberately. The typography reset above
+   carries "#pax-chat .pax-msg span { background: none }" to stop a host page
+   restyling a reply — and the dots are spans inside a bubble, so it blanked
+   them too. Three 6px transparent circles read as an empty white box, which
+   is exactly what a person waiting for an answer should not see. */
+#pax-chat .pax-thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--pc-ink-soft);
+    font-size: 13px;
+}
+
+#pax-chat .pax-typing { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+
+#pax-chat .pax-typing span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--pc-ink-faint);
+    animation: pax-bounce 1.2s infinite;
+    flex: none;
+}
+
+#pax-chat .pax-typing span:nth-child(2) { animation-delay: .15s; }
+#pax-chat .pax-typing span:nth-child(3) { animation-delay: .30s; }
+
+/* An answer can take fifteen seconds or more. Silence that long reads as a
+   hang, so the wording changes rather than the dots just continuing. */
+#pax-chat .pax-thinking-label { white-space: nowrap; }
+
+@keyframes pax-bounce { 0%, 60%, 100% { opacity: .28 } 30% { opacity: 1 } }
+
+@media (prefers-reduced-motion: reduce) {
+    #pax-chat *, #pax-chat *::before, #pax-chat *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+    }
+    /* The dots stop moving, so the words carry the meaning on their own. */
+    #pax-chat .pax-typing span { opacity: .6; }
+}
+
+/* ---- the composer -------------------------------------------------------- */
 #pax-chat-form {
     display: flex;
     gap: 8px;
+    align-items: flex-end;
     padding: 10px;
-    border-top: 1px solid #e9ecef;
-    background: #fff;
+    border-top: 1px solid var(--pc-rule);
+    background: var(--pc-panel);
 }
 
 #pax-chat-input {
     flex: 1;
-    border: 1px solid #dfe3e8;
-    border-radius: 8px;
+    min-width: 0;
+    border: 1px solid var(--pc-rule);
+    border-radius: 10px;
     padding: 9px 12px;
-    font-size: .88rem;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--pc-ink);
+    background: var(--pc-panel);
+    resize: none;
+    max-height: 120px;
+    overflow-y: auto;
     outline: none;
 }
-#pax-chat-input:focus { border-color: #0d6efd; }
+#pax-chat-input:focus { border-color: var(--pc-accent); }
+#pax-chat-input::placeholder { color: var(--pc-ink-faint); }
 
 #pax-chat-send {
-    border: none;
-    border-radius: 8px;
-    padding: 9px 16px;
-    background: #0d6efd;
-    color: #fff;
-    font-size: .85rem;
-    font-weight: 600;
+    border: 0;
+    border-radius: 10px;
+    width: 40px;
+    height: 38px;
+    flex: none;
+    background: var(--pc-accent);
+    color: var(--pc-accent-ink);
+    font-size: 1rem;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
-#pax-chat-send:disabled { opacity: .55; cursor: not-allowed; }
+#pax-chat-send:hover:not(:disabled) { background: var(--pc-accent-hi); }
+#pax-chat-send:disabled { opacity: .45; cursor: not-allowed; }
 
-@media (max-width: 480px) {
-    #pax-chat { right: 12px; bottom: 12px; }
-    #pax-chat-panel { width: calc(100vw - 24px); height: 70vh; }
+#pax-chat-foot {
+    padding: 0 12px 9px;
+    background: var(--pc-panel);
+    font-size: 10.5px;
+    color: var(--pc-ink-faint);
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+#pax-chat-count { font-variant-numeric: tabular-nums; }
+#pax-chat-count.is-near { color: var(--pc-warn); font-weight: 600; }
+
+/* ---- phones --------------------------------------------------------------
+   dvh, not vh: with vh the panel sat under the browser chrome and the
+   on-screen keyboard covered the composer. */
+@media (max-width: 560px) {
+    #pax-chat {
+        right: max(12px, env(safe-area-inset-right, 0px));
+        bottom: max(12px, env(safe-area-inset-bottom, 0px));
+        left: max(12px, env(safe-area-inset-left, 0px));
+        pointer-events: none;
+    }
+    #pax-chat > * { pointer-events: auto; }
+
+    #pax-chat-toggle { float: right; }
+
+    #pax-chat-panel {
+        width: 100%;
+        max-width: 100%;
+        height: 78dvh;
+        max-height: 78dvh;
+    }
+
     .pax-chat-toggle-label { display: none; }
+    #pax-chat-toggle { padding: 14px; }
+    .pax-msg { max-width: 92%; font-size: 14.5px; }
+
+    /* Comfortable tap targets: the old 24px action buttons were too small. */
+    .pax-chat-actions button { width: 40px; height: 40px; font-size: 1.15rem; }
+    #pax-chat-send { width: 46px; height: 42px; }
+}
+
+@media (max-width: 560px) and (display-mode: standalone) {
+    #pax-chat-panel { height: 72dvh; max-height: 72dvh; }
 }

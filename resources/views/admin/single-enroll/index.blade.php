@@ -521,11 +521,18 @@
               @php
                   // The faculty the student is in now. A programme change is
                   // only possible within it, so nothing else is offered.
-                  $pcFaculty = optional(optional($displayEnroll)->program)->faculty_id;
+                  //
+                  // $displayEnroll is defined inside the block that renders a
+                  // selected student. This modal sits outside it, so on the
+                  // bare screen — no ?student= in the URL — the variable does
+                  // not exist and referencing it took the whole page down with
+                  // "Undefined variable $displayEnroll".
+                  $pcEnrolment = $displayEnroll ?? null;
+                  $pcFaculty = optional(optional($pcEnrolment)->program)->faculty_id;
                   $pcChoices = $pcFaculty
                       ? \App\Models\Program::where('status', '1')
                           ->where('faculty_id', $pcFaculty)
-                          ->where('id', '!=', optional($displayEnroll)->program_id)
+                          ->where('id', '!=', optional($pcEnrolment)->program_id)
                           ->orderBy('title')->get()
                       : collect();
               @endphp

@@ -50,6 +50,15 @@ class Kernel extends ConsoleKernel
                 ->dailyAt('23:59');
 
         /*
+         * Chat history: honour the retention period set in Chat Settings.
+         * Nothing enforced it before, so threads — including students asking
+         * about their own fees and results — were kept indefinitely while the
+         * setting said otherwise. Early morning, when nobody is chatting.
+         */
+        $schedule->command('chat:prune-history')
+                ->dailyAt('03:20');
+
+        /*
          * Payment plans: mark instalments overdue once their grace period has
          * lapsed, and remind students of what falls due in the next week.
          *

@@ -19,7 +19,7 @@ return new class extends Migration
         Schema::create('chat_settings', function (Blueprint $table) {
             $table->id();
 
-            $table->string('title')->default('Ask CATUC');
+            $table->string('title')->nullable();
             $table->boolean('is_enabled')->default(false)->comment('Global kill switch');
 
             // Per-surface visibility.
@@ -55,7 +55,9 @@ return new class extends Migration
 
         // Seed the single row so the settings screen always has something to edit.
         DB::table('chat_settings')->insert([
-            'title' => 'Ask CATUC',
+            // Named after the institution on first boot, not after the
+            // school this module was first written for.
+            'title' => 'Ask ' . (function_exists('institution_code') ? institution_code() : 'the Assistant'),
             'is_enabled' => false,
             'enabled_web' => false,
             'enabled_application' => false,
