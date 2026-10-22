@@ -76,7 +76,7 @@
 </div>
 <div class="form-group col-md-4">
   <label for="subject">{{ __('field_subject') }} <span>*</span></label>
-  <select class="form-control subject" name="subject" id="subject" required>
+  <select class="form-control subject select2" name="subject" id="subject" required>
     <option value="">{{ __('select') }}</option>
     @if(isset($subjects))
     @foreach( $subjects->sortBy('code') as $subject )
@@ -242,6 +242,8 @@
                 'text': this.code +' - '+ this.title
               }).appendTo('.subject');
             });
+            // Refresh the searchable (select2) box so it shows the reset list.
+            subject.trigger('change.select2');
           }
 
       });

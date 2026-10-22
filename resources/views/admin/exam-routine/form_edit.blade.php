@@ -1,6 +1,6 @@
 <div class="form-group col-md-3">
-      <label for="subject">{{ __('field_subject') }} <span>*</span></label>
-      <select class="form-control select2" name="subject" id="subject" required>
+      <label for="subject-{{ $row->id }}">{{ __('field_subject') }} <span>*</span></label>
+      <select class="form-control select2" name="subject" id="subject-{{ $row->id }}" required>
             <option value="">{{ __('select') }}</option>
             @foreach( $editSubjects as $subject )
             <option value="{{ $subject->id }}" {{ $row->subject_id == $subject->id ? 'selected' : '' }}>{{ $subject->code }} - {{ $subject->title }}</option>
@@ -12,8 +12,8 @@
       </div>
 </div>
 <div class="form-group col-md-3">
-      <label for="teachers">{{ __('Supervisor(s)') }} <span>*</span></label>
-      <select class="form-control select2" name="teachers[]" id="teachers" multiple required>
+      <label for="teachers-{{ $row->id }}">{{ __('Supervisor(s)') }} <span>*</span></label>
+      <select class="form-control select2" name="teachers[]" id="teachers-{{ $row->id }}" multiple required>
             @foreach( $teachers as $teacher )
             <option value="{{ $teacher->id }}" @foreach($row->users as $selected_teacher) {{ $selected_teacher->id == $teacher->id ? 'selected' : '' }} @endforeach>{{ $teacher->staff_id }} - {{ $teacher->first_name }} {{ $teacher->last_name }}</option>
             @endforeach
@@ -24,8 +24,8 @@
       </div>
 </div>
 <div class="form-group col-md-3">
-      <label for="rooms">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label>
-      <select class="form-control select2" name="rooms[]" id="rooms" multiple required>
+      <label for="rooms-{{ $row->id }}">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label>
+      <select class="form-control select2" name="rooms[]" id="rooms-{{ $row->id }}" multiple required>
             @foreach( $rooms as $room )
             <option value="{{ $room->id }}" @foreach($row->rooms as $selected_room) {{ $selected_room->id == $room->id ? 'selected' : '' }} @endforeach>{{ $room->title }}</option>
             @endforeach

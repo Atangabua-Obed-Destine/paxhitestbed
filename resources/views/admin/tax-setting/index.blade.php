@@ -454,7 +454,15 @@
 @section('page_js')
 <script type="text/javascript">
     "use strict";
-    
+
+    // Searchable staff picker in each exemptions modal. select2 must attach
+    // its dropdown to the modal, or the search box cannot take focus.
+    $(function () {
+        $('.exemption-staff').each(function () {
+            $(this).select2({ dropdownParent: $(this).closest('.modal'), width: '100%' });
+        });
+    });
+
     // Toggle tax type fields on create form
     function updateCreateFormFields() {
         var type = $('#tax_type').val();

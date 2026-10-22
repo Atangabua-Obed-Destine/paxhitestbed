@@ -309,7 +309,7 @@
 
                                 <div class="form-group col-md-3">
                                     <label for="subject">{{ __('field_subject') }} <span>*</span></label>
-                                    <select class="form-control subject subject-filter" name="subject" id="subject" required>
+                                    <select class="form-control subject subject-filter select2" name="subject" id="subject" required>
                                         <option value="">{{ __('select') }}</option>
                                         @foreach(($subjects ?? collect())->sortBy('code') as $subj)
                                         <option value="{{ $subj->id }}" @if(($selected_subject ?? '0') == $subj->id) selected @endif>{{ $subj->code }} - {{ $subj->title }}</option>
@@ -818,6 +818,7 @@ $(document).ready(function() {
     
     const resetSubjectOptions = () => {
         $subject.html('<option value="">{{ __("select") }}</option>');
+        $subject.trigger('change.select2');
     };
     
     const fetchSubjects = () => {
@@ -864,6 +865,7 @@ $(document).ready(function() {
                     }));
                 });
             }
+            $subject.trigger('change.select2');
         });
     };
 

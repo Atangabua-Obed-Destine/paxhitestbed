@@ -6,8 +6,8 @@
             @endisset
 
             <div class="form-group col-md-2">
-                  <label for="subject">{{ __('field_subject') }} <span>*</span></label>
-                  <select class="form-control select2" name="subject[]" id="subject" required>
+                  <label for="subject-{{ $row->id }}">{{ __('field_subject') }} <span>*</span></label>
+                  <select class="form-control select2" name="subject[]" id="subject-{{ $row->id }}" required>
                         <option value="">{{ __('select') }}</option>
                         @foreach( $subjects as $subject )
                         <option value="{{ $subject->id }}" @isset($row) {{ $row->subject_id == $subject->id ? 'selected' : '' }} @endisset>{{ $subject->code }} - {{ $subject->title }}</option>
@@ -19,8 +19,8 @@
                   </div>
             </div>
             <div class="form-group col-md-2">
-                  <label for="teacher">{{ __('field_teacher') }} <span>*</span></label>
-                  <select class="form-control select2" name="teacher[]" id="teacher" required>
+                  <label for="teacher-{{ $row->id }}">{{ __('field_teacher') }} <span>*</span></label>
+                  <select class="form-control select2" name="teacher[]" id="teacher-{{ $row->id }}" required>
                         <option value="">{{ __('select') }}</option>
                         @foreach( $teachers as $teacher )
                         <option value="{{ $teacher->id }}" @isset($row) {{ $row->teacher_id == $teacher->id ? 'selected' : '' }} @endisset>{{ $teacher->staff_id }} - {{ $teacher->first_name }} {{ $teacher->last_name }}</option>
@@ -32,8 +32,8 @@
                   </div>
             </div>
             <div class="form-group col-md-2">
-                  <label for="room">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label>
-                  <select class="form-control select2" name="room[]" id="room" required>
+                  <label for="room-{{ $row->id }}">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label>
+                  <select class="form-control select2" name="room[]" id="room-{{ $row->id }}" required>
                         <option value="">{{ __('select') }}</option>
                         @foreach( $rooms as $room )
                         <option value="{{ $room->id }}" @isset($row) {{ $row->room_id == $room->id ? 'selected' : '' }} @endisset>{{ $room->title }}</option>

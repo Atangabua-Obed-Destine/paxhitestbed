@@ -16,7 +16,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="user_id_{{ $row->id }}" class="form-label">{{ __('select_staff') }} <span>*</span></label>
-                                    <select class="form-control" name="user_id" id="user_id_{{ $row->id }}" required>
+                                    <select class="form-control exemption-staff" name="user_id" id="user_id_{{ $row->id }}" required>
                                         <option value="">{{ __('select') }}</option>
                                         @php
                                         $staff_list = App\User::where('status', '1')

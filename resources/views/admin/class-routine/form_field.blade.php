@@ -1,8 +1,8 @@
 <div class="card-block" id="inputFormField">
       <div class="row">
             <div class="form-group col-md-2">
-                  <label for="subject">{{ __('field_subject') }} <span>*</span></label>
-                  <select class="form-control select2" name="subject[]" id="subject" required>
+                  <label for="subject-day{{ $weekday }}">{{ __('field_subject') }} <span>*</span></label>
+                  <select class="form-control select2" name="subject[]" id="subject-day{{ $weekday }}" required>
                         <option value="">{{ __('select') }}</option>
                         @foreach( $subjects as $subject )
                         <option value="{{ $subject->id }}" @if(old('subject') == $subject->id) selected @endif>{{ $subject->code }} - {{ $subject->title }}</option>
@@ -14,8 +14,8 @@
                   </div>
             </div>
             <div class="form-group col-md-2">
-                  <label for="teacher">{{ __('field_teacher') }} <span>*</span></label>
-                  <select class="form-control select2" name="teacher[]" id="teacher" required>
+                  <label for="teacher-day{{ $weekday }}">{{ __('field_teacher') }} <span>*</span></label>
+                  <select class="form-control select2" name="teacher[]" id="teacher-day{{ $weekday }}" required>
                         <option value="">{{ __('select') }}</option>
                         @foreach( $teachers as $teacher )
                         <option value="{{ $teacher->id }}" @if(old('teacher') == $teacher->id) selected @endif>{{ $teacher->staff_id }} - {{ $teacher->first_name }} {{ $teacher->last_name }}</option>
@@ -27,8 +27,8 @@
                   </div>
             </div>
             <div class="form-group col-md-2">
-                  <label for="room">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label>
-                  <select class="form-control select2" name="room[]" id="room" required>
+                  <label for="room-day{{ $weekday }}">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label>
+                  <select class="form-control select2" name="room[]" id="room-day{{ $weekday }}" required>
                         <option value="">{{ __('select') }}</option>
                         @foreach( $rooms as $room )
                         <option value="{{ $room->id }}" @if(old('room') == $room->id) selected @endif>{{ $room->title }}</option>
