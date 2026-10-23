@@ -46,7 +46,7 @@
 
                                 <div class="form-group col-md-4">
                                     <label for="subject">{{ __('field_course') }} <span>*</span></label>
-                                    <select class="form-control subject" name="subject" id="subject" required>
+                                    <select class="form-control subject select2" name="subject" id="subject" required>
                                         <option value="0">{{ __('select') }}</option>
                                         @foreach( $subjects as $subject )
                                         <option value="{{ $subject->id }}" @if( $selected_subject == $subject->id) selected @endif>{{ $subject->code }} - {{ $subject->title }}</option>
@@ -224,6 +224,7 @@ $(".faculty").on('change',function(e){
                 });
             }
             $('.subject').html('<option value="0">{{ __("select") }}</option>');
+            $('.subject').trigger('change.select2');
         }
     });
 });
@@ -246,6 +247,7 @@ $(".program").on('change',function(e){
                     $('.subject').append('<option value="'+ value.id +'">'+ value.code +' - '+ value.title +'</option>');
                 });
             }
+            $('.subject').trigger('change.select2');
         }
     });
 });

@@ -118,7 +118,7 @@
 
                                 <div class="form-group col-md-2">
                                     <label for="subject">{{ __('field_subject') }} <span class="text-danger">*</span></label>
-                                    <select class="form-control subject" name="subject" id="subject" required>
+                                    <select class="form-control subject select2" name="subject" id="subject" required>
                                         <option value="">{{ __('select') }}</option>
                                         @if(isset($subjects))
                                         @foreach($subjects->sortBy('code') as $subj)
@@ -479,7 +479,8 @@
 @endsection
 
 @section('page_js')
-<script src="{{ asset('dashboard/plugins/jquery/js/jquery.min.js') }}"></script>
+{{-- jQuery is already on the page (footer). Loading it again here replaced it
+     with a bare copy, wiping out select2 and DataTables. --}}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 @if(isset($statistics) && isset($grades))
@@ -658,6 +659,7 @@ $(".session").on('change', function(e) {
     var subject = $(".subject");
     
     subject.empty().append('<option value="">{{ __("select") }}</option>');
+    subject.trigger('change.select2');
     
     if (!session || !program) return;
     
@@ -676,6 +678,7 @@ $(".session").on('change', function(e) {
                     'text': this.code + ' - ' + this.title
                 }).appendTo(subject);
             });
+            subject.trigger('change.select2');
         }
     });
 });

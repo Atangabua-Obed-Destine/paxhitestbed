@@ -55,7 +55,7 @@
                                     <div class="col-md-3">
                                         <div class="form-group">
                                             <label for="user_id">{{ __('field_user') }}</label>
-                                            <select name="user_id" id="user_id" class="form-control">
+                                            <select name="user_id" id="user_id" class="form-control select2">
                                                 <option value="">{{ __('all') }}</option>
                                                 @foreach($users as $user)
                                                 <option value="{{ $user->id }}" {{ request('user_id') == $user->id ? 'selected' : '' }}>

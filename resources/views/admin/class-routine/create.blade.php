@@ -255,22 +255,34 @@
             return overlappingClasses;
         }
 
+        // Numbers the rows added below, so each one's dropdowns get their own
+        // id. select2 keys its state on the element id: rows sharing an id
+        // tear each other down and only one of them stays searchable.
+        var newFieldCount = 0;
+
         // add Field
         $(document).on('click', '#addField', function () {
             var tab = $(this).attr('data-bs-tab');
+            newFieldCount++;
             var html = '';
             html += '<hr/>';
             html += '<div id="inputFormField" class="card-block">';
             html += '<div class="row">';
-            html += '<div class="form-group col-md-2"><label for="subject">{{ __('field_subject') }} <span>*</span></label><select class="form-control select2" name="subject[]" id="subject" required><option value="">{{ __('select') }}</option> @isset($subjects) @foreach( $subjects as $subject ) <option value="{{ $subject->id }}">{{ $subject->code }} - {{ $subject->title }}</option> @endforeach @endisset </select> <div class="invalid-feedback"> {{ __('required_field') }} {{ __('field_subject') }}</div></div>';
-            html += '<div class="form-group col-md-2"><label for="teacher">{{ __('field_teacher') }} <span>*</span></label> <select class="form-control select2" name="teacher[]" id="teacher"><option value="">{{ __('select') }}</option> @isset($teachers) @foreach( $teachers as $teacher ) <option value="{{ $teacher->id }}">{{ $teacher->staff_id }} - {{ $teacher->first_name }} {{ $teacher->last_name }}</option> @endforeach @endisset </select> <div class="invalid-feedback"> {{ __('required_field') }} {{ __('field_teacher') }} </div> </div>';
-            html += '<div class="form-group col-md-2"> <label for="room">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label> <select class="form-control select2" name="room[]" id="room" required> <option value="">{{ __('select') }}</option> @isset($rooms) @foreach( $rooms as $room ) <option value="{{ $room->id }}">{{ $room->title }}</option> @endforeach @endisset </select> <div class="invalid-feedback"> {{ __('required_field') }} {{ __('field_room') }} {{ __('field_no') }} </div> </div>';
+            html += '<div class="form-group col-md-2"><label for="subject-new-' + newFieldCount + '">{{ __('field_subject') }} <span>*</span></label><select class="form-control select2" name="subject[]" id="subject-new-' + newFieldCount + '" required><option value="">{{ __('select') }}</option> @isset($subjects) @foreach( $subjects as $subject ) <option value="{{ $subject->id }}">{{ $subject->code }} - {{ $subject->title }}</option> @endforeach @endisset </select> <div class="invalid-feedback"> {{ __('required_field') }} {{ __('field_subject') }}</div></div>';
+            html += '<div class="form-group col-md-2"><label for="teacher-new-' + newFieldCount + '">{{ __('field_teacher') }} <span>*</span></label> <select class="form-control select2" name="teacher[]" id="teacher-new-' + newFieldCount + '"><option value="">{{ __('select') }}</option> @isset($teachers) @foreach( $teachers as $teacher ) <option value="{{ $teacher->id }}">{{ $teacher->staff_id }} - {{ $teacher->first_name }} {{ $teacher->last_name }}</option> @endforeach @endisset </select> <div class="invalid-feedback"> {{ __('required_field') }} {{ __('field_teacher') }} </div> </div>';
+            html += '<div class="form-group col-md-2"> <label for="room-new-' + newFieldCount + '">{{ __('field_room') }} {{ __('field_no') }} <span>*</span></label> <select class="form-control select2" name="room[]" id="room-new-' + newFieldCount + '" required> <option value="">{{ __('select') }}</option> @isset($rooms) @foreach( $rooms as $room ) <option value="{{ $room->id }}">{{ $room->title }}</option> @endforeach @endisset </select> <div class="invalid-feedback"> {{ __('required_field') }} {{ __('field_room') }} {{ __('field_no') }} </div> </div>';
             html += '<div class="form-group col-md-2"> <label for="start_time">{{ __('field_time') }} {{ __('field_from') }} <span>*</span></label><input type="time" class="form-control time start-time-input" name="start_time[]" required><div class="invalid-feedback">{{ __('required_field') }} {{ __('field_time') }} {{ __('field_from') }}</div></div>';
             html += '<div class="form-group col-md-2"> <label for="end_time">{{ __('field_time') }} {{ __('field_to') }} <span>*</span></label> <input type="time" class="form-control time end-time-input" name="end_time[]" required> <div class="invalid-feedback"> {{ __('required_field') }} {{ __('field_time') }} {{ __('field_to') }} </div> </div>';
             html += '<div class="form-group col-md-2"><button id="removeField" type="button" class="btn btn-danger btn-filter"><i class="fas fa-trash-alt"></i> {{ __('btn_remove') }}</button></div>';
             html += '</div>';
 
-            $('#newField-'+tab).append(html);
+            var $newField = $(html);
+            $('#newField-'+tab).append($newField);
+
+            // Searchable course / lecturer / room dropdowns. The global select2
+            // init only runs on page load, so a row added here would otherwise
+            // be plain selects the user has to scroll through by eye.
+            $newField.find('.select2').select2();
 
             // Time Picker
             $('.time').bootstrapMaterialDatePicker({

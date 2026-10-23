@@ -79,7 +79,7 @@
 
                                 <div class="form-group col-md-3">
                                     <label for="subject">{{ __('field_subject') }} <span>*</span></label>
-                                    <select class="form-control subject subject-filter" name="subject" id="subject" required>
+                                    <select class="form-control subject subject-filter select2" name="subject" id="subject" required>
                                         <option value="">{{ __('select') }}</option>
                                         @foreach(($subjects ?? collect())->sortBy('code') as $subject)
                                         <option value="{{ $subject->id }}" @if($selected_subject == $subject->id) selected @endif>{{ $subject->code }} - {{ $subject->title }}</option>
@@ -498,6 +498,7 @@
                     value: '',
                     text: translationSelect
                 }));
+                $subject.trigger('change.select2');
             };
 
             const applyPreset = () => {
@@ -505,6 +506,7 @@
                     return;
                 }
                 $subject.val(String(presetSubject));
+                $subject.trigger('change.select2');
             };
 
             const applySubjectOptions = (items) => {
@@ -524,6 +526,7 @@
                         $subject.append(option);
                     });
                 }
+                $subject.trigger('change.select2');
                 if(presetSubject){
                     applyPreset();
                 }

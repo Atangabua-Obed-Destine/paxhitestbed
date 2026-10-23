@@ -1900,6 +1900,7 @@
     document.getElementById('addExtraClassBtn')?.addEventListener('click', function() {
         // Reset form and checkboxes
         document.getElementById('extraClassForm').reset();
+        $('#extraSubject').trigger('change.select2');
         document.querySelectorAll('.extra-program-checkbox').forEach(cb => {
             cb.checked = false;
             cb.closest('.custom-control').style.display = 'block';
@@ -1923,6 +1924,15 @@
         cb.addEventListener('change', updateSelectedProgramCount);
     });
     
+    // Searchable course picker. It sits in a modal, so select2 must attach its
+    // dropdown there or the search box cannot take focus. The listeners on it
+    // are native, and never hear the jQuery change select2 fires, so a pick
+    // is passed on as a native change.
+    $('#extraSubject').select2({ dropdownParent: $('#extraClassModal'), width: '100%' })
+        .on('select2:select select2:clear', function () {
+            this.dispatchEvent(new Event('change'));
+        });
+
     // Filter programs when course is selected
     document.getElementById('extraSubject')?.addEventListener('change', function() {
         const selected = this.options[this.selectedIndex];
