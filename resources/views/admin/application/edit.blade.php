@@ -1265,13 +1265,32 @@
                 <div class="invalid-feedback d-block">{{ $message }}</div>
               @enderror
             </div>
-            @include('common.inc.semester_year_field', ['year_target' => '#convert_semester'])
+            {{-- The Year select groups whatever collection it is handed, and on
+                 this screen the semesters are $convert_semesters, not the
+                 $semesters the partial falls back to. Handed nothing, it built
+                 an empty year list and then rebuilt the semester select from
+                 it — wiping the correct server-rendered selection, so both
+                 dropdowns read "Select" on a page that had already chosen the
+                 right semester. The current selection is passed for the same
+                 reason: without it there is nothing for the Year to land on. --}}
+            @php
+              $selectedSemesterId = (int) (old('semester') ?: $convert_default_semester);
+              $selectedSemesterYear = optional($convert_semesters->firstWhere('id', $selectedSemesterId))->year;
+            @endphp
+            @include('common.inc.semester_year_field', [
+              'year_target' => '#convert_semester',
+              'semesters' => $convert_semesters,
+              {{-- Null rather than 0 where there is no default: an application
+                   with no programme yet has no semester to land on, and "0"
+                   would be reported as a selection that matches no option. --}}
+              'selected_semester' => $selectedSemesterId ?: null,
+              'selected_semester_year' => $selectedSemesterYear,
+            ])
             <div class="form-group col-md-6">
               <label for="convert_semester">{{ __('field_semester') }} <span>*</span></label>
               {{-- A student being admitted starts at the first teaching semester,
                    in the only section there is, so both are chosen for the admin.
                    data-default applies only when nothing has been picked. --}}
-              @php $selectedSemesterId = (int) (old('semester') ?: $convert_default_semester); @endphp
               <select class="form-control semester @error('semester') is-invalid @enderror" id="convert_semester" name="semester" data-selected="{{ old('semester') }}" data-default="first-non-resit" required>
                 <option value="">{{ __('select') }}</option>
                 @foreach($convert_semesters as $convertSemester)
