@@ -116,7 +116,7 @@ class TaxGroup extends Model
     {
         $breakdown = [];
 
-        $brackets = $this->brackets()->where('status', 1)->get();
+        $brackets = $this->bracketsInForce();
 
         // Step lookup: a salary is taxed by the SINGLE applicable bracket — the
         // active bracket with the highest min_amount that does not exceed the
@@ -218,7 +218,7 @@ class TaxGroup extends Model
      */
     public function coverageGaps(): array
     {
-        $bands = $this->brackets()->where('status', 1)->get()
+        $bands = $this->bracketsInForce()
             ->sortBy('min_amount')->values();
 
         if ($bands->isEmpty()) {
@@ -287,10 +287,31 @@ class TaxGroup extends Model
      * (highest active min_amount ≤ salary), or null if salary is below all bands.
      * Shared so employer-side calculation selects the same bracket as calculateTax().
      */
+    /**
+     * The active bands of this group, honouring any date filtering already done.
+     *
+     * getEffectiveGroups() eager-loads `brackets` already narrowed to the
+     * bands in force on the payroll month. Reading the relation as
+     * `$this->brackets()->...->get()` issues a FRESH query, which throws that
+     * narrowing away and loads every band whatever its effective_from -- so a
+     * band dated into the future, or one closed off last year, was still being
+     * applied. The dates were stored, displayed, and quietly ignored.
+     *
+     * Using the loaded relation when there is one makes that filtering take
+     * effect. When nothing was eager-loaded the dates cannot be known here, so
+     * it falls back to every active band, exactly as before.
+     */
+    protected function bracketsInForce()
+    {
+        return $this->relationLoaded('brackets')
+            ? $this->brackets->where('status', 1)
+            : $this->brackets()->where('status', 1)->get();
+    }
+
     public function applicableBracket($salary)
     {
         $bracket = null;
-        foreach ($this->brackets()->where('status', 1)->get() as $candidate) {
+        foreach ($this->bracketsInForce() as $candidate) {
             if ($salary >= $candidate->min_amount) {
                 if ($bracket === null || $candidate->min_amount >= $bracket->min_amount) {
                     $bracket = $candidate;

@@ -468,9 +468,14 @@ class CourseRegistrationController extends Controller
             
             // Additional context
             'current_year' => $currentEnroll->semester->year ?? 0,
+            // Resit sittings are not semesters the student completed. They are
+            // a second attempt at one they already have a row for, so counting
+            // them here reported a student as further through the programme
+            // than they are — and every carried-over course would add one.
             'semesters_completed' => $student->studentEnrolls
                 ->where('program_id', $currentEnroll->program_id)
                 ->where('status', '!=', '1')
+                ->reject(fn ($enroll) => (bool) optional($enroll->semester)->is_resit)
                 ->count(),
             
             // Detailed breakdown for potential use

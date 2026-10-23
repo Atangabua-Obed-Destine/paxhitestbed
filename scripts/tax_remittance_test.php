@@ -57,6 +57,60 @@ Auth::guard('web')->login($admin);
 $breakdown = app(PayrollTaxBreakdownService::class);
 $remittance = app(TaxRemittanceService::class);
 
+/**
+ * Generate, pay and post one payroll, so the ledger has something to say.
+ *
+ * Several checks below read the ledger and the remittance screen. On an
+ * installation where no payroll has ever been paid they all read nothing: the
+ * balances come back 0.00, the screen renders an empty table, and the checks
+ * fail for want of data rather than for want of correctness. Three of them did
+ * exactly that here, including one that reported the Details button as broken
+ * when the markup was in fact correct — the row carrying it was never drawn.
+ *
+ * So each of those sections pays a payroll of its own first, inside a
+ * transaction it rolls back. What gets tested is then the posting itself,
+ * which is the thing that has to be right.
+ *
+ * @return array{payroll: Payroll, entry: ?App\Models\JournalEntry}
+ */
+function payOnePayroll(PayrollTaxBreakdownService $breakdown, App\User $admin): array
+{
+    $month = Carbon\Carbon::parse('2026-10-01');
+    $subject = App\User::where('status', '1')->where('basic_salary', '>=', 100000)->firstOrFail();
+    $salary = (float) $subject->basic_salary;
+
+    $totals = $breakdown->totals($breakdown->forSalary($salary, $month));
+
+    $payroll = Payroll::create([
+        'user_id' => $subject->id,
+        'basic_salary' => $salary,
+        'salary_type' => 1,
+        'total_earning' => $salary,
+        'total_allowance' => 0,
+        'bonus' => 0,
+        'total_deduction' => 0,
+        'gross_salary' => $salary,
+        'tax' => round($totals['employee'], 2),
+        'employer_tax' => round($totals['employer'], 2),
+        'net_salary' => round($salary - $totals['employee'], 2),
+        'total_cost' => round($salary + $totals['employer'], 2),
+        'salary_month' => $month->toDateString(),
+        // The posting takes its date from pay_date and finds the accounting
+        // period by it; without one no entry is created at all.
+        'pay_date' => $month->copy()->endOfMonth()->toDateString(),
+        'payment_method' => 'bank',
+        'status' => 1,
+        'created_by' => $admin->id,
+    ]);
+
+    $breakdown->record($payroll);
+
+    $entry = app(App\Services\PayrollAccountingService::class)
+        ->createPayrollJournalEntry($payroll, $admin->id);
+
+    return ['payroll' => $payroll, 'entry' => $entry];
+}
+
 $state = ChartOfAccount::where('account_code', '443')->first();
 $social = ChartOfAccount::where('account_code', '431')->first();
 $bank = ChartOfAccount::where('account_code', '521')->first();
@@ -157,23 +211,41 @@ if ($state && $social) {
         "{$cnpsOnState} line(s) still point at 443");
 
     // And the posted entry has to agree with the recorded lines, not just the
-    // lines with themselves.
-    $ledgerState = $remittance->ledgerBalance($state->id);
-    $ledgerSocial = $remittance->ledgerBalance($social->id);
+    // lines with themselves. A payroll is paid here first, because with none
+    // paid both sides of every comparison below are zero and agree vacuously.
+    DB::beginTransaction();
 
-    $linesState = round(PayrollTaxLine::where('liability_account_id', $state->id)
-        ->sum(DB::raw('employee_amount + employer_amount')), 2);
-    $linesSocial = round(PayrollTaxLine::where('liability_account_id', $social->id)
-        ->sum(DB::raw('employee_amount + employer_amount')), 2);
+    try {
+        $paid = payOnePayroll($breakdown, $admin);
 
-    check('the State account balance matches its recorded lines',
-        abs($ledgerState - $linesState) < 1.0, "ledger {$ledgerState} vs lines {$linesState}");
+        check('a payroll can be paid and posted', $paid['entry'] !== null);
 
-    check('the social account balance matches its recorded lines',
-        abs($ledgerSocial - $linesSocial) < 1.0, "ledger {$ledgerSocial} vs lines {$linesSocial}");
+        $ledgerState = $remittance->ledgerBalance($state->id);
+        $ledgerSocial = $remittance->ledgerBalance($social->id);
 
-    check('the social account carries a balance at all', $ledgerSocial > 0,
-        'nothing is owed to CNPS, which would mean the split never happened');
+        $linesState = round(PayrollTaxLine::where('liability_account_id', $state->id)
+            ->sum(DB::raw('employee_amount + employer_amount')), 2);
+        $linesSocial = round(PayrollTaxLine::where('liability_account_id', $social->id)
+            ->sum(DB::raw('employee_amount + employer_amount')), 2);
+
+        check('the State account balance matches its recorded lines',
+            abs($ledgerState - $linesState) < 1.0, "ledger {$ledgerState} vs lines {$linesState}");
+
+        check('the social account balance matches its recorded lines',
+            abs($ledgerSocial - $linesSocial) < 1.0, "ledger {$ledgerSocial} vs lines {$linesSocial}");
+
+        check('the social account carries a balance at all', $ledgerSocial > 0,
+            'nothing is owed to CNPS, which would mean the split never happened');
+
+        check('and so does the State account', $ledgerState > 0,
+            'nothing is owed to the State either');
+    } finally {
+        DB::rollBack();
+    }
+
+    check('the ledger is back where it was',
+        $remittance->ledgerBalance($social->id) == 0.0
+        || PayrollTaxLine::count() > 0);
 }
 
 echo "\n== The ledger balances ==\n";
@@ -418,14 +490,30 @@ echo "\n== The screen is reachable, and only by the right people ==\n";
 
 $kernel = app(Illuminate\Contracts\Http\Kernel::class);
 
-$request = Illuminate\Http\Request::create('/admin/staff/tax-remittance', 'GET');
-$request->setLaravelSession(app('session.store'));
-$response = $kernel->handle($request);
+// Rendered with something owed, so the table has rows. With nothing owed the
+// page renders an empty table and every check on its controls passes or fails
+// on markup that was never drawn — which is how the Details button came to be
+// reported as broken while its markup was perfectly correct.
+DB::beginTransaction();
 
-check('an admin can open the remittance screen', $response->getStatusCode() === 200,
-    'status ' . $response->getStatusCode());
+try {
+    payOnePayroll($breakdown, $admin);
 
-$body = $response->getContent();
+    $request = Illuminate\Http\Request::create('/admin/staff/tax-remittance', 'GET');
+    $request->setLaravelSession(app('session.store'));
+    $response = $kernel->handle($request);
+
+    check('an admin can open the remittance screen', $response->getStatusCode() === 200,
+        'status ' . $response->getStatusCode());
+
+    $body = $response->getContent();
+
+    check('with something owed, the page lists it',
+        str_contains($body, 'Etat') || str_contains($body, 'CNPS'),
+        'the table rendered with no authority named');
+} finally {
+    DB::rollBack();
+}
 
 check('the page names what is owed', str_contains($body, 'Outstanding') || str_contains($body, 'outstanding'));
 
@@ -551,8 +639,24 @@ $blank = DB::table('journal_entries')
 
 check('no posted entry has a blank journal type', $blank === 0, "{$blank} blank");
 
-check('payroll entries are typed as payroll',
-    DB::table('journal_entries')->where('reference_type', 'payroll')->where('journal_type', 'payroll')->count() > 0);
+// Posted here rather than looked for in whatever the installation holds: with
+// no payroll ever paid there is no payroll entry to type, and the check failed
+// for that reason alone.
+DB::beginTransaction();
+
+try {
+    $paid = payOnePayroll($breakdown, $admin);
+
+    check('a payroll entry is typed as payroll',
+        $paid['entry'] !== null && $paid['entry']->journal_type === 'payroll',
+        $paid['entry'] === null ? 'no entry posted' : "typed '{$paid['entry']->journal_type}'");
+
+    check('and it is marked as referring to a payroll',
+        $paid['entry'] !== null && $paid['entry']->reference_type === 'payroll'
+        && (int) $paid['entry']->reference_id === (int) $paid['payroll']->id);
+} finally {
+    DB::rollBack();
+}
 
 echo "\n$passed passed, $failed failed\n";
 

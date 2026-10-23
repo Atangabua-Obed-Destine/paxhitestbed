@@ -183,7 +183,11 @@
                         <form class="needs-validation" novalidate method="get" action="{{ route($route.'.report') }}">
                             <div class="row gx-2">
 
-                                @include('common.inc.fees_search_filter')
+                                {{-- No Year select here: it filtered nothing (report() never reads
+                                     semester_year), it was empty until a programme was chosen, and
+                                     being `required` it blocked the search button on a fresh load.
+                                     The Semester select alone is what this report filters by. --}}
+                                @include('common.inc.fees_search_filter', ['show_semester_year' => false])
 
                                 <div class="form-group col-md-2">
                                     <label for="category">{{ __('field_fees_type') }}</label>

@@ -43,7 +43,22 @@
 		{{ __('required_field') }} {{ __('field_session') }}
 	</div>
 </div>
+{{--
+  The Year select narrows the Semester select beside it; it is not a filter of
+  its own, and none of the controllers behind this partial read semester_year.
+  A screen that does not want it passes show_semester_year => false, and the
+  Semester select then keeps the full server-rendered list instead of being
+  emptied and rebuilt per year.
+
+  Worth knowing before enabling it on a new screen: the Year select carries
+  `required`, and form-validation.js blocks submit on any .needs-validation
+  form that fails checkValidity(). Since the list is empty until a programme
+  is chosen, leaving it on a screen that can be searched unfiltered blocks the
+  search button on an inert field.
+--}}
+@if($show_semester_year ?? true)
 @include('common.inc.semester_year_field')
+@endif
 <div class="form-group col-md-3">
   <label for="semester">{{ __('field_semester') }} <span>*</span></label>
   <select class="form-control semester" name="semester" id="semester">

@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\StudentEnroll;
+use App\Support\EnrolmentOrder;
 use Symfony\Component\HttpFoundation\Response;
 
 class SelectEnrollmentMiddleware
@@ -35,10 +36,22 @@ class SelectEnrollmentMiddleware
                                     ->orderBy('id', 'desc')
                                     ->get();
 
-        // Group by unique matricule - keep only latest enrollment for each matricule
-        $enrollments = $allEnrollments->groupBy('matricule')->map(function($group) {
-            return $group->sortByDesc('id')->first();
-        })->values();
+        // One enrollment per matricule: the one the student has reached.
+        //
+        // This used to be `sortByDesc('id')->first()` — the most recently
+        // created row. That is a proxy for academic position and a wrong one,
+        // because it assumes rows are always created in academic order. A
+        // back-dated enrollment breaks it: a resit sitting raised for Year 1
+        // Semester 1, for a student already in Semester 2, is the newest row by
+        // id and the earliest by academic position, so it was picked and the
+        // student's whole portal moved back to the resit semester.
+        //
+        // EnrolmentOrder sorts by where the enrollment actually sits — session,
+        // then semester year, then semester type, then regular before resit —
+        // so creation order no longer decides it. Checked against the live data
+        // when it was introduced: for all 86 matricule groups it picks the same
+        // enrollment this line used to.
+        $enrollments = EnrolmentOrder::furthestPerMatricule($allEnrollments);
 
         // If student has no active enrollments, continue (edge case)
         if ($enrollments->isEmpty()) {

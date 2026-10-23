@@ -224,6 +224,24 @@ class StudentEnroll extends Model
             return "Admission fee placeholder {$event} for {$programName}";
         }
 
+        // A resit sitting is not a new enrolment, and the log should not say it
+        // is. Described with the sentence below it read "Student enrolled:
+        // ... to HND - AGE - FIRST RESIT SEMESTER", which looks like somebody
+        // enrolled a student into a semester the enrolment screens refuse to
+        // offer. It is a second attempt at a course already registered
+        // elsewhere, so it is named as one.
+        if (optional($this->semester)->is_resit) {
+            if ($event === 'created') {
+                return "Resit sitting created for {$studentName}: {$semesterName}{$sessionInfo} — to re-sit courses carried over in {$programName}";
+            }
+
+            if ($event === 'deleted') {
+                return "Resit sitting removed for {$studentName}: {$semesterName}{$sessionInfo}";
+            }
+
+            return "Resit sitting {$event} for {$studentName}: {$semesterName}{$sessionInfo}";
+        }
+
         // Generate description based on event
         if ($event === 'created') {
             return "Student enrolled: {$studentName} to {$programName} - {$semesterName}{$sessionInfo}";

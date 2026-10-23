@@ -167,8 +167,8 @@
                 <li class="{{ Request::is('admin/student/student-note*') ? 'active' : '' }}"><a href="{{ route('admin.student-note.index') }}" class="">{{ trans_choice('module_student_note', 2) }}</a></li>
                 @endcanany
 
-                @canany(['student-enroll-single', 'student-enroll-group', 'student-enroll-adddrop', 'student-enroll-complete'])
-                <li class="nav-item pcoded-hasmenu {{ Request::is('admin/student/single-enroll*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/student/group-enroll*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/student/subject-adddrop*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/student/course-complete*') ? 'pcoded-trigger active' : '' }}">
+                @canany(['student-enroll-single', 'student-enroll-group', 'student-enroll-adddrop', 'student-enroll-resit', 'student-enroll-complete'])
+                <li class="nav-item pcoded-hasmenu {{ Request::is('admin/student/single-enroll*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/student/group-enroll*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/student/subject-adddrop*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/student/course-complete*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/student/resit-enrolment*') ? 'pcoded-trigger active' : '' }}">
                     <a href="#!" class="nav-link">
                         <span class="pcoded-mtext">{{ trans_choice('module_student_enroll', 2) }}</span>
                     </a>
@@ -184,6 +184,10 @@
 
                         @canany(['student-enroll-adddrop'])
                         <li class="{{ Request::is('admin/student/subject-adddrop*') ? 'active' : '' }}"><a href="{{ route('admin.subject-adddrop.index') }}" class="">{{ trans_choice('module_subject_adddrop', 2) }}</a></li>
+                        @endcanany
+
+                        @canany(['student-enroll-resit'])
+                        <li class="{{ Request::is('admin/student/resit-enrolment*') ? 'active' : '' }}"><a href="{{ route('admin.resit-enrolment.index') }}" class="">{{ __('Resit Enrolments') }}</a></li>
                         @endcanany
 
                         @canany(['student-enroll-complete'])

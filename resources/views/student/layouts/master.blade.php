@@ -232,11 +232,18 @@
                             ->orderBy('id', 'desc')
                             ->get();
                         
-                        // Group by unique matricule and keep only the latest enrollment for each
-                        $allEnrollments = $tempEnrollments->groupBy('matricule')->map(function($group) {
-                            return $group->sortByDesc('id')->first(); // Latest enrollment for this matricule
-                        })->values();
-                        
+                        // One enrollment per matricule: the one the student has
+                        // reached. This MUST agree with SelectEnrollmentMiddleware,
+                        // because a few lines down this block OVERWRITES the
+                        // session when the middleware's choice is missing from
+                        // this list. While this grouping took the newest row by
+                        // id and the middleware took the furthest by academic
+                        // position, the two disagreed the moment a back-dated
+                        // enrollment existed, and the layout quietly won — the
+                        // student's whole portal moved to a resit semester the
+                        // middleware had deliberately not selected.
+                        $allEnrollments = \App\Support\EnrolmentOrder::furthestPerMatricule($tempEnrollments);
+
                         $selectedEnrollmentId = session('selected_enrollment_id');
                         $currentEnrollment = $allEnrollments->firstWhere('id', $selectedEnrollmentId);
                         

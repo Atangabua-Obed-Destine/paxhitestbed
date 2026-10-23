@@ -352,7 +352,38 @@ $leaveAlone = [
     'admin/section/edit.blade.php' => 'same',
     'admin/web/course/create.blade.php' => 'name="semesters" here is free-text marketing copy, not a foreign key',
     'admin/web/course/edit.blade.php' => 'same',
+    'admin/resit-enrolment/index.blade.php' => 'a worklist, not a programme cascade: the semester select lists the handful of non-resit semesters outright, so a year step in front of it would narrow five items to two',
+    'admin/fees-student/report.blade.php' => 'the Year select filtered nothing there (report() never reads semester_year), was empty until a programme was chosen, and being required it blocked the search button on a fresh load; removed deliberately',
 ];
+
+/**
+ * Screens that switch the Year select off through the partial's own flag.
+ *
+ * Without this, passing show_semester_year => false removed a Year picker that
+ * the breadth check above still counted as present -- the check looks for the
+ * INCLUDE, and the include is still there, just guarded. So an opt-out was
+ * invisible to the one test meant to notice it. Each one has to be named in
+ * $leaveAlone with a reason, exactly like any other exclusion.
+ */
+$optedOut = [];
+
+foreach ($bladeFiles as $path) {
+    $relative = ltrim(str_replace(str_replace('\\', '/', $root . '/resources/views'), '',
+        str_replace('\\', '/', $path)), '/');
+
+    // Only a screen that PASSES the flag on an @include counts. The partial
+    // that defines it documents the name in its own comment, and matching that
+    // would report the partial as having opted itself out.
+    if (preg_match('/@include\([^)]*show_semester_year\'?\s*=>\s*false/', (string) file_get_contents($path))) {
+        $optedOut[] = $relative;
+    }
+}
+
+$unexplainedOptOuts = array_values(array_filter($optedOut, fn ($r) => !isset($leaveAlone[$r])));
+
+check('every screen that switches the Year select off is named with a reason',
+    $unexplainedOptOuts === [],
+    implode("\n        ", $unexplainedOptOuts));
 
 $missingYear = [];
 

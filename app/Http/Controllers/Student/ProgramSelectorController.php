@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\StudentEnroll;
+use App\Support\EnrolmentOrder;
 use Flasher\Laravel\Facade\Flasher;
 
 class ProgramSelectorController extends Controller
@@ -27,10 +28,11 @@ class ProgramSelectorController extends Controller
                                     ->orderBy('id', 'desc')
                                     ->get();
 
-        // Group by unique matricule - keep only the latest enrollment for each matricule
-        $enrollments = $allEnrollments->groupBy('matricule')->map(function($group) {
-            return $group->sortByDesc('id')->first();
-        })->values();
+        // One enrollment per matricule: the one the student has reached.
+        // Shared with SelectEnrollmentMiddleware, which has the full reasoning —
+        // in short, `sortByDesc('id')` picked the most recently created row,
+        // which a back-dated resit enrollment makes the wrong answer.
+        $enrollments = EnrolmentOrder::furthestPerMatricule($allEnrollments);
 
         // If only one unique enrollment, auto-select and redirect to dashboard
         if ($enrollments->count() === 1) {

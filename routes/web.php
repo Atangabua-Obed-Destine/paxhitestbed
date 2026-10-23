@@ -396,6 +396,19 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('student/group-enroll', 'StudentGroupEnrollController');
     Route::resource('student/subject-adddrop', 'SubjectAddDropController');
     Route::post('student/subject-adddrop/drop', 'SubjectAddDropController@drop')->name('subject-adddrop.drop');
+    // Raising a resit enrolment for a carried-over course. Its own permission,
+    // because it enrols into a semester the ordinary enrolment screens refuse
+    // to offer and it overrides resit requests the student declined. The
+    // worklist and the preview are read-only; only the post writes.
+    Route::get('student/resit-enrolment', 'ResitEnrolmentController@index')
+        ->middleware('permission:student-enroll-resit')
+        ->name('resit-enrolment.index');
+    Route::get('student/resit-enrolment/{id}', 'ResitEnrolmentController@show')
+        ->middleware('permission:student-enroll-resit')
+        ->name('resit-enrolment.show');
+    Route::post('student/resit-enrolment', 'ResitEnrolmentController@store')
+        ->middleware('permission:student-enroll-resit')
+        ->name('resit-enrolment.store');
     Route::resource('student/course-complete', 'CourseCompleteController');
     Route::resource('student/student-alumni', 'StudentAlumniController');
     Route::get('student/max-credit-config', 'MaxCreditConfigController@index')->name('max-credit-config.index');
