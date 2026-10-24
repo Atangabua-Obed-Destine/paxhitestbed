@@ -56,12 +56,26 @@ class TaxSettingSeeder extends Seeder
 
     public function run(): void
     {
+        if ($this->hasPayrollHistory()) {
+            $this->command?->warn('Tax settings: payroll has already been charged here — left alone.');
+            $this->command?->line('  Rewriting the brackets would leave those payrolls pointing at rates that no');
+            $this->command?->line('  longer say what they were charged under. Run: php artisan tax:inspect');
+
+            return;
+        }
+
         if ($this->alreadyConfigured()) {
             $this->command?->warn('Tax settings: this installation already has its own configuration — left alone.');
             $this->command?->line('  To replace it deliberately: php artisan tax:configure-cameroon --dry-run');
 
             return;
         }
+
+        // Groups that exist but carry none of the known codes are an empty
+        // shell, usually created by hand. Adopt them by code where the title
+        // matches, so the school keeps its ids and anything already pointing
+        // at them, rather than ending up with two of each.
+        $this->adoptUncodedGroups();
 
         $this->state = $this->account(self::ACCOUNT_STATE);
         $this->social = $this->account(self::ACCOUNT_SOCIAL);
@@ -94,21 +108,79 @@ class TaxSettingSeeder extends Seeder
     }
 
     /**
-     * Has somebody already configured this school?
+     * Has somebody already configured this school, in a way worth keeping?
      *
-     * A fresh install has no tax groups. Anything else — a group with bands,
-     * or settings carrying a liability account — means a human has been here,
-     * and their work is not this seeder's to overwrite.
+     * "Any tax group exists" was the first answer and it was too blunt. A
+     * school can have groups that were created by hand and carry none of the
+     * codes this configuration keys on — in which case
+     * `tax:configure-cameroon` refuses for want of a code AND this seeder
+     * skipped for the presence of a group, leaving no way forward at all. That
+     * is exactly what SAHIK turned out to be.
+     *
+     * So the test is whether anything is really configured HERE: a group that
+     * carries one of the known codes, or a tax pointing at a liability
+     * account. Groups that are neither are an empty shell, and filling them in
+     * is the whole job.
+     *
+     * Payroll history is a separate and stronger reason to stop, and it is
+     * checked on its own below.
      */
     protected function alreadyConfigured(): bool
     {
-        return DB::table('tax_groups')->exists()
+        return DB::table('tax_groups')->whereIn('code', array_keys(CameroonTaxTable::GROUPS))->exists()
             || DB::table('tax_settings')->whereNotNull('liability_account_id')->exists();
+    }
+
+    /**
+     * Anything charged under the current rates?
+     *
+     * A seeder has no business rewriting the brackets a paid payroll was
+     * calculated from. It stops rather than asking, because a seeder runs
+     * unattended as part of `db:seed` and there is nobody there to answer.
+     */
+    protected function hasPayrollHistory(): bool
+    {
+        return DB::table('payroll_tax_lines')->exists()
+            || DB::table('payrolls')->where('status', 1)->exists();
     }
 
     protected function account(string $code): ?int
     {
         return DB::table('chart_of_accounts')->where('account_code', $code)->value('id');
+    }
+
+    /**
+     * Give a code to a group that plainly already is one of these.
+     *
+     * A school whose groups were created by hand has the right titles and no
+     * codes. Creating fresh groups beside them would leave two "Personal
+     * Income Tax" rows, one of them the one the screens already show. Matching
+     * on title and backfilling the code adopts what is there instead, so ids
+     * and anything referencing them survive.
+     *
+     * Only ever fills a code in; never renames a group, and never touches one
+     * that already carries a code.
+     */
+    protected function adoptUncodedGroups(): void
+    {
+        foreach (CameroonTaxTable::GROUPS as $code => $title) {
+            $match = DB::table('tax_groups')
+                ->where(function ($query) {
+                    $query->whereNull('code')->orWhere('code', '');
+                })
+                ->whereRaw('LOWER(TRIM(title)) = ?', [mb_strtolower(trim($title))])
+                ->first();
+
+            if (!$match) {
+                continue;
+            }
+
+            DB::table('tax_groups')->where('id', $match->id)
+                ->update(['code' => $code, 'updated_at' => now()]);
+
+            $this->command?->line(sprintf('  adopted existing group #%d "%s" as %s',
+                $match->id, $match->title, $code));
+        }
     }
 
     // -----------------------------------------------------------------------
