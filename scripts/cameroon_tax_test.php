@@ -67,11 +67,23 @@ function check(string $label, bool $ok, string $detail = ''): void
     }
 }
 
-const GROUP_PIT = 1;
-const GROUP_CFC = 4;
-const GROUP_CRTV = 5;
-const ACCOUNT_SOCIAL = 142;
-const ACCOUNT_STATE = 145;
+/**
+ * Resolved by code, not written as literal ids.
+ *
+ * These were the numbers 1, 4, 5, 142 and 145, which are this installation's
+ * auto-increment values and nobody else's. That made the suite unrunnable on
+ * another school — and it broke here the moment the groups were rebuilt, when
+ * the audio-visual group stopped being number 5 and the checks started reading
+ * an empty group and calling it a failure.
+ *
+ * The code and the OHADA account number are the stable keys, and they are what
+ * the seeder and the command both key on.
+ */
+define('GROUP_PIT', (int) DB::table('tax_groups')->where('code', 'PIT')->value('id'));
+define('GROUP_CFC', (int) DB::table('tax_groups')->where('code', 'HLF')->value('id'));
+define('GROUP_CRTV', (int) DB::table('tax_groups')->where('code', 'CRTV')->value('id'));
+define('ACCOUNT_SOCIAL', (int) DB::table('chart_of_accounts')->where('account_code', '431')->value('id'));
+define('ACCOUNT_STATE', (int) DB::table('chart_of_accounts')->where('account_code', '443')->value('id'));
 
 $month = Carbon::parse('2026-10-01');
 $breakdown = app(PayrollTaxBreakdownService::class);
@@ -486,6 +498,170 @@ $tdl = TaxSetting::where('tax_group_id', 2)->where('status', 1)->orderBy('min_am
 
 check('the local development tax was left intact', $tdl->count() === 10, $tdl->count() . ' bands');
 check('and still covers from zero', (float) $tdl->first()->min_amount === 0.0);
+
+// ---------------------------------------------------------------------------
+section('A new school installs with this configuration, not the demo one');
+
+// The seeder used to wipe tax_settings and insert four brackets from the
+// vendor template — 0-5,000 at 0%, 5,001-10,000 at 5%, and so on — with no tax
+// groups at all. Every installation started from that and was hand-corrected,
+// which is how one school came to charge somebody on 100,000 the tax due on
+// 90,000. These checks are what stop it coming back.
+$seederSource = file_get_contents($base . '/database/seeders/TaxSettingSeeder.php');
+
+/**
+ * The file with its comments removed.
+ *
+ * The seeder's docblock quotes the destructive line it replaced, so that the
+ * next reader knows what was there and why it went. Grepping the raw file
+ * therefore finds the very thing being checked for, in the explanation of its
+ * own removal — which is how this check failed the first time it ran.
+ */
+$codeOnly = function (string $source): string {
+    $out = '';
+
+    foreach (token_get_all($source) as $token) {
+        if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+            continue;
+        }
+
+        $out .= is_array($token) ? $token[1] : $token;
+    }
+
+    return $out;
+};
+
+check('the seeder no longer wipes the table',
+    !preg_match("/DB::table\('tax_settings'\)->delete\(\)/", $codeOnly($seederSource)),
+    'a seeder that empties a live table loses a configuration somebody built');
+check('and no longer carries the vendor demo brackets',
+    !str_contains($seederSource, "'max_amount' => '5000.00'"));
+check('it reads the one shared table rather than repeating the numbers',
+    str_contains($seederSource, 'CameroonTaxTable'));
+
+$commandSource = file_get_contents($base . '/app/Console/Commands/ConfigureCameroonTax.php');
+
+check('and so does the command, so the two cannot drift apart',
+    str_contains($commandSource, 'CameroonTaxTable::INCOME_TAX')
+    && str_contains($commandSource, 'CameroonTaxTable::AUDIO_VISUAL'));
+
+$databaseSeeder = file_get_contents($base . '/database/seeders/DatabaseSeeder.php');
+
+check('the chart of accounts is seeded before the taxes that point at it',
+    strpos($databaseSeeder, 'OhadaChartOfAccountsSeeder') !== false
+    && strpos($databaseSeeder, 'OhadaChartOfAccountsSeeder') < strpos($databaseSeeder, 'TaxSettingSeeder::class'),
+    'a tax with no liability account cannot be remitted to anybody');
+
+// Now actually run it against an empty database and read what a school gets.
+DB::beginTransaction();
+
+try {
+    DB::table('payroll_tax_lines')->delete();
+    DB::table('tax_settings')->delete();
+    DB::table('tax_groups')->delete();
+
+    (new Database\Seeders\TaxSettingSeeder())->run();
+
+    $seededGroups = DB::table('tax_groups')->pluck('code')->all();
+
+    check('a fresh install gets the income tax', in_array('PIT', $seededGroups, true));
+    check('the local development tax', in_array('LDT', $seededGroups, true));
+    check('the housing fund', in_array('HLF', $seededGroups, true));
+    check('the audio-visual tax', in_array('CRTV', $seededGroups, true));
+    check('and the industrial accident group, switched off for the school to fill in',
+        DB::table('tax_groups')->where('code', 'IA')->where('status', 0)->exists(),
+        'it has no honest default rate, but the school must know it is owed');
+
+    check('the social contribution, with its ceiling as two rows',
+        DB::table('tax_settings')->whereNull('tax_group_id')
+            ->where('title', 'LIKE', '%Social Insurance%')->count() === 2);
+    check('the employment fund',
+        DB::table('tax_settings')->whereNull('tax_group_id')
+            ->where('title', 'LIKE', '%Employment Fund%')->exists());
+    check('and the council surcharge, dependent on the income tax',
+        DB::table('tax_settings')->whereNull('tax_group_id')->where('is_dependent', 1)
+            ->where('depends_on_type', 'tax_group')->exists());
+
+    $freshPit = TaxGroup::where('code', 'PIT')->first();
+    $freshWrong = [];
+
+    foreach (App\Support\Tax\CameroonTaxTable::checkpoints() as $salary => $expected) {
+        $freshPit->unsetRelation('brackets');
+
+        if (abs((int) round($freshPit->calculateTax($salary)['amount']) - $expected) > 1) {
+            $freshWrong[] = number_format($salary);
+        }
+    }
+
+    check('and the income tax it installs reproduces the barème at every checkpoint',
+        $freshWrong === [], implode(', ', $freshWrong));
+
+    check('every bracket it writes is dated',
+        DB::table('tax_settings')->where('status', 1)->whereNull('effective_from')->count() === 0);
+    check('and routed to a liability account',
+        DB::table('tax_settings')->where('status', 1)->whereNull('liability_account_id')->count() === 0);
+
+    // Running twice must not double anything, and must not clobber.
+    $afterFirst = DB::table('tax_settings')->count();
+    (new Database\Seeders\TaxSettingSeeder())->run();
+
+    check('running it a second time changes nothing',
+        DB::table('tax_settings')->count() === $afterFirst,
+        sprintf('%d -> %d', $afterFirst, DB::table('tax_settings')->count()));
+} finally {
+    DB::rollBack();
+}
+
+check('the live configuration survived the simulation',
+    TaxSetting::where('tax_group_id', GROUP_PIT)->where('status', 1)->count() === 5);
+
+// ---------------------------------------------------------------------------
+section('Correcting an established school checks for history first');
+
+// Replacing a tax table is safe exactly while nothing has been charged under
+// the old one. Once a payroll is paid, its lines name the bracket that produced
+// them, so rewriting that bracket makes a payslip disagree with the rates it
+// was supposedly calculated from — quietly, and after the fact.
+check('the command reports what the installation already holds',
+    str_contains($commandSource, 'What this installation already holds'));
+check('and refuses when a payroll has been charged',
+    str_contains($commandSource, 'i-know-there-is-history'));
+
+DB::beginTransaction();
+
+try {
+    $bracketId = TaxSetting::where('tax_group_id', GROUP_PIT)->value('id');
+    $someone = App\User::where('is_admin', 1)->first();
+
+    $payrollId = DB::table('payrolls')->insertGetId([
+        'user_id' => $someone->id, 'basic_salary' => 180000, 'salary_type' => 1,
+        'total_earning' => 180000, 'total_allowance' => 0, 'bonus' => 0, 'total_deduction' => 0,
+        'gross_salary' => 180000, 'tax' => 21005, 'employer_tax' => 12060,
+        'net_salary' => 158995, 'total_cost' => 192060, 'salary_month' => '2026-09-01',
+        'pay_date' => '2026-09-30', 'status' => 1, 'created_by' => $someone->id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    DB::table('payroll_tax_lines')->insert([
+        'payroll_id' => $payrollId, 'user_id' => $someone->id, 'salary_month' => '2026-09-01',
+        'tax_group_id' => GROUP_PIT, 'tax_setting_id' => $bracketId, 'label' => 'Personal Income Tax',
+        'employee_amount' => 7677.33, 'employer_amount' => 0, 'liability_account_id' => ACCOUNT_STATE,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $bracketsBefore = TaxSetting::where('tax_group_id', GROUP_PIT)->where('status', 1)->count();
+    $exitCode = Illuminate\Support\Facades\Artisan::call('tax:configure-cameroon', []);
+
+    check('with a paid payroll present, the command refuses', $exitCode !== 0,
+        'it ran anyway, which would rewrite what that payroll was charged under');
+    check('and changes nothing',
+        TaxSetting::where('tax_group_id', GROUP_PIT)->where('status', 1)->count() === $bracketsBefore);
+} finally {
+    DB::rollBack();
+}
+
+check('the brackets are intact after the rollback',
+    TaxSetting::where('tax_group_id', GROUP_PIT)->where('status', 1)->count() === 5);
 
 // ---------------------------------------------------------------------------
 section('Nothing was left behind');

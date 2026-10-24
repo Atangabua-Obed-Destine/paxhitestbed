@@ -22,6 +22,14 @@ class DatabaseSeeder extends Seeder
         $this->call(SessionSeeder::class);
         $this->call(FeesCategorySeeder::class);
         $this->call(StatusTypeSeeder::class);
+
+        // The chart of accounts has to exist before the taxes, because each tax
+        // points at the liability account it accrues to — 431 for the social
+        // funds, 443 for the State. It was never called from here, so a fresh
+        // install had no chart at all and nothing for a tax to point at.
+        // The OHADA seeder never truncates, so running it on an established
+        // school adds what is missing and leaves the rest alone.
+        $this->call(OhadaChartOfAccountsSeeder::class);
         $this->call(TaxSettingSeeder::class);
         $this->call(WorkShiftSeeder::class);
         $this->call(GradeSeeder::class);

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\TaxGroup;
+use App\Support\Tax\CameroonTaxTable;
 use App\Models\TaxSetting;
 use App\User;
 use Illuminate\Console\Command;
@@ -61,7 +62,8 @@ class ConfigureCameroonTax extends Command
 {
     protected $signature = 'tax:configure-cameroon
         {--dry-run : Show what would change and roll it back}
-        {--effective-from= : The date these rates take effect (default: the 1st of this month)}';
+        {--effective-from= : The date these rates take effect (default: the 1st of this month)}
+        {--i-know-there-is-history : Replace the brackets even though payroll has been charged under them}';
 
     protected $description = 'Configure payroll taxes from the DGI barème, and reconcile against the previous rates';
 
@@ -72,13 +74,8 @@ class ConfigureCameroonTax extends Command
      * verified as described in the class docblock; `note` records which
      * statutory rate each one is, so a future reader can re-derive it.
      */
-    protected const PIT = [
-        ['order' => 1, 'min' => 0,         'max' => 316616,   'percent' => 6.58,  'threshold' => 63323.20,  'note' => '10% statutory x 0.658'],
-        ['order' => 2, 'min' => 316617,    'max' => 443262,   'percent' => 9.87,  'threshold' => 147754.14, 'note' => '15% statutory x 0.658'],
-        ['order' => 3, 'min' => 443263,    'max' => 696555,   'percent' => 16.45, 'threshold' => 265957.45, 'note' => '25% statutory x 0.658'],
-        ['order' => 4, 'min' => 696556,    'max' => 1785714,  'percent' => 23.03, 'threshold' => 388985.38, 'note' => '35% statutory x 0.658'],
-        ['order' => 5, 'min' => 1785715,   'max' => 50000000, 'percent' => 24.50, 'threshold' => 472789.12, 'note' => '35% statutory x 0.70, past the CNPS cap'],
-    ];
+    /** The income-tax brackets, from the one table both this and the seeder read. */
+    protected const PIT = CameroonTaxTable::INCOME_TAX;
 
     /**
      * Audio-visual tax (CRTV): a flat amount per 100 000 of pay.
@@ -92,19 +89,8 @@ class ConfigureCameroonTax extends Command
      * threshold. What happens under 52 000 the document does not say, and this
      * command does not guess: see the warning it prints.
      */
-    protected const CRTV = [
-        ['order' => 1,  'min' => self::BAREME_FLOOR,    'max' => 100000,   'amount' => 750],
-        ['order' => 2,  'min' => 100250,   'max' => 200000,   'amount' => 1950],
-        ['order' => 3,  'min' => 200250,   'max' => 300000,   'amount' => 3250],
-        ['order' => 4,  'min' => 300250,   'max' => 400000,   'amount' => 4550],
-        ['order' => 5,  'min' => 400250,   'max' => 500000,   'amount' => 5850],
-        ['order' => 6,  'min' => 500250,   'max' => 600000,   'amount' => 7150],
-        ['order' => 7,  'min' => 600250,   'max' => 700000,   'amount' => 8450],
-        ['order' => 8,  'min' => 700250,   'max' => 800000,   'amount' => 9750],
-        ['order' => 9,  'min' => 800250,   'max' => 900000,   'amount' => 11050],
-        ['order' => 10, 'min' => 900250,   'max' => 1000000,  'amount' => 12350],
-        ['order' => 11, 'min' => 1000250,  'max' => 50000000, 'amount' => 13000],
-    ];
+    /** The audio-visual bands, from the same table. */
+    protected const CRTV = CameroonTaxTable::AUDIO_VISUAL;
 
     /**
      * The lowest gross pay the barème covers.
@@ -114,23 +100,46 @@ class ConfigureCameroonTax extends Command
      * 52 000 the document does not say, so nothing is charged there rather
      * than a figure being assumed.
      */
-    protected const BAREME_FLOOR = 52000;
+    protected const BAREME_FLOOR = CameroonTaxTable::FLOOR;
 
     /** Gross pay at which the CNPS employee contribution stops growing. */
-    protected const CNPS_CAP_BASE = 1785715;
-    protected const CNPS_CAP_AMOUNT = 75000;
-    protected const CNPS_RATE = 4.2;
+    protected const CNPS_CAP_BASE = CameroonTaxTable::CNPS_CAP_BASE;
+    protected const CNPS_CAP_AMOUNT = CameroonTaxTable::CNPS_CAP_AMOUNT;
+    protected const CNPS_RATE = CameroonTaxTable::CNPS_RATE;
 
     /** Group ids, as installed. */
-    protected const GROUP_PIT = 1;
-    protected const GROUP_TDL = 2;
-    protected const GROUP_CFC = 4;
-    protected const GROUP_CRTV = 5;
-    protected const GROUP_ACCIDENT = 9;
+    /**
+     * Groups are found by CODE, not by id.
+     *
+     * These were the literal ids 1, 2, 4, 5 and 9, which are correct on the
+     * installation this was written against and correct nowhere else: the ids
+     * come from an auto-increment, so another school's income tax is whatever
+     * number it happened to get. Running it there would have written the
+     * income-tax brackets into some other group, or failed the preflight for
+     * a group that exists under a different number.
+     *
+     * The code is the stable key, and the seeder uses the same one.
+     */
+    protected const GROUP_PIT = 'PIT';
+    protected const GROUP_TDL = 'LDT';
+    protected const GROUP_CFC = 'HLF';
+    protected const GROUP_CRTV = 'CRTV';
+    protected const GROUP_ACCIDENT = 'IA';
 
-    /** 443 Etat - Retenue, and 431 CNPS. */
-    protected const ACCOUNT_STATE = 145;
-    protected const ACCOUNT_SOCIAL = 142;
+    /** code => id, resolved once in preflight(). */
+    protected array $groupIds = [];
+    protected array $accountIds = [];
+
+    /**
+     * Liability accounts, found by their OHADA code rather than their id.
+     *
+     * Same reasoning as the groups: 145 and 142 are this installation's
+     * auto-increment ids for 443 and 431. On another school those numbers
+     * belong to entirely different accounts, and the withholdings would have
+     * been credited to whatever they happened to be.
+     */
+    protected const ACCOUNT_STATE = '443';
+    protected const ACCOUNT_SOCIAL = '431';
 
     protected string $effectiveFrom;
 
@@ -140,6 +149,11 @@ class ConfigureCameroonTax extends Command
             ?: Carbon::now()->startOfMonth()->toDateString();
 
         if (!$this->preflight()) {
+            return self::FAILURE;
+        }
+
+        // Checked, not assumed: see history() for why this matters.
+        if (!$this->reportHistory($this->history()) && !$this->option('i-know-there-is-history')) {
             return self::FAILURE;
         }
 
@@ -194,6 +208,87 @@ class ConfigureCameroonTax extends Command
         }
     }
 
+    /**
+     * What this installation already holds, before anything is written.
+     *
+     * Replacing a tax table is safe exactly while nothing has been charged
+     * under the old one. Once a payroll has been paid, its lines name the
+     * bracket that produced them and its journal entry has been posted on
+     * those figures, so rewriting the bracket in place makes a payslip
+     * disagree with the rates it was supposedly calculated from -- quietly,
+     * and after the fact.
+     *
+     * So the assumption is CHECKED rather than taken on trust. A machine
+     * reading the tables is worth more here than anyone's recollection of
+     * whether a school has run payroll yet.
+     *
+     * @return array{paid:int, lines:int, entries:int, remittances:int, used_brackets:int}
+     */
+    protected function history(): array
+    {
+        return [
+            'paid' => DB::table('payrolls')->where('status', 1)->count(),
+            'lines' => DB::table('payroll_tax_lines')->count(),
+            'entries' => DB::table('journal_entries')->where('reference_type', 'payroll')->count(),
+            'remittances' => DB::table('tax_remittances')->count(),
+            'used_brackets' => DB::table('payroll_tax_lines')->whereNotNull('tax_setting_id')
+                ->distinct()->count('tax_setting_id'),
+        ];
+    }
+
+    /** Say what is already here, and whether it is safe to replace. */
+    protected function reportHistory(array $history): bool
+    {
+        $this->info('What this installation already holds');
+        $this->line(str_repeat('-', 78));
+        $this->line(sprintf('  payrolls marked paid            : %s', number_format($history['paid'])));
+        $this->line(sprintf('  payroll tax lines recorded      : %s', number_format($history['lines'])));
+        $this->line(sprintf('  payroll journal entries posted  : %s', number_format($history['entries'])));
+        $this->line(sprintf('  tax remittances recorded        : %s', number_format($history['remittances'])));
+        $this->line(sprintf('  brackets a payroll has used     : %s', number_format($history['used_brackets'])));
+        $this->line('');
+
+        $clean = array_sum($history) === 0;
+
+        if ($clean) {
+            $this->info('  Nothing has been charged yet, so the configuration can be replaced outright.');
+            $this->line('');
+
+            return true;
+        }
+
+        $this->error('  This installation has payroll history.');
+        $this->line('');
+        $this->line('  Replacing the brackets would leave those payrolls pointing at rates that no');
+        $this->line('  longer say what they were charged under, so this refuses by default.');
+        $this->line('');
+        $this->line('  If the history is itself test data and you want it gone, clear it first and');
+        $this->line('  run this again. If it is real, the brackets must be closed off with an');
+        $this->line('  effective_to date instead of rewritten — tell whoever maintains this and it');
+        $this->line('  can be done that way.');
+        $this->line('');
+        $this->line('  To proceed anyway, knowing the above: --i-know-there-is-history');
+        $this->line('');
+
+        return false;
+    }
+
+    /**
+     * The id this installation gave a group, looked up by its code.
+     *
+     * Resolved once in preflight(), so a missing group is reported there as a
+     * sentence rather than surfacing later as a null foreign key.
+     */
+    protected function groupId(string $code): ?int
+    {
+        return $this->groupIds[$code] ?? null;
+    }
+
+    protected function accountId(string $code): ?int
+    {
+        return $this->accountIds[$code] ?? null;
+    }
+
     /** Refuse to start unless the groups and accounts this writes to exist. */
     protected function preflight(): bool
     {
@@ -207,20 +302,54 @@ class ConfigureCameroonTax extends Command
 
         foreach ([
             self::GROUP_PIT => 'Personal Income Tax',
+            self::GROUP_TDL => 'Local Development Tax',
             self::GROUP_CFC => 'Housing Loan Fund',
             self::GROUP_CRTV => 'Audio Visual Tax',
-        ] as $id => $what) {
-            if (!TaxGroup::find($id)) {
-                $this->error(sprintf('Tax group %d (%s) is missing.', $id, $what));
-                $ok = false;
+            self::GROUP_ACCIDENT => 'Industrial Accident',
+        ] as $code => $what) {
+            $group = TaxGroup::where('code', $code)->first();
+
+            if ($group) {
+                $this->groupIds[$code] = (int) $group->id;
+
+                continue;
             }
+
+            // The accident group is optional: it carries no rate anywhere, and
+            // a school that has not created it is not misconfigured.
+            if ($code === self::GROUP_ACCIDENT || $code === self::GROUP_TDL) {
+                continue;
+            }
+
+            $this->error(sprintf('No tax group with code "%s" (%s). Run the seeder first, or create it.', $code, $what));
+            $ok = false;
         }
 
-        foreach ([self::ACCOUNT_STATE => '443 Etat - Retenue', self::ACCOUNT_SOCIAL => '431 CNPS'] as $id => $what) {
-            if (!DB::table('chart_of_accounts')->where('id', $id)->exists()) {
-                $this->error(sprintf('Liability account %d (%s) is missing.', $id, $what));
+        foreach ([self::ACCOUNT_STATE => 'Etat - Retenue', self::ACCOUNT_SOCIAL => 'CNPS'] as $code => $what) {
+            $id = DB::table('chart_of_accounts')->where('account_code', $code)->value('id');
+
+            if (!$id) {
+                $this->error(sprintf('No liability account %s (%s) in the chart of accounts.', $code, $what));
                 $ok = false;
+
+                continue;
             }
+
+            $this->accountIds[$code] = (int) $id;
+        }
+
+        if ($ok) {
+            $this->line('  Resolved on this installation:');
+
+            foreach ($this->groupIds as $code => $id) {
+                $this->line(sprintf('    group %-5s -> #%d', $code, $id));
+            }
+
+            foreach ($this->accountIds as $code => $id) {
+                $this->line(sprintf('    account %-4s -> #%d', $code, $id));
+            }
+
+            $this->line('');
         }
 
         return $ok;
@@ -272,7 +401,7 @@ class ConfigureCameroonTax extends Command
         $kept = [];
 
         foreach (self::PIT as $b) {
-            $kept[] = $this->writeBracket(self::GROUP_PIT, [
+            $kept[] = $this->writeBracket($this->groupId(self::GROUP_PIT), [
                 'title' => sprintf('IRPP band %d — %s%% above %s', $b['order'],
                     number_format($b['percent'], 2), number_format($b['threshold'])),
                 'bracket_order' => $b['order'],
@@ -285,7 +414,7 @@ class ConfigureCameroonTax extends Command
                 'fixed_amount' => 0,
                 'employer_fixed_amount' => 0,
                 'max_no_taxable_amount' => $b['threshold'],
-                'liability_account_id' => self::ACCOUNT_STATE,
+                'liability_account_id' => $this->accountId(self::ACCOUNT_STATE),
             ]);
 
             $this->line(sprintf('   %-9s - %-11s  %5s%% above %-12s  %s',
@@ -293,8 +422,8 @@ class ConfigureCameroonTax extends Command
                 number_format($b['percent'], 2), number_format($b['threshold'], 2), $b['note']));
         }
 
-        $this->pruneBrackets(self::GROUP_PIT, $kept);
-        TaxGroup::where('id', self::GROUP_PIT)->update(['status' => 1]);
+        $this->pruneBrackets($this->groupId(self::GROUP_PIT), $kept);
+        TaxGroup::where('id', $this->groupId(self::GROUP_PIT))->update(['status' => 1]);
     }
 
     protected function configureCrtv(): void
@@ -305,7 +434,7 @@ class ConfigureCameroonTax extends Command
         $kept = [];
 
         foreach (self::CRTV as $b) {
-            $kept[] = $this->writeBracket(self::GROUP_CRTV, [
+            $kept[] = $this->writeBracket($this->groupId(self::GROUP_CRTV), [
                 'title' => sprintf('CRTV band %d', $b['order']),
                 'bracket_order' => $b['order'],
                 'tax_type' => 2,
@@ -317,7 +446,7 @@ class ConfigureCameroonTax extends Command
                 'fixed_amount' => $b['amount'],
                 'employer_fixed_amount' => 0,
                 'max_no_taxable_amount' => 0,
-                'liability_account_id' => self::ACCOUNT_STATE,
+                'liability_account_id' => $this->accountId(self::ACCOUNT_STATE),
             ]);
         }
 
@@ -325,8 +454,8 @@ class ConfigureCameroonTax extends Command
             count(self::CRTV), number_format(self::CRTV[0]['amount']),
             number_format(self::CRTV[count(self::CRTV) - 1]['amount'])));
 
-        $this->pruneBrackets(self::GROUP_CRTV, $kept);
-        TaxGroup::where('id', self::GROUP_CRTV)->update(['status' => 1]);
+        $this->pruneBrackets($this->groupId(self::GROUP_CRTV), $kept);
+        TaxGroup::where('id', $this->groupId(self::GROUP_CRTV))->update(['status' => 1]);
     }
 
     /**
@@ -347,7 +476,7 @@ class ConfigureCameroonTax extends Command
         $this->line('');
         $this->info('Housing Loan Fund (CFC) — adding the 1.5% employer share');
 
-        $kept = [$this->writeBracket(self::GROUP_CFC, [
+        $kept = [$this->writeBracket($this->groupId(self::GROUP_CFC), [
             'title' => 'Housing Loan Fund',
             'bracket_order' => 1,
             'tax_type' => 1,
@@ -359,12 +488,12 @@ class ConfigureCameroonTax extends Command
             'fixed_amount' => 0,
             'employer_fixed_amount' => 0,
             'max_no_taxable_amount' => 0,
-            'liability_account_id' => self::ACCOUNT_STATE,
+            'liability_account_id' => $this->accountId(self::ACCOUNT_STATE),
         ])];
 
         $this->line('   1.00% employee + 1.50% employer on the whole of pay');
-        $this->pruneBrackets(self::GROUP_CFC, $kept);
-        TaxGroup::where('id', self::GROUP_CFC)->update(['status' => 1]);
+        $this->pruneBrackets($this->groupId(self::GROUP_CFC), $kept);
+        TaxGroup::where('id', $this->groupId(self::GROUP_CFC))->update(['status' => 1]);
     }
 
     /**
@@ -410,7 +539,7 @@ class ConfigureCameroonTax extends Command
             'employer_fixed_amount' => 0,
             'max_no_taxable_amount' => 0,
             'status' => 1,
-            'liability_account_id' => self::ACCOUNT_SOCIAL,
+            'liability_account_id' => $this->accountId(self::ACCOUNT_SOCIAL),
             'effective_from' => $this->effectiveFrom,
         ])->save();
 
@@ -433,7 +562,7 @@ class ConfigureCameroonTax extends Command
             'employer_fixed_amount' => self::CNPS_CAP_AMOUNT,
             'max_no_taxable_amount' => 0,
             'status' => 1,
-            'liability_account_id' => self::ACCOUNT_SOCIAL,
+            'liability_account_id' => $this->accountId(self::ACCOUNT_SOCIAL),
             'effective_from' => $this->effectiveFrom,
         ])->save();
 
@@ -458,7 +587,7 @@ class ConfigureCameroonTax extends Command
 
         $cac = TaxSetting::whereNull('tax_group_id')->where('is_dependent', 1)
             ->where('depends_on_type', 'tax_group')
-            ->where('depends_on_id', self::GROUP_PIT)->first();
+            ->where('depends_on_id', $this->groupId(self::GROUP_PIT))->first();
 
         if (!$cac) {
             throw new \RuntimeException('The council tax row is missing; not inventing one.');
@@ -474,7 +603,7 @@ class ConfigureCameroonTax extends Command
             'percentange' => 10,
             'employer_percentage' => 0,
             'status' => 1,
-            'liability_account_id' => self::ACCOUNT_STATE,
+            'liability_account_id' => $this->accountId(self::ACCOUNT_STATE),
             'effective_from' => $this->effectiveFrom,
         ])->save();
 
@@ -503,7 +632,7 @@ class ConfigureCameroonTax extends Command
             'employer_percentage' => 1,
             'max_no_taxable_amount' => 0,
             'status' => 1,
-            'liability_account_id' => self::ACCOUNT_SOCIAL,
+            'liability_account_id' => $this->accountId(self::ACCOUNT_SOCIAL),
             'effective_from' => $this->effectiveFrom,
         ])->save();
 
@@ -538,8 +667,8 @@ class ConfigureCameroonTax extends Command
             self::GROUP_TDL => [0, 'a flat amount per band'],
         ];
 
-        foreach ($labels as $id => [$progressive, $why]) {
-            $group = TaxGroup::find($id);
+        foreach ($labels as $code => [$progressive, $why]) {
+            $group = TaxGroup::where('code', $code)->first();
 
             if (!$group) {
                 continue;
@@ -694,7 +823,7 @@ class ConfigureCameroonTax extends Command
             3000000 => 619167,     // bracket 5, near the top of the table
         ];
 
-        $group = TaxGroup::find(self::GROUP_PIT);
+        $group = TaxGroup::find($this->groupId(self::GROUP_PIT));
         $ok = true;
 
         $this->line(sprintf('   %-14s %-12s %-12s %s', 'gross', 'barème', 'configured', ''));
@@ -769,18 +898,18 @@ class ConfigureCameroonTax extends Command
         $this->warn('Left alone, and why');
         $this->line(str_repeat('-', 78));
 
-        $tdl = TaxGroup::find(self::GROUP_TDL);
-        $this->line(sprintf('  %s (group %d, %d bands)',
+        $tdl = TaxGroup::where('code', self::GROUP_TDL)->first();
+        $this->line(sprintf('  %s (group %s, %d bands)',
             $tdl->title ?? 'Local Development Tax', self::GROUP_TDL, $tdl ? $tdl->brackets()->count() : 0));
         $this->line('     This barème excludes it by its own title ("hors taxe de developpement');
         $this->line('     local"). The group is already contiguous from 0, so it is left as it');
         $this->line('     stands — but it has not been checked against the TDL schedule.');
         $this->line('');
 
-        $accident = TaxGroup::find(self::GROUP_ACCIDENT);
+        $accident = TaxGroup::where('code', self::GROUP_ACCIDENT)->first();
 
         if ($accident) {
-            $this->line(sprintf('  %s (group %d, %d bands, %s)',
+            $this->line(sprintf('  %s (group %s, %d bands, %s)',
                 $accident->title, self::GROUP_ACCIDENT, $accident->brackets()->count(),
                 $accident->status ? 'on' : 'off'));
             $this->line('     An employer obligation whose rate depends on the sector');
