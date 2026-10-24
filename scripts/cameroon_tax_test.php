@@ -616,6 +616,83 @@ check('the live configuration survived the simulation',
     TaxSetting::where('tax_group_id', GROUP_PIT)->where('status', 1)->count() === 5);
 
 // ---------------------------------------------------------------------------
+section('A school whose groups were made by hand is adopted, not duplicated');
+
+// One school's income-tax group was coded "PIT." and titled "Personal Income
+// Tax." — trailing full stops somebody typed. An exact match found neither, so
+// the seeder would have created a SECOND income-tax group beside it; and
+// PayrollTaxBreakdownService sums every effective group, so each member of
+// staff would have been charged income tax twice with nothing on screen to say
+// why. The group also carried fifteen bands of its own, and since selection
+// takes the highest floor at or below the salary with max_amount never
+// consulted, a leftover band would simply win for the larger salaries.
+DB::beginTransaction();
+
+try {
+    DB::table('tax_settings')->delete();
+    DB::table('tax_groups')->delete();
+
+    $handMade = DB::table('tax_groups')->insertGetId([
+        'title' => 'Personal Income Tax.', 'code' => 'PIT.', 'status' => 1,
+        'is_progressive' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    for ($i = 1; $i <= 15; $i++) {
+        DB::table('tax_settings')->insert([
+            'tax_group_id' => $handMade, 'title' => 'hand-made band ' . $i, 'bracket_order' => $i,
+            'tax_type' => 2, 'paid_by' => 'employee', 'min_amount' => $i * 50000,
+            'max_amount' => $i * 50000 + 49999, 'percentange' => 0, 'employer_percentage' => 0,
+            'fixed_amount' => $i * 1000, 'employer_fixed_amount' => 0, 'max_no_taxable_amount' => 0,
+            'status' => 1, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    (new Database\Seeders\TaxSettingSeeder())->run();
+
+    $pitGroups = DB::table('tax_groups')
+        ->whereIn('code', ['PIT', 'PIT.'])->count();
+
+    check('the near-miss code is adopted rather than a second group created',
+        $pitGroups === 1, $pitGroups . ' income-tax groups');
+    check('and the school keeps its own group id',
+        (int) DB::table('tax_groups')->where('code', 'PIT')->value('id') === $handMade);
+    check('its title is left as the school wrote it',
+        DB::table('tax_groups')->where('code', 'PIT')->value('title') === 'Personal Income Tax.',
+        'adopting a group is not licence to rename it');
+    check('the bands it had are replaced, not added to',
+        DB::table('tax_settings')->where('tax_group_id', $handMade)->count() === 5,
+        DB::table('tax_settings')->where('tax_group_id', $handMade)->count() . ' bands');
+
+    $adopted = TaxGroup::where('code', 'PIT')->first();
+    $adoptedWrong = [];
+
+    foreach (App\Support\Tax\CameroonTaxTable::checkpoints() as $salary => $expected) {
+        $adopted->unsetRelation('brackets');
+
+        if (abs((int) round($adopted->calculateTax($salary)['amount']) - $expected) > 1) {
+            $adoptedWrong[] = number_format($salary);
+        }
+    }
+
+    check('and it then charges the barème exactly', $adoptedWrong === [],
+        implode(', ', $adoptedWrong));
+
+    // The duplicate would not have been visible in the group list alone: what
+    // matters is that a salary is taxed once.
+    $breakdown = app(PayrollTaxBreakdownService::class);
+    $incomeTaxLines = collect($breakdown->forSalary(180000.0, Carbon::parse('2026-10-01')))
+        ->filter(fn ($line) => stripos($line['label'], 'Income Tax') !== false);
+
+    check('a salary is charged income tax exactly once', $incomeTaxLines->count() === 1,
+        $incomeTaxLines->count() . ' income-tax lines on one payslip');
+} finally {
+    DB::rollBack();
+}
+
+check('the live configuration survived that too',
+    TaxSetting::where('tax_group_id', GROUP_PIT)->where('status', 1)->count() === 5);
+
+// ---------------------------------------------------------------------------
 section('Correcting an established school checks for history first');
 
 // Replacing a tax table is safe exactly while nothing has been charged under

@@ -150,26 +150,51 @@ class TaxSettingSeeder extends Seeder
     }
 
     /**
-     * Give a code to a group that plainly already is one of these.
+     * Strip the things that stop two labels matching when they plainly mean
+     * the same group: case, surrounding space, and trailing punctuation.
      *
-     * A school whose groups were created by hand has the right titles and no
-     * codes. Creating fresh groups beside them would leave two "Personal
-     * Income Tax" rows, one of them the one the screens already show. Matching
-     * on title and backfilling the code adopts what is there instead, so ids
-     * and anything referencing them survive.
+     * Not cosmetic. One school's income-tax group was coded "PIT." and titled
+     * "Personal Income Tax." — both with a trailing full stop somebody typed.
+     * An exact match found neither, so the seeder would have created a SECOND
+     * income-tax group beside it, and PayrollTaxBreakdownService sums every
+     * effective group: each member of staff would have been charged income tax
+     * twice, with nothing on screen to say why.
+     */
+    protected function normalise(?string $value): string
+    {
+        return mb_strtolower(trim(rtrim(trim((string) $value), '.,;:-')));
+    }
+
+    /**
+     * Give the canonical code to a group that plainly already is one of these.
      *
-     * Only ever fills a code in; never renames a group, and never touches one
-     * that already carries a code.
+     * A school whose groups were created by hand has the right titles and
+     * either no code or a nearly-right one. Creating fresh groups beside them
+     * would leave two of each, one being the one the screens already show.
+     * Adopting keeps the school's own ids and anything referencing them.
+     *
+     * Matches on the normalised code first, then the normalised title. Only
+     * ever sets the code; never renames a group, and never touches one that
+     * already carries an exact known code.
      */
     protected function adoptUncodedGroups(): void
     {
+        $known = array_keys(CameroonTaxTable::GROUPS);
+
         foreach (CameroonTaxTable::GROUPS as $code => $title) {
-            $match = DB::table('tax_groups')
-                ->where(function ($query) {
-                    $query->whereNull('code')->orWhere('code', '');
-                })
-                ->whereRaw('LOWER(TRIM(title)) = ?', [mb_strtolower(trim($title))])
-                ->first();
+            if (DB::table('tax_groups')->where('code', $code)->exists()) {
+                continue;
+            }
+
+            $match = DB::table('tax_groups')->get()->first(function ($group) use ($code, $title, $known) {
+                // Leave alone anything already carrying a different known code.
+                if (in_array($group->code, $known, true)) {
+                    return false;
+                }
+
+                return $this->normalise($group->code) === $this->normalise($code)
+                    || $this->normalise($group->title) === $this->normalise($title);
+            });
 
             if (!$match) {
                 continue;
@@ -178,9 +203,42 @@ class TaxSettingSeeder extends Seeder
             DB::table('tax_groups')->where('id', $match->id)
                 ->update(['code' => $code, 'updated_at' => now()]);
 
-            $this->command?->line(sprintf('  adopted existing group #%d "%s" as %s',
-                $match->id, $match->title, $code));
+            $this->command?->line(sprintf('  adopted existing group #%d (code "%s", title "%s") as %s',
+                $match->id, $match->code ?? '', $match->title ?? '', $code));
         }
+    }
+
+    /**
+     * Remove bands of a managed group that this configuration does not define.
+     *
+     * An adopted group arrives with the school's own bands — one had fifteen
+     * in its income-tax group. Writing five over the top of them leaves ten
+     * behind, and bracket selection takes the highest floor at or below the
+     * salary with max_amount never consulted, so a leftover band with a high
+     * floor would simply win. The staff on the largest salaries would be
+     * charged from the old wrong table and nothing would look amiss.
+     *
+     * Safe only because run() has already established that nothing has been
+     * charged here: with payroll history these would have to be closed off
+     * with an effective_to date instead, which is what the command does.
+     *
+     * @param  array<int>  $keep  bracket_order values this configuration defines
+     */
+    protected function pruneBands(int $groupId, array $keep): void
+    {
+        $stale = DB::table('tax_settings')
+            ->where('tax_group_id', $groupId)
+            ->whereNotIn('bracket_order', $keep)
+            ->get();
+
+        if ($stale->isEmpty()) {
+            return;
+        }
+
+        DB::table('tax_settings')->whereIn('id', $stale->pluck('id'))->delete();
+
+        $this->command?->line(sprintf('  removed %d band(s) from group #%d that this configuration does not define',
+            $stale->count(), $groupId));
     }
 
     // -----------------------------------------------------------------------
@@ -188,6 +246,8 @@ class TaxSettingSeeder extends Seeder
     protected function incomeTax(string $effectiveFrom): void
     {
         $group = $this->group('PIT', CameroonTaxTable::GROUPS['PIT'], true);
+
+        $this->pruneBands($group, array_column(CameroonTaxTable::INCOME_TAX, 'order'));
 
         foreach (CameroonTaxTable::INCOME_TAX as $band) {
             $this->bracket($group, [
@@ -209,6 +269,8 @@ class TaxSettingSeeder extends Seeder
     {
         $group = $this->group('LDT', CameroonTaxTable::GROUPS['LDT'], false);
 
+        $this->pruneBands($group, array_column(CameroonTaxTable::LOCAL_DEVELOPMENT, 'order'));
+
         foreach (CameroonTaxTable::LOCAL_DEVELOPMENT as $band) {
             $this->bracket($group, [
                 'title' => sprintf('Local Development Tax — band %d', $band['order']),
@@ -228,6 +290,8 @@ class TaxSettingSeeder extends Seeder
     {
         $group = $this->group('HLF', CameroonTaxTable::GROUPS['HLF'], false);
 
+        $this->pruneBands($group, [1]);
+
         $this->bracket($group, [
             'title' => 'Housing Loan Fund',
             'bracket_order' => 1,
@@ -244,6 +308,8 @@ class TaxSettingSeeder extends Seeder
     protected function audioVisual(string $effectiveFrom): void
     {
         $group = $this->group('CRTV', CameroonTaxTable::GROUPS['CRTV'], false);
+
+        $this->pruneBands($group, array_column(CameroonTaxTable::AUDIO_VISUAL, 'order'));
 
         foreach (CameroonTaxTable::AUDIO_VISUAL as $band) {
             $this->bracket($group, [
