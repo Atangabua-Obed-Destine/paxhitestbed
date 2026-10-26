@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
-    
+    {{-- The portal's phone styling. Everything in it is inside a
+         max-width: 991px block, so a laptop is untouched. --}}
+    @include('student.layouts.inc.app_shell')
+
      @include('student.layouts.common.header_script')
 
 </head>
@@ -1860,6 +1863,10 @@
     @include('components.chat-widget')
     {{-- Says a click landed, and stops the same form being sent twice. --}}
     @include('partials.loading-screen')
+
+    {{-- Last in the body so it sits above the chat launcher and the install
+         card without either of them needing to know about it. --}}
+    @include('student.layouts.inc.bottom_nav')
 
 </body>
 </html>

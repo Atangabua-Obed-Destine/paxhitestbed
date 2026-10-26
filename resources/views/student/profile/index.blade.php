@@ -23,8 +23,18 @@
                             </li>
                         </ul>
                         @php
-                            function field($slug){
-                                return \App\Models\Field::field($slug);
+                            // Guarded, for the reason the sidebar gives about
+                            // panel(): a function declared in a view is declared
+                            // globally, so rendering this page a second time in
+                            // one process — a job, a test, or the view included
+                            // twice — fataled with "Cannot redeclare field()".
+                            //
+                            // Sixteen other views still declare this same
+                            // function unguarded; they are outside this change.
+                            if (!function_exists('field')) {
+                                function field($slug){
+                                    return \App\Models\Field::field($slug);
+                                }
                             }
                         @endphp
                         <div class="tab-content" id="pills-tabContent">

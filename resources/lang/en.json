@@ -2960,5 +2960,18 @@
     "acc_cat_none_hint": "Add one on the left. Categories are what the Income & Expenditure sheet reports against.",
     "acc_cat_in_use": "in use",
     "acc_cat_count": "categories",
-    "acc_cat_status_help": "Inactive keeps every figure already recorded against this category; it only stops being offered on new entries."
+    "acc_cat_status_help": "Inactive keeps every figure already recorded against this category; it only stops being offered on new entries.",
+    "nav_home": "Home",
+    "nav_classes": "Classes",
+    "nav_results": "Results",
+    "nav_fees": "Fees",
+    "nav_more": "More",
+    "nav_group_academics": "Academics",
+    "nav_group_results": "Results & documents",
+    "nav_group_money": "Fees & payments",
+    "nav_group_library": "Library",
+    "nav_group_school": "School",
+    "nav_group_account": "Account",
+    "nav_everything": "Everything else",
+    "nav_close": "Close"
 }
