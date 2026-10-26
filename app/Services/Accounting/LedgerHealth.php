@@ -483,7 +483,7 @@ class LedgerHealth
         $out[] = $this->check('date_drift', 'Agreement', 'Entry dated differently from its transaction',
             count($dateDrift), 0.0,
             'The sheet counts it in one month and the ledger in another — and if they fall either side of 31 December, in different exercices.',
-            'Re-save the transaction; the posting now follows the date.',
+            'Run php artisan accounting:repost. Re-saving the transaction will not do it: nothing has changed on the transaction, so nothing fires.',
             $dateDrift, self::CRITICAL);
 
         $out[] = $this->check('amount_drift', 'Agreement', 'Entry posted for a different amount',

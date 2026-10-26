@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\PaymentMethod;
+use App\Support\TransactionWindow;
 use Illuminate\Support\Facades\Auth;
 use App\Services\Accounting\BudgetLineChoices;
 use Illuminate\Support\Facades\DB;
@@ -74,36 +76,89 @@ class IncomeController extends Controller
             $data['selected_category'] = $category = '0';
         }
 
-        if(!empty($request->start_date) || $request->start_date != null){
-            $data['selected_start_date'] = $start_date = $request->start_date;
-        }
-        else{
-            $data['selected_start_date'] = $start_date = date('Y-m-d', strtotime(Carbon::now()->subYear()));
-        }
+        /*
+         * The window the screen opens on.
+         *
+         * It used to be the last twelve months counted back from today, which
+         * belongs to no set of accounts: it straddles two exercices, so the
+         * screen and the reports were drawn from different periods, and it
+         * silently hid everything older. TransactionWindow answers with the
+         * exercice the books are actually keeping, and leaves an explicit
+         * start_date/end_date alone so a saved link still shows what it did.
+         */
+        $window = TransactionWindow::resolve(
+            $request->input('start_date'),
+            $request->input('end_date'),
+            $request->boolean('all')
+        );
 
-        if(!empty($request->end_date) || $request->end_date != null){
-            $data['selected_end_date'] = $end_date = $request->end_date;
-        }
-        else{
-            $data['selected_end_date'] = $end_date = date('Y-m-d', strtotime(Carbon::today()));
-        }
+        $data['selected_start_date'] = $start_date = $window['start'];
+        $data['selected_end_date'] = $end_date = $window['end'];
+        $data['window'] = $window;
 
 
         // Search Filter
         $data['categories'] = IncomeCategory::where('status', '1')
                             ->orderBy('title', 'asc')->get();
 
-        $rows = Income::whereDate('date', '>=', $start_date)
-                    ->whereDate('date', '<=', $end_date);
+        // when() rather than two bare whereDate calls, because "All time"
+        // resolves to no dates at all and a null bound matches nothing.
+        $rows = Income::when($start_date, fn ($q) => $q->whereDate('date', '>=', $start_date))
+                    ->when($end_date, fn ($q) => $q->whereDate('date', '<=', $end_date));
                     if(!empty($request->title) || $request->title != null){
                         $rows->where('title', 'LIKE', '%'.$title.'%');
                     }
                     if(!empty($request->category) || $request->category != null){
                         $rows->where('category_id', $category);
                     }
-        $data['rows'] = $rows->orderBy('id', 'desc')->get();
+        $data['rows'] = $rows->orderBy('date', 'desc')->orderBy('id', 'desc')->get();
+
+        // Bucketed from the rows already fetched, so the band above the table
+        // costs no extra query and can never disagree with the table below it.
+        $data['summary'] = $this->summarise($data['rows']);
 
         return view($this->view.'.index', $data);
+    }
+
+    /**
+     * The band above the table: how much, over how many rows, and how it moved.
+     *
+     * Taken from the rows the page already has rather than from its own query,
+     * for two reasons. It costs nothing, and more importantly a separate query
+     * could drift from the filters the table was built with — a total that
+     * disagrees with the rows under it is worse than no total at all.
+     *
+     * @param  \Illuminate\Support\Collection  $rows
+     * @return array{count:int, total:float, methods:array<int, array{label:string, count:int, total:float}>}
+     */
+    protected function summarise($rows): array
+    {
+        $methods = [];
+
+        foreach ($rows as $row) {
+            $key = $row->payment_method === null ? 0 : (int) $row->payment_method;
+
+            if (!isset($methods[$key])) {
+                $methods[$key] = [
+                    'label' => $key === 0 ? __('acc_not_recorded') : PaymentMethod::label($key),
+                    'count' => 0,
+                    'total' => 0.0,
+                ];
+            }
+
+            $methods[$key]['count']++;
+            $methods[$key]['total'] += (float) $row->amount;
+        }
+
+        // Biggest first: what the money mostly came through is the thing worth
+        // reading, not whichever method happens to be numbered lowest.
+        uasort($methods, fn ($a, $b) => $b['total'] <=> $a['total']);
+
+        return [
+            'count' => $rows->count(),
+            'total' => (float) $rows->sum('amount'),
+            'methods' => $methods,
+        ];
     }
 
     /**
@@ -117,6 +172,9 @@ class IncomeController extends Controller
         $data['title'] = $this->title;
         $data['route'] = $this->route;
         $data['view'] = $this->view;
+        // Carried so the form knows which side of the sheet it is on; without
+        // it the shared theme fell back to the income accent.
+        $data['path'] = $this->path;
 
         // Headings and the categories filed under them, so a figure cannot be
         // recorded against a category that reaches no line of the sheet.
@@ -140,6 +198,7 @@ class IncomeController extends Controller
             'title' => 'required',
             'amount' => 'required|numeric',
             'date' => 'required|date|before_or_equal:today',
+            'payment_method' => PaymentMethod::rule(),
             'attach' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,zip,rar,csv,xls,xlsx,ppt,pptx|max:20480',
             'payment_account_id' => 'nullable|exists:payment_accounts,id',
         ]);
@@ -270,6 +329,7 @@ class IncomeController extends Controller
             'title' => 'required',
             'amount' => 'required|numeric',
             'date' => 'required|date|before_or_equal:today',
+            'payment_method' => PaymentMethod::rule(),
             'attach' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,zip,rar,csv,xls,xlsx,ppt,pptx|max:20480',
         ]);
 
@@ -296,7 +356,19 @@ class IncomeController extends Controller
 
         Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
 
-        return redirect()->back();
+        /*
+         * Back to the list, not back to the form.
+         *
+         * redirect()->back() returned to the edit screen the save had been
+         * made from, so the page came back looking exactly as it went: same
+         * form, same values, nothing to say the save had happened. The toast
+         * was there — it just landed on a page that looked unchanged, which
+         * reads as nothing having happened at all.
+         *
+         * The list is where the record can actually be seen, and it is where
+         * store() has always gone after recording one.
+         */
+        return redirect()->route($this->route.'.index');
     }
 
     /**

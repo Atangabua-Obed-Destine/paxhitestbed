@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\AccountingPeriod;
 use App\Models\FiscalYear;
 use App\Models\JournalEntry;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -271,6 +272,63 @@ class FiscalYearDoctor extends Command
     }
 
     /**
+     * What to do about an entry no fiscal year covers.
+     *
+     * The old advice was always "create the missing fiscal year", which
+     * assumes the date is right. Far from the books in use that assumption is
+     * usually wrong: an entry dated 2005 on a school whose ledger starts in
+     * 2025 is a mistyped year, not a lost exercice, and creating a 2005
+     * exercice to receive it files a typo as twenty years of history.
+     *
+     * So the distance decides which advice is given. Nothing is repaired
+     * either way — both roads out of this need a decision about the school's
+     * accounts that a repair command does not get to make.
+     *
+     * @param  array<int, string>  $dates  entry_date of each entry left alone
+     */
+    protected function reportStrays(array $dates): void
+    {
+        $years = FiscalYear::orderBy('start_date')->get();
+
+        if ($years->isEmpty()) {
+            $this->line('      There are no fiscal years at all. Create the first one.');
+
+            return;
+        }
+
+        $first = Carbon::parse($years->first()->start_date);
+        $last = Carbon::parse($years->last()->end_date);
+
+        // A year, which is wide enough that an adjacent exercice the school
+        // genuinely has not created yet still reads as near.
+        $near = [];
+        $far = [];
+
+        foreach ($dates as $date) {
+            $d = Carbon::parse($date);
+            $gap = $d->lt($first) ? $d->diffInDays($first) : $d->diffInDays($last);
+
+            if ($gap > 365) { $far[] = $d->toDateString(); } else { $near[] = $d->toDateString(); }
+        }
+
+        if ($near !== []) {
+            $this->line(sprintf('      %d near the years you have (%s).',
+                count($near), implode(', ', array_slice(array_unique($near), 0, 5))));
+            $this->line('      Create the missing fiscal year, then run this again.');
+        }
+
+        if ($far !== []) {
+            $this->line(sprintf('      %d far outside them (%s), against books running %s to %s.',
+                count($far), implode(', ', array_slice(array_unique($far), 0, 5)),
+                $first->toDateString(), $last->toDateString()));
+            $this->line('      Check the transaction date before creating anything. A date this far');
+            $this->line('      out is usually mistyped, and an exercice created to receive it files');
+            $this->line('      the typo as history. Correct the date on the transaction and re-save it;');
+            $this->line('      the posting follows the date.');
+        }
+    }
+
+    /**
      * Re-point each misfiled entry at the year and period its date falls in.
      *
      * Nothing is invented: an entry whose date no fiscal year covers is left
@@ -287,6 +345,7 @@ class FiscalYearDoctor extends Command
         $skippedNoYear = 0;
         $skippedClosed = 0;
         $periodsSet = 0;
+        $strayDates = [];
 
         DB::beginTransaction();
 
@@ -296,6 +355,7 @@ class FiscalYearDoctor extends Command
 
                 if (!$target) {
                     $skippedNoYear++;
+                    $strayDates[] = $entry->entry_date;
                     continue;
                 }
 
@@ -339,7 +399,7 @@ class FiscalYearDoctor extends Command
 
         if ($skippedNoYear > 0) {
             $this->warn(sprintf('  left alone, no fiscal year covers their date : %d', $skippedNoYear));
-            $this->line('      Create the missing fiscal year, then run this again.');
+            $this->reportStrays($strayDates);
         }
 
         if ($skippedClosed > 0) {
