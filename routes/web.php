@@ -238,6 +238,25 @@ Route::middleware(['XSS'])->name('payment.')->namespace('Payment')->prefix('paym
     Route::get('momo/orange/return/{reference}', 'OrangeMomoController@return')->name('momo.orange.return');
     Route::post('momo/orange/webhook', 'OrangeMomoController@webhook')->name('momo.orange.webhook')->withoutMiddleware(['XSS']);
 
+    /*
+     * Fapshi — the platform access fee only.
+     *
+     * initiate and return belong to the student who started the payment, so
+     * they sit behind the student guard; the webhook is called by Fapshi and
+     * cannot be, which is why it authenticates on a shared secret and then
+     * refuses to believe its own request body. See FapshiController::webhook().
+     *
+     * XSS is lifted from the webhook as it is from the MoMo ones: the
+     * middleware rewrites request input, and a payment notification is read,
+     * never rendered.
+     */
+    Route::middleware('auth:student')->group(function () {
+        Route::post('fapshi/initiate', 'FapshiController@initiate')->name('fapshi.initiate');
+        Route::get('fapshi/return/{transaction}', 'FapshiController@return')->name('fapshi.return');
+    });
+
+    Route::post('fapshi/webhook', 'FapshiController@webhook')->name('fapshi.webhook')->withoutMiddleware(['XSS']);
+
 });
 
 

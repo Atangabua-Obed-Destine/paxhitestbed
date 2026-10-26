@@ -20,6 +20,8 @@ class PlatformFeePayment extends Model
         'session_id',
         'fee_amount',
         'paid_amount',
+        'paid_via',
+        'gateway_trans_id',
         'receipt_path',
         'student_note',
         'status',
@@ -83,7 +85,33 @@ class PlatformFeePayment extends Model
             'approved' => '<span class="badge badge-success">Approved</span>',
             'rejected' => '<span class="badge badge-danger">Rejected</span>',
         ];
-        
-        return $badges[$this->status] ?? '';
+
+        $badge = $badges[$this->status] ?? '';
+
+        // An approved gateway payment was approved by the gateway, not by
+        // anybody here. Saying so on the badge keeps the verification queue and
+        // the statistics readable now that two kinds of row sit in them.
+        if ($badge !== '' && $this->isGatewayPaid()) {
+            $badge .= ' <span class="badge badge-info">Online</span>';
+        }
+
+        return $badge;
+    }
+
+    /** Was this settled by the payment gateway rather than by an admin? */
+    public function isGatewayPaid(): bool
+    {
+        return $this->paid_via === 'fapshi';
+    }
+
+    /**
+     * The Fapshi transaction that settled this, if one did.
+     *
+     * No foreign key in either direction — see the create migration for why —
+     * so this is matched on the id the payment row records.
+     */
+    public function fapshiTransaction()
+    {
+        return $this->belongsTo(FapshiTransaction::class, 'gateway_trans_id', 'trans_id');
     }
 }

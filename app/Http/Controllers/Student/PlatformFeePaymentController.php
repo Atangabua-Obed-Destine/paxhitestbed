@@ -64,6 +64,15 @@ class PlatformFeePaymentController extends Controller
 
         $platformSetting = PlatformFeeSetting::first();
 
+        // While the school is collecting online, this is the only route and the
+        // upload form is not shown. Refusing here as well as hiding it matters:
+        // a hidden form is a courtesy, and this is the control. A receipt
+        // accepted now would sit in a queue nobody is working.
+        if ($platformSetting && $platformSetting->onlinePaymentAvailable()) {
+            return redirect()->back()->with('warning',
+                __('The platform access fee is paid online. Please use the Pay button on this page.'));
+        }
+
         // Upload file
         $file = $request->file('receipt');
         $fileName = time() . '_' . $student->id . '.' . $file->getClientOriginalExtension();

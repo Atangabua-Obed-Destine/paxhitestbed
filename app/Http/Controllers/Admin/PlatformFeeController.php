@@ -35,8 +35,15 @@ class PlatformFeeController extends Controller
     {
         $setting = PlatformFeeSetting::firstOrCreate([]);
         $systemSetting = Setting::where('status', '1')->first();
-        
-        return view('admin.platform-fee.settings', compact('setting', 'systemSetting'));
+
+        // Online payment needs three separate things to be true, and two of
+        // them live in .env rather than here. Handing the screen the reason it
+        // is not available saves an admin ticking a box and wondering why
+        // nothing changed.
+        $gateway = app(\App\Services\Payment\FapshiClient::class);
+        $gatewayBlocker = $setting->onlinePaymentBlocker();
+
+        return view('admin.platform-fee.settings', compact('setting', 'systemSetting', 'gateway', 'gatewayBlocker'));
     }
 
     /**
@@ -85,6 +92,13 @@ class PlatformFeeController extends Controller
             'merchant_name' => 'nullable|string|max:191',
             'merchant_number' => 'nullable|string|max:50',
             'is_enabled' => 'boolean',
+
+            // The gateway passes its commission on to the student. Held as a
+            // percentage rather than a flat figure because a flat figure
+            // silently becomes wrong the moment the fee changes.
+            'gateway_fee_percent' => 'nullable|numeric|min:0|max:100',
+            'gateway_fee_fixed' => 'nullable|numeric|min:0',
+            'online_payment_enabled' => 'boolean',
         ]);
 
         $setting = PlatformFeeSetting::first();
@@ -97,7 +111,17 @@ class PlatformFeeController extends Controller
             'merchant_name' => $request->merchant_name,
             'merchant_number' => $request->merchant_number,
             'is_enabled' => $request->has('is_enabled'),
+            'gateway_fee_percent' => (float) $request->input('gateway_fee_percent', 0),
+            'gateway_fee_fixed' => (float) $request->input('gateway_fee_fixed', 0),
+            'online_payment_enabled' => $request->has('online_payment_enabled'),
         ]);
+
+        // Ticking the box is not the same as it working, and an admin who is
+        // told so now will not find out from a student later.
+        if ($setting->online_payment_enabled && ($blocker = $setting->fresh()->onlinePaymentBlocker())) {
+            return redirect()->back()->with('warning',
+                'Settings saved, but students cannot pay online yet: ' . $blocker);
+        }
 
         return redirect()->back()->with('success', 'Platform fee settings updated successfully!');
     }
@@ -152,12 +176,29 @@ class PlatformFeeController extends Controller
                 ->addColumn('receipt_url', function ($row) {
                     return $row->receipt_path ? asset('uploads/platform-fees/' . $row->receipt_path) : null;
                 })
+                ->addColumn('paid_via', function ($row) {
+                    return $row->paid_via;
+                })
+                // A payment the gateway settled has no screenshot to look at.
+                // Giving the column something to say keeps the list from
+                // rendering an empty cell where every other row has a link.
+                ->addColumn('proof', function ($row) {
+                    if ($row->isGatewayPaid()) {
+                        return 'Paid online · ref ' . e((string) $row->gateway_trans_id);
+                    }
+
+                    return $row->receipt_path ? 'receipt' : '—';
+                })
                 ->addColumn('student_note', function ($row) {
                     return $row->student_note;
                 })
                 ->addColumn('actions', function ($row) {
                     $actions = '<button onclick="viewPayment(' . $row->id . ')" class="btn btn-action btn-view"><i class="fas fa-eye"></i> View</button> ';
-                    if ($row->status == 'pending') {
+                    // A payment the gateway confirmed is not a human's to
+                    // approve or reject. The buttons are withheld here and the
+                    // actions themselves refuse as well, because a hidden
+                    // button is a courtesy and not a control.
+                    if ($row->status == 'pending' && !$row->isGatewayPaid()) {
                         $actions .= '<button onclick="approvePayment(' . $row->id . ')" class="btn btn-action btn-approve"><i class="fas fa-check"></i> Approve</button> ';
                         $actions .= '<button onclick="rejectPayment(' . $row->id . ')" class="btn btn-action btn-reject"><i class="fas fa-times"></i> Reject</button>';
                     }
@@ -187,6 +228,14 @@ class PlatformFeeController extends Controller
             'student_note' => $payment->student_note,
             'receipt_path' => $payment->receipt_path,
             'receipt_url' => $payment->receipt_path ? asset('uploads/platform-fees/' . $payment->receipt_path) : null,
+            'paid_via' => $payment->paid_via,
+            'paid_online' => $payment->isGatewayPaid(),
+            'paid_amount' => number_format((float) $payment->paid_amount, 2),
+            'gateway_trans_id' => $payment->gateway_trans_id,
+            // Carries the reference and what the student was actually charged,
+            // which for an online payment is the only record of it on this
+            // screen.
+            'admin_note' => $payment->admin_note,
         ]);
     }
 
@@ -196,7 +245,11 @@ class PlatformFeeController extends Controller
     public function approvePayment(Request $request, $id)
     {
         $payment = PlatformFeePayment::findOrFail($id);
-        
+
+        if ($blocked = $this->refuseIfGatewayPaid($payment)) {
+            return $blocked;
+        }
+
         $payment->update([
             'status' => 'approved',
             'verified_by' => Auth::id(),
@@ -220,7 +273,11 @@ class PlatformFeeController extends Controller
         ]);
 
         $payment = PlatformFeePayment::findOrFail($id);
-        
+
+        if ($blocked = $this->refuseIfGatewayPaid($payment)) {
+            return $blocked;
+        }
+
         $payment->update([
             'status' => 'rejected',
             'verified_by' => Auth::id(),
@@ -235,6 +292,30 @@ class PlatformFeeController extends Controller
     }
 
     /**
+     * A payment the gateway settled is not a human's to overturn here.
+     *
+     * Rejecting one would leave the school holding money it had told the
+     * student was refused, and approving one already approved would say a
+     * member of staff checked something they never saw. Either correction
+     * belongs with a refund, not a status flip.
+     *
+     * The buttons are hidden for these rows as well; this is the control, and
+     * that is the courtesy.
+     */
+    protected function refuseIfGatewayPaid(PlatformFeePayment $payment)
+    {
+        if (!$payment->isGatewayPaid()) {
+            return null;
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'This fee was paid online and confirmed by the payment gateway, so it cannot be '
+                . 'approved or rejected by hand. Reference ' . $payment->gateway_trans_id . '.',
+        ], 422);
+    }
+
+    /**
      * Display statistics.
      */
     public function statistics()
@@ -246,8 +327,41 @@ class PlatformFeeController extends Controller
         $approvedPayments = PlatformFeePayment::where('status', 'approved')->count();
         $rejectedPayments = PlatformFeePayment::where('status', 'rejected')->count();
         
-        $totalCollected = PlatformFeePayment::where('status', 'approved')->sum('fee_amount');
-        
+        /*
+         * What was actually collected, which is not one column.
+         *
+         * A manual row records no received figure at all — approvePayment()
+         * sets a status and nothing else — so for those the fee is the best
+         * available answer. A gateway row records exactly what the student
+         * paid, including the commission passed on to them, so paid_amount is
+         * the true one and the only one that will reconcile against a bank
+         * statement.
+         *
+         * Mixing the two is deliberate rather than accidental, and is why it
+         * is written out here instead of being a sum() on one column.
+         */
+        $collectedExpression = 'SUM(CASE WHEN paid_via = "fapshi" THEN paid_amount ELSE fee_amount END)';
+
+        $totalCollected = PlatformFeePayment::where('status', 'approved')
+            ->value(DB::raw($collectedExpression)) ?? 0;
+
+        $onlinePayments = PlatformFeePayment::where('status', 'approved')->where('paid_via', 'fapshi')->count();
+        $manualPayments = PlatformFeePayment::where('status', 'approved')->where('paid_via', '!=', 'fapshi')->count();
+
+        $onlineCollected = PlatformFeePayment::where('status', 'approved')
+            ->where('paid_via', 'fapshi')
+            ->sum('paid_amount');
+
+        // What the students paid over and above the fee, i.e. the gateway's
+        // commission that was passed on to them. Reported separately so it is
+        // never mistaken for the school's income.
+        $gatewayCommission = \App\Models\FapshiTransaction::where('status', 'successful')
+            ->get()
+            ->sum(fn ($transaction) => (float) $transaction->commissionTaken());
+
+        $needingAttention = \App\Models\FapshiTransaction::whereIn('status',
+            \App\Models\FapshiTransaction::NEEDS_ATTENTION_STATUSES)->count();
+
         // Get sessions with payment stats
         $sessionStats = DB::table('platform_fee_payments')
             ->join('sessions', 'platform_fee_payments.session_id', '=', 'sessions.id')
@@ -257,7 +371,10 @@ class PlatformFeeController extends Controller
                 DB::raw('SUM(CASE WHEN platform_fee_payments.status = "approved" THEN 1 ELSE 0 END) as approved'),
                 DB::raw('SUM(CASE WHEN platform_fee_payments.status = "pending" THEN 1 ELSE 0 END) as pending'),
                 DB::raw('SUM(CASE WHEN platform_fee_payments.status = "rejected" THEN 1 ELSE 0 END) as rejected'),
-                DB::raw('SUM(CASE WHEN platform_fee_payments.status = "approved" THEN platform_fee_payments.fee_amount ELSE 0 END) as revenue')
+                DB::raw('SUM(CASE WHEN platform_fee_payments.status = "approved"'
+                    . ' THEN (CASE WHEN platform_fee_payments.paid_via = "fapshi"'
+                    . ' THEN platform_fee_payments.paid_amount ELSE platform_fee_payments.fee_amount END)'
+                    . ' ELSE 0 END) as revenue')
             )
             ->groupBy('sessions.id', 'sessions.title')
             ->get();
@@ -270,6 +387,11 @@ class PlatformFeeController extends Controller
             'approved_payments' => $approvedPayments,
             'rejected_payments' => $rejectedPayments,
             'total_collected' => $totalCollected,
+            'online_payments' => $onlinePayments,
+            'manual_payments' => $manualPayments,
+            'online_collected' => $onlineCollected,
+            'gateway_commission' => $gatewayCommission,
+            'needing_attention' => $needingAttention,
             'session_breakdown' => $sessionStats
         ];
         

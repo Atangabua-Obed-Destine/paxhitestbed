@@ -20,6 +20,7 @@
                             <ul class="nav nav-tabs mb-3" role="tablist">
                                 <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-mtn" role="tab">{{ __('MTN Mobile Money') }}</a></li>
                                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-orange" role="tab">{{ __('Orange Money') }}</a></li>
+                                <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-fapshi" role="tab">{{ __('Fapshi') }}</a></li>
                                 <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-shared" role="tab">{{ __('Shared Settings') }}</a></li>
                             </ul>
 
@@ -162,6 +163,85 @@
                                             <i class="fas fa-plug me-1"></i>{{ __('Test Orange Connection') }}
                                         </button>
                                         <div id="orange-test-result" class="mt-2 small"></div>
+                                    </div>
+                                </div>
+
+                                {{-- ============================================================
+                                     FAPSHI — used by the platform access fee
+                                     ============================================================ --}}
+                                <div class="tab-pane fade" id="tab-fapshi" role="tabpanel">
+                                    <div class="alert alert-light border">
+                                        {{ __('Fapshi collects MTN Mobile Money and Orange Money through one hosted checkout, so it needs no onboarding with either operator. It is what the Platform Access Fee uses.') }}
+                                        <br>
+                                        <strong>{{ __('Credentials are issued per service in your Fapshi dashboard, and the sandbox and live sets are not interchangeable.') }}</strong>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group form-check mt-2">
+                                                <input type="checkbox" class="form-check-input" name="fapshi_enabled" id="fapshi_enabled" value="1" {{ $fapshi['enabled'] ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="fapshi_enabled">{{ __('Enable Fapshi') }}</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">{{ __('Environment') }}</label>
+                                                <select class="form-control" name="fapshi_environment">
+                                                    <option value="sandbox" @if($fapshi['environment'] === 'sandbox') selected @endif>Sandbox</option>
+                                                    <option value="live" @if($fapshi['environment'] === 'live') selected @endif>Live</option>
+                                                </select>
+                                                <small class="text-muted">{{ __('Leave the Base URL blank and it follows this setting.') }}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">{{ __('Base URL') }}</label>
+                                        <input type="text" class="form-control" name="fapshi_base_url" value="{{ $fapshi['base_url'] }}" placeholder="https://sandbox.fapshi.com">
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">{{ __('API User') }}</label>
+                                                <input type="text" class="form-control" name="fapshi_api_user" value="{{ $fapshi['api_user'] }}" autocomplete="off">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label class="form-label">{{ __('API Key') }}</label>
+                                                <input type="password" class="form-control" name="fapshi_api_key" value="" autocomplete="new-password"
+                                                       placeholder="{{ $fapshi['api_key'] ? __('stored — leave blank to keep it') : __('not set') }}">
+                                                {{-- Never rendered back. Fapshi shows a live key once and nothing
+                                                     can recover it, so a blank field means "keep what is stored",
+                                                     not "clear it". --}}
+                                                <small class="text-muted">{{ __('Shown once by Fapshi and never displayed here. Leave blank to keep the stored key.') }}</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">{{ __('Webhook Secret') }}</label>
+                                        <input type="password" class="form-control" name="fapshi_webhook_secret" value="" autocomplete="new-password"
+                                               placeholder="{{ $fapshi['webhook_secret'] ? __('stored — leave blank to keep it') : __('not set — every webhook will be refused') }}">
+                                        <small class="text-muted">
+                                            {{ __('Set the same value in your Fapshi dashboard. Fapshi does not sign its notifications, so this secret is the only thing that identifies them — without it every notification is refused and payments are confirmed by the five-minute reconciliation instead.') }}
+                                        </small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">{{ __('Webhook URL to paste into your Fapshi dashboard') }}</label>
+                                        <input type="text" class="form-control" value="{{ $fapshi['webhook_url'] }}" readonly onclick="this.select()">
+                                        <small class="text-muted">
+                                            {{ __('Must be reachable over HTTPS from the internet. A local address cannot receive notifications — payments will still be confirmed, a few minutes later, by the reconciliation task.') }}
+                                        </small>
+                                    </div>
+
+                                    <div class="alert alert-info">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-momo-test="fapshi">
+                                            <i class="fas fa-plug me-1"></i>{{ __('Test Fapshi Connection') }}
+                                        </button>
+                                        <div id="fapshi-test-result" class="mt-2 small"></div>
                                     </div>
                                 </div>
 

@@ -159,6 +159,58 @@
                             </div>
                         </div>
 
+                        <!-- Online payment: the switch, and what it costs the student -->
+                        <div class="col-md-12 mb-4">
+                            <div class="card border">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="mb-1"><i class="fas fa-mobile-alt text-primary"></i> Let students pay online</h5>
+                                            <p class="text-muted mb-0">
+                                                Students pay by MTN Mobile Money or Orange Money through Fapshi, and the
+                                                portal unlocks the moment the payment is confirmed &mdash; no screenshot,
+                                                no queue.
+                                            </p>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" name="online_payment_enabled" id="online_payment_enabled" value="1" {{ $setting->online_payment_enabled ? 'checked' : '' }}>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+
+                                    {{-- The three things that have to be true live in two different
+                                         places, so the screen says which one is missing rather than
+                                         leaving an admin to tick a box and wonder why nothing changed. --}}
+                                    @if($gatewayBlocker)
+                                        <div class="alert alert-warning mt-3 mb-0">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            <strong>Students cannot pay online right now.</strong>
+                                            {{ $gatewayBlocker }}
+                                            @if(!$gateway->isEnabled() || !$gateway->isConfigured())
+                                                <a href="{{ route('admin.mobile-money-config.index') }}" class="alert-link">Open the gateway settings</a>.
+                                            @endif
+                                        </div>
+                                    @else
+                                        <div class="alert alert-success mt-3 mb-0">
+                                            <i class="fas fa-check-circle"></i>
+                                            Online payment is live, against the <strong>{{ $gateway->environment() }}</strong> gateway.
+                                            @if($gateway->environment() !== 'live')
+                                                No real money moves in sandbox.
+                                            @endif
+                                        </div>
+                                    @endif
+
+                                    <div class="alert alert-light border mt-3 mb-0">
+                                        <i class="fas fa-info-circle"></i>
+                                        While this is on, students pay online only &mdash; the shortcode and receipt
+                                        upload are hidden. Switch it off to go straight back to manual verification;
+                                        a payment already in progress will still be credited. For a one-off case,
+                                        use <a href="{{ route('admin.platform-fee.exemptions') }}">Exemptions</a>.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Fee Title -->
                         <div class="col-md-6">
                             <div class="form-group mb-3">
@@ -181,6 +233,66 @@
                                     <span class="input-group-text">{!! $systemSetting->currency_symbol !!}</span>
                                 </div>
                                 <small class="text-muted">Amount to charge per session</small>
+                            </div>
+                        </div>
+
+                        <!-- What the gateway takes, and therefore what the student is asked for -->
+                        <div class="col-md-12 mb-3">
+                            <div class="card border">
+                                <div class="card-body">
+                                    <h6 class="mb-1"><i class="fas fa-percent text-primary"></i> Gateway charge passed on to the student</h6>
+                                    <p class="text-muted small">
+                                        Fapshi deducts a commission before the money reaches the school. These two
+                                        fields add it to what the student pays, so the school receives the full fee.
+                                        A percentage rather than a flat figure, because a flat figure stops being
+                                        right the moment the fee changes.
+                                    </p>
+
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-group mb-3">
+                                                <label for="gateway_fee_percent" class="form-label">Percentage of the fee</label>
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control" name="gateway_fee_percent" id="gateway_fee_percent"
+                                                           value="{{ old('gateway_fee_percent', $setting->gateway_fee_percent) }}" step="0.01" min="0" max="100">
+                                                    <span class="input-group-text">%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group mb-3">
+                                                <label for="gateway_fee_fixed" class="form-label">Plus a fixed amount</label>
+                                                <div class="input-group">
+                                                    <input type="number" class="form-control" name="gateway_fee_fixed" id="gateway_fee_fixed"
+                                                           value="{{ old('gateway_fee_fixed', $setting->gateway_fee_fixed) }}" step="1" min="0">
+                                                    <span class="input-group-text">{!! $systemSetting->currency_symbol !!}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group mb-3">
+                                                <label class="form-label">The student will be asked for</label>
+                                                {{-- Recomputed as the fields change, by the same arithmetic the
+                                                     server uses, so nobody has to save and guess. --}}
+                                                <div class="form-control bg-light" id="charge_preview" style="font-weight: 700;">
+                                                    {{ number_format($setting->chargeAmount()) }} {{ $setting->currency }}
+                                                </div>
+                                                <small class="text-muted" id="charge_preview_detail">
+                                                    fee {{ number_format((float) $setting->fee_amount) }}
+                                                    + charge {{ number_format($setting->surchargeAmount()) }}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="alert alert-light border mb-0 small">
+                                        <i class="fas fa-flask"></i>
+                                        Fapshi does not publish its rate in the API documentation, so treat this as an
+                                        estimate until it is measured. <code>php artisan fapshi:reconcile</code> compares
+                                        what each student paid against what actually reached the school and reports the
+                                        real rate once there are live payments.
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -285,4 +397,46 @@
         </div>
     </section>
 </div>
+
+<script>
+    /*
+     * The same arithmetic as PlatformFeeSetting::chargeAmount(), so an admin
+     * sees the figure students will be asked for before saving rather than
+     * after. The server stays the authority — this only previews it.
+     *
+     * Rounded up, as the server rounds up: rounding down would have the school
+     * absorb the remainder on every single payment.
+     */
+    (function () {
+        var fee = document.getElementById('fee_amount');
+        var percent = document.getElementById('gateway_fee_percent');
+        var fixed = document.getElementById('gateway_fee_fixed');
+        var total = document.getElementById('charge_preview');
+        var detail = document.getElementById('charge_preview_detail');
+
+        if (!fee || !percent || !fixed || !total) {
+            return;
+        }
+
+        var currency = @json($setting->currency);
+
+        function group(value) {
+            return value.toLocaleString('en-US');
+        }
+
+        function recompute() {
+            var feeValue = parseFloat(fee.value) || 0;
+            var surcharge = Math.ceil(feeValue * (parseFloat(percent.value) || 0) / 100)
+                + Math.ceil(parseFloat(fixed.value) || 0);
+            var charge = Math.ceil(feeValue) + surcharge;
+
+            total.textContent = group(charge) + ' ' + currency;
+            detail.textContent = 'fee ' + group(Math.ceil(feeValue)) + ' + charge ' + group(surcharge);
+        }
+
+        [fee, percent, fixed].forEach(function (field) {
+            field.addEventListener('input', recompute);
+        });
+    })();
+</script>
 @endsection

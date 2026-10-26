@@ -84,7 +84,10 @@ class LetterheadService
 
         $tokens = $this->tokens();
 
-        return str_replace(array_keys($tokens), array_values($tokens), $html);
+        // repairTokens first: the editor can split a token with its own markup
+        // ("[sch<strong>ool_name]</strong>"), and a split token never matches.
+        return str_replace(array_keys($tokens), array_values($tokens),
+            DocumentHtml::repairTokens($html, array_keys($tokens)));
     }
 
     /**

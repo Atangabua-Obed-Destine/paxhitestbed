@@ -391,12 +391,37 @@ $(document).ready(function() {
                     $('#student-note-section').hide();
                 }
                 
-                // Display receipt
-                var receiptExt = payment.receipt_path.split('.').pop().toLowerCase();
-                if(['jpg', 'jpeg', 'png', 'gif'].includes(receiptExt)) {
-                    $('#receipt-container').html('<img src="' + payment.receipt_url + '" class="receipt-preview" alt="Receipt">');
-                } else if(receiptExt === 'pdf') {
-                    $('#receipt-container').html('<a href="' + payment.receipt_url + '" target="_blank" class="btn btn-primary"><i class="fas fa-file-pdf"></i> View PDF Receipt</a>');
+                /*
+                 * Display the proof — which is no longer always a file.
+                 *
+                 * A payment the gateway settled has no uploaded receipt, so
+                 * receipt_path is null; calling .split() on it threw and the
+                 * modal never opened. What stands in its place is the gateway's
+                 * own reference, which is what an admin would use to trace the
+                 * payment with the provider.
+                 */
+                if (payment.paid_online) {
+                    $('#receipt-container').html(
+                        '<div class="alert alert-info text-start mb-0">'
+                        + '<div><i class="fas fa-mobile-alt"></i> <strong>{{ __("Paid online and confirmed by the payment gateway.") }}</strong></div>'
+                        + '<div class="mt-2 small"><strong>{{ __("Gateway reference") }}:</strong> '
+                        + (payment.gateway_trans_id || '—') + '</div>'
+                        + '<div class="small"><strong>{{ __("Received") }}:</strong> ' + payment.paid_amount + '</div>'
+                        + (payment.admin_note ? '<div class="mt-2 small">' + payment.admin_note + '</div>' : '')
+                        + '<div class="mt-2 small text-muted">{{ __("There is nothing to verify by hand — this payment was confirmed with the provider before access was granted.") }}</div>'
+                        + '</div>'
+                    );
+                } else if (payment.receipt_path) {
+                    var receiptExt = payment.receipt_path.split('.').pop().toLowerCase();
+                    if(['jpg', 'jpeg', 'png', 'gif'].includes(receiptExt)) {
+                        $('#receipt-container').html('<img src="' + payment.receipt_url + '" class="receipt-preview" alt="Receipt">');
+                    } else if(receiptExt === 'pdf') {
+                        $('#receipt-container').html('<a href="' + payment.receipt_url + '" target="_blank" class="btn btn-primary"><i class="fas fa-file-pdf"></i> View PDF Receipt</a>');
+                    } else {
+                        $('#receipt-container').html('<a href="' + payment.receipt_url + '" target="_blank" class="btn btn-primary"><i class="fas fa-paperclip"></i> {{ __("Open the uploaded file") }}</a>');
+                    }
+                } else {
+                    $('#receipt-container').html('<p class="text-muted mb-0">{{ __("No receipt was uploaded.") }}</p>');
                 }
                 
                 $('#viewPaymentModal').modal('show');

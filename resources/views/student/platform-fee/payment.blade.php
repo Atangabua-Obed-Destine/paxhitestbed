@@ -585,7 +585,13 @@
                                'body'  => __('You are paid up for this academic year. Nothing further is needed.')],
                 'rejected' => ['class' => 'is-rejected', 'icon' => 'fa-times-circle',
                                'title' => __('Your receipt could not be accepted'),
-                               'body'  => __('Please read the reason below and upload a clearer or correct receipt.')],
+                               // The instruction has to match what the page
+                               // actually offers: telling a student to upload
+                               // another receipt when the upload form is hidden
+                               // leaves them stuck with no way to comply.
+                               'body'  => $platformSetting->onlinePaymentAvailable()
+                                   ? __('Please read the reason below, then pay online using the button above.')
+                                   : __('Please read the reason below and upload a clearer or correct receipt.')],
             ];
             $state = $statusMap[$payment->status] ?? $statusMap['pending'];
         @endphp
@@ -669,9 +675,72 @@
         // Pay button reasonably concludes their receipt never arrived — and
         // some will pay a second time.
         $stillToPay = !$payment || $payment->status === 'rejected';
+
+        // When the school has online payment on, that is the only route: the
+        // shortcode and the receipt upload are hidden rather than removed, so
+        // switching it off puts them straight back.
+        $payOnline = $platformSetting->onlinePaymentAvailable();
     @endphp
 
-    @if($stillToPay)
+    @if($stillToPay && $payOnline)
+    {{-- One button, and the arithmetic behind it shown rather than hidden: a
+         student asked for 2,063 when the fee is 2,000 will otherwise assume a
+         mistake, and some will stop. --}}
+    <div class="payment-card">
+        <div class="card-header-custom">
+            <h3><i class="fas fa-mobile-alt"></i> {{ __('Pay now with Mobile Money') }}</h3>
+        </div>
+        <div class="card-body-custom">
+            <p class="text-muted">
+                {{ __('Pay with MTN Mobile Money or Orange Money. Your portal opens as soon as the payment goes through — there is nothing to upload and nothing to wait for.') }}
+            </p>
+
+            <div class="info-grid" style="margin-bottom: 18px;">
+                <div class="info-item">
+                    <div class="info-item-label">{{ __('Platform access fee') }}</div>
+                    <div class="info-item-value">
+                        {{ number_format((float) $platformSetting->fee_amount, 0, '.', ',') }}
+                        {{ $platformSetting->currency }}
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-label">{{ __('Mobile money charge') }}</div>
+                    <div class="info-item-value">
+                        {{ number_format($platformSetting->surchargeAmount(), 0, '.', ',') }}
+                        {{ $platformSetting->currency }}
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-label">{{ __('Total to pay') }}</div>
+                    <div class="info-item-value">
+                        <strong style="font-size: 17px; color: #667eea;">
+                            {{ number_format($platformSetting->chargeAmount(), 0, '.', ',') }}
+                            {{ $platformSetting->currency }}
+                        </strong>
+                    </div>
+                </div>
+            </div>
+
+            <form action="{{ route('payment.fapshi.initiate') }}" method="post">
+                @csrf
+                <button type="submit" class="btn btn-primary-custom w-100">
+                    <i class="fas fa-lock"></i>
+                    {{ __('Pay') }}
+                    {{ number_format($platformSetting->chargeAmount(), 0, '.', ',') }}
+                    {{ $platformSetting->currency }}
+                    {{ __('securely') }}
+                </button>
+            </form>
+
+            <p class="text-muted mt-3 mb-0" style="font-size: 12px;">
+                <i class="fas fa-shield-alt"></i>
+                {{ __('You will be taken to Fapshi to complete the payment, then brought back here. Keep the page open until it returns.') }}
+            </p>
+        </div>
+    </div>
+    @endif
+
+    @if($stillToPay && !$payOnline)
     {{-- Three numbered steps. A student who reads nothing else on this page
          should still be able to pay by following 1, 2, 3 in order. --}}
     <div class="payment-card">
@@ -866,7 +935,10 @@
                 </div>
                 @endif
 
-                @if($payment->status == 'rejected')
+                {{-- Not offered while the school is collecting online: the
+                     student pays again through the gateway instead, and a
+                     receipt nobody will read is worse than no receipt. --}}
+                @if($payment->status == 'rejected' && !$payOnline)
                 <!-- Show upload form again if rejected -->
                 <hr class="my-4">
                 <h5 class="mb-3"><i class="fas fa-upload"></i> Reupload Payment Receipt</h5>
@@ -874,7 +946,7 @@
                 @endif
             </div>
         </div>
-    @else
+    @elseif(!$payOnline)
         <!-- Upload Form for New Payment -->
         <div class="payment-card">
             <div class="card-header-custom">

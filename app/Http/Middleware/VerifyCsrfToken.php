@@ -24,5 +24,9 @@ class VerifyCsrfToken extends Middleware
         'student/logout',
         'payment/momo/mtn/webhook',
         'payment/momo/orange/webhook',
+        // Fapshi posts this from its own servers, so there is no session and no
+        // token to carry. It authenticates on the x-wh-secret header instead,
+        // and the state it reports is then re-fetched rather than believed.
+        'payment/fapshi/webhook',
     ];
 }

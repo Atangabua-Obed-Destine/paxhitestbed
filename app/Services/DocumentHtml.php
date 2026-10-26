@@ -246,6 +246,204 @@ class DocumentHtml
     /** Both passes, in the order they need to run. */
     public static function prepare(?string $html, bool $forPdf = false): ?string
     {
-        return static::resolveImages(static::normalize($html), $forPdf);
+        $html = static::resolveImages(static::normalize($html), $forPdf);
+
+        return $forPdf ? static::mapPdfFonts($html) : $html;
+    }
+
+    /**
+     * Everything a PDF needs doing to already-substituted HTML.
+     *
+     * The sent letter substitutes its tokens between normalising and rendering,
+     * so it cannot call prepare(); this is the same tail end of it.
+     */
+    public static function finishForPdf(?string $html): ?string
+    {
+        return static::mapPdfFonts(static::resolveImages($html, true));
+    }
+
+    /**
+     * Lift editor markup out of a placeholder, keeping the formatting.
+     *
+     * A substitution matches a placeholder only when its letters sit together
+     * in the source, and the editor does not guarantee that. Bold half of
+     * [name] and TinyMCE stores "[na<strong>me]</strong>" — the token is still
+     * one word on screen, so whoever wrote it has no way of knowing anything
+     * is wrong, but str_replace cannot see it and the document goes out
+     * reading "[name]" to its reader.
+     *
+     * A tag between the brackets is moved across them — an opening tag to just
+     * before the "[", a closing tag to just after the "]" — so the placeholder
+     * becomes one matchable word again AND the bold, italic or font the author
+     * applied now wraps the whole token, and therefore the value that replaces
+     * it. Nothing is added or removed, only moved from one side of a bracket
+     * to the other, and both brackets sit inside the same text node, so this
+     * cannot change how any tag nests.
+     *
+     * A bracketed run that is not a known placeholder is left exactly as it
+     * is: "[see <em>note</em>]" is prose, not a token.
+     *
+     * @param  array $tokens  the placeholder keys, square brackets included
+     */
+    public static function repairTokens(?string $html, array $tokens): ?string
+    {
+        if ($html === null || $html === '') {
+            return $html;
+        }
+
+        $known = [];
+
+        foreach ($tokens as $token) {
+            $known[mb_strtolower(trim((string) $token, '[]'))] = $token;
+        }
+
+        $repaired = preg_replace_callback(
+            '/\[[a-z0-9_]*(?:<[^>]+>[a-z0-9_]*)+\]/i',
+            function ($match) use ($known) {
+                $name = mb_strtolower(trim(strip_tags($match[0]), '[] '));
+
+                if (!isset($known[$name])) {
+                    return $match[0];
+                }
+
+                preg_match_all('/<[^>]+>/', $match[0], $tags);
+
+                $before = '';
+                $after = '';
+
+                foreach ($tags[0] as $tag) {
+                    if (str_starts_with($tag, '</')) {
+                        $after .= $tag;
+                    } else {
+                        $before .= $tag;
+                    }
+                }
+
+                return $before . $known[$name] . $after;
+            },
+            $html
+        );
+
+        // preg_replace_callback returns null on failure (a backtrack limit on
+        // a very large document, say). A document with its placeholders
+        // unmatched is a great deal better than no document at all.
+        return $repaired ?? $html;
+    }
+
+    /**
+     * The families dompdf has a font file for, after its own aliasing.
+     *
+     * dompdf ships thirteen and no more. Measured rather than assumed, because
+     * the assumption is wrong in a way nothing reports: dompdf does NOT alias
+     * the Windows names. "font-family: arial" on its own renders in
+     * Times-Roman, and so does "courier new" - a monospace choice coming out
+     * proportional. They only work when a generic follows them in the list,
+     * which is why they are aliases below and not members here.
+     */
+    protected const PDF_FONTS = [
+        'helvetica', 'times', 'times-roman', 'courier', 'symbol', 'zapfdingbats',
+        'dejavu sans', 'dejavu serif', 'dejavu sans mono',
+        'serif', 'sans-serif', 'monospace', 'fixed',
+    ];
+
+    /**
+     * What to print instead, for a family dompdf has no file for.
+     *
+     * Keyed on what editors actually offer. The mapping keeps the kind of face
+     * the author chose: a serif stays a serif, a sans stays a sans. Without it
+     * an unknown name falls through to dompdf's default, which is serif — so
+     * "Verdana" printed in Times, the opposite of what was asked for.
+     */
+    protected const PDF_FONT_ALIASES = [
+        // The Windows names dompdf does not resolve on its own.
+        'arial' => 'helvetica',
+        'times new roman' => 'times',
+        'courier new' => 'courier',
+        'arial narrow' => 'helvetica',
+        'arial black' => 'helvetica',
+        // serif
+        'georgia' => 'times',
+        'palatino' => 'times',
+        'palatino linotype' => 'times',
+        'book antiqua' => 'times',
+        'garamond' => 'times',
+        'cambria' => 'times',
+        'constantia' => 'times',
+        'baskerville' => 'times',
+        'georgia pro' => 'times',
+        // sans
+        'verdana' => 'helvetica',
+        'tahoma' => 'helvetica',
+        'geneva' => 'helvetica',
+        'segoe ui' => 'helvetica',
+        'calibri' => 'helvetica',
+        'candara' => 'helvetica',
+        'corbel' => 'helvetica',
+        'trebuchet ms' => 'helvetica',
+        'helvetica neue' => 'helvetica',
+        'roboto' => 'helvetica',
+        'open sans' => 'helvetica',
+        'lato' => 'helvetica',
+        'lucida sans unicode' => 'helvetica',
+        'lucida grande' => 'helvetica',
+        // monospace
+        'consolas' => 'courier',
+        'monaco' => 'courier',
+        'menlo' => 'courier',
+        'lucida console' => 'courier',
+    ];
+
+    /**
+     * Rewrite every font-family so it names something dompdf can print.
+     *
+     * Only the declaration is touched, never the text. A family dompdf serves
+     * is left exactly as written; one it does not is replaced by the nearest
+     * face of the same kind; a list that ends up empty loses its declaration
+     * altogether, so the element inherits rather than landing on the default.
+     */
+    public static function mapPdfFonts(?string $html): ?string
+    {
+        if ($html === null || $html === '') {
+            return $html;
+        }
+
+        return preg_replace_callback(
+            // A double-quoted family name is part of the value, not the end of
+            // it: style='font-family: "Courier New", monospace'. Excluding the
+            // quote outright skipped those declarations entirely, and a skipped
+            // "courier new" prints proportional.
+            '/font-family\s*:\s*((?:[^;"}]|"[^"]*")+)/i',
+            function ($match) {
+                $families = [];
+
+                foreach (explode(',', $match[1]) as $family) {
+                    $name = mb_strtolower(trim(trim($family), "'\" \t\r\n"));
+
+                    if ($name === '') {
+                        continue;
+                    }
+
+                    if (in_array($name, static::PDF_FONTS, true)) {
+                        $families[] = $name;
+                        continue;
+                    }
+
+                    if (isset(static::PDF_FONT_ALIASES[$name])) {
+                        $families[] = static::PDF_FONT_ALIASES[$name];
+                    }
+                }
+
+                $families = array_values(array_unique($families));
+
+                // Nothing survived: drop the declaration so the element
+                // inherits the family its container was given.
+                if ($families === []) {
+                    return '';
+                }
+
+                return 'font-family: ' . implode(', ', $families);
+            },
+            $html
+        );
     }
 }

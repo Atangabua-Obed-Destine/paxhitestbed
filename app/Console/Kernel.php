@@ -101,6 +101,24 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('edutrustpay:heartbeat')
                 ->dailyAt('05:30');
+
+        /*
+         * Fapshi sends each payment notification exactly once and never
+         * retries, whatever this server answers. A restart, a deploy or a few
+         * seconds of downtime is enough to lose the only notice that a student
+         * paid their platform fee — and that student would go on being asked
+         * for money they had already handed over.
+         *
+         * So the webhook is the fast path and this is the one that guarantees
+         * the outcome. Every five minutes, because a student waiting to get
+         * into the portal is waiting in front of the screen.
+         *
+         * A no-op unless FAPSHI_ENABLED is true and credentials are set, so
+         * leaving it scheduled on an unconfigured install costs nothing.
+         */
+        $schedule->command('fapshi:reconcile')
+                ->everyFiveMinutes()
+                ->withoutOverlapping();
     }
 
     /**

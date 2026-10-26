@@ -65,8 +65,28 @@ class AcceptanceLetterService
         $tokens['[fee_year_total]'] = $yearTotal['total'];
         $tokens['[fee_year_total_words]'] = $yearTotal['words'];
 
-        return strtr($this->normalizeLetterHtml($setting->acceptance_letter_html), $tokens);
+        return $this->substitute($this->normalizeLetterHtml($setting->acceptance_letter_html), $tokens);
     }
+
+    /**
+     * Put the student's values into the template.
+     *
+     * strtr alone matches a placeholder only when its letters sit together in
+     * the source, and the editor does not guarantee that. Bold half of [name]
+     * and TinyMCE stores "[na<strong>me]</strong>" — the token is still one
+     * word on screen, so the admin has no way of knowing anything is wrong,
+     * but strtr cannot see it and the letter goes out reading "[name]" to the
+     * applicant. repairTokens() closes that gap first.
+     */
+    public function substitute(?string $html, array $tokens): ?string
+    {
+        if (!filled($html)) {
+            return $html;
+        }
+
+        return strtr(DocumentHtml::repairTokens($html, array_keys($tokens)), $tokens);
+    }
+
 
     /**
      * Build the Year-1 first-installment fee breakdown table from the programme's
@@ -439,7 +459,11 @@ class AcceptanceLetterService
         // ("../../../../uploads/..."), which dompdf cannot resolve — it dropped
         // them without an error, so letters went out with the image missing and
         // nothing to show anything was wrong.
-        $body = \App\Services\DocumentHtml::resolveImages($body, true);
+        //
+        // finishForPdf also maps any font the editor offered but dompdf has no
+        // file for (Georgia, Verdana, Tahoma), which letters written before
+        // the editor's list was trimmed are full of.
+        $body = \App\Services\DocumentHtml::finishForPdf($body);
 
         $pdf = Pdf::loadView('admin.acceptance-letter.pdf', [
             'body' => $body,
@@ -533,7 +557,7 @@ class AcceptanceLetterService
         // while the letter actually sent to the applicant carried it - so the
         // one screen an admin checks their letter on was the one that lied.
         $pdf = Pdf::loadView('admin.acceptance-letter.pdf', [
-            'body' => strtr(\App\Services\DocumentHtml::prepare($html, true), $sample),
+            'body' => $this->substitute(\App\Services\DocumentHtml::prepare($html, true), $sample),
             'student' => null,
             'setting' => $setting,
         ]);

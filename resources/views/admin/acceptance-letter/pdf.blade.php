@@ -10,7 +10,18 @@
            the one place to change it. */
         @page { margin: 1.2cm; }
 
-        * { font-family: DejaVu Sans, sans-serif; }
+        /* body, not *. The universal selector set this font DIRECTLY on every
+           element, including <strong> and <em>, and a direct rule beats an
+           inherited one — so bold text inside a span the author had set to
+           Georgia threw the Georgia away and reset to DejaVu Sans. The word
+           came out heavier AND in a different typeface, which reads as a
+           glitch rather than as emphasis. Measured before the change: a
+           Georgia paragraph with bold and italic rendered as three unrelated
+           faces (Times-Roman, DejaVuSans-Bold, DejaVuSans-Oblique); after, as
+           one family in three weights (Times-Roman, Times-Bold, Times-Italic).
+           On body the font is inherited, so an author's choice wins and this
+           only applies where nothing else sets a family. */
+        body { font-family: DejaVu Sans, sans-serif; }
         body { color: #1f2733; font-size: 12.5px; line-height: 1.6; margin: 0; padding: 0; }
 
         /* No top padding: the page margin above is the top margin. */

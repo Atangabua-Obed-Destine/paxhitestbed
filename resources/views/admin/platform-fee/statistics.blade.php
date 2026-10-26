@@ -259,6 +259,64 @@
             </div>
         </div>
 
+        {{-- Online and manual side by side.
+             The two kinds of row do not record the same thing: a manual row
+             holds only the fee that was due, because approving one sets a
+             status and nothing else, while an online row holds the exact sum
+             the student paid. The total above mixes them deliberately — this
+             row is what makes that visible rather than a figure nobody can
+             reconcile. --}}
+        @if(($statistics['online_payments'] ?? 0) > 0 || ($statistics['needing_attention'] ?? 0) > 0)
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="stat-card approved">
+                    <div class="stat-label"><i class="fas fa-mobile-alt"></i> Paid online</div>
+                    <div class="stat-number">{{ $statistics['online_payments'] ?? 0 }}</div>
+                    <div class="stat-label">
+                        {!! $systemSetting->currency_symbol !!} {{ number_format($statistics['online_collected'] ?? 0, 2) }}
+                        received, including the charge passed on to students
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="stat-card total">
+                    <div class="stat-label"><i class="fas fa-receipt"></i> Verified by hand</div>
+                    <div class="stat-number">{{ $statistics['manual_payments'] ?? 0 }}</div>
+                    <div class="stat-label">Receipt uploaded and approved by a member of staff</div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="stat-card {{ ($statistics['needing_attention'] ?? 0) > 0 ? 'rejected' : 'pending' }}">
+                    <div class="stat-label"><i class="fas fa-exclamation-triangle"></i> Need a person</div>
+                    <div class="stat-number">{{ $statistics['needing_attention'] ?? 0 }}</div>
+                    <div class="stat-label">
+                        @if(($statistics['needing_attention'] ?? 0) > 0)
+                            Money arrived without granting access &mdash; run
+                            <code>php artisan fapshi:inspect</code> to list them
+                        @else
+                            Every online payment matched what was owed
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if(($statistics['gateway_commission'] ?? 0) > 0)
+        <div class="row">
+            <div class="col-md-12 mb-4">
+                <div class="alert alert-light border mb-0">
+                    <i class="fas fa-percent"></i>
+                    The gateway kept
+                    <strong>{!! $systemSetting->currency_symbol !!} {{ number_format($statistics['gateway_commission'], 2) }}</strong>
+                    in commission across those payments. That is not school income &mdash; students were
+                    charged for it on top of the fee. Run <code>php artisan fapshi:reconcile</code> to see
+                    whether the configured rate matches what was actually taken.
+                </div>
+            </div>
+        </div>
+        @endif
+        @endif
+
         <!-- Session Breakdown -->
         <div class="session-card">
             <div class="session-header">

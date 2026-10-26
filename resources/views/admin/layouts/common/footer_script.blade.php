@@ -292,7 +292,13 @@
         content_style: 'html { background: #eef1f6; } body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.6; max-width: 720px; margin: 16px auto; padding: 26px 30px; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.14); } body img { max-width: 100%; height: auto; } body table { max-width: 100%; }',
         block_formats: 'Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3; Heading 4=h4; Heading 5=h5; Heading 6=h6; Preformatted=pre',
         fontsize_formats: '8pt 10pt 12pt 14pt 16pt 18pt 24pt 36pt 48pt',
-        font_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; Georgia=georgia,palatino; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times; Verdana=verdana,geneva',
+        // Only families dompdf can actually serve, so what the editor shows is
+        // what the PDF prints. Georgia, Tahoma and Verdana were offered here
+        // but have no font file installed, so dompdf fell back silently - a
+        // Verdana heading printed in Times, i.e. serif where the author chose
+        // sans. DocumentHtml::mapPdfFonts() maps those legacy names on the way
+        // to the PDF for letters already written with them.
+        font_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; DejaVu Sans=dejavu sans,sans-serif; DejaVu Serif=dejavu serif,serif; Times New Roman=times new roman,times,serif',
         image_advtab: true,
         
         // Enable image paste and drag-drop upload
@@ -363,7 +369,13 @@
         content_style: 'html { background: #eef1f6; } body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.6; max-width: 720px; margin: 16px auto; padding: 26px 30px; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.14); } body img { max-width: 100%; height: auto; } body table { max-width: 100%; }',
         block_formats: 'Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3; Heading 4=h4; Heading 5=h5; Heading 6=h6; Preformatted=pre',
         fontsize_formats: '8pt 10pt 12pt 14pt 16pt 18pt 24pt 36pt 48pt',
-        font_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; Georgia=georgia,palatino; Tahoma=tahoma,arial,helvetica,sans-serif; Times New Roman=times new roman,times; Verdana=verdana,geneva',
+        // Only families dompdf can actually serve, so what the editor shows is
+        // what the PDF prints. Georgia, Tahoma and Verdana were offered here
+        // but have no font file installed, so dompdf fell back silently - a
+        // Verdana heading printed in Times, i.e. serif where the author chose
+        // sans. DocumentHtml::mapPdfFonts() maps those legacy names on the way
+        // to the PDF for letters already written with them.
+        font_formats: 'Arial=arial,helvetica,sans-serif; Courier New=courier new,courier,monospace; DejaVu Sans=dejavu sans,sans-serif; DejaVu Serif=dejavu serif,serif; Times New Roman=times new roman,times,serif',
         image_advtab: true,
         
         // Enable image paste and drag-drop upload
