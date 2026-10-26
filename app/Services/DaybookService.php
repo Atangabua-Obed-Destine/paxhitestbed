@@ -362,12 +362,25 @@ class DaybookService
         $budgetOut = (float) ($budgeted['expenditure'] ?? 0) + (float) ($budgeted['capital'] ?? 0);
         $budgetIn = (float) ($budgeted['income'] ?? 0);
 
+        // Everything below is bucketed from the ONE rows() fetch above. The
+        // warning in this method's own docblock applies to each addition:
+        // twelve calls to rows() would run the same four joins twelve times.
         return [
             'months' => $months,
             'pacing' => $this->pacing($budget, $cumOut, $budgetOut, $rows, $sections),
-            'top_expenditure' => $this->topLines($rows, $sections, 10),
+            'top_expenditure' => $this->topLines($rows, $sections, 10, self::OUT),
+            'top_income' => $this->topLines($rows, $sections, 10, self::IN),
+            'concentration' => [
+                'income' => $this->concentration($rows, self::IN),
+                'expenditure' => $this->concentration($rows, self::OUT),
+            ],
+            'cash_position' => $this->cashPosition($months, (float) ($budget->opening_balance ?? 0)),
+            'largest_movements' => $this->largestMovements($rows, $sections),
+            'movers' => $this->movers($rows, $months),
+            'unallocated' => $this->unallocatedSummary($rows),
             'budget' => ['income' => $budgetIn, 'expenditure' => $budgetOut],
             'totals' => ['in' => $cumIn, 'out' => $cumOut, 'net' => $cumIn - $cumOut],
+            'opening_balance' => (float) ($budget->opening_balance ?? 0),
             'has_data' => $rows !== [],
         ];
     }
@@ -457,15 +470,38 @@ class DaybookService
         ];
     }
 
-    /** Where the money actually went, largest first. */
-    protected function topLines(array $rows, $sections, int $limit): array
+    /**
+     * Where the money went — or where it came from — largest first.
+     *
+     * The direction is a parameter because income needs exactly this and used
+     * to get nothing: the method was hard-wired to OUT, so in a book whose
+     * income is three times more concentrated than its spending, the
+     * concentration that mattered was the one never shown.
+     *
+     * Each row carries its share of its own side's total, so a reader can see
+     * "this one line is a third of our income" without doing arithmetic in a
+     * meeting.
+     *
+     * @param  string $direction  self::OUT or self::IN
+     */
+    protected function topLines(array $rows, $sections, int $limit, string $direction = self::OUT): array
     {
         $totals = [];
+        $sideTotal = 0.0;
 
         foreach ($rows as $row) {
-            if ($row['direction'] !== self::OUT || $row['line_id'] === null) {
+            if ($row['direction'] !== $direction) {
                 continue;
             }
+
+            // Counted toward the side's total even when it sits on no line, so
+            // a share is a share of all the money, not of the placeable part.
+            $sideTotal += (float) $row['amount'];
+
+            if ($row['line_id'] === null) {
+                continue;
+            }
+
             $totals[$row['line_id']] = ($totals[$row['line_id']] ?? 0) + $row['amount'];
         }
 
@@ -481,10 +517,228 @@ class DaybookService
                 'code' => $line->code ?? '',
                 'name' => $line->name ?? '',
                 'amount' => (float) $amount,
+                'share' => $sideTotal > 0 ? ((float) $amount / $sideTotal) * 100 : 0.0,
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * How much of one side rests on its few biggest lines.
+     *
+     * A stat, not a pie. A pie of sixty-three expenditure lines is unreadable,
+     * and the only question anyone actually asks of it — how exposed are we if
+     * one of these moves — is a single number.
+     *
+     * @return array{top: float, total: float, share: float, count: int}
+     */
+    protected function concentration(array $rows, string $direction, int $top = 5): array
+    {
+        $totals = [];
+        $sideTotal = 0.0;
+
+        foreach ($rows as $row) {
+            if ($row['direction'] !== $direction) {
+                continue;
+            }
+
+            $sideTotal += (float) $row['amount'];
+
+            if ($row['line_id'] !== null) {
+                $totals[$row['line_id']] = ($totals[$row['line_id']] ?? 0) + $row['amount'];
+            }
+        }
+
+        arsort($totals);
+
+        $topSum = array_sum(array_slice($totals, 0, $top, true));
+
+        return [
+            'top' => (float) $topSum,
+            'total' => $sideTotal,
+            'share' => $sideTotal > 0 ? ($topSum / $sideTotal) * 100 : 0.0,
+            'count' => min($top, count($totals)),
+        ];
+    }
+
+    /**
+     * The cash curve: where the balance stood at the end of each month.
+     *
+     * The question a Bursar is actually asked, and the one the screen could
+     * never answer — a dip was something you inferred by comparing two bars
+     * rather than something you saw. Starts from the budget's opening balance
+     * so the curve means a balance rather than a running difference.
+     *
+     * @return array<int, array{label: string, end: string, balance: float, net: float}>
+     */
+    protected function cashPosition(array $months, float $openingBalance): array
+    {
+        $balance = $openingBalance;
+        $curve = [];
+
+        foreach ($months as $month) {
+            $balance += $month['net'];
+
+            $curve[] = [
+                'label' => $month['label'],
+                'end' => $month['end'],
+                'net' => (float) $month['net'],
+                'balance' => $balance,
+            ];
+        }
+
+        return $curve;
+    }
+
+    /**
+     * The biggest single movements, either way.
+     *
+     * Every meeting asks about one specific number on the page, and it is
+     * almost always one of these. Having them listed turns "I will check and
+     * come back to you" into an answer.
+     *
+     * @return array<int, array>
+     */
+    protected function largestMovements(array $rows, $sections, int $limit = 10): array
+    {
+        usort($rows, fn ($a, $b) => $b['amount'] <=> $a['amount']);
+
+        $top = array_slice($rows, 0, $limit);
+
+        $lineIds = array_filter(array_column($top, 'line_id'));
+        $lines = $lineIds ? BudgetLine::whereIn('id', $lineIds)->get()->keyBy('id') : collect();
+
+        $out = [];
+
+        foreach ($top as $row) {
+            $line = $row['line_id'] ? $lines->get($row['line_id']) : null;
+
+            $out[] = [
+                'date' => $row['date'],
+                'ref' => $row['ref'],
+                'description' => $row['description'],
+                'direction' => $row['direction'],
+                'amount' => (float) $row['amount'],
+                'line' => $line ? trim($line->code . ' ' . $line->name) : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * What changed between the last two months with activity, and by how much.
+     *
+     * Compared against the previous month that actually had movement rather
+     * than the previous month on the calendar: in a school year with a quiet
+     * September, measuring against zero makes every line look like it exploded.
+     *
+     * @return array<int, array{line: string, previous: float, current: float, change: float, direction: string}>
+     */
+    protected function movers(array $rows, array $months, int $limit = 8): array
+    {
+        $active = array_values(array_filter($months, fn ($m) => $m['in'] > 0 || $m['out'] > 0));
+
+        if (count($active) < 2) {
+            return [];
+        }
+
+        $current = $active[count($active) - 1];
+        $previous = $active[count($active) - 2];
+
+        $byLine = function (array $month) use ($rows) {
+            $totals = [];
+
+            foreach ($rows as $row) {
+                if ($row['line_id'] === null) {
+                    continue;
+                }
+
+                if ($row['date'] >= $month['start'] && $row['date'] <= $month['end']) {
+                    $totals[$row['line_id']] = ($totals[$row['line_id']] ?? 0) + $row['amount'];
+                }
+            }
+
+            return $totals;
+        };
+
+        $now = $byLine($current);
+        $then = $byLine($previous);
+
+        $changes = [];
+
+        foreach (array_unique(array_merge(array_keys($now), array_keys($then))) as $id) {
+            $changes[$id] = ($now[$id] ?? 0) - ($then[$id] ?? 0);
+        }
+
+        // Largest movement either way, so a collapse is as visible as a spike.
+        uasort($changes, fn ($a, $b) => abs($b) <=> abs($a));
+
+        $changes = array_slice($changes, 0, $limit, true);
+
+        $lines = BudgetLine::whereIn('id', array_keys($changes))->get()->keyBy('id');
+
+        $out = [];
+
+        foreach ($changes as $id => $change) {
+            $line = $lines->get($id);
+
+            $out[] = [
+                'line' => $line ? trim($line->code . ' ' . $line->name) : '#' . $id,
+                'previous' => (float) ($then[$id] ?? 0),
+                'current' => (float) ($now[$id] ?? 0),
+                'change' => (float) $change,
+                'direction' => $change >= 0 ? 'up' : 'down',
+            ];
+        }
+
+        return [
+            'from' => $previous['label'],
+            'to' => $current['label'],
+            'rows' => $out,
+        ];
+    }
+
+    /**
+     * The money the sheet cannot place, itemised enough to act on.
+     *
+     * totalsByLine() already returns the total; what an accountant needs is
+     * which rows, so the fix is a mapping decision rather than a hunt.
+     *
+     * @return array{amount: float, count: int, share: float, rows: array<int, array>}
+     */
+    protected function unallocatedSummary(array $rows): array
+    {
+        $amount = 0.0;
+        $total = 0.0;
+        $items = [];
+
+        foreach ($rows as $row) {
+            $total += (float) $row['amount'];
+
+            if (!empty($row['line_id'])) {
+                continue;
+            }
+
+            $amount += (float) $row['amount'];
+            $items[] = [
+                'date' => $row['date'],
+                'ref' => $row['ref'],
+                'description' => $row['description'],
+                'direction' => $row['direction'],
+                'amount' => (float) $row['amount'],
+            ];
+        }
+
+        usort($items, fn ($a, $b) => $b['amount'] <=> $a['amount']);
+
+        return [
+            'amount' => $amount,
+            'count' => count($items),
+            'share' => $total > 0 ? ($amount / $total) * 100 : 0.0,
+            'rows' => array_slice($items, 0, 15),
+        ];
     }
 
     /** "January 2026" -> "Jan", which is all a chart axis has room for. */

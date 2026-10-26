@@ -687,6 +687,9 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('daybook/month/{month}', 'MonthLinkController@daybook')->name('daybook.month');
     Route::get('daybook/summary', 'DaybookController@summary')->name('daybook.summary');
     Route::get('daybook/analysis', 'DaybookController@analysis')->name('daybook.analysis');
+    // POST because the charts travel with it: dompdf cannot run Chart.js, so
+    // the page posts each canvas as a PNG it captured itself.
+    Route::post('daybook/analysis/pdf', 'DaybookController@analysisPdf')->name('daybook.analysis.pdf');
     Route::get('daybook/pdf', 'DaybookController@pdf')->name('daybook.pdf');
     Route::get('daybook/excel', 'DaybookController@excel')->name('daybook.excel');
 
@@ -805,6 +808,10 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('fiscal-years/{id}/generate-periods', 'FiscalYearController@generatePeriods')->name('fiscal-years.generate-periods');
     
     // Journal Entries
+    // Declared before the journal-entries resource so "ledger-health" is never
+    // read as a journal entry id.
+    Route::get('accounting/ledger-health', 'LedgerHealthController@index')->name('accounting.ledger-health');
+
     Route::resource('journal-entries', 'JournalEntryController');
     Route::get('journal-entries-trash', 'JournalEntryController@trash')->name('journal-entries.trash');
     Route::post('journal-entries/{id}/restore', 'JournalEntryController@restore')->name('journal-entries.restore');

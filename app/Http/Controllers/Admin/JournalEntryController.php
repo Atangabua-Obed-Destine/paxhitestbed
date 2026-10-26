@@ -108,7 +108,27 @@ class JournalEntryController extends Controller
 
         $request->validate([
             'entry_date' => 'required|date',
-            'fiscal_year_id' => 'required|exists:fiscal_years,id',
+            // The chosen year must actually contain the entry's date. The two
+            // are separate fields on the form, so they can be set to disagree,
+            // and an entry dated outside its own fiscal year is the exact fault
+            // that left 912 entries misfiled across two calendar years.
+            'fiscal_year_id' => ['required', 'exists:fiscal_years,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $year = FiscalYear::find($value);
+
+                    if (!$year || !$request->filled('entry_date')) {
+                        return;
+                    }
+
+                    $date = \Carbon\Carbon::parse($request->input('entry_date'));
+
+                    if ($date->lt($year->start_date) || $date->gt($year->end_date)) {
+                        $fail(sprintf(__('%s falls outside the fiscal year "%s" (%s to %s). Choose the'
+                            . ' fiscal year that contains this date.'),
+                            $date->format('j M Y'), $year->name,
+                            $year->start_date->format('j M Y'), $year->end_date->format('j M Y')));
+                    }
+                }],
             'accounting_period_id' => 'nullable|exists:accounting_periods,id',
             'journal_type' => 'required|in:general,sales,purchase,cash,bank,adjustment,opening,closing',
             'description' => 'required|string',
@@ -487,8 +507,11 @@ class JournalEntryController extends Controller
             $newEntry = JournalEntry::create([
                 'entry_number' => JournalEntry::generateEntryNumber(),
                 'entry_date' => now()->format('Y-m-d'),
-                'fiscal_year_id' => FiscalYear::getActiveFiscalYear()->id,
-                'accounting_period_id' => null,
+                // A copy is dated today, so it belongs to today's exercice —
+                // and gets today's period rather than none at all.
+                'fiscal_year_id' => FiscalYear::forDate(now())?->id
+                    ?? FiscalYear::getActiveFiscalYear()?->id,
+                'accounting_period_id' => FiscalYear::periodForDate(now())?->id,
                 'journal_type' => $originalEntry->journal_type,
                 'description' => $originalEntry->description . ' (Copy)',
                 'reference_number' => $originalEntry->reference_number,

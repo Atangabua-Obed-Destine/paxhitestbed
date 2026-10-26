@@ -202,13 +202,53 @@ class TransactionAutoMapService
     }
 
     /**
-     * Re-map a transaction after its amount/category changed: reverse the existing
-     * posting then create a fresh one reflecting the new values.
+     * Re-map a transaction after its amount, category or date changed: reverse
+     * the existing posting and create a fresh one reflecting the new values.
+     *
+     * Both halves happen together or neither does.
+     *
+     * They used to be two separate transactions — reverse() committed, then
+     * autoMap() ran on its own — so anything that stopped the second left the
+     * first standing. Measured: remapping a posted income to a category with
+     * no account mapping reversed the existing entry, failed to write the
+     * replacement, and left the transaction on the Income & Expenditure sheet
+     * with no ledger posting at all. 3,781,449 present on one side of the
+     * reconciliation and absent from the other.
+     *
+     * The income screen refuses an unfiled category, so that particular route
+     * is shut; but any other caller, and any failure inside createJournalEntry,
+     * reached the same end. A posting is not something to lose on the way to
+     * improving it.
+     *
+     * When the replacement cannot be written the original posting therefore
+     * stays. That leaves the ledger holding the previous figures, which is
+     * wrong — but wrong by the size of an edit rather than by the size of the
+     * whole transaction, and visible to the reconciliation either way.
+     * autoMap() has already warned the user that nothing was posted.
      */
     public function remap($transactionType, $transactionId, $categoryId, $transactionData, $userId = null)
     {
-        $this->reverse($transactionType, $transactionId, $userId);
-        return $this->autoMap($transactionType, $transactionId, $categoryId, $transactionData);
+        try {
+            return DB::transaction(function () use ($transactionType, $transactionId, $categoryId, $transactionData, $userId) {
+                $this->reverse($transactionType, $transactionId, $userId);
+
+                $remapped = $this->autoMap($transactionType, $transactionId, $categoryId, $transactionData);
+
+                if ($remapped === false) {
+                    // Undoes the reversal above, since it shares this
+                    // transaction. Caught immediately below — it is a control
+                    // flow signal, not an error to propagate into a model save.
+                    throw new RemapCouldNotRepost();
+                }
+
+                return $remapped;
+            });
+        } catch (RemapCouldNotRepost $e) {
+            Log::warning("Remap kept the original posting for {$transactionType}:{$transactionId}:"
+                . ' the replacement could not be written.');
+
+            return false;
+        }
     }
 
     /**
@@ -248,9 +288,11 @@ class TransactionAutoMapService
             ->whereDate('end_date', '>=', $today)
             ->first();
 
-        $fiscalYear = FiscalYear::whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-            ->first() ?? FiscalYear::where('is_active', true)->first();
+        // Same rule as the posting path: the year that contains the date, or
+        // none. The original entry's own year is kept as the last resort here
+        // only because a reversal must never be left unattached to the thing it
+        // reverses — but it is the correction's date that decides first.
+        $fiscalYear = FiscalYear::forDate($today);
 
         return [
             $today,
@@ -261,20 +303,32 @@ class TransactionAutoMapService
 
     private function createJournalEntry($mapping, $transactionData)
     {
-        // The fiscal year is the one the transaction falls in, not whichever
-        // happens to be active. Posting today does not make a payment from last
-        // October part of this year — and backfilling would file every historical
-        // entry under the current year with no period at all.
-        $fiscalYear = FiscalYear::where('start_date', '<=', $mapping->transaction_date)
-            ->where('end_date', '>=', $mapping->transaction_date)
-            ->first()
-            ?? FiscalYear::where('is_active', true)->first();
+        /*
+         * The fiscal year is the one the transaction falls in, not whichever
+         * happens to be active. Posting today does not make a payment from last
+         * October part of this year.
+         *
+         * That was already the intention here, but the rule ended in
+         * "?? the active year", and the fallback is what actually ran: with one
+         * fiscal year on file covering October 2026 to July 2027, all 924
+         * journal entries on this database — dated October 2025 to October 2026
+         * — were stamped with it, and 912 of them carry no accounting period at
+         * all, because no period could contain their dates either.
+         *
+         * So there is no fallback now. A date with no fiscal year gets a null
+         * fiscal year, which accounting:fiscal-year-doctor reports and an admin
+         * fixes by creating the year. A wrong answer here is worse than none:
+         * null is visible, and a misfiled entry is not.
+         */
+        $fiscalYear = FiscalYear::forDate($mapping->transaction_date);
 
-        $accountingPeriod = AccountingPeriod::where('is_closed', false)
-            ->where('fiscal_year_id', $fiscalYear->id ?? null)
-            ->where('start_date', '<=', $mapping->transaction_date)
-            ->where('end_date', '>=', $mapping->transaction_date)
-            ->first();
+        $accountingPeriod = $fiscalYear
+            ? AccountingPeriod::where('is_closed', false)
+                ->where('fiscal_year_id', $fiscalYear->id)
+                ->whereDate('start_date', '<=', $mapping->transaction_date)
+                ->whereDate('end_date', '>=', $mapping->transaction_date)
+                ->first()
+            : null;
 
         // Generate entry number
         $entryNumber = $this->generateEntryNumber();

@@ -856,9 +856,42 @@
             var section = $nest.data('section');
 
             $nest.nestable({
-                handleClass: 'bl-grip',
+                /*
+                 * The whole row is the handle, not the grip alone.
+                 *
+                 * A row is 50 to 90 pixels tall and the grip was about 20 by
+                 * 24, so most attempts to drag a line landed outside it and
+                 * nothing happened at all — which reads as a broken screen
+                 * rather than a missed target. The grip stays as the visual
+                 * cue that a row can be moved.
+                 *
+                 * Buttons inside the row carry dd-nodrag, which Nestable
+                 * checks before starting a drag, so Edit, Retire, Delete and
+                 * the mapping buttons still behave as buttons.
+                 */
+                handleClass: 'bl-row',
+
                 // Two levels: headings, and the lines filed under them.
-                maxDepth: 2
+                maxDepth: 2,
+
+                /*
+                 * One group per section, so a line cannot be dragged out of
+                 * its own.
+                 *
+                 * Nestable's group defaults to 0, which made all three lists
+                 * one group: income lines could be dropped into expenditure
+                 * and the screen accepted it. The server never did — reorder()
+                 * only touches lines already in the posted section and returns
+                 * the rest as "skipped" — so the move was refused, the banner
+                 * still said "Order saved", and the line reappeared where it
+                 * started on the next load.
+                 *
+                 * Moving a line between sections changes which part of the
+                 * Income & Expenditure statement it belongs to. That is an
+                 * edit, and it belongs in the edit form where it can be seen
+                 * and saved, not in a drag that half-works.
+                 */
+                group: section
             });
 
             $nest.on('change', function () {
@@ -881,11 +914,28 @@
                             order: order
                         }
                     }).done(function (response) {
-                        if (response && response.success) {
-                            showState('is-saved', '{{ __('Order saved') }}');
-                        } else {
+                        if (!response || !response.success) {
                             showState('is-error', '{{ __('Could not save the order') }}');
+                            return;
                         }
+
+                        /*
+                         * "success" is not the same as "everything moved".
+                         *
+                         * reorder() only touches lines already in the posted
+                         * section and hands back the rest as skipped. That
+                         * used to be ignored, so a refused move was reported
+                         * as "Order saved" and then quietly undone by the next
+                         * page load — the single most confusing thing this
+                         * screen did.
+                         */
+                        if (response.skipped && response.skipped.length) {
+                            showState('is-error',
+                                '{{ __('Some lines could not be moved there — reload to see where they are') }}');
+                            return;
+                        }
+
+                        showState('is-saved', '{{ __('Order saved') }}');
                     }).fail(function () {
                         // Left visible, not auto-cleared: the screen now shows an
                         // order the database does not have, and a reload is the

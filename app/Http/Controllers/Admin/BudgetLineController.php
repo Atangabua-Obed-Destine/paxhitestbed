@@ -421,12 +421,60 @@ class BudgetLineController extends Controller
         return redirect()->route('admin.budget-line.index');
     }
 
-    /** Take a line off the sheet, or put it back, without touching history. */
+    /**
+     * Take a line off the sheet, or put it back, without touching history.
+     *
+     * Retiring used to do neither of the two things delete does: it refused
+     * nothing and warned about nothing.
+     *
+     * A heading is now refused outright while lines still sit under it —
+     * retiring one left its children on the sheet filed under nothing, which
+     * delete() has always prevented and this had not.
+     *
+     * A line carrying money is still allowed — a school that has stopped using
+     * a category is entitled to take it off next year's form — but it is said
+     * out loud, with the figure, because the money keeps its budget_line_id and
+     * so is neither on the sheet nor counted as unallocated. Retiring one line
+     * on this database quietly took 35,357,704 off the rendered sheet.
+     * BudgetReconciliationService now reports it for as long as it lasts; this
+     * is the warning at the moment it happens.
+     */
     public function toggle($id)
     {
         $line = BudgetLine::findOrFail($id);
+        $retiring = (bool) $line->status;
+
+        if ($retiring && $line->is_header && $line->children()->where('status', true)->exists()) {
+            Flasher::addError(
+                __('":line" still has lines filed under it. Move or retire those first, or they will appear on the sheet under no heading.',
+                    ['line' => $line->label]),
+                __('msg_error')
+            );
+
+            return redirect()->route('admin.budget-line.index');
+        }
+
+        $carried = 0.0;
+
+        if ($retiring) {
+            $totals = app(\App\Services\BudgetActualsService::class)->forPeriod()['lines'];
+            $carried = (float) ($totals[$line->id] ?? 0);
+        }
+
         $line->status = !$line->status;
         $line->save();
+
+        if (!$line->status && abs($carried) > 0.009) {
+            Flasher::addWarning(
+                __('":line" is retired, but it carries :amount FCFA. That money keeps pointing at this line, so it is now on no sheet and is not counted as unallocated either. The reconciliation screen will go on reporting it until the line is restored or the transactions are moved.', [
+                    'line' => $line->label,
+                    'amount' => number_format($carried),
+                ]),
+                __('msg_warning')
+            );
+
+            return redirect()->route('admin.budget-line.index');
+        }
 
         Flasher::addSuccess(
             $line->status ? __('Budget line restored to the sheet.') : __('Budget line retired.'),

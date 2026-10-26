@@ -83,6 +83,27 @@ echo "\nCarrying last year forward\n";
 
 DB::beginTransaction();
 
+/*
+ * Free the period first.
+ *
+ * Two institutional sheets may no longer cover the same day — one franc would
+ * otherwise be reported as spent against both — and this database holds a real
+ * sheet over exactly these dates. The dates matter to this suite only because
+ * seeding reads the sheet immediately before them, so the period is cleared
+ * rather than moved, which would change which sheet is "previous" and with it
+ * every figure checked below.
+ *
+ * Inside the transaction, so it is rolled back with everything else.
+ */
+Budget::where('is_institutional', true)
+    ->whereDate('start_date', '<=', '2027-08-31')
+    ->whereDate('end_date', '>=', '2026-09-01')
+    ->where('id', '!=', $existing->id)
+    ->each(function ($clashing) {
+        BudgetAllocation::where('budget_id', $clashing->id)->delete();
+        $clashing->delete();
+    });
+
 $response = call('/admin/budget-sheet/store', 'POST', [
     'title' => 'TEST 2026/2027',
     'start_date' => '2026-09-01',

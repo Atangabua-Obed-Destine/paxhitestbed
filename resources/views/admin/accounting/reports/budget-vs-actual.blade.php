@@ -18,6 +18,20 @@
                     </div>
                     <!-- /.card-header -->
                     <div class="card-body">
+                        {{-- Which days these figures actually cover.
+                             The report is asked for a fiscal year but measures
+                             over the matched budget's own period, because the
+                             budgeted figures only mean anything over the period
+                             they were set for. That substitution used to be
+                             silent, and with a budget spanning two exercices it
+                             returned several times the right total with nothing
+                             on the page to say so. --}}
+                        @if(!empty($periodNotice))
+                            <div class="alert alert-warning">
+                                <i class="fas fa-calendar-alt"></i> {{ $periodNotice }}
+                            </div>
+                        @endif
+
                         <!-- Filters -->
                         <form action="{{ route('admin.accounting-reports.budget-vs-actual') }}" method="GET" class="mb-4">
                             <div class="row">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Budget;
+use App\Services\Accounting\BudgetPeriod;
 use App\Models\BudgetAllocation;
 use App\Models\BudgetRevision;
 use App\Models\ExpenseCategory;
@@ -99,7 +100,14 @@ class BudgetController extends Controller
             'type' => 'required|in:annual,departmental,project',
             'fiscal_year' => 'required|max:10',
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
+            // A delegated budget belongs inside the sheet it was delegated
+            // from: one running past its parent spends money the annual sheet
+            // never provided for, and the parent's allocated total stops
+            // meaning anything. Attached to end_date because a closure rule is
+            // skipped entirely when its own attribute is absent from the
+            // request, and a rule that never runs reads as protection.
+            'end_date' => ['required', 'date', 'after:start_date',
+                BudgetPeriod::withinParentRule($request->input('start_date'), $request->input('parent_id'))],
             'total_amount' => 'required|numeric|min:0',
             'department_id' => 'required_if:type,departmental',
             // Optional: which annual budget this one is delegated out of.
@@ -217,7 +225,14 @@ class BudgetController extends Controller
             'type' => 'required|in:annual,departmental,project',
             'fiscal_year' => 'required|max:10',
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
+            // A delegated budget belongs inside the sheet it was delegated
+            // from: one running past its parent spends money the annual sheet
+            // never provided for, and the parent's allocated total stops
+            // meaning anything. Attached to end_date because a closure rule is
+            // skipped entirely when its own attribute is absent from the
+            // request, and a rule that never runs reads as protection.
+            'end_date' => ['required', 'date', 'after:start_date',
+                BudgetPeriod::withinParentRule($request->input('start_date'), $request->input('parent_id'))],
             'total_amount' => 'required|numeric|min:0',
             'department_id' => 'required_if:type,departmental',
             // Optional: which annual budget this one is delegated out of.

@@ -41,7 +41,10 @@ class BankReconciliationService
                 'statement_date' => $data['statement_date'],
                 'statement_beginning_balance' => $data['statement_beginning_balance'] ?? $beginningBalance,
                 'statement_ending_balance' => $data['statement_ending_balance'],
-                'fiscal_year_id' => $data['fiscal_year_id'] ?? FiscalYear::getActiveFiscalYear()?->id,
+                // The statement's own date decides the year — reconciling
+                // December's statement in January is a December reconciliation,
+                // and the period below was already being matched on that date.
+                'fiscal_year_id' => $data['fiscal_year_id'] ?? FiscalYear::forDate($data['statement_date'])?->id,
                 'accounting_period_id' => $data['accounting_period_id'] ?? $this->getAccountingPeriod($data['statement_date']),
                 'status' => BankReconciliation::STATUS_IN_PROGRESS,
                 'notes' => $data['notes'] ?? null,

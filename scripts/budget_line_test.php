@@ -15,6 +15,28 @@ use App\Models\BudgetLine;
 $results = [];
 function check($n, $p, $d = '') { global $results; $results[] = [$n, $p, $d]; }
 
+/**
+ * Print what was checked and leave with the right status.
+ *
+ * Extracted so the early exit above can report exactly as the normal end
+ * does: a run that stops short still has to say what it found.
+ */
+function summary(): void
+{
+    global $results;
+
+    $failed = 0;
+
+    foreach ($results as [$n, $p, $d]) {
+        if (!$p) { $failed++; }
+        printf("%s  %s%s\n", $p ? 'PASS' : 'FAIL', $n, (!$p && $d) ? "   [$d]" : '');
+    }
+
+    printf("\n%d/%d passed\n", count($results) - $failed, count($results));
+
+    exit($failed ? 1 : 0);
+}
+
 $all = BudgetLine::all()->keyBy('code');
 
 check('sheet is seeded', $all->count() >= 65, $all->count() . ' lines');
@@ -35,6 +57,32 @@ $paper = [
 ];
 $missing = array_values(array_filter($paper, fn ($c) => !$all->has($c)));
 check('every code on the paper sheet exists', empty($missing), implode(',', $missing));
+
+/*
+ * Stop here when the chart has moved on.
+ *
+ * Every check below indexes $all by a code from the list above, and when one
+ * of them is absent the suite died with "Undefined array key" — a fatal error
+ * rather than a failure, which protects nothing at all and hides whatever
+ * would have run after it.
+ *
+ * This database is in that state: the income lines were renumbered from the
+ * 6xx of the paper form to 70001/71001-style codes, so 600, 610, 611, 621 and
+ * 622 no longer exist. That is a configuration decision, not a defect, and it
+ * is not this file's place to assert which numbering is right — only to say
+ * plainly that the two no longer agree, and to leave the codes above as the
+ * record of what the paper form used.
+ */
+if ($missing) {
+    printf("\n  The configured chart no longer matches the paper form: %d of %d codes are absent\n",
+        count($missing), count($paper));
+    printf("  (%s)\n", implode(', ', $missing));
+    printf("  The structural checks below are skipped — they can only be read against a\n");
+    printf("  chart that uses these codes. Update the list above if the form has changed.\n");
+
+    summary();
+    exit(0);
+}
 
 // Sections must be right — capital is NOT expenditure.
 check('capital lines are in the capital section',
@@ -105,10 +153,4 @@ foreach (['480', '481', '482', '483', '489', '590'] as $code) {
 check('nothing from the diocesan template is flagged local',
     collect($paper)->every(fn ($c) => !$all[$c]->is_local));
 
-$failed = 0;
-foreach ($results as [$n, $p, $d]) {
-    if (!$p) { $failed++; }
-    printf("%s  %s%s\n", $p ? 'PASS' : 'FAIL', $n, (!$p && $d) ? "   [$d]" : '');
-}
-printf("\n%d/%d passed\n", count($results) - $failed, count($results));
-exit($failed ? 1 : 0);
+summary();

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\FiscalYear;
 use App\Models\AccountingPeriod;
+use App\Models\JournalEntry;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Toastr;
@@ -58,7 +59,11 @@ class FiscalYearController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
+            // The overlap rule hangs off end_date because a closure rule is not
+            // implicit: Laravel skips it entirely when its own attribute is
+            // absent from the request, and a rule that never runs is worse than
+            // no rule, because it reads as protection.
+            'end_date' => ['required', 'date', 'after:start_date', $this->noOverlapRule($request)],
             'is_active' => 'boolean',
         ]);
 
@@ -137,7 +142,14 @@ class FiscalYearController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
+            'end_date' => [
+                'required', 'date', 'after:start_date',
+                $this->noOverlapRule($request, $id),
+                // Narrowing a year that already holds entries orphans them:
+                // they keep pointing at it while falling outside its dates,
+                // which is exactly the state this database was found in.
+                $this->keepsItsEntriesRule($request, $id),
+            ],
         ]);
 
         try {
@@ -289,6 +301,77 @@ class FiscalYearController extends Controller
     /**
      * Create monthly accounting periods for a fiscal year
      */
+    /**
+     * No two fiscal years may cover the same day.
+     *
+     * With an overlap, "which fiscal year does this entry belong to" has two
+     * answers and the code picks whichever row it reads first — so the same
+     * entry can land in either year, and a trial balance stops being
+     * reproducible.
+     *
+     * @param  int|null $ignoreId  the year being edited, which may overlap itself
+     */
+    private function noOverlapRule(Request $request, $ignoreId = null): \Closure
+    {
+        return function ($attribute, $value, $fail) use ($request, $ignoreId) {
+            if (!$request->filled('start_date') || !$value) {
+                return;
+            }
+
+            $clash = FiscalYear::when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->whereDate('start_date', '<=', $value)
+                ->whereDate('end_date', '>=', $request->input('start_date'))
+                ->first();
+
+            if ($clash) {
+                $fail(sprintf(__('These dates overlap the fiscal year "%s" (%s to %s). Two fiscal years'
+                    . ' cannot cover the same day.'),
+                    $clash->name,
+                    $clash->start_date->format('j M Y'),
+                    $clash->end_date->format('j M Y')));
+            }
+        };
+    }
+
+    /**
+     * A fiscal year may not be narrowed away from entries it already holds.
+     *
+     * Those entries keep their fiscal_year_id while falling outside the year's
+     * dates — present in the year by the database and absent from it by the
+     * calendar — and the reports disagree with each other depending on which
+     * they filter by. It is the condition this module was found in: 912 of 924
+     * entries stamped with a year that did not contain them.
+     */
+    private function keepsItsEntriesRule(Request $request, $id): \Closure
+    {
+        return function ($attribute, $value, $fail) use ($request, $id) {
+            if (!$request->filled('start_date') || !$value) {
+                return;
+            }
+
+            $orphaned = JournalEntry::where('fiscal_year_id', $id)
+                ->where(function ($query) use ($request, $value) {
+                    $query->whereDate('entry_date', '<', $request->input('start_date'))
+                          ->orWhereDate('entry_date', '>', $value);
+                })
+                ->count();
+
+            if ($orphaned > 0) {
+                $range = JournalEntry::where('fiscal_year_id', $id)
+                    ->selectRaw('MIN(entry_date) as first_entry, MAX(entry_date) as last_entry')
+                    ->first();
+
+                $fail(sprintf(__('%d journal entr%s in this fiscal year fall outside these dates.'
+                    . ' Its entries run from %s to %s. Widen the dates to cover them, or move those'
+                    . ' entries to another fiscal year first.'),
+                    $orphaned,
+                    $orphaned === 1 ? 'y' : 'ies',
+                    $range->first_entry,
+                    $range->last_entry));
+            }
+        };
+    }
+
     private function createMonthlyPeriods(FiscalYear $fiscalYear)
     {
         $startDate = Carbon::parse($fiscalYear->start_date);

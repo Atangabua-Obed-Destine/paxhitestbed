@@ -198,13 +198,37 @@ try {
         'section' => 'expenditure',
         'order' => [['id' => $incomeLine->id, 'parent_id' => null]],
     ]);
-    $reorder->invoke($controller, $request);
+    $response = $reorder->invoke($controller, $request);
     $incomeLine->refresh();
 
     check(
         'a line from another section is ignored, not moved',
         (int) $incomeLine->sort_order === $before,
         "was $before, now {$incomeLine->sort_order}"
+    );
+
+    /*
+     * And it SAYS it ignored it.
+     *
+     * The screen reads this. Nestable put all three sections in one group by
+     * default, so a line could be dragged from income into expenditure; the
+     * server refused it, as the check above proves, but the response still
+     * carried success: true and the banner said "Order saved" — then the next
+     * page load put the line back. Reporting the skip is what lets the screen
+     * tell the truth, so the contract is held here rather than assumed.
+     */
+    $payload = json_decode($response->getContent(), true);
+
+    check(
+        'and the response names what it skipped',
+        in_array($incomeLine->id, $payload['skipped'] ?? [], true),
+        json_encode($payload)
+    );
+
+    check(
+        'while still reporting the request itself as handled',
+        ($payload['success'] ?? false) === true && ($payload['reordered'] ?? null) === 0,
+        json_encode($payload)
     );
 } finally {
     DB::rollBack();

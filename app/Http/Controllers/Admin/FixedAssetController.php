@@ -426,7 +426,10 @@ class FixedAssetController extends Controller
             'description' => __('purchase_of_fixed_asset') . ' - ' . $asset->name,
             'source_type' => 'fixed_asset',
             'source_id' => $asset->id,
-            'fiscal_year_id' => FiscalYear::getActiveFiscalYear()?->id,
+            // An asset is routinely entered long after it was bought, so the
+            // acquisition date decides the exercice, not the date of entry.
+            'fiscal_year_id' => FiscalYear::forDate($asset->acquisition_date)?->id,
+            'accounting_period_id' => FiscalYear::periodForDate($asset->acquisition_date)?->id,
             'status' => 'posted',
             'created_by' => auth()->id(),
         ]);

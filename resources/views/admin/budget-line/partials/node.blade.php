@@ -105,7 +105,7 @@
                          whatever is spent. Said plainly, and with somewhere to
                          go about it. --}}
                     @can('budget-line-edit')
-                        <button type="button" class="bl-unmapped bl-unmapped-btn"
+                        <button type="button" class="bl-unmapped bl-unmapped-btn dd-nodrag"
                                 data-bs-toggle="modal" data-bs-target="#mapModal"
                                 onclick='budgetLineMap(@json($mapPayload))'>
                             <i class="fas fa-exclamation-triangle me-1"></i>{{ __('no category maps here yet — this line will show zero on the sheet') }}
@@ -122,7 +122,7 @@
                          is fixed: the same modal adds another category to this
                          line, or moves one here from somewhere else. --}}
                     @can('budget-line-edit')
-                        <button type="button" class="bl-change-btn"
+                        <button type="button" class="bl-change-btn dd-nodrag"
                                 data-bs-toggle="modal" data-bs-target="#mapModal"
                                 onclick='budgetLineMap(@json($mapPayload))'>
                             <i class="fas fa-pen me-1"></i>{{ __('add or change what feeds this line') }}
@@ -150,7 +150,7 @@
             @endif
         </span>
 
-        <span class="bl-actions">
+        <span class="bl-actions dd-nodrag">
             @can('budget-line-edit')
                 <button type="button" class="btn btn-sm btn-outline-primary"
                         data-bs-toggle="modal" data-bs-target="#lineModal"

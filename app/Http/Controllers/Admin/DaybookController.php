@@ -7,9 +7,11 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountingPeriod;
 use App\Models\Budget;
 use App\Models\BudgetLine;
+use App\Services\Accounting\LedgerConfidence;
 use App\Services\DaybookService;
 use App\Services\LetterheadService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -80,10 +82,85 @@ class DaybookController extends Controller
                 ->with('error', __('No institutional budget exists yet.'));
         }
 
+        $budget = $context['budget'];
+
+        // The confidence panel asks about the same days the charts cover, so a
+        // figure flagged above the charts is a figure that is in them.
+        $confidence = app(LedgerConfidence::class);
+        $checks = $confidence->checks(
+            $budget,
+            optional($budget->start_date)->format('Y-m-d'),
+            optional($budget->end_date)->format('Y-m-d')
+        );
+
         return view('admin.daybook.analysis', $context + [
             'title' => __('Trends & Analysis'),
-            'analysis' => $this->daybook->analysis($context['budget']),
+            'analysis' => $this->daybook->analysis($budget),
+            'checks' => $checks,
+            'allClear' => $confidence->allClear($checks),
+            'concerns' => $confidence->concerns($checks),
         ]);
+    }
+
+    /**
+     * The analysis as a pack to take into the room.
+     *
+     * A POST because the charts come with it: dompdf cannot run Chart.js, so
+     * the page captures each canvas with Chart.js's own toBase64Image() and
+     * posts the images alongside. No html2canvas, no CDN — the library already
+     * on the page can do it.
+     *
+     * The pack renders whether or not those images arrive. Every chart is
+     * backed by its own table, so a failed capture costs a picture and not the
+     * document — and a pack that prints without a chart is a far smaller
+     * problem than a pack that will not print at all.
+     */
+    public function analysisPdf(Request $request)
+    {
+        $context = $this->context($request);
+        abort_unless($context, 404);
+
+        $budget = $context['budget'];
+
+        $images = $request->input('charts', []);
+
+        // Only data: PNGs, and only ones this page could have produced. An
+        // image posted into a document is an injection surface, and dompdf
+        // will fetch a remote src given half a chance.
+        $images = collect(is_array($images) ? $images : [])
+            ->filter(fn ($src) => is_string($src) && str_starts_with($src, 'data:image/png;base64,'))
+            ->filter(fn ($src) => strlen($src) < 4_000_000)
+            ->all();
+
+        $confidence = app(LedgerConfidence::class);
+        $checks = $confidence->checks(
+            $budget,
+            optional($budget->start_date)->format('Y-m-d'),
+            optional($budget->end_date)->format('Y-m-d')
+        );
+
+        $letterhead = app(LetterheadService::class);
+
+        $pdf = Pdf::loadView('admin.daybook.analysis-pdf', $context + [
+            'analysis' => $this->daybook->analysis($budget),
+            'checks' => $checks,
+            'allClear' => $confidence->allClear($checks),
+            'concerns' => $confidence->concerns($checks),
+            'charts' => $images,
+            'generatedAt' => now(),
+            'letterhead' => $letterhead->render(true),
+            'letterheadStyles' => $letterhead->styles(),
+        ])
+            ->setPaper('a4', 'portrait')
+            // Remote fetching off, unlike the book's PDF. The charts arrive as
+            // data: URIs and the letterhead's images are resolved to
+            // filesystem paths by DocumentHtml before they get here, so nothing
+            // in this document needs the network — and a renderer that will not
+            // fetch is one that cannot be made to fetch something else.
+            ->setOption('isRemoteEnabled', false)
+            ->setOption('isHtml5ParserEnabled', true);
+
+        return $pdf->download('analysis-' . Str::slug($budget->title) . '.pdf');
     }
 
     /** The book as a document, for signing and filing. */

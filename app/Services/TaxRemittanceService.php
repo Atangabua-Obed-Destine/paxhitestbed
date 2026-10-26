@@ -388,10 +388,14 @@ class TaxRemittanceService
     /** Build and post the two-line entry a remittance is. */
     private function postEntry(TaxRemittance $remittance, string $description, int $debitAccount, int $creditAccount, float $amount, int $userId): JournalEntry
     {
-        $fiscalYear = FiscalYear::where('is_active', true)->first();
+        // The year the payment date falls in, not whichever is active: a
+        // remittance for December, paid and posted in January, is a December
+        // entry and belongs in December's exercice.
+        $fiscalYear = FiscalYear::forDate($remittance->payment_date);
 
         if (!$fiscalYear) {
-            throw new \RuntimeException(__('There is no active fiscal year to post this into.'));
+            throw new \RuntimeException(__('No fiscal year covers :date. Create it before posting this remittance.',
+                ['date' => \Carbon\Carbon::parse($remittance->payment_date)->format('j F Y')]));
         }
 
         $period = AccountingPeriod::where('fiscal_year_id', $fiscalYear->id)

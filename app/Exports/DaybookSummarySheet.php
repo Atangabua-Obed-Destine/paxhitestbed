@@ -52,7 +52,11 @@ class DaybookSummarySheet implements FromArray, WithTitle, WithColumnWidths, Wit
         $rows[] = [''];
 
         $this->headingRow = count($rows) + 1;
-        $rows[] = ['Code', 'Description', 'Budget', 'Monthly', 'BB Forward', 'Cummulative', 'Balance'];
+        // "Cumulative", one m in the middle. The workbook had it as
+        // "Cummulative" while the screen, this file's own docblock and the
+        // Income & Expenditure sheet all spelled it correctly — and this is
+        // the copy that gets circulated.
+        $rows[] = ['Code', 'Description', 'Budget', 'Monthly', 'BB Forward', 'Cumulative', 'Balance'];
 
         $labels = [
             'income' => 'INCOME',

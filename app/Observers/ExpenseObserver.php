@@ -28,11 +28,19 @@ class ExpenseObserver
     }
 
     /**
-     * Handle the Expense "updated" event — keep the ledger in sync on amount/category change.
+     * Handle the Expense "updated" event — keep the ledger in sync.
+     *
+     * The date belongs in this list and was missing from it, exactly as it was
+     * on IncomeObserver — see that file for what a date-only edit used to do.
+     * In short: the sheet moved the money to the new month and the journal
+     * entry kept the old date, the old period and the old exercice.
+     *
+     * remap() already re-posts from the payload below, which carries the date,
+     * so nothing else had to change.
      */
     public function updated(Expense $expense): void
     {
-        if ($expense->wasChanged(['amount', 'category_id'])) {
+        if ($expense->wasChanged(['amount', 'category_id', 'date'])) {
             $this->autoMapService->remap('expense', $expense->id, $expense->category_id, $this->payload($expense));
         }
     }

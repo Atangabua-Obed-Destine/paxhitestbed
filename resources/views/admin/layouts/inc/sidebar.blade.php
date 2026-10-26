@@ -976,6 +976,15 @@
                 </li>
                 @endcan
                 
+                {{-- Ledger health — does every transaction still match its posting? --}}
+                @can('general-ledger-view')
+                <li class="{{ Request::is('admin/accounting/ledger-health*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.accounting.ledger-health') }}" class="">
+                        <i class="fas fa-stethoscope"></i> {{ __('Ledger health') }}
+                    </a>
+                </li>
+                @endcan
+
                 {{-- General Ledger & Reports --}}
                 @canany(['general-ledger-view', 'trial-balance-view'])
                 <li class="{{ Request::is('admin/general-ledger*') ? 'active' : '' }} pcoded-hasmenu">

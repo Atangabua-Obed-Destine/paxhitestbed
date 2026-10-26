@@ -453,7 +453,17 @@ $response = $kernel->handle($request);
 $analysisHtml = $response->getContent();
 
 check('the analysis screen renders', $response->getStatusCode() === 200, 'status ' . $response->getStatusCode());
-check('it draws its charts', substr_count($analysisHtml, 'new Chart(') === 2);
+// Counted against the canvases rather than against a number typed here: the
+// screen grew from two charts to four and this assertion failed for no reason
+// except that it had the old count written into it. A canvas with no chart is
+// a blank box on the page, and a chart with no canvas throws — so the two
+// agreeing is the thing actually worth asserting.
+$canvases = substr_count($analysisHtml, '<canvas');
+$charts = substr_count($analysisHtml, 'new Chart(');
+
+check('it draws its charts', $charts >= 2, $charts . ' charts');
+check('every canvas on the analysis screen gets a chart', $canvases === $charts,
+    $canvases . ' canvases, ' . $charts . ' charts');
 
 // These schools run on intermittent connections; a chart that needs the
 // internet is a chart that is sometimes simply blank.

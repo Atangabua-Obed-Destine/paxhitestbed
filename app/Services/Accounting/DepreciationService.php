@@ -34,10 +34,17 @@ class DepreciationService
             'schedules' => [],
         ];
 
-        // Get the active fiscal year and accounting period
-        $fiscalYear = FiscalYear::getActiveFiscalYear();
+        /*
+         * The fiscal year the depreciation DATE falls in, not whichever is
+         * active. A run for December, executed in January, is dated December
+         * and belongs to December's exercice; filing it under the active year
+         * would misstate the charge and leave the period null besides, since no
+         * period of the new year can contain a December date.
+         */
+        $fiscalYear = FiscalYear::forDate($date);
         if (!$fiscalYear) {
-            throw new Exception(__('no_active_fiscal_year'));
+            throw new Exception(__('No fiscal year covers :date.',
+                ['date' => \Carbon\Carbon::parse($date)->format('j F Y')]));
         }
 
         $accountingPeriod = AccountingPeriod::where('fiscal_year_id', $fiscalYear->id)
@@ -269,7 +276,9 @@ class DepreciationService
                 'description' => __('disposal_of_asset') . ' ' . $asset->name . ($reason ? ' - ' . $reason : ''),
                 'source_type' => 'asset_disposal',
                 'source_id' => $asset->id,
-                'fiscal_year_id' => FiscalYear::getActiveFiscalYear()?->id,
+                // The disposal date decides the year, not today's.
+                'fiscal_year_id' => FiscalYear::forDate($disposalDate)?->id,
+                'accounting_period_id' => FiscalYear::periodForDate($disposalDate)?->id,
                 'status' => 'posted',
                 'created_by' => auth()->id(),
             ]);

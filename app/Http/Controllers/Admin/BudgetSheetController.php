@@ -7,6 +7,7 @@ use App\Models\Budget;
 use App\Models\BudgetAllocation;
 use App\Models\BudgetLine;
 use App\Exports\BudgetSheetExport;
+use App\Services\Accounting\BudgetPeriod;
 use App\Services\BudgetActualsService;
 use App\Services\BudgetReconciliationService;
 use App\Services\LetterheadService;
@@ -124,6 +125,22 @@ class BudgetSheetController extends Controller
      * A sheet created with the wrong dates reports the wrong year's actuals,
      * which is worse than an empty one — the figures look authoritative.
      */
+    /**
+     * Say how this period sits against the exercices, without refusing it.
+     *
+     * A school that budgets by academic year is making a choice, not a
+     * mistake — but it should know that budget against actual then reports
+     * over the sheet's own dates rather than the exercice it was asked for,
+     * and that the two therefore will not agree. Said once, here, rather than
+     * discovered later from a figure that looks wrong.
+     */
+    protected function warnAboutAlignment(?string $startDate, ?string $endDate): void
+    {
+        foreach (BudgetPeriod::alignmentWarnings($startDate, $endDate) as $warning) {
+            Flasher::addWarning($warning, __('msg_warning'));
+        }
+    }
+
     public function updatePeriod(Request $request, $id)
     {
         $budget = Budget::where('is_institutional', true)->findOrFail($id);
@@ -138,12 +155,19 @@ class BudgetSheetController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:191'],
             'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after:start_date'],
+            'end_date' => ['required', 'date', 'after:start_date',
+                BudgetPeriod::noOverlapRule($request->input('start_date'), $budget->id)],
         ]);
+
+        // The label follows the dates. It did not before, so moving a sheet's
+        // period left it described by the year it used to start in.
+        $validated['fiscal_year'] = BudgetPeriod::labelFor($validated['start_date'], $validated['end_date']);
 
         $budget->update($validated);
 
         Flasher::addSuccess(__('Period updated. The actual figures now cover the new dates.'), __('msg_success'));
+
+        $this->warnAboutAlignment($validated['start_date'], $validated['end_date']);
 
         return redirect()->route('admin.budget-sheet.show', $budget->id);
     }
@@ -190,7 +214,11 @@ class BudgetSheetController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:191'],
             'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after:start_date'],
+            // The overlap rule hangs off end_date because a closure rule is
+            // not implicit: Laravel skips it when its own attribute is absent,
+            // and a rule that never runs reads as protection while giving none.
+            'end_date' => ['required', 'date', 'after:start_date',
+                BudgetPeriod::noOverlapRule($request->input('start_date'))],
             'opening_balance' => ['nullable', 'numeric'],
             'seed_from' => ['nullable', 'in:actual,budget'],
             'uplift_percent' => ['nullable', 'numeric', 'min:-100', 'max:1000'],
@@ -207,9 +235,14 @@ class BudgetSheetController extends Controller
             'opening_balance' => $validated['opening_balance'] ?? $this->previousClosingBalance($validated['start_date']),
             'total_amount' => 0,
             'status' => 'draft',
-            'fiscal_year' => date('Y', strtotime($validated['start_date'])),
+            // Derived from both dates, not just the start: a sheet running
+            // September 2026 to August 2027 was being labelled "2026", which is
+            // true of its first four months and of nothing else.
+            'fiscal_year' => BudgetPeriod::labelFor($validated['start_date'], $validated['end_date']),
             'created_by' => Auth::id(),
         ]);
+
+        $this->warnAboutAlignment($validated['start_date'], $validated['end_date']);
 
         // Optionally start from last year rather than from nothing. Retyping 66
         // lines is how figures get mistyped, and a budget is nearly always last

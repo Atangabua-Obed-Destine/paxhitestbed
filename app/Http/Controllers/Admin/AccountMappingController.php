@@ -519,8 +519,10 @@ class AccountMappingController extends Controller
      */
     private function createJournalEntry($mapping, $transaction)
     {
-        // Get active fiscal year and period
-        $fiscalYear = FiscalYear::where('is_active', true)->first();
+        // The year the transaction falls in, not whichever is active: the
+        // entry below is dated transaction_date, and the two disagreeing is
+        // what filed 912 entries under a year that did not contain them.
+        $fiscalYear = FiscalYear::forDate($mapping->transaction_date);
         $accountingPeriod = AccountingPeriod::where('is_closed', false)
             ->where('fiscal_year_id', $fiscalYear->id ?? null)
             ->where('start_date', '<=', $mapping->transaction_date)

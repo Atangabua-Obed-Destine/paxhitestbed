@@ -14,6 +14,12 @@ use Exception;
 
 class AccountingReportsController extends Controller
 {
+    /**
+     * Which days budget-vs-actual actually measured, when that is not the
+     * exercice the user asked for. Set by generateBudgetVsActualReport().
+     */
+    protected ?string $budgetPeriodNotice = null;
+
     protected $agingService;
     protected $cashFlowService;
 
@@ -250,7 +256,13 @@ class AccountingReportsController extends Controller
 
             $fiscalYears = FiscalYear::orderBy('start_date', 'desc')->get();
 
-            return view('admin.accounting.reports.budget-vs-actual', compact('report', 'fiscalYears', 'fiscalYear', 'hasBudgetModule'));
+            // Carried on a property rather than folded into $report, because
+            // the export paths consume that array as rows and would have to be
+            // taught about a header they do not render.
+            $periodNotice = $this->budgetPeriodNotice;
+
+            return view('admin.accounting.reports.budget-vs-actual',
+                compact('report', 'fiscalYears', 'fiscalYear', 'hasBudgetModule', 'periodNotice'));
         } catch (Exception $e) {
             Log::error('Error generating budget vs actual report', ['exception' => $e->getMessage()]);
             return back()->with('error', __('error_generating_report'));
@@ -280,6 +292,45 @@ class AccountingReportsController extends Controller
 
         $from = $budget ? optional($budget->start_date)->format('Y-m-d') : $fiscalYear->start_date->format('Y-m-d');
         $to = $budget ? optional($budget->end_date)->format('Y-m-d') : $fiscalYear->end_date->format('Y-m-d');
+
+        /*
+         * Say which days were actually measured.
+         *
+         * The report is asked for a FISCAL YEAR and then reports over the
+         * matched BUDGET's dates, because the budgeted figures only mean
+         * anything over the period they were set for. That is defensible, but
+         * it was silent — and with an eighteen-month budget straddling two
+         * exercices, asking for a three-month first exercice returned eighteen
+         * months of actuals: 116,807,830 against the 31,884,092 that exercice
+         * contains. A figure nearly four times too large, with nothing on the
+         * page to say so.
+         */
+        $coversFiscalYear = $budget
+            && optional($budget->start_date)->isSameDay($fiscalYear->start_date)
+            && optional($budget->end_date)->isSameDay($fiscalYear->end_date);
+
+        $periodNotice = null;
+
+        if ($budget && !$coversFiscalYear) {
+            $periodNotice = sprintf(
+                __('These figures cover %s to %s — the period of the budget "%s" — not %s (%s to %s).'
+                    . ' The two do not cover the same days, so this cannot be compared line for line'
+                    . ' with that exercice\'s accounts.'),
+                \Carbon\Carbon::parse($from)->format('j M Y'),
+                \Carbon\Carbon::parse($to)->format('j M Y'),
+                $budget->title,
+                $fiscalYear->name,
+                $fiscalYear->start_date->format('j M Y'),
+                $fiscalYear->end_date->format('j M Y')
+            );
+        }
+
+        if (!$budget) {
+            $periodNotice = sprintf(__('No budget covers %s, so there is nothing to compare against.'
+                . ' The actual figures below are for the exercice itself.'), $fiscalYear->name);
+        }
+
+        $this->budgetPeriodNotice = $periodNotice;
 
         $resolved = $actualsService->forPeriod($from, $to);
         $actuals = $actualsService->withHeaderTotals($resolved['lines']);

@@ -32,19 +32,30 @@ class PayrollAccountingService
     public function createPayrollJournalEntry(Payroll $payroll, int $userId): ?JournalEntry
     {
         try {
-            // Get active fiscal year
-            $fiscalYear = FiscalYear::where('is_active', true)->first();
-            
+            /*
+             * The fiscal year is the one the PAY DATE falls in, not whichever
+             * happens to be active when somebody presses the button.
+             *
+             * This used to take the active year, and the entry is dated
+             * pay_date — so December's payroll, posted in January, was filed
+             * under the new year while being dated in the old one. With a
+             * single fiscal year on file nothing showed; now that the years
+             * have real boundaries it would put salaries in the wrong exercice
+             * and leave the period null, because no period of the new year can
+             * contain a December date either.
+             */
+            $fiscalYear = FiscalYear::forDate($payroll->pay_date);
+
             if (!$fiscalYear) {
-                Log::warning('PayrollAccountingService: No active fiscal year found for payroll #' . $payroll->id);
+                Log::warning('PayrollAccountingService: no fiscal year covers the pay date '
+                    . $payroll->pay_date . ' for payroll #' . $payroll->id);
                 return null;
             }
 
-            // Get the accounting period
             $accountingPeriod = AccountingPeriod::where('is_closed', false)
                 ->where('fiscal_year_id', $fiscalYear->id)
-                ->where('start_date', '<=', $payroll->pay_date)
-                ->where('end_date', '>=', $payroll->pay_date)
+                ->whereDate('start_date', '<=', $payroll->pay_date)
+                ->whereDate('end_date', '>=', $payroll->pay_date)
                 ->first();
 
             // Get default payroll mapping for main salary expense
@@ -379,12 +390,28 @@ class PayrollAccountingService
             $salaryMonth = date('F Y', strtotime($payroll->salary_month));
             $description = "Reversal: Salary Payment - {$staffName} ({$salaryMonth})";
 
+            /*
+             * A reversal is dated today, so it belongs to today's exercice —
+             * not to the one the entry it reverses sat in. Inheriting the
+             * original's year put a 2027-dated correction inside the 2026
+             * accounts, which is both misfiled and, once 2026 is closed, a
+             * change to figures already signed off.
+             *
+             * The original's year is kept only as a last resort, so a reversal
+             * is never left unattached to the thing it reverses.
+             */
+            $reversalDate = now()->format('Y-m-d');
+            $reversalYear = FiscalYear::forDate($reversalDate);
+            $reversalPeriod = FiscalYear::periodForDate($reversalDate);
+
             // Create reversal journal entry
             $reversalEntry = JournalEntry::create([
                 'entry_number' => JournalEntry::generateEntryNumber(),
-                'entry_date' => now()->format('Y-m-d'),
-                'fiscal_year_id' => $originalEntry->fiscal_year_id,
-                'accounting_period_id' => $originalEntry->accounting_period_id,
+                'entry_date' => $reversalDate,
+                'fiscal_year_id' => $reversalYear->id ?? $originalEntry->fiscal_year_id,
+                'accounting_period_id' => $reversalYear
+                    ? ($reversalPeriod->id ?? null)
+                    : $originalEntry->accounting_period_id,
                 'journal_type' => 'payroll',
                 'description' => $description,
                 'reference_type' => 'payroll_reversal',
