@@ -7,6 +7,8 @@ use App\Support\PaymentMethod;
 use App\Support\TransactionWindow;
 use Illuminate\Support\Facades\Auth;
 use App\Services\Accounting\BudgetLineChoices;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Flasher\Laravel\Facade\Flasher;
 use App\Models\IncomeCategory;
@@ -261,9 +263,36 @@ class IncomeController extends Controller
 
             return redirect()->route($this->route.'.index');
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            Flasher::addError(__('msg_created_error'), __('msg_error'));
+
+            /*
+             * Throwable, not Exception.
+             *
+             * A null property read or a type error is an \Error, which an
+             * Exception catch does not take — so those escaped as a white 500
+             * page with the transaction left to Laravel to unwind. They are
+             * the same failure to the Bursar and belong in the same log line.
+             *
+             * Say what went wrong, somewhere.
+             *
+             * This caught the exception and threw it away: the Bursar saw
+             * "Created Fail!" and the log held nothing at all, so the one
+             * screen that records money could fail and leave no way to find
+             * out why. The reference goes on screen so a report of "it failed
+             * at 12:46" can be matched to the entry in the log.
+             */
+            $reference = (string) Str::uuid();
+
+            Log::error('Income could not be recorded [' . $reference . ']: ' . $e->getMessage(), [
+                'reference' => $reference,
+                'user' => Auth::guard('web')->id(),
+                'input' => $request->except(['_token', 'attach']),
+                'exception' => $e,
+            ]);
+
+            Flasher::addError(__('msg_created_error') . ' (' . $reference . ')', __('msg_error'));
+
             return redirect()->back()->withInput();
         }
     }
