@@ -41,46 +41,46 @@
         .toolbar button,.toolbar a{border:0;background:#224abe;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-size:.85rem;cursor:pointer;margin-left:6px}
         .toolbar a.secondary{background:#6c757d}
 
-        .sheet{max-width:900px;margin:0 auto 40px;background:#fff;padding:36px 46px 32px;box-shadow:0 6px 24px rgba(0,0,0,.08);position:relative;overflow:hidden}
+        .sheet{max-width:900px;margin:0 auto 32px;background:#fff;padding:28px 40px 26px;box-shadow:0 6px 24px rgba(0,0,0,.08);position:relative;overflow:hidden}
         .sheet > *{position:relative;z-index:1}
 
-        .r-title{text-align:center;background:#f1f5f9;color:#1e293b;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:8px;border-radius:2px;margin-bottom:20px;font-size:.95rem;border:1px solid #cbd5e1}
+        .r-title{text-align:center;background:#f1f5f9;color:#1e293b;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:6px;border-radius:2px;margin-bottom:14px;font-size:.95rem;border:1px solid #cbd5e1}
         .r-title small{display:block;font-weight:500;letter-spacing:.05em;text-transform:none;color:#64748b;font-size:.7rem;margin-top:2px}
 
-        .r-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:22px;font-size:.8rem}
+        .r-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;font-size:.8rem}
         .r-meta .cell{background:#f8fafc;border-left:3px solid #224abe;padding:8px 10px}
         .r-meta .cell .k{color:#64748b;text-transform:uppercase;font-size:.65rem;letter-spacing:.08em}
         .r-meta .cell .v{font-weight:600;color:#0f172a;margin-top:2px;word-break:break-all}
 
-        .field{display:flex;align-items:baseline;margin-bottom:14px}
+        .field{display:flex;align-items:baseline;margin-bottom:10px}
         .field .label{width:220px;flex:0 0 220px;font-weight:600;text-transform:uppercase;font-size:.8rem;letter-spacing:.05em;color:#1e293b}
-        .field .value{flex:1;border-bottom:1px solid #94a3b8;padding:2px 4px 4px;min-height:26px;font-size:.95rem;color:#0f172a}
+        .field .value{flex:1;border-bottom:1px solid #94a3b8;padding:2px 4px 3px;min-height:21px;font-size:.95rem;color:#0f172a}
         .field-row{display:flex;gap:20px}
         .field-row .field{flex:1}
         .field-row .field .label{width:150px;flex:0 0 150px}
 
-        .amount-box{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#f8fafc;padding:14px 20px;border-radius:4px;margin:18px 0}
+        .amount-box{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#f8fafc;padding:12px 18px;border-radius:4px;margin:14px 0}
         .amount-box .k{text-transform:uppercase;letter-spacing:.1em;font-size:.75rem;opacity:.8}
-        .amount-box .v{font-size:1.6rem;font-weight:700;letter-spacing:.02em}
+        .amount-box .v{font-size:1.4rem;font-weight:700;letter-spacing:.02em}
         .amount-box .status{background:#16a34a;color:#fff;padding:4px 10px;border-radius:12px;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;margin-left:12px}
         .amount-box .status.partial{background:#f59e0b}
         .amount-box .status.unpaid{background:#dc2626}
 
-        table.block{width:100%;border-collapse:collapse;margin:0 0 18px;font-size:.85rem}
+        table.block{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:.85rem}
         table.block caption{text-align:left;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:.72rem;color:#64748b;padding-bottom:6px}
-        table.block th,table.block td{border-bottom:1px solid #e2e8f0;padding:7px 8px;text-align:left}
+        table.block th,table.block td{border-bottom:1px solid #e2e8f0;padding:5px 8px;text-align:left}
         table.block th{background:#f8fafc;color:#475569;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}
         table.block td.num,table.block th.num{text-align:right;white-space:nowrap}
         table.block tr.total td{font-weight:700;border-top:2px solid #0f172a;border-bottom:0}
         table.block tr.settled td{color:#15803d}
         table.block tr.owing td{color:#b45309}
 
-        .sig{display:flex;justify-content:space-between;margin-top:32px;gap:40px}
+        .sig{display:flex;justify-content:space-between;margin-top:24px;gap:40px}
         .sig .box{flex:1}
-        .sig .box .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:22px}
+        .sig .box .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:20px}
         .sig .box .line{border-top:1px solid #475569;padding-top:4px;font-size:.85rem}
 
-        .verify{margin-top:24px;padding:12px 14px;border:1px dashed #94a3b8;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;gap:18px;font-size:.75rem}
+        .verify{margin-top:16px;padding:10px 12px;border:1px dashed #94a3b8;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;gap:18px;font-size:.75rem}
         .verify .code{font-family:'Courier New',monospace;font-size:1rem;color:#0f172a;letter-spacing:.15em;font-weight:700}
         .verify .qr{flex:0 0 90px;text-align:right}
         .verify .qr img{width:90px;height:90px;background:#fff;border:1px solid #cbd5e1}
@@ -89,9 +89,53 @@
         .digital-badge{position:absolute;top:22px;right:22px;background:#16a34a;color:#fff;padding:4px 10px;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;border-radius:2px;z-index:2}
 
         @media print{
+            /* The page itself supplies the margin, so the sheet does not have
+               to, and nothing is paid for twice. */
+            @page{size:A4;margin:12mm}
             body{background:#fff}
             .toolbar{display:none}
-            .sheet{box-shadow:none;margin:0;padding:20px 30px;max-width:100%}
+            .sheet{box-shadow:none;margin:0;padding:0;max-width:100%}
+
+            /* ---- legible on paper ----------------------------------------
+               Browsers do not print background colours by default, and the
+               setting is off in most print dialogs. Anything that relied on a
+               background for its contrast therefore printed its own text on
+               white: the Amount Received is near-white on near-black, so the
+               single most important figure on the receipt came out blank. The
+               status pill and the digital badge did the same.
+
+               These invert for paper rather than asking for the background to
+               be printed, because a receipt has to be readable however it is
+               sent to the printer. It also costs a great deal less toner. */
+            .amount-box{background:#fff !important;color:#0f172a !important;
+                        border:2px solid #0f172a;padding:9px 14px;margin:10px 0}
+            .amount-box .k{opacity:1;color:#475569 !important}
+            .amount-box .v{font-size:1.25rem}
+            .amount-box .status,
+            .digital-badge{background:#fff !important;color:#0f172a !important;
+                           border:1px solid #0f172a}
+
+            /* ---- density -------------------------------------------------
+               Every field, table and block is kept; what shrinks is the space
+               between them. Nothing drops below about 8pt, which is the floor
+               for a document somebody may have to read in a dispute. */
+            .r-title{margin-bottom:10px;padding:5px;font-size:.84rem}
+            .r-meta{gap:8px;margin-bottom:12px;font-size:.7rem}
+            .r-meta .cell{padding:5px 7px}
+            .field{margin-bottom:6px}
+            .field .label{font-size:.7rem}
+            .field .value{min-height:15px;padding:1px 3px 2px;font-size:.82rem}
+            table.block{margin-bottom:10px;font-size:.74rem}
+            table.block caption{padding-bottom:3px}
+            table.block th,table.block td{padding:3px 6px}
+            .sig{margin-top:16px;gap:30px}
+            .sig .box .label{margin-bottom:16px;font-size:.66rem}
+            .verify{margin-top:10px;padding:7px 10px;font-size:.66rem}
+            .footer{margin-top:7px;font-size:.62rem;line-height:1.35}
+
+            /* A table, the signatures or the verification block split across
+               a page break is worse than a slightly longer document. */
+            table.block,.sig,.verify,.amount-box{page-break-inside:avoid}
         }
     </style>
 </head>

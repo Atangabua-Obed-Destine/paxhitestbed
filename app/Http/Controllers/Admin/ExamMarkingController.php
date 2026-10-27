@@ -384,6 +384,12 @@ class ExamMarkingController extends Controller
     {
         $validated = $request->validate([
             'marks'         => 'nullable|array',
+            // A mark had no rule on its VALUE at all, only on the array
+            // around it. The per-exam ceiling cannot live here because it
+            // belongs to the exam type, so it is checked below — this is the
+            // cheap half that catches text and negatives before anything is
+            // loaded.
+            'marks.*'       => 'nullable|numeric|min:0',
             'notes'         => 'nullable|array',
             'subject'       => 'nullable|integer',
             'start_date'    => 'nullable|date',
@@ -462,6 +468,49 @@ class ExamMarkingController extends Controller
         $markGuard = app(\App\Services\Assessment\MarkChangeGuard::class);
         $markRefusals = [];
 
+        /*
+         * Is each mark one a marker could have meant?
+         *
+         * Before the dry run, because a mark above its exam type's maximum is
+         * refused on its own terms and there is no point asking the guard what
+         * the totals would become from a figure that cannot stand. The ceiling
+         * belongs to the exam type — Final 60, CA 30 — so it is read per exam
+         * rather than taken from the request.
+         *
+         * These join $markRefusals so they travel the path this screen already
+         * has, and the marker is told which student and which figure.
+         */
+        foreach ($examIds as $examId) {
+            $exam = $allExams->get($examId);
+
+            if (!$exam || $exam->marks_locked) {
+                continue;
+            }
+
+            $refusal = \App\Support\ExamMark::refusal(
+                $marks[$examId] ?? null,
+                $exam->type?->marks !== null ? (float) $exam->type->marks : null
+            );
+
+            if ($refusal === null) {
+                continue;
+            }
+
+            $who = trim(optional($exam->studentEnroll?->student)->first_name . ' '
+                . optional($exam->studentEnroll?->student)->last_name)
+                ?: ($exam->studentEnroll?->matricule ?? ('#' . $examId));
+
+            $markRefusals[] = $who . ': ' . $refusal;
+        }
+
+        if ($markRefusals !== []) {
+            Flasher::addError(implode(' ', array_slice(array_unique($markRefusals), 0, 3)), __('msg_error'));
+
+            // withInput, or a refused save costs the marker a column of up to
+            // 88 figures they have just typed.
+            return redirect()->back()->withInput();
+        }
+
         \Illuminate\Support\Facades\DB::beginTransaction();
 
         try {
@@ -483,8 +532,9 @@ class ExamMarkingController extends Controller
                     continue;
                 }
 
-                $proposed = $marks[$dryExam->id];
-                $dryExam->achieve_marks = ($proposed === null || $proposed === '') ? null : $proposed;
+                // The same cast as the real save below: the guard has to be
+                // asked about the figures that will actually be written.
+                $dryExam->achieve_marks = \App\Support\ExamMark::toStore($marks[$dryExam->id]);
                 $dryExam->save();
                 $touched[$dryExam->student_enroll_id . '-' . $dryExam->subject_id] =
                     ['enroll' => $dryExam->student_enroll_id, 'subject' => $dryExam->subject_id];
@@ -548,7 +598,9 @@ class ExamMarkingController extends Controller
                     continue;
                 }
 
-                $exam->achieve_marks = ($markValue === null || $markValue === '') ? null : $markValue;
+                // Cast in one place rather than at the assignment, so the
+                // column never sees a raw request value.
+                $exam->achieve_marks = \App\Support\ExamMark::toStore($markValue);
                 $exam->marks_locked = 1; // Lock upon saving
                 $exam->note = $noteValue;
                 $exam->updated_by = $currentUserId;

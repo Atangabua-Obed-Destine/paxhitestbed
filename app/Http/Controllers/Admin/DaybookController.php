@@ -9,6 +9,7 @@ use App\Models\Budget;
 use App\Models\BudgetLine;
 use App\Services\Accounting\LedgerConfidence;
 use App\Services\DaybookService;
+use App\Services\FeeCollection;
 use App\Services\LetterheadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -96,6 +97,9 @@ class DaybookController extends Controller
         return view('admin.daybook.analysis', $context + [
             'title' => __('Trends & Analysis'),
             'analysis' => $this->daybook->analysis($budget),
+            // Who still owes. Its own service, because this is a POSITION and
+            // everything else on the page is a FLOW: see App\Services\FeeCollection.
+            'collection' => app(FeeCollection::class)->forBudget($budget),
             'checks' => $checks,
             'allClear' => $confidence->allClear($checks),
             'concerns' => $confidence->concerns($checks),
@@ -143,6 +147,7 @@ class DaybookController extends Controller
 
         $pdf = Pdf::loadView('admin.daybook.analysis-pdf', $context + [
             'analysis' => $this->daybook->analysis($budget),
+            'collection' => app(FeeCollection::class)->forBudget($budget),
             'checks' => $checks,
             'allClear' => $confidence->allClear($checks),
             'concerns' => $confidence->concerns($checks),

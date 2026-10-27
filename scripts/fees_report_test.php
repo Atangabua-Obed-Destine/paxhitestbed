@@ -438,6 +438,70 @@ $reportSource = file_get_contents($base . '/resources/views/admin/fees-student/r
 ok('the per-row print button still opens a window on click',
     str_contains($reportSource, 'onclick="PopupWin('));
 
+echo PHP_EOL . "=== 11. the receipt is legible and fits ===" . PHP_EOL;
+
+/*
+ * Two things, and the first is not about space at all.
+ *
+ * Browsers do not print background colours by default, and the setting is off
+ * in most print dialogs. The Amount Received was near-white text on a
+ * near-black background with no print-color-adjust, so the single most
+ * important figure on the receipt printed BLANK. The status pill and the
+ * digital badge did the same.
+ *
+ * The second is the density the page was asked for: every field, table and
+ * block is kept, and what shrinks is the space between them.
+ */
+$receiptSource = file_get_contents($base . '/resources/views/admin/fees-student/print.blade.php');
+
+preg_match('~@media print\{(.*?)\n        \}~s', $receiptSource, $printBlock);
+$printCss = $printBlock[1] ?? '';
+
+ok('the receipt has print rules', $printCss !== '');
+
+// Anything whose contrast came from a background must invert for paper.
+foreach (['.amount-box', '.digital-badge'] as $onColour) {
+    ok($onColour . ' is readable without a printed background',
+        (bool) preg_match('~' . preg_quote($onColour, '~') . '[^{]*\{[^}]*background:\s*#fff~s', $printCss));
+    ok($onColour . ' takes dark text on paper',
+        (bool) preg_match('~' . preg_quote($onColour, '~') . '[^{]*\{[^}]*color:\s*#0f172a~s', $printCss));
+}
+
+// And the screen keeps the dark bar it had: this is a paper fix, not a
+// redesign of the document.
+ok('on screen the amount bar is still dark',
+    (bool) preg_match('~\.amount-box\{[^}]*background:#0f172a~', str_replace($printCss, '', $receiptSource)));
+
+// The page supplies its own margin so the sheet does not pay for it twice.
+ok('the page size and margin are stated', (bool) preg_match('~@page\{size:A4;margin:\d+mm\}~', $printCss));
+ok('and the sheet drops its own padding for print',
+    (bool) preg_match('~\.sheet\{[^}]*padding:0~', $printCss));
+
+// Nothing a reader needs is dropped — the compaction is spacing only.
+[$receiptHtml, ] = [file_get_contents('C:/Users/KENTOJ~1/AppData/Local/Temp/receipt.html'), null];
+
+foreach (['r-title', 'r-meta', 'amount-box', 'sig', 'verify', 'footer'] as $part) {
+    ok('the ' . $part . ' block is still there', str_contains($receiptHtml, 'class="' . $part));
+}
+
+ok('every field is still there', substr_count($receiptHtml, 'class="field"') >= 11);
+
+// Nothing shrinks below about 8pt: this is a document somebody may have to
+// read in a dispute.
+preg_match_all('~font-size:\s*\.(\d+)rem~', $printCss, $sizes);
+
+foreach ($sizes[1] as $hundredths) {
+    $rem = (float) ('0.' . $hundredths);
+
+    ok(sprintf('%.2frem is still readable (%.1fpt)', $rem, $rem * 12),
+        $rem >= 0.60);
+}
+
+// A table or the signatures split over a page break is worse than a longer
+// document.
+ok('blocks are kept whole across a page break',
+    str_contains($printCss, 'page-break-inside:avoid'));
+
 echo PHP_EOL . "=== nothing was left behind ===" . PHP_EOL;
 
 check(sprintf('fees     is still %d', $opening['fees']), $opening['fees'], DB::table('fees')->count());

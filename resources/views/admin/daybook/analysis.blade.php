@@ -19,6 +19,18 @@
         --good:           #0ca30c;
         --warning:        #fab219;
         --critical:       #d03b3b;
+
+        /* Fee collection is ORDERED severity — fully paid, partly paid, nothing
+           paid — so it takes the status roles rather than a new categorical
+           set. It cannot reuse the three above as fills: --warning #fab219
+           sits outside the lightness band at 0.811 and reaches only 1.79:1 on
+           this surface, which is invisible as a bar segment. These are the
+           same roles at bar weight, validated in the order they stack:
+             all checks pass — worst adjacent CVD ΔE 9.8 (protan),
+             normal-vision 20.7, all three >= 3:1 on the surface. */
+        --paid-full:      #0f7a3d;
+        --paid-part:      #b8860b;
+        --paid-none:      #b3261e;
     }
 
     .db-toolbar {
@@ -140,6 +152,81 @@
     .rank-bar.in { background: var(--series-in); }
     .rank-track { background: #f2f4f7; border-radius: 4px; }
     .rank-share { font-size: .78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    /* Only the collection tables, which are the only rank tables with a
+       header row. Styling .rank-table thead th would also have restyled the
+       movers table above, which was not asked for. */
+    .fc-rank thead th {
+        font-size: .68rem; text-transform: uppercase; letter-spacing: .7px;
+        color: var(--text-muted); font-weight: 800; padding: .35rem .5rem;
+        border-top: 0; white-space: nowrap;
+    }
+
+    /* ---- Who has paid ---------------------------------------------------
+       Three counts, a proportion bar, and the money behind them. Ordered
+       severity, so it wears the status roles at bar weight rather than a
+       fourth categorical hue — see the token block at the top. */
+    .fc-split {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: .85rem; margin-bottom: 1rem;
+    }
+    .fc-stat {
+        border: 1px solid #e3e7ee; border-radius: 10px; padding: .85rem 1rem;
+        border-left-width: 3px;
+    }
+    .fc-stat .label {
+        font-size: .7rem; font-weight: 800; letter-spacing: .9px; text-transform: uppercase;
+        color: var(--text-muted); margin-bottom: .2rem;
+    }
+    .fc-stat .value {
+        font-size: 1.9rem; font-weight: 800; line-height: 1.1;
+        font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+    }
+    .fc-stat .of { font-size: .78rem; color: var(--text-secondary); margin-top: .2rem; }
+    .fc-full { border-left-color: var(--paid-full); }
+    .fc-part { border-left-color: var(--paid-part); }
+    .fc-none { border-left-color: var(--paid-none); }
+    .fc-full .value { color: var(--paid-full); }
+    .fc-part .value { color: var(--paid-part); }
+    .fc-none .value { color: var(--paid-none); }
+
+    /* A 2px surface gap between segments, so two fills never touch. */
+    .fc-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: #f2f4f7; }
+    .fc-bar span { display: block; height: 100%; box-shadow: 0 0 0 2px var(--surface) inset; }
+    .fc-bar span:first-child { box-shadow: none; }
+    .fc-bar .s-full { background: var(--paid-full); }
+    .fc-bar .s-part { background: var(--paid-part); }
+    .fc-bar .s-none { background: var(--paid-none); }
+
+    .fc-tiles { padding: 0 1.25rem; margin-bottom: 1rem; }
+
+    .fc-b-full { background: var(--paid-full) !important; }
+    .fc-b-part { background: var(--paid-part) !important; }
+    .fc-b-none { background: var(--paid-none) !important; }
+
+    .fc-aside { font-size: .76rem; color: var(--text-muted); line-height: 1.5; }
+
+    .fc-tag {
+        display: inline-block; padding: .02rem .35rem; border-radius: 3px;
+        font-size: .68rem; font-weight: 700; background: #f4f6f9;
+        color: #55637a; border: 1px solid #d7dee7;
+    }
+
+    .fc-note {
+        display: flex; gap: .6rem; align-items: flex-start;
+        margin: 0 1.25rem 1rem; padding: .75rem .9rem;
+        border: 1px solid #e3e7ee; border-left: 3px solid var(--text-muted);
+        border-radius: 8px; font-size: .85rem; color: #33507d; line-height: 1.55;
+    }
+    .fc-note i { margin-top: .2rem; color: var(--text-muted); }
+    .fc-note-warn { border-left-color: var(--paid-part); background: #fdfaf2; }
+    .fc-note-warn i { color: var(--paid-part); }
+    .fc-note .fc-aside { display: block; margin-top: .15rem; }
+
+    @media (max-width: 767px) {
+        .fc-stat .value { font-size: 1.5rem; }
+        .fc-tiles { padding: 0 1rem; }
+        .fc-note { margin: 0 1rem 1rem; }
+    }
 
     /* The numbers behind every chart — the table view, and what somebody
        actually reads out in a meeting. */
@@ -675,9 +762,19 @@
             </div>
         @endif
 
+        @endif
+
+        {{-- Who has paid -----------------------------------------------------
+             Outside the has_data branch on purpose. Everything above needs
+             cash to have moved; this does not. A budget year whose fees are
+             assigned and wholly unpaid has no rows for the charts and is
+             exactly the year somebody most needs to be told about. --}}
+        @include('admin.daybook.partials.collection')
+
         {{-- The pack ---------------------------------------------------------
              A POST, because the charts travel with it as images this page
-             captures itself. --}}
+             captures itself. Last, because it is the action you take after
+             reading rather than part of the reading. --}}
         <form method="post" action="{{ route('admin.daybook.analysis.pdf') }}" id="packForm" class="mb-4">
             @csrf
             <input type="hidden" name="budget_id" value="{{ $budget->id }}">
@@ -690,8 +787,6 @@
                 {{ __('Every chart on this page, with the numbers behind it, on the school letterhead.') }}
             </p>
         </form>
-
-        @endif
     </div>
 </div>
 @endsection
@@ -902,6 +997,65 @@
             }
         }
     }));
+
+    /* 5. Fee collection, month by month.
+
+       Registered AFTER the four above, and that ordering is load-bearing:
+       analysis-pdf.blade.php reads $charts[0..3] by POSITION for cash, in/out,
+       net and pacing. Registering this one earlier would silently print the
+       wrong picture under four headings in the meeting pack. */
+    var feeCanvas = document.getElementById('chartFeeCollection');
+
+    if (feeCanvas) {
+        var feeLabels = @json(array_column($collection['by_month'], 'label'));
+        var feeCash = @json(array_column($collection['by_month'], 'cash'));
+        var feeCumulative = @json(array_column($collection['by_month'], 'cumulative'));
+
+        keep(new Chart(feeCanvas, {
+            data: {
+                labels: feeLabels,
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: '{{ __('Received in the month') }}',
+                        data: feeCash,
+                        backgroundColor: IN,
+                        borderRadius: 4,
+                        // A 2px surface gap so adjacent bars never touch.
+                        borderColor: role('--surface') || '#ffffff',
+                        borderWidth: { top: 0, right: 1, bottom: 0, left: 1 },
+                        order: 2
+                    },
+                    {
+                        type: 'line',
+                        label: '{{ __('Running total') }}',
+                        data: feeCumulative,
+                        borderColor: INK,
+                        backgroundColor: INK,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: false,
+                        tension: .25,
+                        // Its own axis would make this a dual-axis chart, which
+                        // is the one chart form never to build. Both series are
+                        // money in the same currency, so they share the scale;
+                        // the running total simply climbs above the bars.
+                        order: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: axes,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: tooltip
+                }
+            }
+        }));
+    }
 
     /* The meeting pack.
        dompdf cannot run Chart.js, so each canvas is captured here with the

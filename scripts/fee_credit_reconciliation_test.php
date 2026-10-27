@@ -195,7 +195,24 @@ echo "\n== The report's cards ==\n";
 
 $reportUrl = '/admin/fees-student-report?faculty=0&program=0&session=0&semester=0&section=0&category=0&payment_status=all&student_id=';
 [$status, $html] = $render($reportUrl);
-$text = trim(preg_replace('/\s+/', ' ', strip_tags($html)));
+
+/*
+ * strip_tags alone is not safe on this page, and the failure is silent.
+ *
+ * The pay modal — inline <script> and all — is rendered once per row, so a
+ * full report carries over a thousand bare '<' characters from ordinary
+ * JavaScript comparisons (legs.length < 2, amount < maxAmount). strip_tags
+ * treats each of those as the start of a tag and eats everything up to the
+ * next '>', taking real page text with it. That is why a row's "moved to
+ * another fee" note could not be found in a document that demonstrably
+ * contained it.
+ *
+ * So: remove script and style blocks first, then strip.
+ */
+$text = trim(preg_replace(
+    '/\s+/', ' ',
+    strip_tags(preg_replace('~<(script|style)\b[^>]*>.*?</\1>~is', ' ', $html))
+));
 
 check('the report renders', $status === 200, (string) $status);
 
@@ -221,12 +238,23 @@ foreach ($set as $fee) {
     }
 }
 
-preg_match('/Total Collected\s*([\d,]+(?:\.\d+)?)/', $text, $collected);
-preg_match('/Outstanding Balance\s*([\d,]+(?:\.\d+)?)/', $text, $outstanding);
-preg_match('/(\d+)\s*Total Fully Paid Fees/', $text, $fully);
-// The count and the amount share one card: '3 fees - paid beyond what was billed'.
-preg_match('/Overpaid Amount\s*([\d,]+(?:\.\d+)?)/', $text, $overpaidAmount);
-preg_match('/(\d+)\s*fees?\s*[^\d]*paid beyond what was billed/', $text, $overpaid);
+/*
+ * The labels, not the layout. The summary band was rebuilt — the cards became
+ * a figure strip plus status chips — so these read the current wording:
+ *   'Total Collected'        -> fees_collected       'Collected'
+ *   'Outstanding Balance'    -> fees_outstanding     'Outstanding'
+ *   'Total Fully Paid Fees'  -> fees_count_paid      '<n>paid'
+ *   'Overpaid Amount'        -> fees_overpaid_held   'Overpayment held'
+ * What each one asserts is unchanged: the figure behind the label still has to
+ * be the net, independently recomputed above.
+ */
+preg_match('/Collected\s*([\d,]+(?:\.\d+)?)/', $text, $collected);
+preg_match('/Outstanding\s*([\d,]+(?:\.\d+)?)/', $text, $outstanding);
+// The chips run figures into their words — '275paid', '10part paid' — so the
+// negative lookahead is what keeps this off 'part paid' and 'unpaid'.
+preg_match('/(\d+)\s*paid(?![a-z])/', $text, $fully);
+preg_match('/Overpayment held\s*([\d,]+(?:\.\d+)?)/', $text, $overpaidAmount);
+preg_match('/(\d+)\s*overpaid(?![a-z])/', $text, $overpaid);
 
 check('Total Collected is what was actually collected',
     isset($collected[1]) && abs($number($collected[1]) - $expected['collected']) < 0.01,

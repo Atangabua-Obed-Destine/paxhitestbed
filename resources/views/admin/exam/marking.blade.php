@@ -100,8 +100,12 @@
 
 @section('content')
 
+{{-- The marking screen's own styling, scoped to .exm so none of it reaches the
+     six other views that include common/inc/subject_search_filter. --}}
+@include('admin.exam.partials.theme')
+
 <!-- Start Content-->
-<div class="main-body">
+<div class="main-body exm">
     <div class="page-wrapper">
         <!-- [ Main Content ] start -->
         <div class="row">
@@ -657,168 +661,30 @@
                     @endcan
                     <div class="card-block">
                         <!-- [ Data table ] start -->
-                        <div class="table-responsive">
-                            <table class="display table nowrap table-striped table-hover printable">
-                                <thead>
-                                    <tr>
-                                        @can('subject-marking-unlock')
-                                        <th class="text-center" style="width: 40px;">
-                                            <div class="checkbox checkbox-warning d-inline">
-                                                <input type="checkbox" id="checkAllUnlock" class="check-all-unlock">
-                                                <label for="checkAllUnlock" class="cr"></label>
-                                            </div>
-                                        </th>
-                                        @endcan
-                                        <th>S/N</th>
-                                        <th>{{ $isFinalExam ? __('Student Exam ID') : __('field_matricule') }}</th>
-                                        @if(!$isFinalExam)
-                                        <th>{{ __('field_student_name') }}</th>
-                                        @endif
-                                        @if($cross_program)
-                                        <th>{{ trans_choice('module_program', 1) }}</th>
-                                        @endif
-                                        <th>
-                                            {{ __('field_max_marks') }}
-                                            @if(!is_null($maxMarks))
-                                                ({{ round($maxMarks, 2) }})
-                                            @endif
-                                        </th>
-                                        <th>{{ __('field_note') }}</th>
-                                        @if(!$isFinalExam)
-                                        <th>{{ __('Absences') }}</th>
-                                        <th>{{ __('Attendance Score') }}</th>
-                                        <th>{{ __('Actual Mark') }}</th>
-                                        @endif
-                                        <th>{{ __('Status') }}</th>
-                                        <th>{{ __('field_semester') }}</th>
-                                        <th>{{ __('field_section') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                  @php $prevMarkingProgramId = null; @endphp
-                                  @foreach($rows as $row)
-                                    @php
-                                        $anonymousCode = $row->scriptCode->anonymous_code ?? null;
-                                        $canMark = !$isFinalExam || !empty($anonymousCode);
-                                        $is_locked = $row->marks_locked;
-                                        $rowProgram = $row->studentEnroll->program ?? null;
-                                        $colSpan = 6 + (!$isFinalExam ? 4 : 0) + ($cross_program ? 1 : 0) + (auth()->user()->can('subject-marking-unlock') ? 1 : 0);
-                                    @endphp
+                        {{-- The band and the table are partials now: this view was
+                             1,922 lines and the table alone was 156 of them. --}}
+                        @include('admin.exam.partials.marking_band', [
+                            'subjectTitle' => optional(optional($firstRow)->subject)->title
+                                ?? optional(optional($firstRow)->subject)->code,
+                        ])
 
-                                    {{-- Programme group separator --}}
-                                    @if($cross_program && $rowProgram && $rowProgram->id !== $prevMarkingProgramId)
-                                        @php $prevMarkingProgramId = $rowProgram->id; @endphp
-                                        <tr class="bg-light">
-                                            <td colspan="{{ $colSpan }}" class="py-2 px-3">
-                                                <strong>
-                                                    <i class="fas fa-graduation-cap text-primary me-1"></i>
-                                                    {{ $rowProgram->title }}
-                                                </strong>
-                                                @if($rowProgram->faculty)
-                                                    <small class="text-muted ms-2">({{ $rowProgram->faculty->title }})</small>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                    @endif
+                        @include('admin.exam.partials.marking_table')
+                    </div>
 
-                                    <tr>
-                                        @can('subject-marking-unlock')
-                                        <td class="text-center">
-                                            @if($is_locked)
-                                            <div class="checkbox checkbox-warning d-inline">
-                                                <input type="checkbox" class="bulk-unlock-checkbox" id="unlock-{{ $row->id }}" value="{{ $row->id }}">
-                                                <label for="unlock-{{ $row->id }}" class="cr"></label>
-                                            </div>
-                                            @endif
-                                        </td>
-                                        @endcan
-                                        <td>{{ $loop->iteration }}</td>
-                                        <td>
-                                            @if($isFinalExam)
-                                                @if($anonymousCode)
-                                                    {{ $anonymousCode }}
-                                                @else
-                                                    <span class="badge bg-warning text-dark">{{ __('Not set') }}</span>
-                                                @endif
-                                            @else
-                                                @isset($row->studentEnroll->matricule)
-                                                <a href="{{ route('admin.student.show', $row->studentEnroll->student->id) }}">
-                                                #{{ $row->studentEnroll->matricule ?? '' }}
-                                                </a>
-                                                @endisset
-                                            @endif
-                                        </td>
-                                        @if(!$isFinalExam)
-                                        <td>
-                                            {{ $row->studentEnroll->student->first_name ?? '' }} {{ $row->studentEnroll->student->last_name ?? '' }}
-                                        </td>
-                                        @endif
-                                        @if($cross_program)
-                                        <td>
-                                            <span class="badge badge-light border" style="font-size: 10px; white-space: normal;">
-                                                {{ Str::limit($rowProgram->title ?? 'N/A', 25) }}
-                                            </span>
-                                        </td>
-                                        @endif
-                                        <td>
-                                            <input type="text" class="form-control" name="marks[{{ $row->id }}]" value="{{ $row->achieve_marks ? round($row->achieve_marks, 2) : '' }}" style="width: 110px;" data-v-max="{{ $maxMarks }}" data-v-min="0" @unless($canMark && !$is_locked) disabled @endunless>
-                                            @if($isFinalExam && !$canMark)
-                                                <small class="text-danger d-block mt-1">{{ __('Awaiting student exam ID') }}</small>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <input type="text" class="form-control" name="notes[{{ $row->id }}]" value="{{ $row->note }}" style="width: 160px;" @unless($canMark && !$is_locked) disabled @endunless>
-                                        </td>
-                                        @if(!$isFinalExam)
-                                        <td>
-                                            <input type="number" min="0" class="form-control att-absence" name="absences[{{ $row->student_enroll_id }}]" form="marksForm" data-enroll="{{ $row->student_enroll_id }}" style="width: 90px;" placeholder="0" value="{{ $mig_absences[$row->student_enroll_id] ?? '' }}">
-                                        </td>
-                                        <td>
-                                            <span class="att-score badge badge-light border" data-enroll="{{ $row->student_enroll_id }}" style="font-size: 13px;">0</span>
-                                        </td>
-                                        <td>
-                                            <span class="att-actual badge badge-info" data-enroll="{{ $row->student_enroll_id }}" style="font-size: 13px;" title="{{ __('Actual graded attendance mark across all recorded dates') }}">{{ $mig_actual_marks[$row->student_enroll_id] ?? 0 }}</span>
-                                        </td>
-                                        @endif
-                                        <td>
-                                            @if($is_locked)
-                                                <span class="badge badge-danger"><i class="fas fa-lock"></i></span>
-                                                @can('subject-marking-unlock')
-                                                <button type="button" class="btn btn-icon btn-outline-warning btn-sm unlock-marks" 
-                                                    data-exam="{{ $row->id }}"
-                                                    title="Unlock Marks">
-                                                    <i class="fas fa-unlock"></i>
-                                                </button>
-                                                @endcan
-                                            @else
-                                                <span class="badge badge-success"><i class="fas fa-lock-open"></i></span>
-                                            @endif
-                                        </td>
-                                        <td>{{ $row->studentEnroll->semester->title ?? '' }}</td>
-                                        <td>{{ $row->studentEnroll->section->title ?? '' }}</td>
-                                    </tr>
-                                  @endforeach
-                                </tbody>
-                                @if($firstRow)
-                                <caption>{{ $firstRow->subject->code ?? '' }} - {{ $firstRow->type->title ?? '' }} - {{ $firstRow->studentEnroll->session->title ?? '' }}</caption>
-                                @endif
-                            </table>
-                            @if($isFinalExam)
-                                @if($cross_program)
-                                    <p class="mt-2 text-muted small"><i class="fas fa-info-circle"></i> Cross-programme mode: Marks apply to students from all sharing programmes. Student exam IDs must be configured before marks can be entered.</p>
-                                @else
-                                    <p class="mt-2 text-muted small">{{ __('Student marks can only be entered once a student exam ID has been configured by the administrator.') }}</p>
-                                @endif
-                            @elseif($cross_program)
-                                <p class="mt-2 text-muted small"><i class="fas fa-info-circle"></i> Cross-programme mode: You are entering marks for students from all programmes sharing this course.</p>
-                            @endif
+                    <div class="exm-actions">
+                        <button type="button" class="exm-btn exm-btn-main" id="btnShowConfirmModal">
+                            <i class="fas fa-check"></i> {{ __('btn_update') }}
+                        </button>
+
+                        <div class="exm-right">
+                            {{-- The inline red message per field already exists; this is
+                                 the count, so nothing is missed in a list of 88. --}}
+                            <span id="exmOutOfRange" class="exm-count-ok"
+                                  data-label="{{ __('exam_out_of_range') }}"></span>
                         </div>
-                        <!-- [ Data table ] end -->
                     </div>
 
-                    <div class="card-footer">
-                        <button type="button" class="btn btn-success" id="btnShowConfirmModal"><i class="fas fa-check"></i> {{ __('btn_update') }}</button>
-                    </div>
+                    @include('admin.exam.partials.marking_aids')
                     @else
                     <div class="card-block">
                         <h5>{{ __('no_result_found') }}</h5>

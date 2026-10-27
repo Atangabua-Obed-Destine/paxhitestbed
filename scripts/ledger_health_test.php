@@ -96,9 +96,47 @@ check('eighteen checks in all', 18, count($baseline));
 check('the four unposted incomes are found', 4, find($baseline, 'source_unposted')['count']);
 check('worth 20,254,000', '20254000.00',
     number_format(find($baseline, 'source_unposted')['value'], 2, '.', ''));
-check('the five fee amount differences are found', 5, find($baseline, 'amount_drift')['count']);
-check('worth 196,666.66', '196666.66',
-    number_format(find($baseline, 'amount_drift')['value'], 2, '.', ''));
+/*
+ * The amount differences are asserted by their SHAPE, not by a figure.
+ *
+ * This used to pin "5, worth 196,666.66" — a snapshot of the live database.
+ * It broke the first time somebody recorded a real payment: fee 242 was paid
+ * 150,000 of which 90,000 came from credit already counted on another fee, so
+ * the ledger correctly posted only the 60,000 cash and a sixth difference
+ * appeared. Nothing was wrong; the assertion was.
+ *
+ * What is actually invariant is that every one of these is a FEE, and that the
+ * gap is credit applied from elsewhere — which is why the check's own remedy
+ * is fees:credit-audit. A difference on an income or an expense would be a
+ * different fault, and that is what this now catches.
+ */
+$drift = find($baseline, 'amount_drift');
+
+ok('there are amount differences to explain', $drift['count'] > 0);
+
+foreach ($drift['rows'] as $row) {
+    check('difference #' . $row->id . ' is on a fee', 'fee', $row->kind);
+}
+
+/*
+ * And the ledger never claims MORE cash than the fee says was paid.
+ *
+ * That is the direction that matters. A ledger short of the fee is the known
+ * credit case — some of what the student owed was settled by credit already
+ * counted elsewhere, which fees:credit-audit owns. A ledger AHEAD of the fee
+ * would mean money posted that nobody paid, and there is no benign reading of
+ * that.
+ */
+$overstated = [];
+
+foreach ($drift['rows'] as $row) {
+    if ((float) $row->total_debit > (float) $row->source_amount + 0.01) {
+        $overstated[] = sprintf('fee %s: ledger %s vs fee %s',
+            $row->reference_id, $row->total_debit, $row->source_amount);
+    }
+}
+
+check('the ledger never posts more than the fee', [], $overstated);
 /*
  * The two dead payroll mappings were retired once it was established that
  * neither carried a posting — so the anchor is now that they are gone, and

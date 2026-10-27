@@ -77,7 +77,15 @@
     $closing = count($cash) ? end($cash)['balance'] : 0;
     $lowest = count($cash) ? min(array_column($cash, 'balance')) : 0;
     // Charts arrive in the order the page registered them: cash, in/out, net,
-    // pacing. Missing ones are simply absent — the tables carry the figures.
+    // pacing, fee collection. Missing ones are simply absent — the tables
+    // carry the figures.
+    //
+    // These are POSITIONS, not names, so the order is a contract between this
+    // file and the registration order in analysis.blade.php. A chart inserted
+    // ahead of the others there would print the wrong picture under four
+    // headings here, silently. New charts go on the end;
+    // scripts/fee_collection_test.php asserts that 0-3 are still the original
+    // four.
     $chart = fn ($i) => $charts[$i] ?? null;
 @endphp
 
@@ -334,6 +342,236 @@
 
 @else
     <p class="sub">{{ __('Nothing has been recorded against this budget, so there is nothing to analyse.') }}</p>
+@endif
+
+{{-- Who has paid -------------------------------------------------------------
+     Outside the has_data branch, as on the screen: a year whose fees are
+     assigned and unpaid produces no cash rows at all, and is exactly the year
+     a meeting needs this page for.
+--}}
+@php $cl = $collection; $cst = $cl['students']; $cap = $cl['applicants']; @endphp
+
+@if($cst['total'] > 0 || $cap['total'] > 0)
+<h2 class="brk">{{ __('Who has paid, and who has not') }}</h2>
+<p class="sub">
+    {{ __('Students with fees assigned in this budget year, counted as people rather than as fees: a student with three instalments and two paid is one student who is partly paid. Applicants are counted apart because they are not yet students, and pooling the two would overstate collection.') }}
+</p>
+
+<table class="tiles">
+    <tr>
+        <td>
+            <div class="lbl">{{ __('Paid in full') }}</div>
+            <div class="val st-good">{{ number_format($cst['full']) }}</div>
+            <div class="note">{{ __('of :total students', ['total' => number_format($cst['total'])]) }}</div>
+        </td>
+        <td>
+            <div class="lbl">{{ __('Paid in part') }}</div>
+            <div class="val st-warning">{{ number_format($cst['part']) }}</div>
+            <div class="note">{{ __('a balance left') }}</div>
+        </td>
+        <td>
+            <div class="lbl">{{ __('Paid nothing') }}</div>
+            <div class="val st-critical">{{ number_format($cst['none']) }}</div>
+            <div class="note">{{ __('nothing received') }}</div>
+        </td>
+        <td>
+            <div class="lbl">{{ __('Collection rate') }}</div>
+            <div class="val">{{ number_format($cst['rate'], 1) }}%</div>
+            <div class="note">{{ __('of what students were billed') }}</div>
+        </td>
+    </tr>
+</table>
+
+<table class="g">
+    <thead><tr>
+        <th>{{ __('Cohort') }}</th>
+        <th class="num" style="width:50px">{{ __('People') }}</th>
+        <th class="num" style="width:42px">{{ __('Full') }}</th>
+        <th class="num" style="width:42px">{{ __('Part') }}</th>
+        <th class="num" style="width:48px">{{ __('Nothing') }}</th>
+        <th class="num" style="width:85px">{{ __('Billed') }}</th>
+        <th class="num" style="width:85px">{{ __('Collected') }}</th>
+        <th class="num" style="width:85px">{{ __('Outstanding') }}</th>
+    </tr></thead>
+    <tbody>
+        @foreach([__('Students') => $cst, __('Applicants') => $cap] as $label => $row)
+        <tr>
+            <td>{{ $label }}</td>
+            <td class="num">{{ number_format($row['total']) }}</td>
+            <td class="num">{{ number_format($row['full']) }}</td>
+            <td class="num">{{ number_format($row['part']) }}</td>
+            <td class="num">{{ number_format($row['none']) }}</td>
+            <td class="num">{{ number_format($row['billed']) }}</td>
+            <td class="num">{{ number_format($row['collected']) }}</td>
+            <td class="num">{{ number_format($row['outstanding']) }}</td>
+        </tr>
+        @endforeach
+        <tr class="total">
+            <td>{{ __('Together') }}</td>
+            <td class="num">{{ number_format($cl['combined']['total']) }}</td>
+            <td class="num">{{ number_format($cl['combined']['full']) }}</td>
+            <td class="num">{{ number_format($cl['combined']['part']) }}</td>
+            <td class="num">{{ number_format($cl['combined']['none']) }}</td>
+            <td class="num">{{ number_format($cl['combined']['billed']) }}</td>
+            <td class="num">{{ number_format($cl['combined']['collected']) }}</td>
+            <td class="num">{{ number_format($cl['combined']['outstanding']) }}</td>
+        </tr>
+    </tbody>
+</table>
+
+@if($cl['arrears']['people'] > 0)
+<p class="sub">
+    <strong class="st-warning">{{ __('Owed from earlier years: :amount', ['amount' => number_format($cl['arrears']['amount'])]) }}</strong>
+    {{ __('across :n people, oldest assigned :date. Not in the table above, which covers this year\'s billing only.', [
+        'n' => $cl['arrears']['people'],
+        'date' => $cl['arrears']['oldest'] ? \Carbon\Carbon::parse($cl['arrears']['oldest'])->format('j M Y') : '—',
+    ]) }}
+</p>
+@endif
+
+@if(count($cl['by_month']))
+<h2>{{ __('Fee collection, month by month') }}</h2>
+<p class="sub">{{ __('All fee cash received in this budget year — a wider figure than Collected above, because it includes payments against earlier years\' fees. It is what ties to the money-in figures earlier in this pack.') }}</p>
+{{-- Index 4: this chart is registered on the screen AFTER the original four,
+     so the indices above keep their pictures. --}}
+@if($chart(4))
+    <div class="chart"><img src="{{ $chart(4) }}" alt=""></div>
+@endif
+<table class="g">
+    <thead><tr>
+        <th>{{ __('Month') }}</th>
+        <th class="num" style="width:110px">{{ __('Received') }}</th>
+        <th class="num" style="width:110px">{{ __('Running total') }}</th>
+    </tr></thead>
+    <tbody>
+    @foreach($cl['by_month'] as $m)
+        <tr>
+            <td>{{ $m['label'] }}</td>
+            <td class="num">{{ number_format($m['cash']) }}</td>
+            <td class="num">{{ number_format($m['cumulative']) }}</td>
+        </tr>
+    @endforeach
+    </tbody>
+</table>
+@endif
+
+@if(count($cl['by_programme']))
+<h2>{{ __('Collection by programme') }}</h2>
+<p class="sub">{{ __('Worst collection rate first. Rate is money collected against money billed, so a small programme can show a poor rate over very little money — read it with the outstanding column.') }}</p>
+<table class="g">
+    <thead><tr>
+        <th>{{ trans_choice('module_program', 1) }}</th>
+        <th class="num" style="width:45px">{{ __('People') }}</th>
+        <th class="num" style="width:85px">{{ __('Billed') }}</th>
+        <th class="num" style="width:85px">{{ __('Collected') }}</th>
+        <th class="num" style="width:85px">{{ __('Outstanding') }}</th>
+        <th class="num" style="width:45px">{{ __('Rate') }}</th>
+    </tr></thead>
+    <tbody>
+    @foreach($cl['by_programme'] as $row)
+        <tr>
+            <td>{{ $row['programme'] }}@if($row['faculty'])<br><span style="font-size:7.5px;color:#666">{{ $row['faculty'] }}</span>@endif</td>
+            <td class="num">{{ number_format($row['people']) }}</td>
+            <td class="num">{{ number_format($row['due']) }}</td>
+            <td class="num">{{ number_format($row['collected']) }}</td>
+            <td class="num">{{ number_format($row['owed']) }}</td>
+            <td class="num">{{ number_format($row['rate'], 1) }}%</td>
+        </tr>
+    @endforeach
+    </tbody>
+</table>
+@endif
+
+@if(count($cl['by_category']))
+<h2>{{ __('Collection by fee') }}</h2>
+<p class="sub">{{ __('Counted in fees, not people. Compare each rate against how far through the year that fee falls due.') }}</p>
+<table class="g">
+    <thead><tr>
+        <th>{{ __('field_fees_category') }}</th>
+        <th class="num" style="width:45px">{{ __('Fees') }}</th>
+        <th class="num" style="width:90px">{{ __('Billed') }}</th>
+        <th class="num" style="width:90px">{{ __('Collected') }}</th>
+        <th class="num" style="width:90px">{{ __('Outstanding') }}</th>
+        <th class="num" style="width:45px">{{ __('Rate') }}</th>
+    </tr></thead>
+    <tbody>
+    @foreach($cl['by_category'] as $row)
+        <tr>
+            <td>{{ $row['category'] }}</td>
+            <td class="num">{{ number_format($row['fees']) }}</td>
+            <td class="num">{{ number_format($row['due']) }}</td>
+            <td class="num">{{ number_format($row['collected']) }}</td>
+            <td class="num">{{ number_format($row['owed']) }}</td>
+            <td class="num">{{ number_format($row['rate'], 1) }}%</td>
+        </tr>
+    @endforeach
+    </tbody>
+</table>
+@endif
+
+@if(count($cl['top_debtors']))
+<h2>{{ __('The largest outstanding balances') }}</h2>
+<p class="sub">{{ __('Every fee assigned to this person this year, totalled. An applicant is marked as one: an unpaid admission fee there is an admission that has not completed, not a student in arrears.') }}</p>
+<table class="g">
+    <thead><tr>
+        <th>{{ __('field_student_name') }}</th>
+        <th style="width:70px">{{ __('Reference') }}</th>
+        <th>{{ trans_choice('module_program', 1) }}</th>
+        <th class="num" style="width:80px">{{ __('Billed') }}</th>
+        <th class="num" style="width:80px">{{ __('Paid') }}</th>
+        <th class="num" style="width:80px">{{ __('Outstanding') }}</th>
+    </tr></thead>
+    <tbody>
+    @foreach($cl['top_debtors'] as $row)
+        <tr>
+            <td>{{ $row['name'] }}@if($row['kind'] === 'applicant') <span style="font-size:7.5px;color:#666">({{ __('Applicant') }})</span>@endif</td>
+            <td>{{ $row['reference'] }}</td>
+            <td>{{ $row['programme'] ?: '—' }}</td>
+            <td class="num">{{ number_format($row['due']) }}</td>
+            <td class="num">{{ number_format($row['paid']) }}</td>
+            <td class="num">{{ number_format($row['owed']) }}</td>
+        </tr>
+    @endforeach
+    </tbody>
+</table>
+@endif
+
+@if($cl['unattributed']['count'] > 0)
+<h2>{{ __('Fees that belong to nobody') }}</h2>
+<p class="sub">
+    {{ __('These cannot be attributed to a student or an applicant, so they are in none of the figures above — :amount of it still outstanding. Shown here rather than dropped: a fee with no person cannot be chased, receipted, or put on anybody\'s statement.', [
+        'amount' => number_format($cl['unattributed']['owed']),
+    ]) }}
+</p>
+<table class="g">
+    <thead><tr>
+        <th style="width:45px">{{ __('Fee') }}</th>
+        <th>{{ __('field_fees_category') }}</th>
+        <th style="width:62px">{{ __('field_assign_date') }}</th>
+        <th class="num" style="width:80px">{{ __('Billed') }}</th>
+        <th class="num" style="width:80px">{{ __('Outstanding') }}</th>
+        <th>{{ __('Why') }}</th>
+    </tr></thead>
+    <tbody>
+    @foreach($cl['unattributed']['rows'] as $row)
+        <tr>
+            <td>#{{ $row['id'] }}</td>
+            <td>{{ $row['category'] }}</td>
+            <td>{{ $row['assign_date'] ? \Carbon\Carbon::parse($row['assign_date'])->format('j M Y') : '—' }}</td>
+            <td class="num">{{ number_format($row['due']) }}</td>
+            <td class="num">{{ number_format($row['owed']) }}</td>
+            <td>
+                @if($row['reason'] === 'missing_enrolment')
+                    {{ __('Its enrolment (:id) no longer exists.', ['id' => $row['enroll_id']]) }}
+                @else
+                    {{ __('Its enrolment carries neither a student nor an applicant.') }}
+                @endif
+            </td>
+        </tr>
+    @endforeach
+    </tbody>
+</table>
+@endif
 @endif
 
 <p class="foot">
