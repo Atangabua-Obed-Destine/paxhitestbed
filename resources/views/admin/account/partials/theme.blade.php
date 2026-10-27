@@ -35,24 +35,12 @@
 
 @push('css')
 <style>
-    .acct, .acct-form, .acct-record, .acct-cat {
-        --ink:       #15233b;
-        --body:      #4a5870;
-        --muted:     #64748b;
-        --faint:     #8794ab;
-        --rule:      #e4e8f0;
-        --rule-soft: #eef1f6;
-        --surface:   #ffffff;
-        --ground:    #f6f8fb;
-
-        --flow:      {{ $isExpense ? '#eb6834' : '#2a78d6' }};
-        --flow-ink:  {{ $isExpense ? '#9a3b12' : '#1856a4' }};
-        --flow-wash: {{ $isExpense ? '#fdf1ec' : '#eef4fc' }};
-
-        --good:      #0f7a3d;
-        --warn:      #9a6a06;
-        --bad:       #b3261e;
-    }
+{{-- The measured values are shared with the fees screens; only the
+         components below are this section's own. --}}
+@include('common.inc.ledger_tokens', [
+    'scope' => '.acct, .acct-form, .acct-record, .acct-cat',
+    'accent' => $isExpense ? 'expense' : 'income',
+])
 
     /* ---- shared primitives -------------------------------------------- */
 

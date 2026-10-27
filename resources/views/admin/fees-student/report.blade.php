@@ -2,540 +2,223 @@
 @section('title', $title)
 @section('content')
 
-<!-- Start Content-->
-<div class="main-body">
+{{-- The fees report.
+
+     Rebuilt around the question it is run to answer — how much was billed, how
+     much has come in, and who still owes — with the money as the headline
+     rather than a row of count cards above it.
+
+     Three things are preserved exactly, because changing any of them breaks
+     behaviour rather than appearance:
+
+       * the sixteen columns in their existing ORDER. The column chooser
+         addresses them by index, so moving one hides the wrong column.
+       * the bulk-select checkbox and the `.fees` hidden input, which is what
+         Print Selected posts.
+       * common/inc/fees_search_filter, shared with fees-master and two other
+         modules. Its markup is untouched; the new styling reaches it only
+         because it sits inside .fees here.
+--}}
+
+@include('admin.fees-student.partials.theme')
+
+@php
+    $decimals = $setting->decimal_place ?? 2;
+    $currency = $setting->currency_symbol ?? '';
+    $dateFormat = $setting->date_format ?? 'Y-m-d';
+
+    /*
+     * WITH thousands separators. The cells used number_format(..., '.', '') —
+     * an empty separator — so every figure on a sixteen-column money report
+     * read as an unbroken run of digits.
+     */
+    $money = fn ($value) => number_format((float) $value, $decimals);
+@endphp
+
+<div class="main-body fees">
     <div class="page-wrapper">
-        <!-- [ Main Content ] start -->
-        <div class="row">
-            <!-- Statistics Cards -->
-            @if(isset($stats))
-            <div class="col-xl-3 col-md-6">
-                <div class="card">
-                    <div class="card-block">
-                        <div class="row align-items-center">
-                            <div class="col-8">
-                                <h4 class="text-c-blue">{{ $stats['total_fees'] }}</h4>
-                                <h6 class="text-muted m-b-0">{{ __('total_fees_processed') }}</h6>
-                            </div>
-                            <div class="col-4 text-right">
-                                <i class="feather icon-file-text f-28"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="col-xl-3 col-md-6">
-                <div class="card">
-                    <div class="card-block">
-                        <div class="row align-items-center">
-                            <div class="col-8">
-                                <h4 class="text-c-green">{{ $stats['fully_paid_count'] }}</h4>
-                                <h6 class="text-muted m-b-0">{{ __('total_fully_paid_fees') }}</h6>
-                            </div>
-                            <div class="col-4 text-right">
-                                <i class="feather icon-check-circle f-28"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        @include('admin.fees-student.partials.summary_band')
 
-            <div class="col-xl-3 col-md-6">
-                <div class="card">
-                    <div class="card-block">
-                        <div class="row align-items-center">
-                            <div class="col-8">
-                                <h4 class="text-c-yellow">{{ $stats['partially_paid_count'] }}</h4>
-                                <h6 class="text-muted m-b-0">{{ __('total_partially_paid_fees') }}</h6>
-                            </div>
-                            <div class="col-4 text-right">
-                                <i class="feather icon-alert-triangle f-28"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-xl-3 col-md-6">
-                <div class="card">
-                    <div class="card-block">
-                        <div class="row align-items-center">
-                            <div class="col-8">
-                                <h4 class="text-c-red">{{ $stats['cancelled_count'] }}</h4>
-                                <h6 class="text-muted m-b-0">{{ __('total_cancelled_fees') }}</h6>
-                            </div>
-                            <div class="col-4 text-right">
-                                <i class="feather icon-x-circle f-28"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            @php
-                // Collected can exceed Amount when students have overpaid, so the
-                // overpayment is shown beside the money it explains: Amount less
-                // what is still owed, plus this, is what was collected. The count
-                // goes on that same card, so the four money cards share one row.
-                $overpaidAmount = (float) ($stats['total_overpayment'] ?? 0);
-                $overpaidShown = $overpaidAmount > 0.005;
-                $moneyCols = $overpaidShown ? 'col-xl-3' : 'col-xl-4';
-            @endphp
-
-            @if(isset($stats['overpaid_count']) && $stats['overpaid_count'] > 0 && !$overpaidShown)
-            <div class="col-xl-3 col-md-6">
-                <div class="card">
-                    <div class="card-block">
-                        <div class="row align-items-center">
-                            <div class="col-8">
-                                <h4 class="text-c-purple">{{ $stats['overpaid_count'] }}</h4>
-                                <h6 class="text-muted m-b-0">{{ __('Overpaid Fees') }}</h6>
-                            </div>
-                            <div class="col-4 text-right">
-                                <i class="feather icon-plus-circle f-28"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            @endif
-
-            <div class="{{ $moneyCols }} col-md-6">
-                <div class="card bg-c-blue text-white">
-                    <div class="card-block">
-                        <h6 class="text-white">{{ __('total_amount') }}</h6>
-                        <h3 class="text-white">
-                            @if(isset($setting->decimal_place))
-                            {{ number_format((float)$stats['total_amount'], $setting->decimal_place, '.', ',') }}
-                            @else
-                            {{ number_format((float)$stats['total_amount'], 2, '.', ',') }}
-                            @endif
-                            {!! $setting->currency_symbol !!}
-                        </h3>
-                    </div>
-                </div>
-            </div>
-
-            <div class="{{ $moneyCols }} col-md-6">
-                <div class="card bg-c-green text-white">
-                    <div class="card-block">
-                        <h6 class="text-white">{{ __('total_collected') }}</h6>
-                        <h3 class="text-white">
-                            @if(isset($setting->decimal_place))
-                            {{ number_format((float)$stats['total_collected'], $setting->decimal_place, '.', ',') }}
-                            @else
-                            {{ number_format((float)$stats['total_collected'], 2, '.', ',') }}
-                            @endif
-                            {!! $setting->currency_symbol !!}
-                        </h3>
-                    </div>
-                </div>
-            </div>
-
-            <div class="{{ $moneyCols }} col-md-6">
-                <div class="card bg-c-yellow text-white">
-                    <div class="card-block">
-                        <h6 class="text-white">{{ __('outstanding_balance') }}</h6>
-                        <h3 class="text-white">
-                            @if(isset($setting->decimal_place))
-                            {{ number_format((float)$stats['total_remaining'], $setting->decimal_place, '.', ',') }}
-                            @else
-                            {{ number_format((float)$stats['total_remaining'], 2, '.', ',') }}
-                            @endif
-                            {!! $setting->currency_symbol !!}
-                        </h3>
-                    </div>
-                </div>
-            </div>
-
-            @if($overpaidAmount > 0.005)
-            <div class="{{ $moneyCols }} col-md-6">
-                <div class="card bg-c-purple text-white">
-                    <div class="card-block">
-                        <h6 class="text-white">{{ __('Overpaid Amount') }}</h6>
-                        <h3 class="text-white">
-                            @if(isset($setting->decimal_place))
-                            {{ number_format($overpaidAmount, $setting->decimal_place, '.', ',') }}
-                            @else
-                            {{ number_format($overpaidAmount, 2, '.', ',') }}
-                            @endif
-                            {!! $setting->currency_symbol !!}
-                        </h3>
-                        {{-- Says out loud why Collected can be the larger figure. --}}
-                        <small class="text-white">
-                            {{ trans_choice(':count fee|:count fees', $stats['overpaid_count'] ?? 0, ['count' => $stats['overpaid_count'] ?? 0]) }}
-                            — {{ __('paid beyond what was billed, held as student credit') }}
-                        </small>
-                    </div>
-                </div>
-            </div>
-            @endif
-            @endif {{-- @if(isset($stats)) — the statistics cards --}}
-
-            <!-- Filter Section -->
-            <div class="col-sm-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>{{ $title }}</h5>
-                    </div>
-                    <div class="card-block">
-                        <form class="needs-validation" novalidate method="get" action="{{ route($route.'.report') }}">
-                            <div class="row gx-2">
-
-                                {{-- No Year select here: it filtered nothing (report() never reads
-                                     semester_year), it was empty until a programme was chosen, and
-                                     being `required` it blocked the search button on a fresh load.
-                                     The Semester select alone is what this report filters by. --}}
-                                @include('common.inc.fees_search_filter', ['show_semester_year' => false])
-
-                                <div class="form-group col-md-2">
-                                    <label for="category">{{ __('field_fees_type') }}</label>
-                                    <select class="form-control select2" name="category[]" id="category" multiple data-placeholder="{{ __('all') }}">
-                                        @foreach( $categories as $category )
-                                        <option value="{{ $category->id }}" @selected(in_array($category->id, (array) $selected_category))>{{ $category->title }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-
-                                <div class="form-group col-md-2">
-                                    <label for="payment_status">{{ __('filter_payment_status') }}</label>
-                                    <select class="form-control select2" name="payment_status[]" id="payment_status" multiple data-placeholder="{{ __('all_payment_statuses') }}">
-                                        <option value="0" @selected(in_array('0', (array) $selected_payment_status, true))>{{ __('filter_unpaid_fees') }}</option>
-                                        <option value="1" @selected(in_array('1', (array) $selected_payment_status, true))>{{ __('filter_fully_paid_fees') }}</option>
-                                        <option value="2" @selected(in_array('2', (array) $selected_payment_status, true))>{{ __('filter_partially_paid_fees') }}</option>
-                                        <option value="3" @selected(in_array('3', (array) $selected_payment_status, true))>{{ __('status_canceled') }}</option>
-                                        <option value="4" @selected(in_array('4', (array) $selected_payment_status, true))>{{ __('payment_plan') }}</option>
-                                        <option value="5" @selected(in_array('5', (array) $selected_payment_status, true))>{{ __('filter_overpaid_fees') }}</option>
-                                    </select>
-                                </div>
-
-                                <div class="form-group col-md-2">
-                                    <label for="student_id">{{ __('field_student_id') }}</label>
-                                    <input type="text" class="form-control" name="student_id" id="student_id" value="{{ $selected_student_id }}">
-                                </div>
-
-                                <div class="form-group col-md-2">
-                                    <button type="submit" class="btn btn-info btn-filter"><i class="fas fa-search"></i> {{ __('btn_search') }}</button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Data Table -->
-            <div class="col-sm-12">
-                <div class="card">
-                    @if(isset($rows))
-                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            @isset($rows)
-                            @can($access.'-print')
-                            <form class="needs-validation d-inline" novalidate method="get" action="{{ route($route.'.multiprint') }}" target="_blank">
-                                <input type="hidden" name="fees" class="fees" value="">
-                                <button type="submit" class="btn btn-sm btn-dark print-btn"><i class="fas fa-print"></i> {{ __('btn_print') }} {{ __('field_selected') }}</button>
-                            </form>
-                            @endcan
-                            @endisset
-                        </div>
-                        
-                        <!-- Column Visibility Toggle -->
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="columnVisibilityBtn" data-bs-toggle="dropdown" data-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-columns"></i> {{ __('columns') }}
-                            </button>
-                            <div class="dropdown-menu dropdown-menu-right p-3" aria-labelledby="columnVisibilityBtn" style="min-width: 220px; max-height: 400px; overflow-y: auto;">
-                                <h6 class="dropdown-header">{{ __('show_hide_columns') }}</h6>
-                                <div class="dropdown-divider"></div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-receipt" data-column="2" checked>
-                                    <label class="form-check-label" for="col-receipt">{{ __('field_receipt') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-matricule" data-column="3" checked>
-                                    <label class="form-check-label" for="col-matricule">{{ __('field_matricule') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-feetype" data-column="4" checked>
-                                    <label class="form-check-label" for="col-feetype">{{ __('field_fees_type') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-fee" data-column="5" checked>
-                                    <label class="form-check-label" for="col-fee">{{ __('field_fee') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-discount" data-column="6" checked>
-                                    <label class="form-check-label" for="col-discount">{{ __('field_discount') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-fine" data-column="7" checked>
-                                    <label class="form-check-label" for="col-fine">{{ __('field_fine_amount') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-net" data-column="8" checked>
-                                    <label class="form-check-label" for="col-net">{{ __('field_net_amount') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-paid" data-column="9" checked>
-                                    <label class="form-check-label" for="col-paid">{{ __('field_paid') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-balance" data-column="10" checked>
-                                    <label class="form-check-label" for="col-balance">{{ __('field_remaining_balance') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-paydate" data-column="11" checked>
-                                    <label class="form-check-label" for="col-paydate">{{ __('field_pay_date') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-status" data-column="12" checked>
-                                    <label class="form-check-label" for="col-status">{{ __('field_status') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-method" data-column="13" checked>
-                                    <label class="form-check-label" for="col-method">{{ __('field_payment_method') }}</label>
-                                </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input column-toggle" type="checkbox" id="col-note" data-column="14" checked>
-                                    <label class="form-check-label" for="col-note">{{ __('field_note') }}</label>
-                                </div>
-                                <div class="dropdown-divider"></div>
-                                <div class="d-flex justify-content-between">
-                                    <button type="button" class="btn btn-xs btn-outline-primary" id="showAllColumns">{{ __('show_all') }}</button>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary" id="hideOptionalColumns">{{ __('minimal') }}</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card-block">
-                        <!-- [ Data table ] start -->
-                        <div class="table-responsive">
-                            <table id="export-table" class="display table nowrap table-striped table-hover" style="width:100%">
-                                <thead>
-                                    <tr>
-                                        <th>
-                                            <div class="checkbox checkbox-success d-inline">
-                                                <input type="checkbox" id="checkbox" class="all_select">
-                                                <label for="checkbox" class="cr" style="margin-bottom: 0px;"></label>
-                                            </div>
-                                        </th>
-                                        <th>#</th>
-                                        <th>{{ __('field_receipt') }}</th>
-                                        <th>{{ __('field_matricule') }}</th>
-                                        <th>{{ __('field_fees_type') }}</th>
-                                        <th>{{ __('field_fee') }}</th>
-                                        <th>{{ __('field_discount') }}</th>
-                                        <th>{{ __('field_fine_amount') }}</th>
-                                        <th>{{ __('field_net_amount') }}</th>
-                                        <th>{{ __('field_paid') }}</th>
-                                        <th>{{ __('field_remaining_balance') }}</th>
-                                        <th>{{ __('field_pay_date') }}</th>
-                                        <th>{{ __('field_status') }}</th>
-                                        <th>{{ __('field_payment_method') }}</th>
-                                        <th>{{ __('field_note') }}</th>
-                                        <th>{{ __('field_action') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                  @foreach( $rows as $key => $row )
-                                    <tr>
-                                        <td>
-                                            <div class="checkbox checkbox-primary d-inline">
-                                                <input type="checkbox" data_id="{{ $row->id }}" id="checkbox-{{ $row->id }}" value="{{ $row->id }}">
-                                                <label for="checkbox-{{ $row->id }}" class="cr"></label>
-                                            </div>
-                                        </td>
-                                        <td>{{ $key + 1 }}</td>
-                                        <td>{{ $print->prefix ?? '' }}{{ str_pad($row->id, 6, '0', STR_PAD_LEFT) }}</td>
-                                        <td>
-                                            @isset($row->studentEnroll)
-                                            <a href="{{ route('admin.student.show', $row->studentEnroll->student->id) }}">
-                                            #{{ $row->studentEnroll->matricule ?? $row->studentEnroll->student->student_id ?? '' }}
-                                            </a>
-                                            <br>
-                                            <small>{{ $row->studentEnroll->student->first_name ?? '' }} {{ $row->studentEnroll->student->last_name ?? '' }}</small>
-                                            @endisset
-                                        </td>
-                                        <td>{{ $row->category->title ?? '' }}</td>
-                                        <td>
-                                            @if(isset($setting->decimal_place))
-                                            {{ number_format((float)$row->fee_amount, $setting->decimal_place, '.', '') }} 
-                                            @else
-                                            {{ number_format((float)$row->fee_amount, 2, '.', '') }} 
-                                            @endif 
-                                            {!! $setting->currency_symbol !!}
-                                        </td>
-                                        <td>
-                                            @if(isset($setting->decimal_place))
-                                            {{ number_format((float)$row->discount_amount, $setting->decimal_place, '.', '') }} 
-                                            @else
-                                            {{ number_format((float)$row->discount_amount, 2, '.', '') }} 
-                                            @endif 
-                                            {!! $setting->currency_symbol !!}
-                                        </td>
-                                        <td>
-                                            @if(isset($setting->decimal_place))
-                                            {{ number_format((float)$row->fine_amount, $setting->decimal_place, '.', '') }} 
-                                            @else
-                                            {{ number_format((float)$row->fine_amount, 2, '.', '') }} 
-                                            @endif 
-                                            {!! $setting->currency_symbol !!}
-                                        </td>
-                                        <td>
-                                            @if(isset($setting->decimal_place))
-                                            {{ number_format((float)$row->total_amount, $setting->decimal_place, '.', '') }} 
-                                            @else
-                                            {{ number_format((float)$row->total_amount, 2, '.', '') }} 
-                                            @endif 
-                                            {!! $setting->currency_symbol !!}
-                                        </td>
-                                        <td>
-                                            @php
-                                                // Net of overpayment credit moved to another fee, which
-                                                // counts on that fee instead.
-                                                $display_paid = min((float) $row->net_paid_amount, (float) $row->total_amount);
-                                            @endphp
-                                            <span class="{{ $display_paid > 0 ? 'text-success' : 'text-muted' }}">
-                                            @if(isset($setting->decimal_place))
-                                            {{ number_format((float)$display_paid, $setting->decimal_place, '.', '') }} 
-                                            @else
-                                            {{ number_format((float)$display_paid, 2, '.', '') }} 
-                                            @endif 
-                                            {!! $setting->currency_symbol !!}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            @php
-                                                $display_balance = max(0, $row->net_remaining_balance);
-                                            @endphp
-                                            <strong class="{{ $display_balance > 0 ? 'text-danger' : 'text-success' }}">
-                                            @if(isset($setting->decimal_place))
-                                            {{ number_format((float)$display_balance, $setting->decimal_place, '.', '') }} 
-                                            @else
-                                            {{ number_format((float)$display_balance, 2, '.', '') }} 
-                                            @endif 
-                                            {!! $setting->currency_symbol !!}
-                                            </strong>
-                                            
-                                            @if($row->status == 2)
-                                            <br>
-                                            <small class="badge badge-warning">{{ __('partial_payment') }}</small>
-                                            @endif
-                                            @if($row->credit_moved_out > 0)
-                                            <br>
-                                            <small class="badge badge-info" title="{{ __('Overpayment on this fee, moved as credit to another fee') }}"><i class="fas fa-exchange-alt"></i> {{ number_format($row->credit_moved_out, 2) }} {{ __('moved to another fee') }}</small>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @if($row->status == 1 || $row->status == 2)
-                                            @if(isset($setting->date_format))
-                                            {{ date($setting->date_format, strtotime($row->pay_date)) }}
-                                            @else
-                                            {{ date("Y-m-d", strtotime($row->pay_date)) }}
-                                            @endif
-                                            @endif
-                                        </td>
-                                        <td>
-                                            {!! $row->status_badge !!}
-                                            @if($row->payment_plan_id && $row->paymentPlan)
-                                            <br><span class="badge badge-info mt-1">
-                                                <i class="fas fa-calendar-alt"></i> {{ __('payment_plan') }}
-                                                @if($row->paymentPlan->status == 'active')
-                                                ({{ __('status_active') }})
-                                                @elseif($row->paymentPlan->status == 'completed')
-                                                ({{ __('status_completed') }})
-                                                @elseif($row->paymentPlan->status == 'cancelled')
-                                                ({{ __('status_cancelled') }})
-                                                @endif
-                                            </span>
-                                            @endif
-                                            @if($row->hasPendingMultiPayment())
-                                            <br><span class="badge badge-warning mt-1">
-                                                <i class="fas fa-clock"></i> Multi-Pay Pending ({{ number_format($row->getPendingMultiPaymentAmount(), 2) }})
-                                            </span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @if( $row->payment_method == 1 )
-                                            {{ __('payment_method_card') }}
-                                            @elseif( $row->payment_method == 2 )
-                                            {{ __('payment_method_cash') }}
-                                            @elseif( $row->payment_method == 3 )
-                                            {{ __('payment_method_cheque') }}
-                                            @elseif( $row->payment_method == 4 )
-                                            {{ __('payment_method_bank') }}
-                                            @elseif( $row->payment_method == 5 )
-                                            {{ __('payment_method_e_wallet') }}
-                                            @elseif( $row->payment_method == 6 )
-                                            {{ __('PayPal') }}
-                                            @elseif( $row->payment_method == 7 )
-                                            {{ __('Stripe') }}
-                                            @elseif( $row->payment_method == 8 )
-                                            {{ __('RazorPay') }}
-                                            @elseif( $row->payment_method == 9 )
-                                            {{ __('PayStack') }}
-                                            @elseif( $row->payment_method == 10 )
-                                            {{ __('Flutterwave') }}
-                                            @endif
-                                        </td>
-                                        <td>{!! $row->note !!}</td>
-                                        <td>
-                                            @if($row->payment_plan_id && $row->paymentPlan && $row->paymentPlan->status == 'active')
-                                            <!-- Fee has active payment plan - show View Payment Plan button -->
-                                            <a href="{{ route('admin.payment-plan.show', $row->payment_plan_id) }}" class="btn btn-icon btn-success btn-sm" title="{{ __('view_payment_plan') }}">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <span class="badge badge-info">{{ __('payment_plan') }}</span>
-                                            @elseif($row->hasPendingMultiPayment())
-                                            <!-- Fee has pending multi-payment - show disabled button -->
-                                            <button type="button" class="btn btn-icon btn-secondary btn-sm" disabled title="This fee has a pending multi-payment">
-                                                <i class="fas fa-clock"></i>
-                                            </button>
-                                            <span class="badge badge-warning">Multi-Pay Pending</span>
-                                            @elseif($row->status == 0 || $row->status == 1 || $row->status == 2)
-                                            <!-- Fee can be paid directly (including overpayment on fully paid) -->
-                                            <button type="button" class="btn btn-icon btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#payModal-{{ $row->id }}" title="{{ $row->status == 1 ? __('add_overpayment') : ($row->status == 2 ? __('pay_balance') : __('make_payment')) }}">
-                                                <i class="fas fa-plus"></i>
-                                            </button>
-                                            <!-- Include Pay modal -->
-                                            @include($view.'.pay')
-                                            @endif
-
-                                            @if($row->status == 1 || $row->status == 2 || ($row->payment_plan_id && $row->paymentPlan))
-                                            @can($access.'-print')
-                                            @if(isset($print))
-                                            <a href="#" class="btn btn-icon btn-dark btn-sm" onclick="PopupWin('{{ route($route.'.print', ['id' => $row->id]) }}', '{{ $title }}', 1000, 600);" title="{{ __('btn_print') }}">
-                                                <i class="fas fa-print"></i>
-                                            </a>
-                                            @endif
-                                            @endcan
-                                            @endif
-
-                                            @if($row->isNetOverpaid())
-                                            <!-- Overpayment still held on this fee, not yet applied elsewhere -->
-                                            <span class="badge badge-primary" title="{{ __('overpayment_credit_generated') }}">
-                                                <i class="fas fa-plus-circle"></i> +{{ number_format($row->net_overpayment_amount, 2) }}
-                                            </span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                  @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                        <!-- [ Data table ] end -->
-                    </div>
-                    @endif
-                    
-                </div>
+        <div class="fees-panel">
+            <div class="fees-filters">
+                @include('admin.fees-student.partials.filters')
             </div>
         </div>
-        <!-- [ Main Content ] end -->
+
+        @if(isset($rows))
+        <div class="fees-bar-actions">
+            @can($access.'-print')
+            <form class="needs-validation d-inline" novalidate method="get" action="{{ route($route.'.multiprint') }}" target="_blank">
+                <input type="hidden" name="fees" class="fees" value="">
+                <button type="submit" class="fees-btn print-btn">
+                    <i class="fas fa-print"></i> {{ __('btn_print') }} {{ __('field_selected') }}
+                </button>
+            </form>
+            @endcan
+
+            <div class="ms-auto">
+                @include('admin.fees-student.partials.column_chooser')
+            </div>
+        </div>
+
+        <div class="fees-panel">
+            @if($rows->isEmpty())
+                <div class="fees-empty">
+                    <i class="fas fa-folder-open"></i>
+                    <p>{{ __('fees_no_match') }}</p>
+                    <small>{{ __('fees_no_match_hint') }}</small>
+                </div>
+            @else
+            {{-- Its own scroll container: sixteen columns do not fit a laptop,
+                 and without this the whole page goes sideways with them. --}}
+            <div class="fees-scroll">
+                <table id="export-table" class="display table nowrap fees-table" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>
+                                <div class="checkbox checkbox-success d-inline">
+                                    <input type="checkbox" id="checkbox" class="all_select">
+                                    <label for="checkbox" class="cr" style="margin-bottom: 0px;"></label>
+                                </div>
+                            </th>
+                            <th>#</th>
+                            <th>{{ __('field_receipt') }}</th>
+                            <th>{{ __('field_matricule') }}</th>
+                            <th>{{ __('field_fees_type') }}</th>
+                            <th class="n">{{ __('field_fee') }}</th>
+                            <th class="n">{{ __('field_discount') }}</th>
+                            <th class="n">{{ __('field_fine_amount') }}</th>
+                            <th class="n">{{ __('field_net_amount') }}</th>
+                            <th class="n">{{ __('field_paid') }}</th>
+                            <th class="n">{{ __('field_remaining_balance') }}</th>
+                            <th>{{ __('field_pay_date') }}</th>
+                            <th>{{ __('field_status') }}</th>
+                            <th>{{ __('field_payment_method') }}</th>
+                            <th>{{ __('field_note') }}</th>
+                            <th class="n">{{ __('field_action') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach( $rows as $key => $row )
+                        @php
+                            // Net of overpayment credit moved to another fee,
+                            // which counts on that fee instead.
+                            $display_paid = min((float) $row->net_paid_amount, (float) $row->total_amount);
+                            $display_balance = max(0, $row->net_remaining_balance);
+                            $paidOn = in_array((int) $row->status, [1, 2], true) && $row->pay_date
+                                ? \Carbon\Carbon::parse($row->pay_date)
+                                : null;
+                        @endphp
+                        <tr>
+                            <td>
+                                <div class="checkbox checkbox-primary d-inline">
+                                    <input type="checkbox" data_id="{{ $row->id }}" id="checkbox-{{ $row->id }}" value="{{ $row->id }}">
+                                    <label for="checkbox-{{ $row->id }}" class="cr"></label>
+                                </div>
+                            </td>
+                            <td class="fees-meta">{{ $key + 1 }}</td>
+                            <td class="fees-meta fees-num">{{ $print->prefix ?? '' }}{{ str_pad($row->id, 6, '0', STR_PAD_LEFT) }}</td>
+                            <td class="fees-who">
+                                @isset($row->studentEnroll)
+                                <a href="{{ route('admin.student.show', $row->studentEnroll->student->id) }}">#{{ $row->studentEnroll->matricule ?? $row->studentEnroll->student->student_id ?? '' }}</a>
+                                <div class="fees-meta">{{ $row->studentEnroll->student->first_name ?? '' }} {{ $row->studentEnroll->student->last_name ?? '' }}</div>
+                                @endisset
+                            </td>
+                            <td><span class="fees-tag fees-tag-flow">{{ $row->category->title ?? '—' }}</span></td>
+                            <td class="n fees-num">{{ $money($row->fee_amount) }}</td>
+                            <td class="n fees-num">{{ $money($row->discount_amount) }}</td>
+                            <td class="n fees-num">{{ $money($row->fine_amount) }}</td>
+                            <td class="n fees-num">{{ $money($row->total_amount) }}</td>
+                            <td class="n fees-num">{{ $money($display_paid) }}</td>
+                            <td class="n fees-num {{ $display_balance > 0 ? 'is-due' : '' }}">
+                                {{ $money($display_balance) }}
+                                @if($row->credit_moved_out > 0)
+                                <div class="fees-meta" title="{{ __('Overpayment on this fee, moved as credit to another fee') }}">
+                                    <i class="fas fa-exchange-alt"></i> {{ $money($row->credit_moved_out) }} {{ __('moved to another fee') }}
+                                </div>
+                                @endif
+                            </td>
+                            {{-- data-order so DataTables sorts the day and not the
+                                 rendered string: the setting is d/m/Y, under which
+                                 01/12 sorts before 26/10. --}}
+                            <td class="fees-when" data-order="{{ $paidOn?->format('Y-m-d') }}">
+                                {{ $paidOn?->format($dateFormat) }}
+                            </td>
+                            <td>
+                                {!! $row->status_badge !!}
+                                @if($row->payment_plan_id && $row->paymentPlan)
+                                <div class="mt-1"><span class="fees-tag">
+                                    <i class="fas fa-calendar-alt"></i> {{ __('payment_plan') }}
+                                    @if($row->paymentPlan->status == 'active') ({{ __('status_active') }})
+                                    @elseif($row->paymentPlan->status == 'completed') ({{ __('status_completed') }})
+                                    @elseif($row->paymentPlan->status == 'cancelled') ({{ __('status_cancelled') }})
+                                    @endif
+                                </span></div>
+                                @endif
+                                @if($row->hasPendingMultiPayment())
+                                <div class="mt-1"><span class="fees-tag fees-tag-warn">
+                                    <i class="fas fa-clock"></i> Multi-Pay Pending ({{ $money($row->getPendingMultiPaymentAmount()) }})
+                                </span></div>
+                                @endif
+                            </td>
+                            {{-- One vocabulary, from App\Support\FeesPaymentMethod. The
+                                 chain this replaces carried the stock template's gateway
+                                 list, so 26 cash-office receipts were being reported as
+                                 arriving through RazorPay. --}}
+                            <td class="fees-meta fees-method">{{ \App\Support\FeesPaymentMethod::label($row->payment_method) }}</td>
+                            <td class="fees-meta">{!! $row->note !!}</td>
+                            <td class="fees-acts">
+                                @if($row->payment_plan_id && $row->paymentPlan && $row->paymentPlan->status == 'active')
+                                <a href="{{ route('admin.payment-plan.show', $row->payment_plan_id) }}" class="btn btn-icon btn-light btn-sm" title="{{ __('view_payment_plan') }}">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                @elseif($row->hasPendingMultiPayment())
+                                <button type="button" class="btn btn-icon btn-light btn-sm" disabled title="This fee has a pending multi-payment">
+                                    <i class="fas fa-clock"></i>
+                                </button>
+                                @elseif($row->status == 0 || $row->status == 1 || $row->status == 2)
+                                <button type="button" class="btn btn-icon btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#payModal-{{ $row->id }}" title="{{ $row->status == 1 ? __('add_overpayment') : ($row->status == 2 ? __('pay_balance') : __('make_payment')) }}">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                @include($view.'.pay')
+                                @endif
+
+                                @if($row->status == 1 || $row->status == 2 || ($row->payment_plan_id && $row->paymentPlan))
+                                @can($access.'-print')
+                                @if(isset($print))
+                                <a href="#" class="btn btn-icon btn-light btn-sm" onclick="PopupWin('{{ route($route.'.print', ['id' => $row->id]) }}', '{{ $title }}', 1000, 600);" title="{{ __('btn_print') }}">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                @endif
+                                @endcan
+                                @endif
+
+                                @if($row->isNetOverpaid())
+                                <span class="fees-tag fees-tag-flow" title="{{ __('overpayment_credit_generated') }}">
+                                    +{{ $money($row->net_overpayment_amount) }}
+                                </span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @endif
+        </div>
+        @else
+        <div class="fees-panel">
+            <div class="fees-empty">
+                <i class="fas fa-search"></i>
+                <p>{{ __('fees_nothing_searched') }}</p>
+                <small>{{ __('fees_nothing_searched_hint') }}</small>
+            </div>
+        </div>
+        @endif
+
     </div>
 </div>
-<!-- End Content-->
 
 @endsection
 

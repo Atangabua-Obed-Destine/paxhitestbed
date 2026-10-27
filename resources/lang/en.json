@@ -2973,5 +2973,20 @@
     "nav_group_school": "School",
     "nav_group_account": "Account",
     "nav_everything": "Everything else",
-    "nav_close": "Close"
+    "nav_close": "Close",
+    "fees_billed": "Billed",
+    "fees_collected": "Collected",
+    "fees_outstanding": "Outstanding",
+    "fees_overpaid_held": "Overpayment held",
+    "fees_of_billed_collected": "of what was billed has been collected",
+    "fees_count_total": "fees",
+    "fees_count_paid": "paid",
+    "fees_count_partial": "part paid",
+    "fees_count_unpaid": "unpaid",
+    "fees_count_cancelled": "cancelled",
+    "fees_count_overpaid": "overpaid",
+    "fees_nothing_searched": "Choose a programme or a student to run the report.",
+    "fees_nothing_searched_hint": "Nothing is listed until a filter is applied, so the whole table is never loaded by accident.",
+    "fees_no_match": "No fees match these filters.",
+    "fees_no_match_hint": "Widen the programme, the session or the payment status."
 }

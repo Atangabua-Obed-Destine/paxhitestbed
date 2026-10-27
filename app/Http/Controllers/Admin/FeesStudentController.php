@@ -425,7 +425,27 @@ class FeesStudentController extends Controller
 
             Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
 
-            return redirect()->back()->with('receipt', $fee->id);
+            /*
+             * Straight to the receipt, the way the admission walk-in payment
+             * already does it.
+             *
+             * This used to redirect back and flash a `receipt` id, which the
+             * LIST then turned into PopupWin() — window.open() from a
+             * page-load script. Browsers only allow that from inside a user
+             * gesture, so it was blocked and nothing opened; and the REPORT
+             * never carried the block at all, so paying from there flashed an
+             * id that nothing read. Either way the Bursar recorded money and
+             * got no receipt.
+             *
+             * A redirect cannot be blocked. The receipt's own Back link runs
+             * off url()->previous(), which is the filtered screen the payment
+             * was made from, so their place is kept.
+             */
+            if (in_array((int) $fee->status, [1, 2], true) || $fee->payment_plan_id) {
+                return redirect()->route($this->route . '.print', ['id' => $fee->id]);
+            }
+
+            return redirect()->back();
             
         } catch (\Exception $e) {
             DB::rollBack();
