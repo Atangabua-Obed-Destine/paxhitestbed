@@ -142,6 +142,11 @@
                         footer: true,
                         exportOptions: {
                             columns: ':visible:not(:last-child)',
+                            // Every page, not the one on screen. This IS the
+                            // documented default, but it was being relied on
+                            // rather than stated, and an export that silently
+                            // drops rows is worse than one that fails.
+                            modifier: { page: 'all', search: 'applied', order: 'current' },
                         }
                     },
                     {
@@ -150,6 +155,11 @@
                         footer: true,
                         exportOptions: {
                             columns: ':visible:not(:last-child)',
+                            // Every page, not the one on screen. This IS the
+                            // documented default, but it was being relied on
+                            // rather than stated, and an export that silently
+                            // drops rows is worse than one that fails.
+                            modifier: { page: 'all', search: 'applied', order: 'current' },
                         }
                     },
                     {
@@ -158,6 +168,11 @@
                         footer: true,
                         exportOptions: {
                             columns: ':visible:not(:last-child)',
+                            // Every page, not the one on screen. This IS the
+                            // documented default, but it was being relied on
+                            // rather than stated, and an export that silently
+                            // drops rows is worse than one that fails.
+                            modifier: { page: 'all', search: 'applied', order: 'current' },
                         }
                     },
                     {
@@ -166,6 +181,11 @@
                         footer: true,
                         exportOptions: {
                             columns: ':visible:not(:last-child)',
+                            // Every page, not the one on screen. This IS the
+                            // documented default, but it was being relied on
+                            // rather than stated, and an export that silently
+                            // drops rows is worse than one that fails.
+                            modifier: { page: 'all', search: 'applied', order: 'current' },
                         }
                     },
                     {
@@ -176,6 +196,11 @@
                         footer: true,
                         exportOptions: {
                             columns: ':visible:not(:last-child)',
+                            // Every page, not the one on screen. This IS the
+                            // documented default, but it was being relied on
+                            // rather than stated, and an export that silently
+                            // drops rows is worse than one that fails.
+                            modifier: { page: 'all', search: 'applied', order: 'current' },
                         },
                         customize: function ( win ) {
                             $(win.document.body)

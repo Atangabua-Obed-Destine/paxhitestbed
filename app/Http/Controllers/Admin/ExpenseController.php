@@ -7,6 +7,9 @@ use App\Support\PaymentMethod;
 use App\Support\TransactionWindow;
 use Illuminate\Support\Facades\Auth;
 use App\Services\Accounting\BudgetLineChoices;
+use App\Services\Accounting\TransactionReport;
+use App\Services\LetterheadService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
@@ -71,12 +74,10 @@ class ExpenseController extends Controller
             $data['selected_title'] = $title = null;
         }
 
-        if(!empty($request->category) || $request->category != null){
-            $data['selected_category'] = $category = $request->category;
-        }
-        else{
-            $data['selected_category'] = $category = '0';
-        }
+        // One definition of the filter, shared with the printed report, so the
+        // document and the screen it was printed from cannot disagree.
+        $filter = app(TransactionReport::class)->filter($request);
+        $data['selected_category'] = $category = $filter['categories'];
 
         /*
          * The window the screen opens on.
@@ -110,8 +111,8 @@ class ExpenseController extends Controller
                     if(!empty($request->title) || $request->title != null){
                         $rows->where('title', 'LIKE', '%'.$title.'%');
                     }
-                    if(!empty($request->category) || $request->category != null){
-                        $rows->where('category_id', $category);
+                    if ($category !== []) {
+                        $rows->whereIn('category_id', $category);
                     }
         $data['rows'] = $rows->orderBy('date', 'desc')->orderBy('id', 'desc')->get();
 
@@ -133,6 +134,49 @@ class ExpenseController extends Controller
      * @param  \Illuminate\Support\Collection  $rows
      * @return array{count:int, total:float, methods:array<int, array{label:string, count:int, total:float}>}
      */
+    /**
+     * The filtered list as a document, under the letterhead.
+     *
+     * Built from the records, not from the page the browser happens to be
+     * showing. The export buttons on the table hand their rows to the browser
+     * to turn into a file, which is why what came out was whatever DataTables
+     * had rendered; this reads the same filter the screen read and prints
+     * every row it selects.
+     */
+    public function report(Request $request)
+    {
+        $service = app(TransactionReport::class);
+        $filter = $service->filter($request);
+        $rows = $service->rows(TransactionReport::EXPENSE, $filter);
+
+        $letterhead = app(LetterheadService::class);
+
+        $pdf = Pdf::loadView('admin.account.report-pdf', [
+            'title' => $this->title,
+            'path' => $this->path,
+            'report' => $service->build(TransactionReport::EXPENSE, $filter, $rows),
+            'cover' => $service->describe(TransactionReport::EXPENSE, $filter),
+            'filtered' => $service->isFiltered($filter),
+            'accent' => '#eb6834',
+            'accentDark' => '#9a3b12',
+            'generatedAt' => now(),
+            'generatedBy' => optional(Auth::user())->name ?? __('the system'),
+            'letterhead' => $letterhead->render(true),
+            'letterheadStyles' => $letterhead->styles(),
+        ])
+            ->setPaper('a4', 'portrait')
+            // Nothing in this document needs the network: the letterhead's
+            // images are resolved to filesystem paths before they get here,
+            // and a renderer that will not fetch is one that cannot be made
+            // to fetch something else.
+            ->setOption('isRemoteEnabled', false)
+            ->setOption('isHtml5ParserEnabled', true);
+
+        return $pdf->download(
+            Str::slug($this->title . ' ' . ($filter['window']['start'] ?? 'all') . ' ' . ($filter['window']['end'] ?? '')) . '.pdf'
+        );
+    }
+
     protected function summarise($rows): array
     {
         $methods = [];

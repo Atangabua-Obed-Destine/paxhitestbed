@@ -1019,6 +1019,10 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
 
     // Income Expense Routes
+    // The report routes come FIRST. Declared after the resource, the resource's
+    // /account/income/{income} would match "report" as an id and 404 instead.
+    Route::get('account/income/report', 'IncomeController@report')->name('income.report');
+    Route::get('account/expense/report', 'ExpenseController@report')->name('expense.report');
     Route::resource('account/income', 'IncomeController');
     Route::resource('account/income-category', 'IncomeCategoryController');
     Route::resource('account/expense', 'ExpenseController');

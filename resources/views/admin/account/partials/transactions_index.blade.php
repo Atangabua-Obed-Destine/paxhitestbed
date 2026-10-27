@@ -107,6 +107,21 @@
             @endforeach
 
             <div class="acct-bar-end">
+                {{-- The report takes the filter from the URL, exactly as the
+                     screen did, so what prints is what is on screen. Built
+                     from the same values the quick ranges carry, which is why
+                     a bookmarked report keeps working. --}}
+                <a href="{{ route($route.'.report', array_filter([
+                       'title' => $selected_title,
+                       'category' => $selected_category ?: null,
+                       'start_date' => $window['start'],
+                       'end_date' => $window['end'],
+                       'all' => $window['start'] === null ? 1 : null,
+                   ])) }}"
+                   class="acct-btn" title="{{ __('Print this filtered list as a report, with every record') }}">
+                    <i class="fas fa-file-pdf"></i>{{ __('Report') }}
+                </a>
+
                 @can($access.'-create')
                 <a href="{{ route($route.'.create') }}" class="acct-btn acct-btn-main">
                     <i class="fas fa-plus"></i>{{ __('btn_add_new') }}
@@ -129,11 +144,18 @@
                     </div>
 
                     <div class="col-md-3">
-                        <label for="category">{{ __('field_category') }}</label>
-                        <select class="form-control" name="category" id="category">
-                            <option value="">{{ __('all') }}</option>
+                        <label for="category">{{ __('field_category') }} <span>({{ __('select_multiple') }})</span></label>
+                        {{-- Several categories at once, so "what did we take in
+                             on tuition and hostel" is one question rather than
+                             two screens added up by hand. Nothing selected means
+                             every category, which is what the placeholder says;
+                             there is deliberately no "All" OPTION, because on a
+                             multiple select it can be chosen alongside a real
+                             category and then has to mean something. --}}
+                        <select class="form-control select2" name="category[]" id="category"
+                                multiple data-placeholder="{{ __('all') }}">
                             @foreach( $categories as $category )
-                            <option value="{{ $category->id }}" @if($selected_category == $category->id) selected @endif>{{ $category->title }}</option>
+                            <option value="{{ $category->id }}" @selected(in_array($category->id, (array) $selected_category))>{{ $category->title }}</option>
                             @endforeach
                         </select>
                     </div>

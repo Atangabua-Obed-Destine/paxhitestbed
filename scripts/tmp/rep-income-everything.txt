@@ -1,0 +1,198 @@
+                       PAX HIGHER INSTITUTE (PAXHI)
+
+                                                                  Image not found or type unknown
+
+Motto: Pax, Innovatio et Scientia                                                                                                                                P.O Box 782
+Email: info@paxhi.org                                                                                                                                         Bamunka-Ndop
+Website: www.paxhi.org                                                                                                                                 Ngoketunjia Division
+Tel: (+237) 680943141 | (+237) 697688658                                                                                                    North West Region, Cameroon
+
+Image not found or type unknown
+
+INCOME
+
+All time · entries dated 30/10/2025 to 27/10/2026
+
+DATE                   All time
+CATEGORY               All 16 categories
+
+TOTAL                                     RECORDS                 AVERAGE ENTRY                                                   LARGEST SINGLE ENTRY
+
+59,905,485.00                             38                      1,576,460.13                                                    7,289,000.00
+
+CFA                                       entries in this report  total divided by the count                                      Fees from SMBS year 1
+
+The average and the largest entry are given together on purpose: a total made of one large payment and nine small ones reads very differently from ten even
+ones, and the average alone cannot tell the two apart.
+
+By category
+
+Largest first. Share is of the total above, so these add to 100% of what this report covers -- not of all income.
+
+                       CATEGORY                                           RECORDS                    AMOUNT                         SHARE
+                                                                                     16    35,350,249.00                            59.0%
+Capital contribution                                                                  1                                             12.2%
+Tuition Fees Y1 SMBS                                                                  1      7,289,000.00
+Tuition Fees Y1 SCEDT                                                                 1      5,855,000.00                             9.8%
+Tuition Fees Y1 FAFS                                                                  1      4,110,000.00                             6.9%
+Tuition Fees Y1 FBMF                                                                  8      3,000,000.00                             5.0%
+Registration                                                                          5      2,829,000.00                             4.7%
+Other Income                                                                          5                                               1.4%
+Chaplaincy                                                                          38          850,086.00                            1.0%
+Total                                                                                           622,150.00                        100.0%
+                                                                                         59,905,485.00
+
+Method
+
+How the money moved. An entry with no method recorded is shown as such rather than folded into cash, because the two are not the same thing to anyone
+reconciling a bank statement.
+
+                       METHOD                                             RECORDS                    AMOUNT                         SHARE
+                                                                                     17    35,355,249.00                            59.0%
+MTN Mobile Money                                                                     19    24,044,836.00                            40.1%
+Cash                                                                                  2
+Bank Transfer                                                                       38          505,400.00                            0.8%
+Total                                                                                    59,905,485.00                            100.0%
+
+Month by month
+
+Every month between the first and last entry, including the ones with nothing in them: a list that skipped those would draw a straight line through the gap and hide
+the month worth asking about.
+
+                       MONTH                                              RECORDS                                         AMOUNT
+                                                                                      5                            4,124,000.00
+Oct 2025                                                                              2                            2,040,000.00
+Nov 2025
+
+                                                                  Page 1
+          MONTH          RECORDS                    AMOUNT
+                                     4      6,580,636.00
+Dec 2025                             3      2,393,500.00
+Jan 2026                             2      3,005,000.00
+Feb 2026                             2      4,200,000.00
+Mar 2026                             2      4,200,000.00
+Apr 2026                             3      4,327,149.00
+May 2026                             1
+Jun 2026                             5            2,000.00
+Jul 2026                             6    21,769,500.00
+Aug 2026                             1
+Sep 2026                             2      6,380,300.00
+Oct 2026                                       378,000.00
+Total                              38          505,400.00
+
+                                        59,905,485.00
+
+                 Page 2
+All records
+
+Every one of the 38 records behind the figures above, newest first. Not a page of them: this document is built from the records themselves, so what is listed here is
+the whole of what the filter selected.
+
+#  DATE                                   TITLE                               CATEGORY         METHOD                                              INVOICE ID         AMOUNT
+                                                                                                                                                                 500,000.00
+   1 27/10/2026  new test                                                     Chaplaincy       Bank
+                                                                                               Transfer                                                              5,400.00
+                                                                                                                                                                 378,000.00
+   2 26/10/2026  new                                                          Chaplaincy       Bank                                                              230,000.00
+                                                                                               Transfer                                                          294,000.00
+                                                                                                                                                                 503,000.00
+   3 24/09/2026  SCEDT                                                        Registration     Cash                                                            1,200,000.00
+   4 31/08/2026                                                                                                                                                  653,300.00
+   5 31/08/2026  FMS/FBF                                                      Registration     Cash                                                            3,500,000.00
+   6 31/08/2026                                                                                                                                                3,000,000.00
+   7 31/08/2026  FAFS                                                         Registration     Cash                                                            4,110,000.00
+                                                                                                                                                               5,855,000.00
+                 SMBS                                                         Registration     Cash                                                            7,289,000.00
+                                                                                                                                                               1,515,500.00
+                 Cash from OPSECS for Partial salaries for the month of       Capital contribution MTN Mobile
+                 August                                                                                         Money                                                2,000.00
+                                                                                                                                                               3,781,449.00
+   8 31/08/2026  Balance cash from OPSECS after solar installation            Capital contribution MTN Mobile
+                                                                                                                Money                                            500,000.00
+                                                                                                                                                                   45,700.00
+   9 01/08/2026  Cash from OPSECS for July salaries                           Capital contribution MTN Mobile
+                                                                                                                Money                                          3,500,000.00
+                                                                                                                                                                 700,000.00
+10 31/07/2026    Fees from FMS/FBF year1                                      Tuition Fees Y1  Cash
+                                                                              FBMF                                                                             3,200,000.00
+                                                                                                                                                               1,000,000.00
+11 31/07/2026    Fees from FAFS year 1                                        Tuition Fees Y1 FAFS Cash                                                        3,000,000.00
+12 31/07/2026
+                 Fees from SCEDT year 1                                       Tuition Fees Y1  Cash                                                                  5,000.00
+                                                                              SCEDT                                                                            1,600,000.00
+
+13 31/07/2026    Fees from SMBS year 1                                        Tuition Fees Y1  Cash                                                              773,500.00
+                                                                              SMBS                                                                                 20,000.00
+                                                                                                                                                                   69,050.00
+14 03/07/2026    Float from OPSECS for June salaries 2026                     Capital contribution MTN Mobile
+                                                                                                                Money                                          3,000,000.00
+                                                                                                                                                               3,500,000.00
+15 15/06/2026    Mass intention offered by Sr. Veronica                       Chaplaincy       Cash
+16 29/05/2026
+                 Float for May salaries from OPSECS                           Capital contribution MTN Mobile
+                                                                                                                Money
+
+17 23/05/2026    Float from OPSECS for agricultural purposes for the          Capital contribution MTN Mobile
+                 school farm                                                                                    Money
+
+18 17/05/2026    Offertory during the closing ceremony of the cultural        Chaplaincy       Cash
+                 week
+
+19 30/04/2026    Float for April salaries from OPSECS                         Capital contribution MTN Mobile
+                                                                                                                Money
+
+20 14/04/2026    Float from OPSECS for agricultural purposes for the FAFS Capital contribution MTN Mobile
+                                                                                                                                            Money
+
+21 26/03/2026    Float for March salaries from OPSECS                         Capital contribution MTN Mobile
+                                                                                                                Money
+
+22 07/03/2026    Float from OPSECS                                            Capital contribution MTN Mobile
+                                                                                                                Money
+
+23 24/02/2026    Float for February salaries from OPSECS                      Capital contribution MTN Mobile
+                                                                                                                Money
+
+24 12/02/2026    Attaching Miss Nchu Melvis under PAXHI NSIF Account Other Income              MTN Mobile
+                                                                                               Money
+
+25 29/01/2026    Float for January salaries from OPSECS                       Capital contribution MTN Mobile
+                                                                                                                Money
+
+26 28/01/2026    Income from T-shirts and Bags                                Other Income     Cash
+27 16/01/2026
+                 sold planks which were sawed from the trees on the           Other Income     Cash
+                 school garden
+
+28 21/12/2025    Offertory during the Christmas party mass on campus Chaplaincy                Cash
+29 18/12/2025
+                 Float for December salaries from OPSECS                      Capital contribution MTN Mobile
+                                                                                                                Money
+
+30 04/12/2025    Float for November salaries from OPSECS                      Capital contribution MTN Mobile
+                                                                                                                Money
+
+                                                                      Page 3
+#  DATE                                                          TITLE                  CATEGORY          METHOD   INVOICE ID              AMOUNT
+                     Overstated expense on 11/11/2025                           Other Income          Cash                              11,586.00
+31 04/12/2025        Matriculation support received                             Other Income          Cash                              40,000.00
+                     Float from OPSECS                                          Capital contribution  MTN Mobile                   2,000,000.00
+32 15/11/2025                                                                                         Money
+                                                                                Registration          Cash                            230,000.00
+33 12/11/2025                                                                   Registration          Cash                            294,000.00
+                                                                                Registration          Cash                            397,000.00
+34 31/10/2025        Registration for FMS/FBF                                   Registration          Cash                            503,000.00
+35 31/10/2025        Registration for FAFS                                      Capital contribution  MTN Mobile                   2,700,000.00
+36 31/10/2025        Registration for SCEDT                                                           Money
+37 31/10/2025        Income from registration for SMBS                                                                         59,905,485.00
+38 30/10/2025        income for salaries for the month of October 2025
+
+Total -- 38 records
+
+Generated 27/10/2026 22:50 by Obed Destine Atangabua. Amounts are in CFA. Figures are taken from the records as they stand at that moment; a record edited afterwards will not
+match this copy.
+
+Prepared by          Checked by                                                                       Approved by
+
+                                                                        Page 4
+

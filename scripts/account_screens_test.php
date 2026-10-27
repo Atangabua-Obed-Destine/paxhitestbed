@@ -630,6 +630,96 @@ foreach (['income', 'expense'] as $mod) {
         str_contains($body[1] ?? '', 'color: var(--body) !important'));
 }
 
+echo PHP_EOL . "=== the category filter takes more than one category ===" . PHP_EOL;
+
+/* The dropdown was single-select, so "what did we take in on tuition AND
+   hostel" meant opening the screen twice and adding the two by hand. These
+   assertions are about the ARITHMETIC of that, not about the widget: picking
+   two categories has to return exactly the rows of each, with nothing lost
+   between them and nothing counted twice. */
+foreach (['income', 'expense'] as $mod) {
+    $table = $mod === 'income' ? 'incomes' : 'expenses';
+
+    /* The two busiest categories, so the test has rows to lose if the filter
+       is wrong. Read from the data, never hard-coded: the ids differ between
+       this install and the one the screen runs on. */
+    $busiest = DB::table($table)
+        ->selectRaw('category_id, COUNT(*) as c')
+        ->whereNotNull('category_id')
+        ->groupBy('category_id')->orderByDesc('c')->limit(2)
+        ->pluck('category_id')->all();
+
+    if (count($busiest) < 2) {
+        echo "  ({$mod}: fewer than two categories carry rows, nothing to compare)" . PHP_EOL;
+        continue;
+    }
+
+    [$a, $b] = [(int) $busiest[0], (int) $busiest[1]];
+
+    $ids = function (array $query) use ($mod) {
+        [, $data] = screen($mod, 'index', $query + ['all' => 1]);
+
+        return $data['rows']->pluck('id')->sort()->values()->all();
+    };
+
+    $all = $ids([]);
+    $justA = $ids(['category' => [$a]]);
+    $justB = $ids(['category' => [$b]]);
+    $both = $ids(['category' => [$a, $b]]);
+
+    /* Teeth, inside the test rather than beside it: if the filter quietly did
+       nothing, every figure below would still agree with every other. */
+    ok("{$mod}: filtering to one category returns fewer rows than all of them",
+        count($justA) > 0 && count($justA) < count($all));
+
+    $union = array_values(array_unique(array_merge($justA, $justB)));
+    sort($union);
+
+    check("{$mod}: two categories return each category's rows and no others",
+        $union, $both);
+
+    check("{$mod}: two categories return as many rows as the two apart",
+        count($justA) + count($justB), count($both));
+
+    /* The money follows the rows. A filter that returned the right rows under
+       a total for all of them would be worse than no filter. */
+    [, $bothData] = screen($mod, 'index', ['category' => [$a, $b], 'all' => 1]);
+    [, $aData] = screen($mod, 'index', ['category' => [$a], 'all' => 1]);
+    [, $bData] = screen($mod, 'index', ['category' => [$b], 'all' => 1]);
+
+    check("{$mod}: the amount shown for two categories is the two added",
+        round((float) $aData['rows']->sum('amount') + (float) $bData['rows']->sum('amount'), 2),
+        round((float) $bothData['rows']->sum('amount'), 2));
+
+    /* A bookmark or a mail from before this change sends ?category=7, not
+       ?category[]=7. It has to keep meaning what it meant. */
+    check("{$mod}: a single-value link from before still filters",
+        $justA, $ids(['category' => $a]));
+
+    /* '0' was the old "no category chosen" sentinel and could still arrive
+       from a hand-edited URL. It must mean every category, not the category
+       whose id is zero - which is no rows at all. */
+    check("{$mod}: category=0 still means every category", $all, $ids(['category' => '0']));
+    check("{$mod}: an empty choice means every category", $all, $ids(['category' => []]));
+
+    /* The control itself, and the choice surviving the round trip. */
+    [$html] = screen($mod, 'index', ['category' => [$a, $b], 'all' => 1]);
+
+    ok("{$mod}: the category control accepts several at once",
+        preg_match('~<select[^>]*name="category\[\]"[^>]*multiple~s', $html) === 1);
+
+    foreach ([$a, $b] as $chosen) {
+        ok("{$mod}: category {$chosen} is still shown as chosen",
+            preg_match('~<option value="' . $chosen . '"[^>]*selected~', $html) === 1);
+    }
+
+    /* The quick-range links reload the screen. If they dropped the categories,
+       every click would silently widen the report the user is reading. */
+    ok("{$mod}: the quick ranges carry the chosen categories",
+        strpos($html, 'category%5B0%5D=' . $a) !== false
+        && strpos($html, 'category%5B1%5D=' . $b) !== false);
+}
+
 echo PHP_EOL . "=== nothing was left behind ===" . PHP_EOL;
 
 $closing = [
