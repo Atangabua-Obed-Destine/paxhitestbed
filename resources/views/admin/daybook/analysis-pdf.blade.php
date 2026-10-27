@@ -354,7 +354,14 @@
 @if($cst['total'] > 0 || $cap['total'] > 0)
 <h2 class="brk">{{ __('Who has paid, and who has not') }}</h2>
 <p class="sub">
-    {{ __('Students with fees assigned in this budget year, counted as people rather than as fees: a student with three instalments and two paid is one student who is partly paid. Applicants are counted apart because they are not yet students, and pooling the two would overstate collection.') }}
+    {{ __('Students billed a :scope in this budget year, counted as people rather than as fees: a student with both instalments and one paid is one student who is partly paid. Applicants are counted apart because they are not yet students, and pooling the two would overstate collection.', [
+        'scope' => implode(' ' . __('or') . ' ', $cl['scope']['names'])]) }}
+    @if($cl['scope']['matched'] && $cl['scope']['excluded']['fees'] > 0)
+        {{ __('Resit fees, admission fees and everything else are not in these counts - :fees of them, :billed billed, :owed still owed. They are listed in full under "Collection by fee" below.', [
+            'fees' => number_format($cl['scope']['excluded']['fees']),
+            'billed' => number_format($cl['scope']['excluded']['billed']),
+            'owed' => number_format($cl['scope']['excluded']['owed'])]) }}
+    @endif
 </p>
 
 <table class="tiles">
@@ -394,7 +401,14 @@
         <th class="num" style="width:85px">{{ __('Outstanding') }}</th>
     </tr></thead>
     <tbody>
-        @foreach([__('Students') => $cst, __('Applicants') => $cap] as $label => $row)
+        {{-- The applicant row and the "Together" total are dropped when no
+             applicant holds a fee in scope, which on an instalment-only
+             cohort is the ordinary case. Three identical lines read as a
+             mistake in the pack rather than as a zero. --}}
+        @php $cohorts = $cap['total'] > 0
+            ? [__('Students') => $cst, __('Applicants') => $cap]
+            : [__('Students') => $cst]; @endphp
+        @foreach($cohorts as $label => $row)
         <tr>
             <td>{{ $label }}</td>
             <td class="num">{{ number_format($row['total']) }}</td>
@@ -406,6 +420,7 @@
             <td class="num">{{ number_format($row['outstanding']) }}</td>
         </tr>
         @endforeach
+        @if($cap['total'] > 0)
         <tr class="total">
             <td>{{ __('Together') }}</td>
             <td class="num">{{ number_format($cl['combined']['total']) }}</td>
@@ -416,6 +431,7 @@
             <td class="num">{{ number_format($cl['combined']['collected']) }}</td>
             <td class="num">{{ number_format($cl['combined']['outstanding']) }}</td>
         </tr>
+        @endif
     </tbody>
 </table>
 
@@ -429,9 +445,43 @@
 </p>
 @endif
 
+{{-- Admission fees, under their own heading and after the student figures,
+     so the two can never be read as one. An admission fee is paid by
+     somebody who is not a student yet; pooling them was measured to turn
+     "11 students, 8.5% collected" into "37 people, 25 fully paid". --}}
+@if($cl['admissions']['has_data'])
+@php $ad = $cl['admissions']; @endphp
+<h2>{{ __('Admission fees, counted on their own') }}</h2>
+<p class="sub">{{ __('People billed an admission fee in this budget year. These are mostly applicants, who are not students yet, so none of these figures form any part of the student figures above.') }}</p>
+<table class="g">
+    <thead><tr>
+        <th>{{ __('Admission fees') }}</th>
+        <th class="num" style="width:55px">{{ __('People') }}</th>
+        <th class="num" style="width:42px">{{ __('Full') }}</th>
+        <th class="num" style="width:42px">{{ __('Part') }}</th>
+        <th class="num" style="width:48px">{{ __('Nothing') }}</th>
+        <th class="num" style="width:85px">{{ __('Billed') }}</th>
+        <th class="num" style="width:85px">{{ __('Collected') }}</th>
+        <th class="num" style="width:85px">{{ __('Outstanding') }}</th>
+    </tr></thead>
+    <tbody>
+        <tr>
+            <td>{{ implode(', ', $ad['names']) }}</td>
+            <td class="num">{{ number_format($ad['total']) }}</td>
+            <td class="num">{{ number_format($ad['full']) }}</td>
+            <td class="num">{{ number_format($ad['part']) }}</td>
+            <td class="num">{{ number_format($ad['none']) }}</td>
+            <td class="num">{{ number_format($ad['billed']) }}</td>
+            <td class="num">{{ number_format($ad['collected']) }}</td>
+            <td class="num">{{ number_format($ad['outstanding']) }}</td>
+        </tr>
+    </tbody>
+</table>
+@endif
+
 @if(count($cl['by_month']))
 <h2>{{ __('Fee collection, month by month') }}</h2>
-<p class="sub">{{ __('All fee cash received in this budget year — a wider figure than Collected above, because it includes payments against earlier years\' fees. It is what ties to the money-in figures earlier in this pack.') }}</p>
+<p class="sub">{{ __('Instalment cash received in this budget year, a wider figure than Collected above because it includes instalments billed in earlier years. The last column is all fee cash, instalments and everything else, which is what ties to the money-in figures earlier in this pack.') }}</p>
 {{-- Index 4: this chart is registered on the screen AFTER the original four,
      so the indices above keep their pictures. --}}
 @if($chart(4))
@@ -440,8 +490,9 @@
 <table class="g">
     <thead><tr>
         <th>{{ __('Month') }}</th>
-        <th class="num" style="width:110px">{{ __('Received') }}</th>
-        <th class="num" style="width:110px">{{ __('Running total') }}</th>
+        <th class="num" style="width:100px">{{ __('Instalments received') }}</th>
+        <th class="num" style="width:100px">{{ __('Running total') }}</th>
+        <th class="num" style="width:100px">{{ __('All fee cash') }}</th>
     </tr></thead>
     <tbody>
     @foreach($cl['by_month'] as $m)
@@ -449,6 +500,7 @@
             <td>{{ $m['label'] }}</td>
             <td class="num">{{ number_format($m['cash']) }}</td>
             <td class="num">{{ number_format($m['cumulative']) }}</td>
+            <td class="num">{{ number_format($m['all_cash']) }}</td>
         </tr>
     @endforeach
     </tbody>
@@ -484,10 +536,11 @@
 
 @if(count($cl['by_category']))
 <h2>{{ __('Collection by fee') }}</h2>
-<p class="sub">{{ __('Counted in fees, not people. Compare each rate against how far through the year that fee falls due.') }}</p>
+<p class="sub">{{ __('Every category billed this year, not only the instalments: only the rows marked "Counted" feed the figures above. Counted in fees, not people. Compare each rate against how far through the year that fee falls due.') }}</p>
 <table class="g">
     <thead><tr>
         <th>{{ __('field_fees_category') }}</th>
+        <th style="width:70px">{{ __('Counted above') }}</th>
         <th class="num" style="width:45px">{{ __('Fees') }}</th>
         <th class="num" style="width:90px">{{ __('Billed') }}</th>
         <th class="num" style="width:90px">{{ __('Collected') }}</th>
@@ -498,6 +551,7 @@
     @foreach($cl['by_category'] as $row)
         <tr>
             <td>{{ $row['category'] }}</td>
+            <td>{{ $row['in_scope'] ? __('Counted') : __('Not counted') }}</td>
             <td class="num">{{ number_format($row['fees']) }}</td>
             <td class="num">{{ number_format($row['due']) }}</td>
             <td class="num">{{ number_format($row['collected']) }}</td>
@@ -536,41 +590,23 @@
 </table>
 @endif
 
+{{-- The "Fees that belong to nobody" table is deliberately NOT in this pack.
+     It is a data-quality finding - a fee whose enrolment was deleted - and
+     this document is read aloud to a board. A line item that no one in the
+     room can explain costs more attention than the amount is worth, and the
+     finding is not lost: it stays on the analysis screen, where the person
+     who can repair the record is the person reading it.
+
+     What the pack does owe the reader is the fact that the money exists, so
+     the totals cannot be quietly short. That is the line below. --}}
 @if($cl['unattributed']['count'] > 0)
-<h2>{{ __('Fees that belong to nobody') }}</h2>
 <p class="sub">
-    {{ __('These cannot be attributed to a student or an applicant, so they are in none of the figures above — :amount of it still outstanding. Shown here rather than dropped: a fee with no person cannot be chased, receipted, or put on anybody\'s statement.', [
-        'amount' => number_format($cl['unattributed']['owed']),
+    {{ __('A note on the totals: :count fee(s) worth :amount, of which :owed is still outstanding, are attached to enrolments that no longer exist and so belong to no named person. They are in none of the figures above. They are listed on the analysis screen for correction.', [
+        'count' => number_format($cl['unattributed']['count']),
+        'amount' => number_format($cl['unattributed']['amount']),
+        'owed' => number_format($cl['unattributed']['owed']),
     ]) }}
 </p>
-<table class="g">
-    <thead><tr>
-        <th style="width:45px">{{ __('Fee') }}</th>
-        <th>{{ __('field_fees_category') }}</th>
-        <th style="width:62px">{{ __('field_assign_date') }}</th>
-        <th class="num" style="width:80px">{{ __('Billed') }}</th>
-        <th class="num" style="width:80px">{{ __('Outstanding') }}</th>
-        <th>{{ __('Why') }}</th>
-    </tr></thead>
-    <tbody>
-    @foreach($cl['unattributed']['rows'] as $row)
-        <tr>
-            <td>#{{ $row['id'] }}</td>
-            <td>{{ $row['category'] }}</td>
-            <td>{{ $row['assign_date'] ? \Carbon\Carbon::parse($row['assign_date'])->format('j M Y') : '—' }}</td>
-            <td class="num">{{ number_format($row['due']) }}</td>
-            <td class="num">{{ number_format($row['owed']) }}</td>
-            <td>
-                @if($row['reason'] === 'missing_enrolment')
-                    {{ __('Its enrolment (:id) no longer exists.', ['id' => $row['enroll_id']]) }}
-                @else
-                    {{ __('Its enrolment carries neither a student nor an applicant.') }}
-                @endif
-            </td>
-        </tr>
-    @endforeach
-    </tbody>
-</table>
 @endif
 @endif
 

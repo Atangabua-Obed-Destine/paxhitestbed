@@ -13,10 +13,18 @@ use Illuminate\Support\Facades\DB;
  * counts PEOPLE, not fees, which is the whole reason it exists as its own
  * class rather than another figure on the fees report.
  *
- * A student with three instalments, two of them paid, is ONE student who is
- * partly paid. The fees report would count that as two paid fees and one
+ * A student with both instalments, one of them paid, is ONE student who is
+ * partly paid. The fees report would count that as one paid fee and one
  * unpaid, which is the right answer to a different question. A board meeting
  * asks the first one.
+ *
+ * "Fees" here means the TUITION INSTALMENTS and nothing else — see
+ * INSTALMENT_PATTERN. That scope is not a convenience; it decides the answer.
+ * Counting every category, the 2026/2027 window reads 8 students partly paid
+ * and 3 who have paid nothing, at 8.5% collected. Scoped to the instalments
+ * it reads 2 partly paid and NINE who have paid nothing, at 4.2% — because
+ * most of those students had settled a small resit or admission fee and that
+ * was enough to lift them out of "paid nothing at all".
  *
  * ---------------------------------------------------------------------------
  * Four ways to get this wrong, all of which this installation's data would
@@ -28,6 +36,12 @@ use Illuminate\Support\Facades\DB;
  *      losing 31. The person is the student if there is one, else the
  *      applicant, and applicants are reported separately because they are not
  *      students yet.
+ *
+ *      Under the instalment scope no applicant on this install holds a fee at
+ *      all, so the applicant line reads zero. The split stays regardless: it
+ *      is what GUARANTEES the zero rather than assuming it, and an institution
+ *      that bills an instalment before enrolment completes would otherwise
+ *      have those people silently counted as students.
  *
  *   2. Summing paid_amount. There are 88 overpayment credits worth ~7m on this
  *      install, so an instalment settled by credit moved from another fee
@@ -45,7 +59,8 @@ use Illuminate\Support\Facades\DB;
  *      paid, so it cannot disagree with the money beside it.
  *
  * ---------------------------------------------------------------------------
- * The cohort is fees ASSIGNED inside the budget window. Not paid inside it:
+ * The cohort is INSTALMENT fees ASSIGNED inside the budget window. Not paid
+ * inside it:
  * pay_date is null on every unpaid fee, so scoping by payment would make "has
  * paid nothing" uncountable — the one figure this was asked for.
  *
@@ -71,6 +86,46 @@ class FeeCollection
     /** How many debtors the ranking shows. */
     protected const DEBTOR_LIMIT = 15;
 
+    /**
+     * Which fees this section is about: the tuition instalments, and nothing
+     * else.
+     *
+     * This is a scope, not a filter bolted on afterwards, and it changes the
+     * answer rather than trimming it. On this install the categories are
+     * First Instalment (74 fees, 11,100,000), Second Installment (73 fees,
+     * 13,300,000), Resit Fee (151 fees, 755,000) and Admission Fees (39 fees,
+     * 819,000). Counting all four, a student who has settled both instalments
+     * but not a 5,000 resit reads as PARTLY PAID — which is the wrong answer
+     * to "who has paid their fees". The resit is a separate transaction, and
+     * the admission fee belongs to an applicant who is not a student yet.
+     *
+     * Matched on the TITLE, not on ids: 5 and 7 are this database's ids and
+     * would be somebody else's "Transport" and "Library". The pattern allows
+     * one or two l's deliberately — this install spells the first one
+     * "Instalment" and the second "Installment", and an exact-spelling match
+     * would silently halve the cohort.
+     */
+    protected const INSTALMENT_PATTERN = 'instal+ment';
+
+    /**
+     * Admission fees are reported too, and reported APART.
+     *
+     * They are a real question — how many applicants have paid to come in —
+     * but a different one from how many students have paid their tuition,
+     * and pooling the two was measured to invert the answer: 26 applicants
+     * who had each settled a 21,000 admission fee turned "11 students, 8.5%
+     * collected" into "37 people, 25 fully paid", which reads as a healthy
+     * year. So they get their own counts under their own heading, and never
+     * a share of the instalment ones.
+     */
+    protected const ADMISSION_PATTERN = 'admission';
+
+    /** Resolved once per instance: see instalmentScope(). */
+    protected ?array $scope = null;
+
+    /** Resolved once per instance: see admissionScope(). */
+    protected ?array $admissionScope = null;
+
     public function forBudget(Budget $budget): array
     {
         $from = $this->day($budget->start_date);
@@ -83,15 +138,18 @@ class FeeCollection
         $people = $this->peopleInWindow($from, $to);
 
         // Students and applicants are tallied apart, and the headline is the
-        // STUDENT tally. Mixing them is not a rounding difference, it inverts
-        // the answer: on this install the 2026/2027 window holds 11 students
-        // and 26 applicants, and the applicants have nearly all paid a 21,000
-        // admission fee. Pooled, the page would report "25 of 37 fully paid",
-        // which reads as a healthy year. The students alone are 21% collected.
+        // STUDENT tally. Under the instalment scope this install has no
+        // applicants holding a fee, so the applicant tally is all zeros and
+        // the combined figure equals the student one — but the split is not
+        // therefore redundant. Pooling was measured to INVERT the answer when
+        // admission fees were in scope: 26 applicants who had each settled a
+        // 21,000 admission fee turned "11 students, 8.5% collected" into
+        // "37 people, 25 fully paid", which reads as a healthy year.
         //
-        // An applicant is also not yet a student, which is the question that
-        // was asked. So: students lead, applicants are reported beside them,
-        // and a combined figure exists for anyone who wants the gross.
+        // So the split stays as the structural guarantee. An applicant is also
+        // not yet a student, which is the question that was asked. Students
+        // lead, applicants sit beside them, and a combined figure exists for
+        // anyone who wants the gross.
         $byKind = ['student' => [], 'applicant' => []];
 
         foreach ($people as $person) {
@@ -107,12 +165,16 @@ class FeeCollection
 
         return [
             'window' => ['from' => $from, 'to' => $to],
+            'scope' => $this->instalmentScope() + ['excluded' => $this->excluded($from, $to)],
 
             // The three figures this was asked for, plus the denominator —
             // "3 have paid nothing" means nothing without "of 12".
             'students' => $tally['student'],
             'applicants' => $tally['applicant'],
             'combined' => $this->tally($people),
+
+            // Its own block, never added to the figures above.
+            'admissions' => $this->admissions($from, $to),
 
             'arrears' => $this->arrears($from),
             'plans' => $this->activePlans(),
@@ -131,6 +193,139 @@ class FeeCollection
      |===================================================================*/
 
     /**
+     * The instalment categories, resolved from the catalogue.
+     *
+     * Returns the ids to scope on, the titles to name on the page, and
+     * whether the match actually found anything. That last flag is not
+     * decoration: on an installation that names its instalments something
+     * else, an empty id list would scope every figure to nothing and the
+     * section would read "0 of 0 students" — a confident, wrong, and entirely
+     * silent answer. So when nothing matches, the scope opens to every
+     * category and the page says it is counting all fees.
+     */
+    public function instalmentScope(): array
+    {
+        if ($this->scope !== null) {
+            return $this->scope;
+        }
+
+        $matched = DB::table('fees_categories')
+            ->whereRaw('LOWER(title) REGEXP ?', [self::INSTALMENT_PATTERN])
+            ->orderBy('id')
+            ->get(['id', 'title']);
+
+        if ($matched->isEmpty()) {
+            $all = DB::table('fees_categories')->orderBy('id')->get(['id', 'title']);
+
+            return $this->scope = [
+                'ids' => $all->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'names' => $all->pluck('title')->all(),
+                'matched' => false,
+            ];
+        }
+
+        return $this->scope = [
+            'ids' => $matched->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'names' => $matched->pluck('title')->all(),
+            'matched' => true,
+        ];
+    }
+
+    /**
+     * The admission categories, resolved the same way as the instalments.
+     *
+     * Deliberately NOT folded into instalmentScope() with a flag. These are
+     * two groups that must never be added together, and keeping them as two
+     * methods is what makes a query that wants both have to say so.
+     */
+    public function admissionScope(): array
+    {
+        if ($this->admissionScope !== null) {
+            return $this->admissionScope;
+        }
+
+        $matched = DB::table('fees_categories')
+            ->whereRaw('LOWER(title) REGEXP ?', [self::ADMISSION_PATTERN])
+            ->whereNotIn('id', $this->instalmentScope()['ids'])
+            ->orderBy('id')
+            ->get(['id', 'title']);
+
+        return $this->admissionScope = [
+            'ids' => $matched->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'names' => $matched->pluck('title')->all(),
+            'matched' => $matched->isNotEmpty(),
+        ];
+    }
+
+    /**
+     * Admission fees, counted as people, in the same shape as the cohort.
+     *
+     * Reuses tally() so the two blocks cannot drift into meaning different
+     * things by "paid in full" — and takes its own people, so no one appears
+     * in both totals.
+     */
+    protected function admissions(string $from, string $to): array
+    {
+        $ids = $this->admissionScope()['ids'];
+
+        if ($ids === []) {
+            return ['has_data' => false, 'names' => []] + $this->tally([]);
+        }
+
+        $people = $this->peopleInWindow($from, $to, $ids);
+
+        return ['has_data' => $people !== [], 'names' => $this->admissionScope()['names']]
+            + $this->tally($people);
+    }
+
+    /**
+     * The ids every scoped query narrows to.
+     *
+     * Used as whereIn on category_id, which excludes a fee with no category
+     * at all — correct, because a fee nobody categorised is not known to be
+     * an instalment, and guessing it in would quietly inflate what students
+     * owe. An uncategorised fee is not lost: it still shows under "Collection
+     * by fee", which is deliberately NOT scoped.
+     *
+     * @return array<int, int>
+     */
+    protected function instalmentIds(): array
+    {
+        return $this->instalmentScope()['ids'];
+    }
+
+    /**
+     * What the scope leaves out, so the page can say so in one line.
+     *
+     * Reported rather than dropped. Resit fees and admission fees are real
+     * money owed; they are simply not the question this section answers, and
+     * a section that silently omits 1,574,000 is worse than one that names it.
+     */
+    protected function excluded(string $from, string $to): array
+    {
+        $net = Fee::netPaidSql('f');
+        $due = $this->dueSql('f');
+
+        $row = DB::table('fees as f')
+            ->where('f.status', '<>', self::CANCELLED)
+            ->whereDate('f.assign_date', '>=', $from)
+            ->whereDate('f.assign_date', '<=', $to)
+            ->whereNotIn('f.category_id', $this->instalmentScope()['ids'])
+            ->selectRaw("COUNT(*) as fees, COALESCE(SUM({$due}), 0) as due, COALESCE(SUM({$net}), 0) as paid")
+            ->first();
+
+        $billed = round((float) ($row->due ?? 0), 2);
+        $collected = round((float) ($row->paid ?? 0), 2);
+
+        return [
+            'fees' => (int) ($row->fees ?? 0),
+            'billed' => $billed,
+            'collected' => $collected,
+            'owed' => round(max(0.0, $billed - $collected), 2),
+        ];
+    }
+
+    /**
      * One row per person with a fee assigned in the window.
      *
      * The grouping key is the heart of this class. COALESCE down to the
@@ -139,8 +334,10 @@ class FeeCollection
      *
      * @return array<int, object>
      */
-    protected function peopleInWindow(string $from, string $to): array
+    protected function peopleInWindow(string $from, string $to, ?array $categoryIds = null): array
     {
+        $categoryIds = $categoryIds ?? $this->instalmentIds();
+
         $net = Fee::netPaidSql('f');
         $due = $this->dueSql('f');
 
@@ -151,6 +348,7 @@ class FeeCollection
             ->leftJoin('programs as p', 'p.id', '=', 'se.program_id')
             ->whereRaw($this->personColumn() . ' IS NOT NULL')
             ->where('f.status', '<>', self::CANCELLED)
+            ->whereIn('f.category_id', $categoryIds)
             ->whereDate('f.assign_date', '>=', $from)
             ->whereDate('f.assign_date', '<=', $to)
             ->groupBy('person')
@@ -286,6 +484,7 @@ class FeeCollection
             ->leftJoin('student_enrolls as se', 'se.id', '=', 'f.student_enroll_id')
             ->whereRaw($this->personColumn() . ' IS NOT NULL')
             ->where('f.status', '<>', self::CANCELLED)
+            ->whereIn('f.category_id', $this->instalmentIds())
             ->whereDate('f.assign_date', '<', $from)
             ->groupBy('person')
             ->selectRaw($this->personKeySql() . ' as person')
@@ -342,6 +541,14 @@ class FeeCollection
      * belongs to the programme, but a person with fees under two programmes
      * would otherwise have to be split or double-counted, and neither is
      * honest. The headline people figures are the place for people.
+     *
+     * Restricted to fees that belong to SOMEBODY. Without that restriction a
+     * fee whose enrolment was deleted has no programme either, so it lands in
+     * a "No programme recorded" row carrying money and ZERO people — a line
+     * that cannot be explained to anyone reading the report, and that puts
+     * the same money on the page twice, since it is already reported as
+     * unattributable. This table ranks programmes; a fee with no person is
+     * not a programme doing badly.
      */
     protected function byProgramme(string $from, string $to): array
     {
@@ -352,7 +559,9 @@ class FeeCollection
             ->leftJoin('student_enrolls as se', 'se.id', '=', 'f.student_enroll_id')
             ->leftJoin('programs as p', 'p.id', '=', 'se.program_id')
             ->leftJoin('faculties as fac', 'fac.id', '=', 'p.faculty_id')
+            ->whereRaw($this->personColumn() . ' IS NOT NULL')
             ->where('f.status', '<>', self::CANCELLED)
+            ->whereIn('f.category_id', $this->instalmentIds())
             ->whereDate('f.assign_date', '>=', $from)
             ->whereDate('f.assign_date', '<=', $to)
             ->groupBy('p.id', 'p.title', 'fac.title')
@@ -372,7 +581,18 @@ class FeeCollection
         ]);
     }
 
-    /** Collection by fee category — is it the second instalment that lags? */
+    /**
+     * Collection by fee category — is it the second instalment that lags?
+     *
+     * The ONE breakdown that is deliberately not scoped. Everything else in
+     * this section counts instalments only, and a category table that also
+     * counted instalments only would have exactly two rows and would make the
+     * resit and admission money vanish from a page about collection.
+     *
+     * So every category is listed and each row says whether it is counted in
+     * the figures above. That is what makes the scope legible instead of
+     * merely applied: the reader can see what was left out, and how much.
+     */
     protected function byCategory(string $from, string $to): array
     {
         $net = Fee::netPaidSql('f');
@@ -389,10 +609,21 @@ class FeeCollection
             ->selectRaw('COUNT(*) as fees')
             ->get();
 
-        return $this->rank($rows, fn ($row) => [
+        $ids = $this->instalmentIds();
+
+        $ranked = $this->rank($rows, fn ($row) => [
             'category' => $row->category ?: __('No category'),
             'fees' => (int) $row->fees,
+            'in_scope' => $row->category_id !== null
+                && in_array((int) $row->category_id, $ids, true),
         ]);
+
+        // Counted rows lead, each block still worst-rate-first. The rate is
+        // carried into the comparison rather than relying on a stable sort.
+        usort($ranked, fn ($a, $b) => [!$a['in_scope'], $a['rate'], -$a['owed']]
+                                  <=> [!$b['in_scope'], $b['rate'], -$b['owed']]);
+
+        return $ranked;
     }
 
     /**
@@ -442,15 +673,23 @@ class FeeCollection
     {
         $cash = Fee::cashReceivedSql('f');
 
-        $rows = DB::table('fees as f')
+        $monthly = fn (?array $categories) => DB::table('fees as f')
             ->where('f.status', '<>', self::CANCELLED)
             ->where('f.paid_amount', '>', 0)
             ->whereNotNull('f.pay_date')
             ->whereDate('f.pay_date', '>=', $from)
             ->whereDate('f.pay_date', '<=', $to)
+            ->when($categories !== null, fn ($q) => $q->whereIn('f.category_id', $categories))
             ->groupBy('bucket')
             ->selectRaw("DATE_FORMAT(f.pay_date, '%Y-%m') as bucket, SUM({$cash}) as cash")
             ->pluck('cash', 'bucket');
+
+        // Two series, and both are needed. The instalment one is what this
+        // section is about; the all-fee one is what ties to the money-in bars
+        // elsewhere on this page, and without it a reader comparing the two
+        // charts would reasonably conclude they contradict each other.
+        $rows = $monthly($this->instalmentIds());
+        $allRows = $monthly(null);
 
         // Walked from the budget's own periods, so an empty month is a zero in
         // the series rather than a gap the chart closes up.
@@ -464,6 +703,7 @@ class FeeCollection
                 'label' => $this->shortLabel($period->name),
                 'key' => $key,
                 'cash' => round((float) ($rows[$key] ?? 0), 2),
+                'all_cash' => round((float) ($allRows[$key] ?? 0), 2),
             ];
         }
 
@@ -516,7 +756,7 @@ class FeeCollection
             ->where('f.status', '<>', self::CANCELLED)
             ->whereRaw($this->personColumn() . ' IS NULL')
             ->orderByDesc('f.assign_date')
-            ->selectRaw('f.id, f.student_enroll_id, f.assign_date')
+            ->selectRaw('f.id, f.student_enroll_id, f.assign_date, f.category_id')
             ->selectRaw("fc.title as category, {$due} as due, {$net} as paid")
             ->selectRaw('CASE WHEN f.student_enroll_id IS NOT NULL AND se.id IS NULL
                               THEN \'missing_enrolment\' ELSE \'no_person\' END as reason')
@@ -530,6 +770,12 @@ class FeeCollection
                 'id' => (int) $r->id,
                 'enroll_id' => $r->student_enroll_id ? (int) $r->student_enroll_id : null,
                 'category' => $r->category ?: __('No category'),
+                // Unscoped on purpose: this list is the page's own admission
+                // of what it could not place, so narrowing it to instalments
+                // would hide a broken fee for the sake of consistency with a
+                // scope the row is not subject to.
+                'in_scope' => $r->category_id !== null
+                    && in_array((int) $r->category_id, $this->instalmentIds(), true),
                 'assign_date' => $r->assign_date,
                 'due' => round((float) $r->due, 2),
                 'owed' => round(max(0.0, (float) $r->due - (float) $r->paid), 2),
@@ -599,9 +845,12 @@ class FeeCollection
     {
         return [
             'window' => ['from' => $from, 'to' => $to],
+            'scope' => $this->instalmentScope()
+                + ['excluded' => ['fees' => 0, 'billed' => 0.0, 'collected' => 0.0, 'owed' => 0.0]],
             'students' => $this->tally([]),
             'applicants' => $this->tally([]),
             'combined' => $this->tally([]),
+            'admissions' => ['has_data' => false, 'names' => []] + $this->tally([]),
             'arrears' => ['people' => 0, 'amount' => 0.0, 'oldest' => null],
             'plans' => ['people' => 0, 'amount' => 0.0],
             'by_programme' => [],

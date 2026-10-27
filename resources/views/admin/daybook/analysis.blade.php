@@ -211,6 +211,12 @@
         color: #55637a; border: 1px solid #d7dee7;
     }
 
+    /* The repair list is not a collection figure, and must not read as one.
+       A muted left rule and a quieter heading put it one step below the
+       cards that carry money the institution is actually chasing. */
+    .fc-repair { border-left: 3px solid var(--text-muted); }
+    .fc-repair .viz-head h5 { color: var(--text-secondary); }
+
     .fc-note {
         display: flex; gap: .6rem; align-items: flex-start;
         margin: 0 1.25rem 1rem; padding: .75rem .9rem;
@@ -1017,7 +1023,7 @@
                 datasets: [
                     {
                         type: 'bar',
-                        label: '{{ __('Received in the month') }}',
+                        label: '{{ __('Instalments received in the month') }}',
                         data: feeCash,
                         backgroundColor: IN,
                         borderRadius: 4,

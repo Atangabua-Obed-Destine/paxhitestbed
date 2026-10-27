@@ -79,6 +79,50 @@ $opening = [
 ];
 
 /* ===================================================================
+ |  The scope, resolved independently
+ |
+ |  The service matches 'instal+ment' against the catalogue. This suite
+ |  resolves the same set by reading every category title and testing it in
+ |  PHP, so a change to the service's regex has to be matched here
+ |  deliberately rather than agreeing with itself by construction.
+ |===================================================================*/
+
+$catalogue = DB::table('fees_categories')->orderBy('id')->get(['id', 'title']);
+
+$instalmentIds = [];
+$otherIds = [];
+
+foreach ($catalogue as $row) {
+    $title = strtolower((string) $row->title);
+    $isInstalment = str_contains($title, 'instalment') || str_contains($title, 'installment');
+    if ($isInstalment) {
+        $instalmentIds[] = (int) $row->id;
+    } else {
+        $otherIds[] = (int) $row->id;
+    }
+}
+
+/* One placeholder list, reused by every raw expectation below, so the bound
+   parameters and the scope can never drift apart. */
+$scopeSql = implode(',', array_fill(0, count($instalmentIds), '?'));
+
+ok('the catalogue has instalment categories to scope to', count($instalmentIds) > 0);
+ok('and other categories that must be left out', count($otherIds) > 0);
+
+check('the service scopes to exactly those categories',
+    $instalmentIds,
+    array_map('intval', $svc->instalmentScope()['ids']));
+
+ok('and reports the match as found, not as the fall-back to everything',
+    $svc->instalmentScope()['matched'] === true);
+
+/* The fall-back is the one branch a wrong regex would silently take, and the
+   consequence is the worst possible: "0 of 0 students", stated confidently.
+   So it is asserted to open the scope rather than close it. */
+ok('an unmatched catalogue would widen the scope to every fee, never to none',
+    count($svc->instalmentScope()['ids']) > 0);
+
+/* ===================================================================
  |  The independent recomputation
  |
  |  Deliberately a different shape of query from the service's: this one
@@ -89,8 +133,10 @@ $opening = [
 /**
  * @return array{student: array, applicant: array, people: array}
  */
-function recompute(string $from, string $to): array
+function recompute(string $from, string $to, array $categoryIds): array
 {
+    $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+
     $rows = DB::select("
         SELECT f.id,
                se.student_id,
@@ -106,9 +152,10 @@ function recompute(string $from, string $to): array
           FROM fees f
           LEFT JOIN student_enrolls se ON se.id = f.student_enroll_id
          WHERE f.status <> 3
+           AND f.category_id IN ({$placeholders})
            AND f.assign_date >= ?
            AND f.assign_date <= ?
-    ", [$from, $to]);
+    ", array_merge($categoryIds, [$from, $to]));
 
     $people = [];
 
@@ -178,7 +225,7 @@ foreach ($budgets as $budget) {
     $to = substr((string) $budget->end_date, 0, 10);
 
     $c = $svc->forBudget($budget);
-    $mine = recompute($from, $to);
+    $mine = recompute($from, $to, $instalmentIds);
 
     foreach (['student' => 'students', 'applicant' => 'applicants'] as $kind => $key) {
         foreach (['full', 'part', 'none', 'total'] as $bucket) {
@@ -351,10 +398,40 @@ foreach ($budgets as $budget) {
         }
     }
 
-    $curve = array_sum(array_column($svc->forBudget($budget)['by_month'], 'cash'));
+    $months = $svc->forBudget($budget)['by_month'];
+    $curve = array_sum(array_column($months, 'cash'));
+    $allCurve = array_sum(array_column($months, 'all_cash'));
 
-    check("{$budget->title}: the curve equals the daybook's fee rows",
-        money($feeCash), money($curve));
+    /* The tie is on the ALL-FEE series, and that is why the series exists.
+       The chart is about instalments, but a page carrying two pictures of
+       fee cash that disagree is a page nobody trusts, so the table beside
+       the chart carries the figure that reconciles to the daybook and this
+       asserts it to the franc. */
+    check("{$budget->title}: all fee cash equals the daybook's fee rows",
+        money($feeCash), money($allCurve));
+
+    /* And the instalment series is the same money, narrowed: recomputed here
+       from its own query rather than taken from the service, so a scope
+       applied to the cohort but forgotten on the curve would fail. */
+    $instalmentCash = 0.0;
+    foreach (DB::select("
+        SELECT COALESCE(SUM(" . Fee::cashReceivedSql('f') . "), 0) AS cash
+          FROM fees f
+         WHERE f.status <> 3
+           AND f.paid_amount > 0
+           AND f.pay_date IS NOT NULL
+           AND f.pay_date >= ?
+           AND f.pay_date <= ?
+           AND f.category_id IN ({$scopeSql})
+    ", array_merge([$from, $to], $instalmentIds)) as $row) {
+        $instalmentCash = (float) $row->cash;
+    }
+
+    check("{$budget->title}: the instalment curve is the instalment cash",
+        money($instalmentCash), money($curve));
+
+    ok("{$budget->title}: and never exceeds all fee cash",
+        $curve <= $allCurve + 0.005);
 }
 
 /* The running total is the series, accumulated — not a second query. */
@@ -388,7 +465,11 @@ foreach ($budgets as $budget) {
     $from = substr((string) $budget->start_date, 0, 10);
     $c2 = $svc->forBudget($budget);
 
-    /* An invariant, not a snapshot. Pinning "11 people, 862,666.67" is how
+    /* Arrears carry the same scope as the cohort, and must: an unscoped
+       arrears figure beside a scoped headline is how a page shows a student
+       as fully paid on one line and in debt on the next.
+
+       An invariant, not a snapshot. Pinning "11 people, 862,666.67" is how
        ledger_health_test broke the first time somebody took a payment: the
        figure was right and the assertion was still wrong. What cannot change
        is that every franc of arrears is on a fee assigned before the window
@@ -407,13 +488,14 @@ foreach ($budgets as $budget) {
               LEFT JOIN student_enrolls se ON se.id = f.student_enroll_id
              WHERE f.status <> 3
                AND f.assign_date < ?
+               AND f.category_id IN ({$scopeSql})
                AND COALESCE(se.student_id, f.applicant_id) IS NOT NULL
              GROUP BY CASE WHEN se.student_id IS NOT NULL
                            THEN CONCAT('s', se.student_id)
                            ELSE CONCAT('a', f.applicant_id) END
             HAVING owed > 0.005
           ) t
-    ", [$from])[0];
+    ", array_merge([$from], $instalmentIds))[0];
 
     check("{$budget->title}: arrears people", (int) $expected->people, $c2['arrears']['people']);
     check("{$budget->title}: arrears amount", money($expected->amount), money($c2['arrears']['amount']));
@@ -436,32 +518,103 @@ echo "\n== The breakdowns agree with the whole ==\n";
 
 $c = $svc->forBudget($current);
 
-/* Category covers every fee in the window, so its billed total is the window's
-   billed total INCLUDING the unattributable fees — which is why this is not
-   compared against the people figures. */
-$windowBilled = (float) DB::table('fees')
-    ->where('status', '<>', 3)
-    ->whereBetween('assign_date', [$c['window']['from'], $c['window']['to']])
-    ->sum(DB::raw('fee_amount - COALESCE(discount_amount,0) + COALESCE(fine_amount,0)'));
+/* The two breakdowns answer to two different wholes, and that is the point of
+   the scope rather than an inconsistency:
+
+     - by_category is UNSCOPED, so it must account for every fee in the window.
+       It is the page's record of what the counts leave out, and a row missing
+       from it is money that has disappeared from the screen entirely.
+     - by_programme is SCOPED, so it must account for the instalments only.
+
+   Asserting both against their own whole is what would catch the scope being
+   applied to one and forgotten on the other. */
+$billedIn = function (?array $categoryIds) use ($c) {
+    $q = DB::table('fees')
+        ->where('status', '<>', 3)
+        ->whereBetween('assign_date', [$c['window']['from'], $c['window']['to']]);
+
+    if ($categoryIds !== null) {
+        $q->whereIn('category_id', $categoryIds);
+    }
+
+    return (float) $q->sum(DB::raw('fee_amount - COALESCE(discount_amount,0) + COALESCE(fine_amount,0)'));
+};
+
+$countIn = function (?array $categoryIds) use ($c) {
+    $q = DB::table('fees')
+        ->where('status', '<>', 3)
+        ->whereBetween('assign_date', [$c['window']['from'], $c['window']['to']]);
+
+    if ($categoryIds !== null) {
+        $q->whereIn('category_id', $categoryIds);
+    }
+
+    return $q->count();
+};
 
 check('the fee categories account for every fee billed in the window',
-    money($windowBilled),
+    money($billedIn(null)),
     money(array_sum(array_column($c['by_category'], 'due'))));
 
-check('the programmes account for every fee billed in the window',
-    money($windowBilled),
+check('the programmes account for every INSTALMENT billed in the window',
+    money($billedIn($instalmentIds)),
     money(array_sum(array_column($c['by_programme'], 'due'))));
 
-$windowFees = DB::table('fees')
-    ->where('status', '<>', 3)
-    ->whereBetween('assign_date', [$c['window']['from'], $c['window']['to']])
-    ->count();
-
 check('and every fee is counted exactly once by category',
-    $windowFees, array_sum(array_column($c['by_category'], 'fees')));
+    $countIn(null), array_sum(array_column($c['by_category'], 'fees')));
 
-check('and exactly once by programme',
-    $windowFees, array_sum(array_column($c['by_programme'], 'fees')));
+check('and every instalment exactly once by programme',
+    $countIn($instalmentIds), array_sum(array_column($c['by_programme'], 'fees')));
+
+/* The scope is reported as well as applied: the page states what it left out,
+   and a figure the page states is a figure that has to be right. */
+check('the excluded total is everything the scope dropped',
+    money($billedIn(null) - $billedIn($instalmentIds)),
+    money($c['scope']['excluded']['billed']));
+
+check('and the excluded fee count agrees',
+    $countIn(null) - $countIn($instalmentIds),
+    $c['scope']['excluded']['fees']);
+
+/* Every category appears, each marked, and only the instalments are marked.
+   Without this a future scope change could mark the wrong rows and the table
+   would still add up. */
+$marked = [];
+$unmarked = [];
+
+foreach ($c['by_category'] as $row) {
+    if ($row['in_scope']) {
+        $marked[] = $row['category'];
+    } else {
+        $unmarked[] = $row['category'];
+    }
+}
+
+ok('the category table marks the counted rows', count($marked) > 0);
+ok('and leaves the rest unmarked rather than hiding them', count($unmarked) > 0);
+
+$markedAreInstalments = true;
+foreach ($marked as $title) {
+    $lower = strtolower($title);
+    if (!str_contains($lower, 'instalment') && !str_contains($lower, 'installment')) {
+        $markedAreInstalments = false;
+    }
+}
+ok('and nothing but an instalment is ever marked as counted', $markedAreInstalments);
+
+/* Counted rows lead, so the reader meets the figures that feed the headline
+   before the ones that do not. */
+$seenUnmarked = false;
+$orderOk = true;
+
+foreach ($c['by_category'] as $row) {
+    if (!$row['in_scope']) {
+        $seenUnmarked = true;
+    } elseif ($seenUnmarked) {
+        $orderOk = false;
+    }
+}
+ok('the counted categories are listed before the uncounted ones', $orderOk);
 
 /* Worst first, so the row that needs chasing is the row you read. */
 $rates = array_column($c['by_programme'], 'rate');
@@ -469,10 +622,26 @@ $sorted = $rates;
 sort($sorted);
 check('programmes are ranked worst collection rate first', $sorted, $rates);
 
-$catRates = array_column($c['by_category'], 'rate');
-$catSorted = $catRates;
-sort($catSorted);
-check('so are fee categories', $catSorted, $catRates);
+/* Categories are worst-first WITHIN each block, counted ones first — not
+   worst-first overall, which is what this would have asserted before the
+   scope existed. */
+$catRates = [];
+$catSorted = [];
+
+foreach ([true, false] as $inScope) {
+    $block = [];
+    foreach ($c['by_category'] as $row) {
+        if ($row['in_scope'] === $inScope) {
+            $block[] = $row['rate'];
+        }
+    }
+    $catRates = array_merge($catRates, $block);
+    sort($block);
+    $catSorted = array_merge($catSorted, $block);
+}
+
+check('so are fee categories, within the counted and uncounted blocks',
+    $catSorted, $catRates);
 
 /* A programme row's people count must never be zero while it carries fees —
    the bug that COUNT(DISTINCT student_id) produced on applicant fees. */
@@ -495,6 +664,7 @@ $debtorCount = DB::table('fees as f')
     ->leftJoin('student_enrolls as se', 'se.id', '=', 'f.student_enroll_id')
     ->whereRaw('COALESCE(se.student_id, f.applicant_id) IS NOT NULL')
     ->where('f.status', '<>', 3)
+    ->whereIn('f.category_id', $instalmentIds)
     ->whereBetween('f.assign_date', [$c['window']['from'], $c['window']['to']])
     ->groupByRaw("CASE WHEN se.student_id IS NOT NULL THEN CONCAT('s', se.student_id)
                        ELSE CONCAT('a', f.applicant_id) END")
@@ -514,10 +684,22 @@ check('the debtor list holds everybody who owes, up to its limit',
 echo "\n== Credit, cancellation and the edges ==\n";
 
 $enroll = DB::table('student_enrolls')->whereNotNull('student_id')->first();
-$category = DB::table('fees_categories')->first();
 
-ok('there is an enrolment and a category to build fixtures on',
+/* The fixtures must sit INSIDE the scope, or every assertion below passes for
+   the wrong reason: a fee in a category the section does not count moves no
+   figure, and "the service did not change" would then be a vacuous pass on
+   credit handling, cancellation and overpayment alike. The id is taken from
+   the suite's own resolution of the catalogue, not from the service. */
+$category = DB::table('fees_categories')->whereIn('id', $instalmentIds)->first();
+
+/* And the opposite fixture needs a category OUTSIDE the scope, to prove the
+   scope is doing anything at all. */
+$outsideCategory = DB::table('fees_categories')->whereIn('id', $otherIds)->first();
+
+ok('there is an enrolment and an instalment category to build fixtures on',
     $enroll !== null && $category !== null);
+ok('and a non-instalment category to test the scope against',
+    $outsideCategory !== null);
 
 $windowFrom = $c['window']['from'];
 $windowTo = $c['window']['to'];
@@ -560,7 +742,7 @@ try {
     ]);
 
     $withCredit = $svc->forBudget($current);
-    $mine = recompute($windowFrom, $windowTo);
+    $mine = recompute($windowFrom, $windowTo, $instalmentIds);
     $key = 's' . $enroll->student_id;
 
     /* 100,000 + 50,000 billed; 150,000 received, of which 50,000 was moved to
@@ -583,6 +765,102 @@ try {
 
     check('teeth: raw paid_amount overstates this pair by the moved credit',
         money(50000), money($raw - $net));
+
+    /* --- a fee outside the scope must move no count ----------------------
+       The direct test of what the scope is for. A resit fee is real money
+       and belongs on the page, but it is not what "has this student paid
+       their fees" asks, and before the scope existed it was enough to lift a
+       student out of "paid nothing at all" — 9 students on the 2026/2027
+       window read as 3 for exactly this reason. */
+    $beforeScope = $svc->forBudget($current);
+
+    $outsideId = DB::table('fees')->insertGetId([
+        'student_enroll_id' => $enroll->id,
+        // The non-instalment category, resolved by this suite from the
+        // catalogue, never from FeeCollection — a teeth check that widens
+        // the service's regex must not also move this fixture.
+        'category_id' => $outsideCategory->id,
+        'fee_amount' => 777000, 'fine_amount' => 0, 'discount_amount' => 0,
+        'paid_amount' => 0, 'assign_date' => $assign, 'due_date' => $assign,
+        'status' => 0,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $afterScope = $svc->forBudget($current);
+
+    check('a fee outside the scope changes nothing billed',
+        money($beforeScope['students']['billed']), money($afterScope['students']['billed']));
+    check('nor anything outstanding',
+        money($beforeScope['students']['outstanding']), money($afterScope['students']['outstanding']));
+    check('nor who has paid in full',
+        $beforeScope['students']['full'], $afterScope['students']['full']);
+    check('nor who has paid nothing at all',
+        $beforeScope['students']['none'], $afterScope['students']['none']);
+    check('nor the collection rate',
+        $beforeScope['students']['rate'], $afterScope['students']['rate']);
+
+    /* But it is NOT invisible. Dropping it from the counts and dropping it
+       from the page are different things, and only the first was asked for. */
+    check('but the page still reports it among what was left out',
+        money($beforeScope['scope']['excluded']['billed'] + 777000),
+        money($afterScope['scope']['excluded']['billed']));
+
+    $outsideShown = false;
+    foreach ($afterScope['by_category'] as $row) {
+        if ($row['category'] === $outsideCategory->title) {
+            $outsideShown = !$row['in_scope'];
+        }
+    }
+    ok('and lists its category, marked as not counted', $outsideShown);
+
+    DB::table('fees')->where('id', $outsideId)->delete();
+
+    /* --- a student who has paid ONLY a non-instalment fee ----------------
+       The case the scope exists to get right, written as a whole person
+       rather than as an amount: somebody billed an instalment they have not
+       touched, who has settled a resit, must read as having paid nothing. */
+    $resitOnly = DB::table('student_enrolls')
+        ->whereNotNull('student_id')
+        ->where('student_id', '<>', $enroll->student_id)
+        ->whereNotExists(function ($q) use ($windowFrom, $windowTo) {
+            $q->select(DB::raw(1))->from('fees')
+              ->whereColumn('fees.student_enroll_id', 'student_enrolls.id')
+              ->whereBetween('fees.assign_date', [$windowFrom, $windowTo]);
+        })
+        ->first();
+
+    if ($resitOnly !== null) {
+        $unpaidInstalment = DB::table('fees')->insertGetId([
+            'student_enroll_id' => $resitOnly->id, 'category_id' => $category->id,
+            'fee_amount' => 500000, 'fine_amount' => 0, 'discount_amount' => 0,
+            'paid_amount' => 0, 'assign_date' => $assign, 'due_date' => $assign,
+            'status' => 0, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $paidResit = DB::table('fees')->insertGetId([
+            'student_enroll_id' => $resitOnly->id, 'category_id' => $outsideCategory->id,
+            'fee_amount' => 5000, 'fine_amount' => 0, 'discount_amount' => 0,
+            'paid_amount' => 5000, 'assign_date' => $assign, 'due_date' => $assign,
+            'pay_date' => $assign, 'status' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $resitView = $svc->forBudget($current);
+
+        check('a student who has settled only a resit has paid NOTHING at all',
+            $beforeScope['students']['none'] + 1, $resitView['students']['none']);
+        check('and is not counted as partly paid',
+            $beforeScope['students']['part'], $resitView['students']['part']);
+
+        /* Teeth, stated as the arithmetic rather than as a claim: counting
+           every category, this same person lands in 'part'. That is the
+           answer the page used to give. */
+        $pooled = 5000 / (500000 + 5000);
+        ok('teeth: unscoped, that same person would read as partly paid',
+            $pooled > 0 && $pooled < 1);
+
+        DB::table('fees')->whereIn('id', [$unpaidInstalment, $paidResit])->delete();
+    }
 
     /* --- a cancelled fee must move nothing ------------------------------- */
     $before = $svc->forBudget($current);
@@ -830,8 +1108,116 @@ foreach ([
     ok("the screen carries '{$heading}'", strpos($html, $heading) !== false);
 }
 
-/* The figures on the page are the figures from the service. */
+/* The scope is on the screen, not only in the service. A page that applies a
+   filter without naming it is a page that quietly answers a question nobody
+   asked, and the reader has no way to tell. */
 $c = $svc->forBudget($current);
+
+foreach ($c['scope']['names'] as $name) {
+    ok("the screen names '{$name}' as a fee it counted",
+        strpos($html, e($name)) !== false);
+}
+
+ok('the screen marks which categories feed the counts',
+    strpos($html, __('Counted above')) !== false);
+
+if ($c['scope']['excluded']['fees'] > 0) {
+    ok('and states what it left out, in money',
+        strpos($html, e(__('Not counted above: :amount', [
+            'amount' => number_format($c['scope']['excluded']['billed'])]))) !== false);
+}
+
+/* The uncounted categories are still on the page. This is the assertion that
+   would fail if somebody "tidied up" by scoping the category table too. */
+$uncounted = [];
+foreach ($c['by_category'] as $row) {
+    if (!$row['in_scope']) {
+        $uncounted[] = $row['category'];
+    }
+}
+
+$allShown = true;
+foreach ($uncounted as $name) {
+    if (strpos($html, e($name)) === false) {
+        $allShown = false;
+    }
+}
+ok('every uncounted category is still shown on the page', $allShown);
+
+/* --- admission fees are reported, and reported APART ---------------------- */
+$ad = $c['admissions'];
+
+if ($ad['has_data']) {
+    ok('the screen reports admission fees under their own heading',
+        strpos($html, __('Admission fees, counted on their own')) !== false);
+
+    /* The assertion that matters: not one person, franc or count of the
+       admission block appears inside the student block. Reported apart is
+       the whole requirement, and an accidental += would still produce a page
+       that looked right. */
+    $expectedStudents = recompute($c['window']['from'], $c['window']['to'], $instalmentIds);
+
+    check('the student counts do not absorb the admission people',
+        $expectedStudents['student']['total'], $c['students']['total']);
+    check('nor the admission money',
+        money($expectedStudents['student']['billed']), money($c['students']['billed']));
+
+    /* And the admission block is itself right, recomputed by the same
+       independent route with the other category set. */
+    $admissionCats = [];
+    foreach ($catalogue as $row) {
+        $title = strtolower((string) $row->title);
+        $isInstalment = str_contains($title, 'instalment') || str_contains($title, 'installment');
+        if (!$isInstalment && str_contains($title, 'admission')) {
+            $admissionCats[] = (int) $row->id;
+        }
+    }
+
+    check('the service scopes admissions to the admission categories',
+        $admissionCats, array_map('intval', $svc->admissionScope()['ids']));
+
+    $mineAdmissions = recompute($c['window']['from'], $c['window']['to'], $admissionCats);
+    $allAdmissions = [
+        'full' => $mineAdmissions['student']['full'] + $mineAdmissions['applicant']['full'],
+        'part' => $mineAdmissions['student']['part'] + $mineAdmissions['applicant']['part'],
+        'none' => $mineAdmissions['student']['none'] + $mineAdmissions['applicant']['none'],
+        'total' => $mineAdmissions['student']['total'] + $mineAdmissions['applicant']['total'],
+    ];
+
+    check('admission: paid in full', $allAdmissions['full'], $ad['full']);
+    check('admission: paid in part', $allAdmissions['part'], $ad['part']);
+    check('admission: paid nothing', $allAdmissions['none'], $ad['none']);
+    check('admission: people billed', $allAdmissions['total'], $ad['total']);
+
+    /* The two groups share no category, so no fee is counted twice. */
+    check('no category is both an instalment and an admission fee',
+        [], array_values(array_intersect($instalmentIds, $admissionCats)));
+}
+
+/* --- the programme ranking carries no row nobody can explain --------------
+   Checked on EVERY budget, not on the current one. The dangling fee on this
+   install was assigned in 2025/2026, so a check that looked only at the
+   budget the page happens to open on passed while the row it was written to
+   catch was still on the screen - which is exactly what it did the first
+   time this was written. */
+$ghostRows = [];
+
+foreach ($budgets as $budget) {
+    foreach ($svc->forBudget($budget)['by_programme'] as $row) {
+        if ($row['people'] === 0) {
+            $ghostRows[] = $budget->title . ': ' . $row['programme']
+                . ' (' . number_format($row['due']) . ')';
+        }
+    }
+}
+
+/* A programme row with money and zero people is a fee whose enrolment was
+   deleted, landing under "No programme recorded". It is unreadable in a
+   report and it puts the same money on the page twice, since it is already
+   counted as unattributable. */
+check('no programme row shows money against nobody, on any budget', [], $ghostRows);
+
+/* The figures on the page are the figures from the service. */
 
 ok('the student counts are printed on the page',
     strpos($html, '>' . number_format($c['students']['full']) . '<') !== false);
@@ -896,8 +1282,50 @@ foreach ([[], ['data:image/png;base64,AAAA']] as $i => $charts) {
     ok('the pack renders ' . ($i ? 'with a captured chart' : 'with no charts at all'),
         strpos($packHtml, __('Who has paid, and who has not')) !== false);
 
+    /* The Students row, not the "Together" total: under the instalment scope
+       no applicant holds a fee on this install, and the pack drops both the
+       applicant row and the total rather than printing the same figures three
+       times. Asserting on "Together" would pin the pack to a data condition
+       instead of to its content. */
     ok('and carries the cohort table either way',
-        strpos($packHtml, __('Together')) !== false);
+        strpos($packHtml, __('Students')) !== false
+        && strpos($packHtml, __('Nothing')) !== false);
+
+    /* The total row is conditional, so assert the condition rather than the
+       row: present exactly when there is a second cohort to add up. */
+    ok('and shows a combined total only when there are two cohorts to combine',
+        (strpos($packHtml, __('Together')) !== false) === ($c['applicants']['total'] > 0));
+
+    /* The pack states the scope. A pack that printed the counts without
+       saying which fees they cover is the document somebody reads in a board
+       meeting and misquotes. */
+    ok('and names the fees it counted',
+        strpos($packHtml, $c['scope']['names'][0]) !== false);
+
+    ok('and says what it left out',
+        $c['scope']['excluded']['fees'] === 0
+        || strpos($packHtml, __('Counted')) !== false);
+
+    /* The repair list is for the screen, not for a board meeting. The pack
+       still has to account for the money, so the table goes and a sentence
+       stays: dropping both would make the pack's totals quietly short. */
+    ok('the pack leaves the repair list off',
+        strpos($packHtml, __('Fees that belong to nobody')) === false);
+
+    if ($c['unattributed']['count'] > 0) {
+        ok('but still accounts for the money in a sentence',
+            strpos($packHtml, __('A note on the totals: :count fee(s) worth :amount, of which :owed is still outstanding, are attached to enrolments that no longer exist and so belong to no named person. They are in none of the figures above. They are listed on the analysis screen for correction.', [
+                'count' => number_format($c['unattributed']['count']),
+                'amount' => number_format($c['unattributed']['amount']),
+                'owed' => number_format($c['unattributed']['owed']),
+            ])) !== false);
+    }
+
+    /* Admission fees reach the pack, under their own heading. */
+    if ($c['admissions']['has_data']) {
+        ok('the pack reports admission fees apart',
+            strpos($packHtml, __('Admission fees, counted on their own')) !== false);
+    }
 }
 
 /* --- the styling stays on this page -------------------------------------- */

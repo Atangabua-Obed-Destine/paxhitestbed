@@ -42,7 +42,14 @@
     <div class="viz-head">
         <h5>{{ __('Who has paid, and who has not') }}</h5>
         <p class="sub">
-            {{ __('Students with fees assigned in this budget year, counted as people rather than as fees: a student with three instalments and two paid is one student who is partly paid.') }}
+            {{ __('Students billed a :scope in this budget year, counted as people rather than as fees: a student with both instalments and one paid is one student who is partly paid.', [
+                'scope' => implode(' ' . __('or') . ' ', $c['scope']['names'])]) }}
+            @if(!$c['scope']['matched'])
+                {{-- Only shown when the catalogue has no instalment category to
+                     match. Silence here would mean the section reported on
+                     every fee while its headings said instalments. --}}
+                <strong>{{ __('No instalment fee category was found in the catalogue, so this section is counting every fee instead.') }}</strong>
+            @endif
         </p>
     </div>
 
@@ -134,6 +141,23 @@
         </div>
     </div>
 
+    {{-- What the scope leaves out. Stated, not dropped: resit and admission
+         fees are real money, they are simply not what "has the student paid
+         their fees" asks, and a section that omitted them without a word
+         would be the kind of quiet omission this page exists to prevent. --}}
+    @if($c['scope']['matched'] && $c['scope']['excluded']['fees'] > 0)
+    <div class="fc-note">
+        <i class="fas fa-filter"></i>
+        <div>
+            <strong>{{ __('Not counted above: :amount', ['amount' => number_format($c['scope']['excluded']['billed'])]) }}</strong>
+            {{ trans_choice('across :count other fee|across :count other fees', $c['scope']['excluded']['fees'], ['count' => $c['scope']['excluded']['fees']]) }}
+            — {{ __('resit fees, admission fees and anything else that is not an instalment, of which :owed is still owed.', [
+                'owed' => number_format($c['scope']['excluded']['owed'])]) }}
+            <span class="fc-aside">{{ __('They are broken out in full under "Collection by fee" below. A student who has settled a small resit fee but neither instalment belongs in "paid nothing at all", which is why they are kept out of the counts.') }}</span>
+        </div>
+    </div>
+    @endif
+
     {{-- Brought forward. Without this the page would show a clean year while
          last session's debts sat uncollected and invisible. --}}
     @if($c['arrears']['people'] > 0)
@@ -181,6 +205,75 @@
     @endif
 </div>
 
+{{-- ---- Admission fees, counted apart --------------------------------------
+     Its own card, deliberately, and placed AFTER the student figures so it
+     can never be mistaken for part of them. An admission fee is paid by
+     somebody who is not a student yet; adding the two was measured to turn
+     "11 students, 8.5% collected" into "37 people, 25 fully paid".
+--}}
+@if($c['admissions']['has_data'])
+@php $ad = $c['admissions']; @endphp
+<div class="viz-card">
+    <div class="viz-head">
+        <h5>{{ __('Admission fees, counted on their own') }}</h5>
+        <p class="sub">
+            {{ __('People billed a :scope in this budget year. These are mostly applicants, who are not students yet — so they are counted here and nowhere else on this page. None of these figures are part of the student figures above.', [
+                'scope' => implode(' ' . __('or') . ' ', $ad['names'])]) }}
+        </p>
+    </div>
+
+    <div class="viz-body">
+        <div class="fc-split">
+            <div class="fc-stat fc-full">
+                <div class="value">{{ number_format($ad['full']) }}</div>
+                <div class="label">{{ __('Paid in full') }}</div>
+                <div class="of">{{ __('of :total people billed', ['total' => number_format($ad['total'])]) }}</div>
+            </div>
+            <div class="fc-stat fc-part">
+                <div class="value">{{ number_format($ad['part']) }}</div>
+                <div class="label">{{ __('Paid in part') }}</div>
+                <div class="of">{{ __('some money received, a balance left') }}</div>
+            </div>
+            <div class="fc-stat fc-none">
+                <div class="value">{{ number_format($ad['none']) }}</div>
+                <div class="label">{{ __('Paid nothing at all') }}</div>
+                <div class="of">{{ __('not one franc received') }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tiles fc-tiles">
+        <div class="tile">
+            <div class="label">{{ __('Billed this year') }}</div>
+            <div class="value">{{ number_format($ad['billed']) }}</div>
+        </div>
+        <div class="tile in">
+            <div class="label">{{ __('Collected') }}</div>
+            <div class="value">{{ number_format($ad['collected']) }}</div>
+        </div>
+        <div class="tile {{ $ad['outstanding'] > 0 ? 'deficit' : '' }}">
+            <div class="label">{{ __('Still outstanding') }}</div>
+            <div class="value">{{ number_format($ad['outstanding']) }}</div>
+        </div>
+        <div class="tile">
+            <div class="label">{{ __('Collection rate, admissions') }}</div>
+            <div class="value">{{ number_format($ad['rate'], 1) }}%</div>
+        </div>
+    </div>
+
+    <div class="viz-read">
+        <div>
+            <h6>{{ __('How to read it') }}</h6>
+            <p>{{ __('One line per person, exactly as above, but over admission fees only. An unpaid admission fee is an admission that has not completed rather than a student in arrears, which is why it is never added to the student counts.') }}</p>
+        </div>
+        <div>
+            <h6>{{ __('What to do with it') }}</h6>
+            <p>{{ __('Read this with the admissions office rather than with the chasing list: somebody who has not paid to come in is a place that is still open, not a debt.') }}</p>
+        </div>
+    </div>
+</div>
+@endif
+
 {{-- ---- Collection month by month ------------------------------------------
      The same arithmetic as the daybook's fee rows — cash received, dated by
      pay_date — so this curve and the money-in bars above it cannot disagree.
@@ -190,12 +283,13 @@
     <div class="viz-head">
         <h5>{{ __('Fee collection, month by month') }}</h5>
         <p class="sub">
-            {{ __('All fee cash received in this budget year, and the running total.') }}
-            {{ __('This is a wider figure than "Collected" above, deliberately: it counts every franc that came in during the year, including payments against earlier years\' fees, while the figures above cover only what was billed this year. That is also what makes it tie to the money-in bars on this page.') }}
+            {{ __('Instalment cash received in this budget year, and the running total.') }}
+            {{ __('This is a wider figure than "Collected" above, deliberately: it counts every franc of instalment money that came in during the year, including instalments billed in earlier years, while the figures above cover only what was billed this year.') }}
+            {{ __('The table below carries a second column for all fee cash, instalments and everything else together — that is the figure that ties to the money-in bars on this page.') }}
         </p>
     </div>
     <div class="key">
-        <span><i style="background: var(--series-in)"></i>{{ __('Received in the month') }}</span>
+        <span><i style="background: var(--series-in)"></i>{{ __('Instalments received in the month') }}</span>
         <span><i style="background: var(--text-secondary)"></i>{{ __('Running total') }}</span>
     </div>
     <div class="viz-body"><div class="viz-canvas"><canvas id="chartFeeCollection"></canvas></div></div>
@@ -205,8 +299,9 @@
         <table>
             <thead><tr>
                 <th>{{ __('Month') }}</th>
-                <th class="n">{{ __('Received') }}</th>
+                <th class="n">{{ __('Instalments received') }}</th>
                 <th class="n">{{ __('Running total') }}</th>
+                <th class="n">{{ __('All fee cash') }}</th>
             </tr></thead>
             <tbody>
             @foreach($c['by_month'] as $m)
@@ -214,6 +309,7 @@
                     <td>{{ $m['label'] }}</td>
                     <td class="n">{{ number_format($m['cash']) }}</td>
                     <td class="n">{{ number_format($m['cumulative']) }}</td>
+                    <td class="n">{{ number_format($m['all_cash']) }}</td>
                 </tr>
             @endforeach
             </tbody>
@@ -292,12 +388,16 @@
 <div class="viz-card">
     <div class="viz-head">
         <h5>{{ __('Collection by fee') }}</h5>
-        <p class="sub">{{ __('Which fee is lagging — usually the instalment that falls due mid-year.') }}</p>
+        <p class="sub">
+            {{ __('Every fee category billed this year, not only the instalments — this is where the money the counts above leave out stays visible.') }}
+            {{ __('The counted ones come first and are marked; the rest are shown so nothing disappears.') }}
+        </p>
     </div>
     <div class="viz-body">
         <table class="rank-table fc-rank mb-0">
             <thead><tr>
                 <th>{{ __('field_fees_category') }}</th>
+                <th>{{ __('Counted above') }}</th>
                 <th class="rank-num">{{ __('Fees') }}</th>
                 <th class="rank-num">{{ __('Billed') }}</th>
                 <th class="rank-num">{{ __('Collected') }}</th>
@@ -308,6 +408,15 @@
             @foreach($c['by_category'] as $row)
                 <tr>
                     <td>{{ $row['category'] }}</td>
+                    <td>
+                        {{-- A word, not a tick: identity is never carried by a
+                             mark the reader has to go and decode. --}}
+                        @if($row['in_scope'])
+                            <span class="fc-tag">{{ __('Counted') }}</span>
+                        @else
+                            <span class="fc-aside">{{ __('Not counted') }}</span>
+                        @endif
+                    </td>
                     <td class="rank-num">{{ number_format($row['fees']) }}</td>
                     <td class="rank-num">{{ number_format($row['due']) }}</td>
                     <td class="rank-num">{{ number_format($row['collected']) }}</td>
@@ -328,6 +437,7 @@
         <div>
             <h6>{{ __('How to read it') }}</h6>
             <p>{{ __('This counts fees, not people, because a fee category is a property of the fee. A low rate on the second instalment with a high one on the first is the ordinary shape of a year in progress, not a problem.') }}</p>
+            <p>{{ __('Only the rows marked "Counted" feed the three figures at the top of this section. The others are shown because they are money the institution is owed, but a resit fee is a separate transaction and an admission fee belongs to somebody who is not a student yet — neither answers "has this student paid their fees".') }}</p>
         </div>
         <div>
             <h6>{{ __('What to do with it') }}</h6>
@@ -389,17 +499,23 @@
 </div>
 @endif
 
-{{-- ---- Fees that belong to nobody ----------------------------------------
+{{-- ---- Records to repair ---------------------------------------------------
      Shown for the same reason the page shows money on no budget line: a
      figure the totals cannot include is a question for the Bursar, and
      leaving it out would make the page quietly wrong rather than visibly
      incomplete.
---}}
+
+     It is kept OFF the printed pack. This is a repair task for whoever keeps
+     the records, not a figure for a board meeting, and the pack carries a
+     single sentence so its totals are still honest. --}}
 @if($c['unattributed']['count'] > 0)
-<div class="viz-card">
+<div class="viz-card fc-repair">
     <div class="viz-head">
-        <h5>{{ __('Fees that belong to nobody') }}</h5>
-        <p class="sub">{{ __('These cannot be attributed to a student or an applicant, so they are in none of the figures above. They are shown here rather than dropped.') }}</p>
+        <h5>{{ __('Records to repair: fees with no student attached') }}</h5>
+        <p class="sub">
+            {{ __('Not a collection figure. Each of these is a fee whose enrolment record was deleted while the fee itself was left behind, so the system no longer knows whose fee it is.') }}
+            {{ __('They are in none of the figures above, and they are left out of the printed pack — but they are money on the books, so they are shown here for correction rather than dropped.') }}
+        </p>
     </div>
     <div class="viz-body">
         <table class="rank-table fc-rank mb-0">
