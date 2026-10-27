@@ -251,8 +251,25 @@ ok('the chat launcher clears the bar',
 ok('the install card clears the bar',
     (bool) preg_match('~\.pwa-install--floating\s*\{[^}]*calc\(var\(--app-nav-h\)~s', $shell));
 
-// One number, read by everything that has to clear the bar.
-check('there is one bar height', 1, substr_count($shell, '--app-nav-h:'));
+/*
+ * The height may be redefined — landscape wants a shorter bar — but nothing
+ * may hardcode it. Everything that has to clear the bar reads the variable, so
+ * changing it in one place moves everything that depends on it.
+ */
+ok('the bar height is a variable', str_contains($shell, '--app-nav-h:'));
+ok('and a landscape phone gets a shorter one',
+    (bool) preg_match('~@media \(orientation: landscape\)[^{]*\{[^}]*--app-nav-h:~s', $shell));
+
+preg_match_all('~(#pax-chat|\.pwa-install--floating|body|\.navbar-content)\s*\{([^}]*)\}~', $shell, $clearers, PREG_SET_ORDER);
+
+foreach ($clearers as $rule) {
+    if (!str_contains($rule[2], 'bottom') && !str_contains($rule[2], 'padding')) {
+        continue;
+    }
+
+    ok(sprintf('%-24s clears the bar by variable, not by number', $rule[1]),
+        str_contains($rule[2], '--app-nav-h') || str_contains($rule[2], '--app-nav-total'));
+}
 
 echo PHP_EOL . "=== 6. thumbs can reach it ===" . PHP_EOL;
 
@@ -320,6 +337,71 @@ foreach (['/student', '/student/class-routine', '/student/exam-results', '/stude
     ok(sprintf('%-30s has the bar', $url), $barOf($html) !== '');
     ok(sprintf('%-30s resolves its labels', $url), !str_contains($html, 'nav_group_'));
 }
+
+echo PHP_EOL . "=== 10. it holds up at small sizes and over dialogs ===" . PHP_EOL;
+
+/*
+ * Four defects found by reading the stylesheet against the theme's own, none
+ * of which is visible from markup and all of which would have shipped:
+ *
+ *   - the bar sat at z-index 10600 while the portal's .modal sits at 1072, so
+ *     it floated on top of every dialog, the More sheet included;
+ *   - the Fees dot was absolutely positioned with nothing positioned to anchor
+ *     it, so it resolved against the bar and landed at its far left;
+ *   - More is a <button>, which inherits no font family, so its label was set
+ *     in the browser's UI font beside four links in the theme's;
+ *   - nothing stopped a longer label wrapping to a second line, which makes
+ *     the bar taller than the padding the page was given and hides the last
+ *     row of every screen.
+ */
+
+// The bar leaves while a dialog is open. Lowering it instead would put it
+// under the chat launcher, which it has to stay above.
+ok('the bar yields to an open dialog',
+    (bool) preg_match('~body\.modal-open\s+\.app-nav\s*\{[^}]*transform:\s*translateY\(100%\)~s', $shell));
+ok('and it moves rather than blinking', str_contains($shell, '.app-nav {') && (bool) preg_match('~\.app-nav\s*\{[^}]*transition:[^}]*transform~s', $shell));
+
+// Confirm the clash this guards against is real, from the theme's own file.
+$themeCss = file_get_contents($base . '/public/dashboard/css/style.css');
+preg_match('~^\.modal \{\s*z-index:\s*(\d+)~m', $themeCss, $modalZ);
+preg_match('~\.app-nav\s*\{[^}]*z-index:\s*(\d+)~s', $shell, $navZ);
+
+ok('the theme still puts dialogs below the bar', isset($modalZ[1], $navZ[1])
+    && (int) $navZ[1] > (int) $modalZ[1]);
+
+// The dot needs something positioned to hang from.
+ok('the icon is a positioning context',
+    (bool) preg_match('~\.app-tab-ico\s*\{[^}]*position:\s*relative~s', $shell));
+ok('and the dot is placed on it, not translated from nowhere',
+    (bool) preg_match('~\.app-tab-dot\s*\{[^}]*top:[^}]*right:~s', $shell));
+
+// A button inherits no font family.
+ok('the More button uses the page font',
+    (bool) preg_match('~\.app-tab\s*\{[^}]*font-family:\s*inherit~s', $shell));
+
+// One line, whatever the translation.
+ok('a long label is clipped, not wrapped',
+    (bool) preg_match('~\.app-tab > span:last-child\s*\{[^}]*white-space:\s*nowrap~s', $shell));
+ok('and ellipsised rather than cut mid-word',
+    (bool) preg_match('~\.app-tab > span:last-child\s*\{[^}]*text-overflow:\s*ellipsis~s', $shell));
+
+// The sizes a phone actually is.
+ok('small phones get a smaller bar',
+    (bool) preg_match('~@media \(max-width: 359px\)~', $shell));
+ok('a phone on its side gets a shorter one',
+    (bool) preg_match('~@media \(orientation: landscape\)~', $shell));
+
+// vh is measured with the address bar hidden, so a sheet at 86vh can be
+// taller than the screen. dvh is honest; the vh line stays as the fallback.
+preg_match_all('~max-height:\s*(\d+)(vh|dvh)~', $shell, $heights, PREG_SET_ORDER);
+$units = array_column($heights, 2);
+
+ok('sheets have a vh fallback', in_array('vh', $units, true));
+ok('and an honest dvh on top of it', in_array('dvh', $units, true));
+
+// The hamburger sidebar still exists on a phone and is full height.
+ok('the sidebar clears the bar too',
+    (bool) preg_match('~\.navbar-content\s*\{[^}]*padding-bottom:\s*var\(--app-nav-total\)~s', $shell));
 
 echo PHP_EOL . "=== nothing was left behind ===" . PHP_EOL;
 

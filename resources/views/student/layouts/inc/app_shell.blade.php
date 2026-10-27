@@ -46,7 +46,20 @@
             -webkit-backdrop-filter: saturate(180%) blur(14px);
             backdrop-filter: saturate(180%) blur(14px);
             border-top: 1px solid var(--app-rule);
+            transition: transform .25s cubic-bezier(.32, .72, 0, 1);
         }
+
+        /*
+         * Out of the way while a dialog is open.
+         *
+         * The portal's .modal sits at z-index 1072 and the bar at 10600, so
+         * the bar floated on top of every dialog — including the More sheet
+         * it opens itself, covering its own footer. Lowering the bar instead
+         * would put it under the chat launcher (10500), which it has to stay
+         * above. So it leaves: the bar slides down as the sheet rises, which
+         * is what it should do anyway.
+         */
+        body.modal-open .app-nav { transform: translateY(100%); }
 
         .app-tab {
             flex: 1 1 0;
@@ -61,6 +74,10 @@
             text-decoration: none;
             background: none;
             border: 0;
+            /* More is a <button>, and a button inherits no font family. Without
+               this its label rendered in the browser's own UI font while the
+               four links beside it used the theme's. */
+            font-family: inherit;
             font-size: .66rem;
             font-weight: 600;
             letter-spacing: .01em;
@@ -71,7 +88,35 @@
         }
         .app-tab:hover { color: var(--app-muted); text-decoration: none; }
 
+        /* One line, always. A longer translation — "Résultats", "Paiements" —
+           wrapping to two lines would push the bar taller than the padding the
+           page was given, and hide the last row of every screen. */
+        .app-tab > span:last-child {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Five tabs on a 320px screen is 64px each. */
+        @media (max-width: 359px) {
+            .app-tab { font-size: .6rem; }
+            .app-tab-ico { width: 38px; }
+        }
+
+        /* A phone on its side has little height to spare, and the bar should
+           not take 58px of it. */
+        @media (orientation: landscape) and (max-height: 460px) {
+            :root { --app-nav-h: 46px; }
+            .app-tab { font-size: .58rem; gap: 1px; }
+            .app-tab-ico { height: 20px; }
+        }
+
         .app-tab-ico {
+            /* The dot is absolutely positioned against this. Without it the
+               dot resolved against .app-nav — the nearest positioned ancestor
+               — and sat at the far left of the bar instead of on the icon. */
+            position: relative;
             display: flex; align-items: center; justify-content: center;
             width: 46px; height: 26px; border-radius: 13px;
             font-size: 1rem; line-height: 1;
@@ -89,7 +134,7 @@
 
         .app-tab-dot {
             position: absolute;
-            transform: translate(13px, -9px);
+            top: -1px; right: 9px;
             width: 8px; height: 8px; border-radius: 50%;
             background: var(--app-bad);
             box-shadow: 0 0 0 2px #fff;
@@ -110,6 +155,7 @@
             border: 0;
             border-radius: 18px 18px 0 0;
             max-height: 86vh;
+            max-height: 86dvh;
             padding-bottom: env(safe-area-inset-bottom, 0px);
         }
         .app-sheet .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -176,6 +222,7 @@
             border: 0;
             border-radius: 18px 18px 0 0;
             max-height: 88vh;
+            max-height: 88dvh;
             padding-bottom: env(safe-area-inset-bottom, 0px);
         }
         .modal:not(.app-sheet) .modal-body {
@@ -191,6 +238,10 @@
         /* A full-width action is easier to hit than two small ones in a row. */
         .modal:not(.app-sheet) .modal-footer { padding-bottom: 1rem; }
         .modal:not(.app-sheet) .modal-footer .btn { min-height: 44px; }
+
+        /* The hamburger sidebar is still reachable on a phone, and it is
+           fixed and full height, so its last item sat behind the bar. */
+        .pcoded-navbar .navbar-content { padding-bottom: var(--app-nav-total); }
 
         /* ---- clearing the bar ------------------------------------------- */
 
