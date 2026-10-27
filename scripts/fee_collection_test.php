@@ -1347,6 +1347,186 @@ foreach (['/admin/daybook', '/admin/daybook/summary'] as $uri) {
 }
 
 /* ===================================================================
+ |  10b. Each instalment on its own, and each programme's three counts
+ |===================================================================*/
+
+echo "\n== each instalment, and each programme, counted on its own ==\n";
+
+$netSql = App\Models\Fee::netPaidSql('f');
+$dueSql = 'f.fee_amount - COALESCE(f.discount_amount,0) + COALESCE(f.fine_amount,0)';
+
+/* The expectation is built from raw SQL, one category at a time, and never by
+   asking the service a second question. */
+$instalmentCohort = function (string $from, string $to, int $categoryId) use ($netSql, $dueSql) {
+    $rows = DB::select("
+        SELECT CONCAT('s:', se.student_id) AS person,
+               SUM({$dueSql}) AS due, SUM({$netSql}) AS paid
+        FROM fees f
+        LEFT JOIN student_enrolls se ON se.id = f.student_enroll_id
+        WHERE f.status <> 3
+          AND f.category_id = ?
+          AND se.student_id IS NOT NULL
+          AND DATE(f.assign_date) >= ? AND DATE(f.assign_date) <= ?
+        GROUP BY person
+    ", [$categoryId, $from, $to]);
+
+    $out = ['full' => 0, 'part' => 0, 'none' => 0, 'total' => 0,
+            'billed' => 0.0, 'collected' => 0.0, 'outstanding' => 0.0];
+
+    foreach ($rows as $row) {
+        $due = (float) $row->due;
+        $paid = (float) $row->paid;
+
+        if ($paid <= 0.005) {
+            $out[$due <= 0.005 ? 'full' : 'none']++;
+        } else {
+            $out[$due - $paid <= 0.005 ? 'full' : 'part']++;
+        }
+
+        $out['total']++;
+        $out['billed'] += $due;
+        $out['collected'] += $paid;
+        $out['outstanding'] += max(0.0, $due - $paid);
+    }
+
+    return $out;
+};
+
+foreach ($budgets as $budget) {
+    $from = substr((string) $budget->start_date, 0, 10);
+    $to = substr((string) $budget->end_date, 0, 10);
+    $c = $svc->forBudget($budget);
+
+    check("{$budget->title}: one row per instalment category",
+        count($instalmentIds), count($c['by_instalment']));
+
+    /* Read aloud to a board, so "Second" must not print above "First". The
+       order is asserted from the NAMES, not from the ids that happen to
+       produce the right order on this install. */
+    $ordinals = [];
+    foreach ($c['by_instalment'] as $row) {
+        $lower = strtolower($row['category']);
+        $rank = PHP_INT_MAX;
+        foreach (['first' => 1, 'second' => 2, 'third' => 3, 'fourth' => 4, 'fifth' => 5] as $word => $n) {
+            if (strpos($lower, $word) !== false) {
+                $rank = $n;
+                break;
+            }
+        }
+        $ordinals[] = $rank;
+    }
+    $ordered = $ordinals;
+    sort($ordered);
+    check("{$budget->title}: instalments print in their stated order", $ordered, $ordinals);
+
+    $billedAcross = 0.0;
+
+    foreach ($c['by_instalment'] as $row) {
+        $mine = $instalmentCohort($from, $to, $row['category_id']);
+        $label = "{$budget->title}: {$row['category']}";
+
+        foreach (['full', 'part', 'none', 'total'] as $bucket) {
+            check("{$label} {$bucket}", $mine[$bucket], $row[$bucket]);
+        }
+
+        foreach (['billed', 'collected', 'outstanding'] as $figure) {
+            check("{$label} {$figure}", money($mine[$figure]), money($row[$figure]));
+        }
+
+        /* Self-consistent on its own line: the three counts are a partition of
+           the people that instalment was billed to. */
+        check("{$label}: the three counts are the students billed",
+            $row['total'], $row['full'] + $row['part'] + $row['none']);
+
+        $billedAcross += $row['billed'];
+    }
+
+    /* The counts do not add down, but the money must: every instalment fee has
+       exactly one category, so the rows partition the headline's money. This
+       is what stops the split from quietly losing or duplicating a fee. */
+    check("{$budget->title}: the instalment rows account for all the student money",
+        money($c['students']['billed']), money($billedAcross));
+
+    /* ---- the programme table's three counts ---- */
+    foreach ($c['by_programme'] as $row) {
+        check("{$budget->title}: {$row['programme']} counts add to its students",
+            $row['people'], $row['full'] + $row['part'] + $row['none']);
+    }
+
+    /* Recomputed per (person, programme) pair, which is the grouping the page
+       claims to use: a student enrolled in two programmes is counted once
+       under each, against what that programme billed them. */
+    $scopeIn = implode(',', array_fill(0, count($instalmentIds), '?'));
+    $pairs = DB::select("
+        SELECT se.program_id AS pid,
+               SUM({$dueSql}) AS due, SUM({$netSql}) AS paid
+        FROM fees f
+        LEFT JOIN student_enrolls se ON se.id = f.student_enroll_id
+        WHERE f.status <> 3
+          AND f.category_id IN ({$scopeIn})
+          AND COALESCE(se.student_id, f.applicant_id) IS NOT NULL
+          AND DATE(f.assign_date) >= ? AND DATE(f.assign_date) <= ?
+        GROUP BY se.program_id,
+                 CONCAT(CASE WHEN se.student_id IS NOT NULL THEN 's' ELSE 'a' END, ':',
+                        COALESCE(se.student_id, f.applicant_id))
+    ", array_merge($instalmentIds, [$from, $to]));
+
+    $mineProg = [];
+    foreach ($pairs as $pair) {
+        $key = $pair->pid === null ? 0 : (int) $pair->pid;
+        $mineProg[$key] = $mineProg[$key] ?? ['full' => 0, 'part' => 0, 'none' => 0];
+        $due = (float) $pair->due;
+        $paid = (float) $pair->paid;
+
+        if ($paid <= 0.005) {
+            $mineProg[$key][$due <= 0.005 ? 'full' : 'none']++;
+        } else {
+            $mineProg[$key][$due - $paid <= 0.005 ? 'full' : 'part']++;
+        }
+    }
+
+    foreach (['full', 'part', 'none'] as $bucket) {
+        check("{$budget->title}: programme column '{$bucket}' totals",
+            array_sum(array_column($mineProg, $bucket)),
+            array_sum(array_column($c['by_programme'], $bucket)));
+    }
+
+    /* The caveat the page prints has to be true of the data it prints it on. */
+    $progPeople = array_sum(array_column($c['by_programme'], 'people'));
+    ok("{$budget->title}: no student is lost between the programme rows and the headline",
+        $progPeople >= $c['students']['total']);
+}
+
+/* ---- teeth ---- */
+
+/* If by_instalment were scoped to the whole instalment set instead of to one
+   category at a time, every row would print the same pooled figures - the bug
+   this section was written to remove. */
+$teeth = $svc->forBudget($budgets->first());
+if (count($teeth['by_instalment']) > 1) {
+    $distinct = count(array_unique(array_map(
+        fn ($r) => $r['total'] . '/' . $r['full'] . '/' . $r['billed'],
+        $teeth['by_instalment']
+    )));
+
+    ok('teeth: the instalment rows differ from one another, so each is its own cohort',
+        $distinct > 1);
+}
+
+/* A person-level bucket on the programme table puts a dual-enrolled student in
+   one programme only, leaving the other with people > 0 and three zero counts.
+   That row was written once; this asserts it cannot come back. */
+$selfContradicting = [];
+foreach ($budgets as $budget) {
+    foreach ($svc->forBudget($budget)['by_programme'] as $row) {
+        if ($row['people'] > 0 && $row['full'] + $row['part'] + $row['none'] === 0) {
+            $selfContradicting[] = $budget->title . ': ' . $row['programme'];
+        }
+    }
+}
+check('teeth: no programme row shows students with none of them counted', [], $selfContradicting);
+
+/* ===================================================================
  |  11. Nothing was left behind
  |===================================================================*/
 

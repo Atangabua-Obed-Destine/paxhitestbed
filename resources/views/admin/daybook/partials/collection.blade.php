@@ -42,7 +42,7 @@
     <div class="viz-head">
         <h5>{{ __('Who has paid, and who has not') }}</h5>
         <p class="sub">
-            {{ __('Students billed a :scope in this budget year, counted as people rather than as fees: a student with both instalments and one paid is one student who is partly paid.', [
+            {{ __('Students billed a :scope in this budget year, counted as people rather than as fees. These three figures are the position ACROSS ALL INSTALMENTS TOGETHER: a student who has settled the first and not the second is one student who is partly paid. Each instalment is answered on its own in the table underneath.', [
                 'scope' => implode(' ' . __('or') . ' ', $c['scope']['names'])]) }}
             @if(!$c['scope']['matched'])
                 {{-- Only shown when the catalogue has no instalment category to
@@ -140,6 +140,57 @@
             </div>
         </div>
     </div>
+
+    {{-- Each instalment on its own. The figures above cannot answer "who has
+         not paid the first instalment", because they pool both: a student
+         fully paid on the first and absent on the second appears there as
+         "partly paid", which is the one description that lets a defaulter
+         pass unnamed. The denominators differ too — an instalment is only
+         counted against the people it was actually billed to — so the People
+         column does NOT add down to the total above. That is said on the
+         page, not just in this comment. --}}
+    @if(count($c['by_instalment']) > 0)
+    <div class="viz-body fc-sub">
+        <h6 class="fc-subhead">{{ __('The same students, one instalment at a time') }}</h6>
+        <p class="sub">
+            {{ __('Each row counts only the students that instalment was billed to, so the three counts answer "who has paid THIS instalment". The People column does not add down: the rows describe overlapping groups of different sizes. The money does add, and comes to the billed figure above.') }}
+        </p>
+        <table class="rank-table fc-rank mb-0">
+            <thead><tr>
+                <th>{{ __('Instalment') }}</th>
+                <th class="rank-num">{{ __('Students billed') }}</th>
+                <th class="rank-num">{{ __('Paid in full') }}</th>
+                <th class="rank-num">{{ __('Paid in part') }}</th>
+                <th class="rank-num">{{ __('Paid nothing') }}</th>
+                <th class="rank-num">{{ __('Billed') }}</th>
+                <th class="rank-num">{{ __('Collected') }}</th>
+                <th class="rank-num">{{ __('Outstanding') }}</th>
+                <th style="width: 18%">{{ __('Rate') }}</th>
+            </tr></thead>
+            <tbody>
+            @foreach($c['by_instalment'] as $row)
+                <tr>
+                    <td>{{ $row['category'] }}</td>
+                    <td class="rank-num">{{ number_format($row['total']) }}</td>
+                    <td class="rank-num"><span class="fc-dot s-full"></span>{{ number_format($row['full']) }}</td>
+                    <td class="rank-num"><span class="fc-dot s-part"></span>{{ number_format($row['part']) }}</td>
+                    <td class="rank-num"><span class="fc-dot s-none"></span>{{ number_format($row['none']) }}</td>
+                    <td class="rank-num">{{ number_format($row['billed']) }}</td>
+                    <td class="rank-num">{{ number_format($row['collected']) }}</td>
+                    <td class="rank-num">{{ number_format($row['outstanding']) }}</td>
+                    <td>
+                        <div class="rank-track">
+                            <div class="rank-bar {{ $row['rate'] >= 90 ? 'fc-b-full' : ($row['rate'] >= 50 ? 'fc-b-part' : 'fc-b-none') }}"
+                                 style="width: {{ max(2, $row['rate']) }}%"></div>
+                        </div>
+                        <span class="rank-share">{{ number_format($row['rate'], 1) }}%</span>
+                    </td>
+                </tr>
+            @endforeach
+            </tbody>
+        </table>
+    </div>
+    @endif
 
     {{-- What the scope leaves out. Stated, not dropped: resit and admission
          fees are real money, they are simply not what "has the student paid
@@ -331,17 +382,33 @@
 
 {{-- ---- By programme ------------------------------------------------------- --}}
 @if(count($c['by_programme']))
-@php $worstDue = max(array_column($c['by_programme'], 'owed')) ?: 1; @endphp
+@php
+    $worstDue = max(array_column($c['by_programme'], 'owed')) ?: 1;
+    $progPeople = array_sum(array_column($c['by_programme'], 'people'));
+@endphp
 <div class="viz-card">
     <div class="viz-head">
         <h5>{{ __('Collection by programme') }}</h5>
-        <p class="sub">{{ __('Worst collection rate first — where chasing is worth the most.') }}</p>
+        <p class="sub">
+            {{ __('Worst collection rate first — where chasing is worth the most. Each student is counted against the programme that billed them, so every row reads: of the students this programme billed, how many have settled it.') }}
+            {{-- Said only when it is actually true of this year's data. A
+                 standing caveat that does not apply reads as boilerplate and
+                 stops being read at all. --}}
+            @if($progPeople > $st['total'])
+                <span class="fc-aside">{{ __('These counts do not add down to the :total students above: :dual student(s) hold enrolments in two programmes this year and are counted once under each. The totals above count every student exactly once.', [
+                    'total' => number_format($st['total']),
+                    'dual' => number_format($progPeople - $st['total'])]) }}</span>
+            @endif
+        </p>
     </div>
     <div class="viz-body">
         <table class="rank-table fc-rank mb-0">
             <thead><tr>
                 <th>{{ trans_choice('module_program', 1) }}</th>
-                <th class="rank-num">{{ __('People') }}</th>
+                <th class="rank-num">{{ __('Students') }}</th>
+                <th class="rank-num">{{ __('Paid in full') }}</th>
+                <th class="rank-num">{{ __('Paid in part') }}</th>
+                <th class="rank-num">{{ __('Paid nothing') }}</th>
                 <th class="rank-num">{{ __('Billed') }}</th>
                 <th class="rank-num">{{ __('Collected') }}</th>
                 <th class="rank-num">{{ __('Outstanding') }}</th>
@@ -355,6 +422,9 @@
                         @if($row['faculty'])<div class="fc-aside">{{ $row['faculty'] }}</div>@endif
                     </td>
                     <td class="rank-num">{{ number_format($row['people']) }}</td>
+                    <td class="rank-num"><span class="fc-dot s-full"></span>{{ number_format($row['full']) }}</td>
+                    <td class="rank-num"><span class="fc-dot s-part"></span>{{ number_format($row['part']) }}</td>
+                    <td class="rank-num"><span class="fc-dot s-none"></span>{{ number_format($row['none']) }}</td>
                     <td class="rank-num">{{ number_format($row['due']) }}</td>
                     <td class="rank-num">{{ number_format($row['collected']) }}</td>
                     <td class="rank-num">{{ number_format($row['owed']) }}</td>

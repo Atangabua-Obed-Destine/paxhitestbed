@@ -211,6 +211,21 @@
         color: #55637a; border: 1px solid #d7dee7;
     }
 
+    /* The per-instalment block sits inside the headline card as a refinement
+       of it, set off by a rule rather than by a second card border: a card of
+       its own would read as a separate, competing total. */
+    .fc-sub { border-top: 1px solid var(--border-color); padding-top: .9rem; }
+    .fc-subhead { font-size: .82rem; font-weight: 600; letter-spacing: .04em;
+                  text-transform: uppercase; color: var(--text-secondary); margin-bottom: .35rem; }
+
+    /* The swatch always travels with its number, so the three states are never
+       told apart by colour alone. */
+    .fc-dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
+              margin-right: .35rem; vertical-align: middle; }
+    .fc-dot.s-full { background: var(--paid-full); }
+    .fc-dot.s-part { background: var(--paid-part); }
+    .fc-dot.s-none { background: var(--paid-none); }
+
     /* The repair list is not a collection figure, and must not read as one.
        A muted left rule and a quieter heading put it one step below the
        cards that carry money the institution is actually chasing. */

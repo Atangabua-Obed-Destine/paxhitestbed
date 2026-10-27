@@ -173,6 +173,10 @@ class FeeCollection
             'applicants' => $tally['applicant'],
             'combined' => $this->tally($people),
 
+            // The same students, answered one instalment at a time. Not a
+            // sub-total of the line above: see byInstalment().
+            'by_instalment' => $this->byInstalment($from, $to),
+
             // Its own block, never added to the figures above.
             'admissions' => $this->admissions($from, $to),
 
@@ -255,6 +259,88 @@ class FeeCollection
             'names' => $matched->pluck('title')->all(),
             'matched' => $matched->isNotEmpty(),
         ];
+    }
+
+    /**
+     * Each instalment answered on its own.
+     *
+     * The pooled figures above answer "who still owes anything by the end of
+     * the year". They cannot answer "who has not paid the first instalment",
+     * and on this install the two differ in the DENOMINATOR, not merely in
+     * the counts: 2026/2027 bills eleven people for a second instalment and
+     * only seven for a first, so "11 students" is the denominator of neither.
+     * Worse, a student fully paid on the first and absent on the second reads
+     * as "partly paid" when pooled - the one description that lets a
+     * defaulter pass unnamed.
+     *
+     * Each row is therefore its own cohort: only the people that instalment
+     * was actually billed to. The PEOPLE COLUMNS DO NOT ADD DOWN - two rows
+     * usually describe overlapping, differently sized groups. The money
+     * columns do add, because every instalment fee has exactly one category,
+     * and the suite asserts that against the headline.
+     *
+     * Students only, exactly as the headline is, so the two cannot disagree
+     * about who is being counted. An applicant holding an instalment fee
+     * stays where the headline puts them, on the applicant line.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function byInstalment(string $from, string $to): array
+    {
+        $scope = $this->instalmentScope();
+
+        // Nothing matched, so the scope has already opened to every category
+        // and there is no sequence to split. Returning rows here would print
+        // "Transport" and "Library" under a heading that says instalment.
+        if (!$scope['matched']) {
+            return [];
+        }
+
+        $rows = [];
+
+        foreach ($scope['ids'] as $i => $id) {
+            $title = $scope['names'][$i] ?? (string) $id;
+
+            $students = array_values(array_filter(
+                $this->peopleInWindow($from, $to, [(int) $id]),
+                fn ($person) => $person->kind === 'student'
+            ));
+
+            $rows[] = [
+                'category_id' => (int) $id,
+                'category' => $title,
+                'rank' => $this->ordinal($title),
+            ] + $this->tally($students);
+        }
+
+        usort(
+            $rows,
+            fn ($a, $b) => [$a['rank'], $a['category_id']] <=> [$b['rank'], $b['category_id']]
+        );
+
+        return $rows;
+    }
+
+    /**
+     * Where an instalment sits in the sequence, read from its name.
+     *
+     * Ordering by id alone would print "Second" above "First" on any install
+     * that happened to create the categories in the other order - in a
+     * document that is read aloud to a board. An unrecognised name sorts
+     * LAST rather than first, so a misspelt or newly added instalment never
+     * silently jumps the queue; it appears at the end, where it is noticed.
+     */
+    protected function ordinal(string $title): int
+    {
+        $lower = strtolower($title);
+
+        foreach (['first' => 1, 'second' => 2, 'third' => 3, 'fourth' => 4, 'fifth' => 5] as $word => $rank) {
+            if (str_contains($lower, $word)) {
+                return $rank;
+            }
+        }
+
+        return PHP_INT_MAX;
     }
 
     /**
@@ -555,6 +641,46 @@ class FeeCollection
         $net = Fee::netPaidSql('f');
         $due = $this->dueSql('f');
 
+        // The three counts, resolved per (person, programme) pair rather than
+        // per person. Eleven students on this install hold one instalment
+        // under one programme and the other under a second, so a person-level
+        // bucket filed all eleven under ONE of their programmes and left the
+        // other reading "3 people, 0 full, 0 part, 0 none" - a row that
+        // contradicts itself on its own line, which is exactly the kind of
+        // figure this section exists to keep off the page.
+        //
+        // Per pair, every row satisfies full + part + none = people, and the
+        // row answers the question a programme head actually asks: of the
+        // students I billed, how many have settled what I billed them.
+        //
+        // The price is that these counts do NOT add down to the headline - 77
+        // against 66 students here, the eleven counted once in each of their
+        // programmes. The page says so in words; it is not left for the
+        // reader to discover by adding the column up and finding it wrong.
+        $pairs = DB::table('fees as f')
+            ->leftJoin('student_enrolls as se', 'se.id', '=', 'f.student_enroll_id')
+            ->whereRaw($this->personColumn() . ' IS NOT NULL')
+            ->where('f.status', '<>', self::CANCELLED)
+            ->whereIn('f.category_id', $this->instalmentIds())
+            ->whereDate('f.assign_date', '>=', $from)
+            ->whereDate('f.assign_date', '<=', $to)
+            ->groupBy('se.program_id')
+            ->groupByRaw($this->personKeySql())
+            ->selectRaw('se.program_id as programme_id')
+            ->selectRaw("SUM({$due}) as due, SUM({$net}) as paid")
+            ->get();
+
+        $counts = [];
+
+        foreach ($pairs as $pair) {
+            $key = $pair->programme_id === null ? 0 : (int) $pair->programme_id;
+            $counts[$key] = $counts[$key] ?? ['full' => 0, 'part' => 0, 'none' => 0];
+            $counts[$key][$this->bucket((float) $pair->due, (float) $pair->paid)]++;
+        }
+
+        $net = Fee::netPaidSql('f');
+        $due = $this->dueSql('f');
+
         $rows = DB::table('fees as f')
             ->leftJoin('student_enrolls as se', 'se.id', '=', 'f.student_enroll_id')
             ->leftJoin('programs as p', 'p.id', '=', 'se.program_id')
@@ -573,12 +699,17 @@ class FeeCollection
             ->selectRaw('COUNT(*) as fees, COUNT(DISTINCT ' . $this->personKeySql() . ') as people')
             ->get();
 
-        return $this->rank($rows, fn ($row) => [
-            'programme' => $row->programme ?: __('No programme recorded'),
-            'faculty' => $row->faculty ?: null,
-            'people' => (int) $row->people,
-            'fees' => (int) $row->fees,
-        ]);
+        return $this->rank($rows, function ($row) use ($counts) {
+            $bucket = $counts[$row->programme_id === null ? 0 : (int) $row->programme_id]
+                ?? ['full' => 0, 'part' => 0, 'none' => 0];
+
+            return [
+                'programme' => $row->programme ?: __('No programme recorded'),
+                'faculty' => $row->faculty ?: null,
+                'people' => (int) $row->people,
+                'fees' => (int) $row->fees,
+            ] + $bucket;
+        });
     }
 
     /**
@@ -850,6 +981,7 @@ class FeeCollection
             'students' => $this->tally([]),
             'applicants' => $this->tally([]),
             'combined' => $this->tally([]),
+            'by_instalment' => [],
             'admissions' => ['has_data' => false, 'names' => []] + $this->tally([]),
             'arrears' => ['people' => 0, 'amount' => 0.0, 'oldest' => null],
             'plans' => ['people' => 0, 'amount' => 0.0],

@@ -507,13 +507,50 @@
 </table>
 @endif
 
+@if(count($cl['by_instalment']))
+<h2>{{ __('The same students, one instalment at a time') }}</h2>
+<p class="sub">{{ __('The cohort table above pools the instalments, so a student who has settled the first and not the second counts there as partly paid. Each row below counts only the students that instalment was billed to and answers "who has paid THIS instalment". The people columns do not add down — the rows describe overlapping groups of different sizes — but the money does, and comes to the student figures above.') }}</p>
+<table class="g">
+    <thead><tr>
+        <th>{{ __('Instalment') }}</th>
+        <th class="num" style="width:60px">{{ __('Students') }}</th>
+        <th class="num" style="width:42px">{{ __('Full') }}</th>
+        <th class="num" style="width:42px">{{ __('Part') }}</th>
+        <th class="num" style="width:48px">{{ __('Nothing') }}</th>
+        <th class="num" style="width:85px">{{ __('Billed') }}</th>
+        <th class="num" style="width:85px">{{ __('Collected') }}</th>
+        <th class="num" style="width:85px">{{ __('Outstanding') }}</th>
+        <th class="num" style="width:45px">{{ __('Rate') }}</th>
+    </tr></thead>
+    <tbody>
+    @foreach($cl['by_instalment'] as $row)
+        <tr>
+            <td>{{ $row['category'] }}</td>
+            <td class="num">{{ number_format($row['total']) }}</td>
+            <td class="num">{{ number_format($row['full']) }}</td>
+            <td class="num">{{ number_format($row['part']) }}</td>
+            <td class="num">{{ number_format($row['none']) }}</td>
+            <td class="num">{{ number_format($row['billed']) }}</td>
+            <td class="num">{{ number_format($row['collected']) }}</td>
+            <td class="num">{{ number_format($row['outstanding']) }}</td>
+            <td class="num">{{ number_format($row['rate'], 1) }}%</td>
+        </tr>
+    @endforeach
+    </tbody>
+</table>
+@endif
+
 @if(count($cl['by_programme']))
 <h2>{{ __('Collection by programme') }}</h2>
-<p class="sub">{{ __('Worst collection rate first. Rate is money collected against money billed, so a small programme can show a poor rate over very little money — read it with the outstanding column.') }}</p>
+@php $progPeople = array_sum(array_column($cl['by_programme'], 'people')); @endphp
+<p class="sub">{{ __('Worst collection rate first. Rate is money collected against money billed, so a small programme can show a poor rate over very little money — read it with the outstanding column. Each student is counted against the programme that billed them, so every row reads: of the students this programme billed, how many have settled it.') }}@if($progPeople > $cst['total']) {{ __('These counts do not add down to the :total students above: :dual student(s) hold enrolments in two programmes this year and are counted once under each.', ['total' => number_format($cst['total']), 'dual' => number_format($progPeople - $cst['total'])]) }}@endif</p>
 <table class="g">
     <thead><tr>
         <th>{{ trans_choice('module_program', 1) }}</th>
-        <th class="num" style="width:45px">{{ __('People') }}</th>
+        <th class="num" style="width:50px">{{ __('Students') }}</th>
+        <th class="num" style="width:42px">{{ __('Full') }}</th>
+        <th class="num" style="width:42px">{{ __('Part') }}</th>
+        <th class="num" style="width:48px">{{ __('Nothing') }}</th>
         <th class="num" style="width:85px">{{ __('Billed') }}</th>
         <th class="num" style="width:85px">{{ __('Collected') }}</th>
         <th class="num" style="width:85px">{{ __('Outstanding') }}</th>
@@ -524,6 +561,9 @@
         <tr>
             <td>{{ $row['programme'] }}@if($row['faculty'])<br><span style="font-size:7.5px;color:#666">{{ $row['faculty'] }}</span>@endif</td>
             <td class="num">{{ number_format($row['people']) }}</td>
+            <td class="num">{{ number_format($row['full']) }}</td>
+            <td class="num">{{ number_format($row['part']) }}</td>
+            <td class="num">{{ number_format($row['none']) }}</td>
             <td class="num">{{ number_format($row['due']) }}</td>
             <td class="num">{{ number_format($row['collected']) }}</td>
             <td class="num">{{ number_format($row['owed']) }}</td>
