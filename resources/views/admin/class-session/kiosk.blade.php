@@ -2159,7 +2159,7 @@
             // Reset all dropdowns
             resetDropdown('extraProgram', allPrograms, 'id', 'title');
             resetDropdown('extraSession', allSessions, 'id', 'title');
-            resetDropdown('extraSemester', allSemesters, 'id', 'title');
+            setExtraSemesters(allSemesters);
             resetDropdown('extraSection', allSections, 'id', 'title');
             return;
         }
@@ -2173,10 +2173,26 @@
         // Filter and repopulate dropdowns
         filterDropdown('extraProgram', allPrograms, allowedPrograms, 'id', 'title', 'short_form');
         filterDropdown('extraSession', allSessions, allowedSessions, 'id', 'title');
-        filterDropdown('extraSemester', allSemesters, allowedSemesters, 'id', 'title');
+        setExtraSemesters(allSemesters.filter(item => allowedSemesters.includes(item.id)));
         filterDropdown('extraSection', allSections, allowedSections, 'id', 'title');
     });
     
+    // #extraSemester is fronted by the shared Year select
+    // (common/inc/semester_year_field), which publishes a handle on the
+    // semester select. Every repopulation of #extraSemester must go through
+    // that handle: writing <option> into the select directly fills the
+    // semesters while leaving the required Year select empty, and the two
+    // controls then contradict each other. The fallback keeps the modal
+    // usable if the module has not loaded.
+    function setExtraSemesters(rows) {
+        const handle = window.jQuery && window.jQuery('#extraSemester').data('semesterYearHandle');
+        if (handle) {
+            handle.setLookup(rows);
+            return;
+        }
+        resetDropdown('extraSemester', rows, 'id', 'title');
+    }
+
     function filterDropdown(selectId, allItems, allowedIds, valueKey, textKey, altTextKey) {
         const select = document.getElementById(selectId);
         if (!select) return;

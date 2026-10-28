@@ -931,6 +931,27 @@
                 },
                 success: function(response){
                     console.log('Semesters received:', response);
+
+                    // The Year select in front of this one comes from
+                    // common/inc/semester_year_field, which publishes a handle
+                    // on the semester select. Writing <option> straight into
+                    // the semester select fills it while leaving that Year
+                    // select empty, and the Year is a required field - so the
+                    // list goes through the handle, which groups it by year.
+                    // setLookup() takes the semester to keep, which is how
+                    // old('semester') survives a failed validation here.
+                    var handle = semester.data('semesterYearHandle');
+
+                    if (handle) {
+                        var keep = semester.data('selected');
+                        handle.setLookup(response, keep);
+                        if (keep) {
+                            semester.data('selected', '');
+                            semester.trigger('change');
+                        }
+                        return;
+                    }
+
                     semester.each(function(){
                         var $semester = $(this);
                         var selectedValue = $semester.data('selected');

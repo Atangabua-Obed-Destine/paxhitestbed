@@ -252,6 +252,13 @@ class ExamMarkingController extends Controller
                 // Cross-programme mode: only filter by session (skip program/semester/section)
                 $sharingProgramIds = $data['sharing_programs']->pluck('id')->toArray();
                 $exams->whereHas('studentEnroll', function ($query) use ($session, $sharingProgramIds) {
+                    // Live enrolments only. Status 0 is a superseded enrolment
+                    // (programme change, or moved on to the next semester) or a
+                    // conversion placeholder; its exam rows are leftovers whose
+                    // live twin carries the marks, so showing them puts ghost
+                    // students on the roll. Resit enrolments are status 2 and
+                    // stay. Matches checkStatus() and every other exam screen.
+                    $query->whereIn('status', [1, 2]);
                     $query->where('session_id', $session);
                     if (!empty($sharingProgramIds)) {
                         $query->whereIn('program_id', $sharingProgramIds);
@@ -260,6 +267,9 @@ class ExamMarkingController extends Controller
             } else {
                 // Normal mode: filter by all criteria
                 $exams->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section) {
+                    // Live enrolments only - same rule as the cross-programme
+                    // branch above.
+                    $query->whereIn('status', [1, 2]);
                     if ($program != '0') {
                         $query->where('program_id', $program);
                     }
@@ -934,6 +944,10 @@ class ExamMarkingController extends Controller
             if(!empty($request->program) && !empty($request->session)){
 
                 $exams->with('studentEnroll')->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section){
+                    // Live enrolments only - status 0 is a superseded
+                    // enrolment or a placeholder, and its exam rows are
+                    // leftovers. Same rule as index() and checkStatus().
+                    $query->whereIn('status', [1, 2]);
                     if($program != '0'){
                         $query->where('program_id', $program);
                     }

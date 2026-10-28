@@ -410,12 +410,44 @@ $(".faculty").on('change', function(e) {
     });
 });
 
+// The Year select in front of the semester is drawn by
+// common/js/semester_year_select, which common/inc/semester_year_field
+// attaches and publishes as a handle on the semester select itself. The
+// cascade below must go through that handle: writing <option> straight
+// into .semester fills the semester list while leaving the Year select
+// empty, which is a filter bar that cannot be used - the Year is a
+// required field and nothing ever puts a year in it.
+//
+// Hand the flat filter-semester response over; the module groups it by
+// year. The fallback fills the select directly, so the bar still works if
+// the module has not loaded.
+function setSemesters(response) {
+    var handle = $(".semester").data('semesterYearHandle');
+
+    if (handle) {
+        handle.setLookup(response);
+        return;
+    }
+
+    var semester = $(".semester");
+    semester.empty().append('<option value="">{{ __("select") }}</option>');
+    $.each(response, function() {
+        $('<option/>', {
+            'value': this.id,
+            'text': this.title
+        }).appendTo(semester);
+    });
+}
+
+function clearSemesters() {
+    setSemesters([]);
+}
+
 // Program filter change
 $(".program").on('change', function(e) {
     e.preventDefault();
     var program = $(this).val();
     var session = $(".session");
-    var semester = $(".semester");
     
     $.ajaxSetup({
         headers: {
@@ -452,14 +484,7 @@ $(".program").on('change', function(e) {
             program: program
         },
         success: function(response) {
-            semester.empty();
-            semester.append('<option value="">{{ __("select") }}</option>');
-            $.each(response, function() {
-                $('<option/>', {
-                    'value': this.id,
-                    'text': this.title
-                }).appendTo('.semester');
-            });
+            setSemesters(response);
         }
     });
 });

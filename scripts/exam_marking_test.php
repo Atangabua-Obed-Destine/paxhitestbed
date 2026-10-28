@@ -338,6 +338,94 @@ if ($crossCombo) {
         substr_count($crossHtml, 'fa-graduation-cap') >= count($spans[1]));
 }
 
+/* A superseded enrolment stays off the roll. When a student changes
+   programme or moves on, the old enrolment is set to status 0 (see
+   StudentSingleEnrollController) but its exam rows remain - and the roll is
+   built from exam rows, so without a status filter the old programme kept a
+   ghost student who could be marked twice. Resit enrolments are status 2, so
+   the filter must not touch them. The expectation is computed from SQL, not
+   from the code under test. */
+/* A CA type, because the final-exam roll also demands attendance = 1 and the
+   expectations below would have to mirror that too; the status rule under
+   test is the same either way. */
+$ghostCombo = DB::table('exams as e')
+    ->join('student_enrolls as se', 'se.id', '=', 'e.student_enroll_id')
+    ->join('exam_types as t', 't.id', '=', 'e.exam_type_id')
+    ->where('t.is_final', 0)
+    ->where('se.status', 0)
+    ->select('e.subject_id', 'e.exam_type_id', 'se.session_id', DB::raw('count(*) n'))
+    ->groupBy('e.subject_id', 'e.exam_type_id', 'se.session_id')
+    ->orderByDesc('n')
+    ->orderBy('e.subject_id')->orderBy('e.exam_type_id')->orderBy('se.session_id')
+    ->first();
+
+if ($ghostCombo === null) {
+    echo "  (no superseded enrolment carries an exam; the ghost check has nothing to bite on)" . PHP_EOL;
+} else {
+    $deadMats = DB::table('exams as e')
+        ->join('student_enrolls as se', 'se.id', '=', 'e.student_enroll_id')
+        ->where('e.subject_id', $ghostCombo->subject_id)
+        ->where('e.exam_type_id', $ghostCombo->exam_type_id)
+        ->where('se.session_id', $ghostCombo->session_id)
+        ->where('se.status', 0)->pluck('se.matricule')->unique();
+
+    // Scoped the way the page scopes it: cross-programme mode only shows
+    // enrolments in active programmes that share the subject.
+    $liveMats = DB::table('exams as e')
+        ->join('student_enrolls as se', 'se.id', '=', 'e.student_enroll_id')
+        ->join('programs as p', 'p.id', '=', 'se.program_id')
+        ->join('program_subject as ps', fn ($j) => $j
+            ->on('ps.program_id', '=', 'se.program_id')
+            ->where('ps.subject_id', $ghostCombo->subject_id))
+        ->where('p.status', '1')
+        ->where('e.subject_id', $ghostCombo->subject_id)
+        ->where('e.exam_type_id', $ghostCombo->exam_type_id)
+        ->where('se.session_id', $ghostCombo->session_id)
+        ->whereIn('se.status', [1, 2])->pluck('se.matricule')->unique();
+
+    // A matricule can sit on both sides (the dead enrolment and its live
+    // successor under the same number); only the purely-dead ones must vanish.
+    $mustVanish = $deadMats->diff($liveMats)->values();
+
+    // The controller's gate is !empty(program), so '0' would render nothing;
+    // cross-programme mode then ignores which sharing programme it was.
+    $anyProgram = DB::table('program_subject as ps')
+        ->join('programs as p', 'p.id', '=', 'ps.program_id')
+        ->where('p.status', '1')
+        ->where('ps.subject_id', $ghostCombo->subject_id)
+        ->orderBy('ps.program_id')->value('ps.program_id');
+
+    [$ghostHtml] = $render([
+        'subject' => $ghostCombo->subject_id, 'type' => $ghostCombo->exam_type_id,
+        'session' => $ghostCombo->session_id, 'program' => (string) $anyProgram,
+        'semester' => '0', 'section' => '0', 'cross_program' => 1,
+    ]);
+
+    ok('there is a class with exams on superseded enrolments', $mustVanish->isNotEmpty());
+
+    $shown = $mustVanish->filter(fn ($mat) => str_contains($ghostHtml, (string) $mat))->values();
+    check('no superseded enrolment is on the roll', [], $shown->all());
+
+    $liveMissing = $liveMats->filter(fn ($mat) => !str_contains($ghostHtml, (string) $mat))->values();
+    check('while every live enrolment still is', [], $liveMissing->all());
+
+    // The resit child this filter must not catch: status 2 on a resit semester.
+    $resitMat = DB::table('student_enrolls as se')
+        ->join('exams as e', 'e.student_enroll_id', '=', 'se.id')
+        ->join('semesters as s', 's.id', '=', 'se.semester_id')
+        ->where('s.is_resit', 1)->whereIn('se.status', [1, 2])
+        ->where('e.subject_id', $ghostCombo->subject_id)
+        ->where('e.exam_type_id', $ghostCombo->exam_type_id)
+        ->where('se.session_id', $ghostCombo->session_id)
+        ->orderBy('se.id')->value('se.matricule');
+
+    if ($resitMat !== null) {
+        ok('and a resit enrolment is still marked', str_contains($ghostHtml, (string) $resitMat));
+    } else {
+        echo "  (no resit enrolment in this class to assert on)" . PHP_EOL;
+    }
+}
+
 // Nothing listed until a course and type are chosen.
 [$bare, $bareData] = $render([]);
 

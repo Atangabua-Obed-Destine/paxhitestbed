@@ -215,6 +215,68 @@ foreach ($pages as $name => [$html, $data]) {
 }
 
 /* ================================================================== */
+echo PHP_EOL . "=== 2b. a superseded enrolment is not on the roll ===" . PHP_EOL;
+
+/* When a student changes programme or moves on, the old enrolment is set to
+   status 0 but its exam rows remain - and this roll is built from exam rows,
+   so without a status filter the old programme kept a ghost student whose
+   attendance could still be taken. Resit enrolments are status 2 and must
+   stay. Expectations from SQL, not from the controller under test. */
+$ghostCombo = DB::table('exams as e')
+    ->join('student_enrolls as se', 'se.id', '=', 'e.student_enroll_id')
+    ->where('se.status', 0)
+    ->select('e.subject_id', 'e.exam_type_id', 'se.session_id', DB::raw('count(*) n'))
+    ->groupBy('e.subject_id', 'e.exam_type_id', 'se.session_id')
+    ->orderByDesc('n')
+    ->orderBy('e.subject_id')->orderBy('e.exam_type_id')->orderBy('se.session_id')
+    ->first();
+
+if ($ghostCombo === null) {
+    echo "  (no superseded enrolment carries an exam; nothing for this to bite on)" . PHP_EOL;
+} else {
+    $deadMats = DB::table('exams as e')
+        ->join('student_enrolls as se', 'se.id', '=', 'e.student_enroll_id')
+        ->where('e.subject_id', $ghostCombo->subject_id)
+        ->where('e.exam_type_id', $ghostCombo->exam_type_id)
+        ->where('se.session_id', $ghostCombo->session_id)
+        ->where('se.status', 0)->pluck('se.matricule')->unique();
+
+    $liveMats = DB::table('exams as e')
+        ->join('student_enrolls as se', 'se.id', '=', 'e.student_enroll_id')
+        ->where('e.subject_id', $ghostCombo->subject_id)
+        ->where('e.exam_type_id', $ghostCombo->exam_type_id)
+        ->where('se.session_id', $ghostCombo->session_id)
+        ->whereIn('se.status', [1, 2])->pluck('se.matricule')->unique();
+
+    // A matricule can sit on both sides (dead enrolment, live successor under
+    // the same number); only the purely-dead ones must vanish.
+    $mustVanish = $deadMats->diff($liveMats)->values();
+
+    $anyProgram = DB::table('student_enrolls as se')
+        ->join('exams as e', 'e.student_enroll_id', '=', 'se.id')
+        ->where('e.subject_id', $ghostCombo->subject_id)
+        ->whereIn('se.status', [1, 2])
+        ->orderBy('se.program_id')->value('se.program_id');
+
+    // Cross-programme attendance filters by session only (semester '0' means
+    // all), so the whole class is on one page to judge.
+    [$ghostHtml] = $render([
+        'faculty' => '0', 'program' => (string) $anyProgram,
+        'session' => (string) $ghostCombo->session_id, 'semester' => '0',
+        'section' => '0', 'subject' => (string) $ghostCombo->subject_id,
+        'type' => (string) $ghostCombo->exam_type_id, 'cross_program' => '1',
+    ]);
+
+    ok('there is a class with exams on superseded enrolments', $mustVanish->isNotEmpty());
+
+    check('no superseded enrolment is on the attendance roll', [],
+        $mustVanish->filter(fn ($mat) => str_contains($ghostHtml, (string) $mat))->values()->all());
+
+    check('while every live enrolment still is', [],
+        $liveMats->filter(fn ($mat) => !str_contains($ghostHtml, (string) $mat))->values()->all());
+}
+
+/* ================================================================== */
 echo PHP_EOL . "=== 3. the programme separator spans the whole table ===" . PHP_EOL;
 
 /* The expectation is the <th> the page itself emitted. Computing it from the

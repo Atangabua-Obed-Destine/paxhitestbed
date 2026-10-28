@@ -421,6 +421,91 @@ check('and the exclusions are named with a reason each',
     count(array_filter($leaveAlone)) === count($leaveAlone));
 
 // ---------------------------------------------------------------------------
+section('And the cascade behind the Year select actually feeds it');
+// ---------------------------------------------------------------------------
+// The check above finds a Year select on the page. It cannot tell whether
+// anything ever puts a year in it, and that is a second way for this to fail
+// silently: five screens shipped with the picker present, required, and
+// permanently empty.
+//
+// The cause is always the same. A screen's own programme-change AJAX writes
+// <option> straight into .semester, which fills the semester list and leaves
+// the Year select untouched - so the Year offers nothing, and being `required`
+// it blocks the form. The module publishes a handle on the semester select for
+// exactly this, and the seven shared filter partials already use it.
+//
+// The contract checked here is narrow and exact: a screen that includes
+// common/inc/semester_year_field has handed its Year select to the module, so
+// a fresh semester list must go back through the handle the module published.
+// Screens that render their own Year control and fill it themselves are a
+// different mechanism and are not in scope - the breadth check above is what
+// covers those.
+//
+// Run against the code as it was, this fails on exam-publishing and on the
+// four results-summary screens.
+$notFed = [];
+
+foreach ($bladeFiles as $path) {
+    $relative = ltrim(str_replace(str_replace('\\', '/', $root . '/resources/views'), '',
+        str_replace('\\', '/', $path)), '/');
+
+    $source = (string) file_get_contents($path);
+
+    // The screen's cascade may live in a shared JS partial rather than in the
+    // view itself - student/import's lives in common/js/batch_filter - so one
+    // level of common.* includes is folded in before judging. Without this,
+    // the view shows the Year partial, the JS partial fills the semester
+    // select behind it, and neither file alone looks wrong.
+    if (preg_match_all('~@include\(\s*[\'"](common[./][\w./-]+)[\'"]~', $source, $incs)) {
+        foreach (array_unique($incs[1]) as $inc) {
+            $incPath = $root . '/resources/views/' . str_replace('.', '/', $inc) . '.blade.php';
+            if (!is_file($incPath)) {
+                // dots inside path segments: resolve only the last as a file
+                continue;
+            }
+            $source .= "\n" . file_get_contents($incPath);
+        }
+    }
+
+    // Only screens that use the shared partial AND reload the list themselves.
+    // A screen whose semesters only ever arrive from the controller has
+    // nothing to hand over.
+    if (!str_contains($source, 'semester_year_field')
+        || !str_contains($source, "route('filter-semester')")) {
+        continue;
+    }
+
+    $feedsHandle = str_contains($source, 'semesterYearHandle')
+        && str_contains($source, 'setLookup(');
+
+    if (!$feedsHandle) {
+        $notFed[] = $relative;
+    }
+}
+
+check('every screen using the shared Year partial hands its semesters to the module',
+    $notFed === [],
+    $notFed === [] ? '' : implode("\n        ", $notFed));
+
+// The shared batch filter serves three of those screens (student/import,
+// student-transfer-in/create, application/edit), so it is pinned by name as
+// well: the fold-in above only sees it through its hosts.
+$batchFilter = (string) file_get_contents($root . '/resources/views/common/js/batch_filter.blade.php');
+check('the shared batch filter hands its semesters to the module',
+    str_contains($batchFilter, 'semesterYearHandle') && str_contains($batchFilter, 'setLookup('));
+
+// The kiosk's extra-session modal repopulates #extraSemester from its own
+// subject-scoped lists rather than from filter-semester, so the rule above
+// never reaches it. Same failure mode, own check: every repopulation goes
+// through one helper, and that helper asks the module first.
+$kiosk = (string) file_get_contents($root . '/resources/views/admin/class-session/kiosk.blade.php');
+check('the kiosk feeds #extraSemester through the module',
+    str_contains($kiosk, 'setExtraSemesters')
+    && str_contains($kiosk, 'semesterYearHandle')
+    && substr_count($kiosk, "resetDropdown('extraSemester'") === 1   // the fallback inside the helper
+    && substr_count($kiosk, "filterDropdown('extraSemester'") === 0);
+
+// ---------------------------------------------------------------------------
 section('The screens receive something for the Year select to offer');
 // ---------------------------------------------------------------------------
 $admin = User::whereHas('roles', fn ($q) => $q->where('name', 'Super Admin'))->first();

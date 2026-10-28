@@ -244,6 +244,13 @@ class ExamAttendanceController extends Controller
             // Enrolls
             $enrolls = StudentEnroll::where('id', '!=', null);
 
+            // Live enrolments only. Status 0 is a superseded enrolment
+            // (programme change, or moved on to the next semester) or a
+            // conversion placeholder, and taking attendance against it files
+            // the record on a dead enrolment. Resit enrolments are status 2
+            // and stay. Matches checkStatus() and the other exam screens.
+            $enrolls->whereIn('status', [1, 2]);
+
             if ($crossProgram) {
                 // Cross-programme mode: skip program/section filters but keep session and semester
                 if(!empty($request->session) && $request->session != '0'){
@@ -318,6 +325,12 @@ class ExamAttendanceController extends Controller
             if ($crossProgram) {
                 // Cross-programme: filter by session and semester (not program/section)
                 $attendances->with('studentEnroll')->whereHas('studentEnroll', function ($query) use ($session, $semester){
+                    // Live enrolments only. Status 0 is a superseded enrolment
+                    // (programme change, or moved on) or a conversion
+                    // placeholder; its exam rows are leftovers whose live twin
+                    // carries the record. Resit enrolments are status 2 and
+                    // stay. Matches checkStatus() and the other exam screens.
+                    $query->whereIn('status', [1, 2]);
                     if($session != '0'){
                         $query->where('session_id', $session);
                     }
@@ -328,6 +341,9 @@ class ExamAttendanceController extends Controller
             } else {
                 if(!empty($request->program) && !empty($request->session)){
                     $attendances->with('studentEnroll')->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section){
+                        // Live enrolments only - same rule as the
+                        // cross-programme branch above.
+                        $query->whereIn('status', [1, 2]);
                         if($program != '0'){
                             $query->where('program_id', $program);
                         }
