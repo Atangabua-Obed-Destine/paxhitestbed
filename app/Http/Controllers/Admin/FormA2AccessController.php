@@ -11,6 +11,8 @@ use App\Models\Program;
 use App\Models\Faculty;
 use App\Models\Session;
 use App\Models\Fee;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class FormA2AccessController extends Controller
 {
@@ -52,6 +54,21 @@ class FormA2AccessController extends Controller
 
         if ($request->has('bypass_status') && $request->bypass_status != '') {
             $query->where('bypass_payment_restriction', $request->bypass_status);
+        }
+
+        // Free-text search: matricule, student id or student name
+        $search = trim((string) $request->get('q', ''));
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            $query->where(function ($w) use ($like) {
+                $w->where('matricule', 'like', $like)
+                  ->orWhereHas('student', function ($s) use ($like) {
+                      $s->where('student_id', 'like', $like)
+                        ->orWhere('first_name', 'like', $like)
+                        ->orWhere('last_name', 'like', $like)
+                        ->orWhere(DB::raw("CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))"), 'like', $like);
+                  });
+            });
         }
 
         // Get all enrollments matching criteria
@@ -103,7 +120,22 @@ class FormA2AccessController extends Controller
         $data['total_paid'] = $students->where('payment_status', 'Paid')->count();
         $data['total_not_assigned'] = $students->where('payment_status', 'Not Assigned')->count();
 
-        $data['rows'] = $students;
+        // Paginate. Payment status is worked out above, per student, so the
+        // collection is paged by hand; the KPIs still count every match.
+        $perPage = in_array((int) $request->get('per_page'), [25, 50, 100], true) ? (int) $request->get('per_page') : 25;
+        $students = $students->values();
+        // A page past the end (e.g. after narrowing the filters) shows the last page
+        $currentPage = min(LengthAwarePaginator::resolveCurrentPage(), max(1, (int) ceil($students->count() / $perPage)));
+
+        $data['rows'] = new LengthAwarePaginator(
+            $students->forPage($currentPage, $perPage),
+            $students->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+        $data['search'] = $search;
+        $data['per_page'] = $perPage;
         $data['faculties'] = Faculty::where('status', '1')->orderBy('title', 'asc')->get();
         $data['programs'] = Program::where('status', '1')->orderBy('title', 'asc')->get();
         $data['sessions'] = Session::where('status', '1')->orderBy('id', 'desc')->get();

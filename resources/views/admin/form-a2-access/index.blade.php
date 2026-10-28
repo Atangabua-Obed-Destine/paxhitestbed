@@ -81,36 +81,42 @@
                         <!-- Filter Form -->
                         <form class="needs-validation" novalidate method="get" action="{{ route('admin.form-a2-access.index') }}">
                             <div class="row gx-2">
-                                <div class="col-md-2">
+                                <div class="col-md-3 mb-2">
+                                    <label for="q" class="form-label">{{ __('Search') }}</label>
+                                    <input type="text" class="form-control" name="q" id="q" value="{{ $search }}" placeholder="{{ __('Matricule or student name') }}">
+                                </div>
+                                <div class="col-md-2 mb-2">
                                     <label class="form-label">{{ trans_choice('module_session', 1) }}</label>
-                                    <select class="form-control" name="session_id" id="session_id">
+                                    <select class="form-control select2" name="session_id" id="session_id">
                                         <option value="">{{ __('all') }}</option>
                                         @foreach($sessions as $session)
                                         <option value="{{ $session->id }}" @if($selected_session == $session->id) selected @endif>{{ $session->title }}</option>
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-3 mb-2">
                                     <label class="form-label">{{ trans_choice('module_faculty', 1) }}</label>
-                                    <select class="form-control" name="faculty_id" id="faculty_id">
+                                    <select class="form-control select2" name="faculty_id" id="faculty_id">
                                         <option value="">{{ __('all') }}</option>
                                         @foreach($faculties as $faculty)
                                         <option value="{{ $faculty->id }}" @if($selected_faculty == $faculty->id) selected @endif>{{ $faculty->title }}</option>
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-4 mb-2">
                                     <label class="form-label">{{ trans_choice('module_program', 1) }}</label>
-                                    <select class="form-control" name="program_id" id="program_id">
+                                    <select class="form-control select2" name="program_id" id="program_id">
                                         <option value="">{{ __('all') }}</option>
                                         @foreach($programs as $program)
                                         <option value="{{ $program->id }}" @if($selected_program == $program->id) selected @endif>{{ $program->title }}</option>
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="col-md-2">
+                            </div>
+                            <div class="row gx-2">
+                                <div class="col-md-2 mb-2">
                                     <label class="form-label">Payment Status</label>
-                                    <select class="form-control" name="payment_status">
+                                    <select class="form-control select2" name="payment_status" id="payment_status">
                                         <option value="">{{ __('all') }}</option>
                                         <option value="Unpaid" @if($selected_payment_status == 'Unpaid') selected @endif>Unpaid</option>
                                         <option value="Partial" @if($selected_payment_status == 'Partial') selected @endif>Partial</option>
@@ -118,15 +124,23 @@
                                         <option value="Not Assigned" @if($selected_payment_status == 'Not Assigned') selected @endif>Not Assigned</option>
                                     </select>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-2 mb-2">
                                     <label class="form-label">Access Status</label>
-                                    <select class="form-control" name="bypass_status">
+                                    <select class="form-control select2" name="bypass_status" id="bypass_status">
                                         <option value="">{{ __('all') }}</option>
                                         <option value="1" @if($selected_bypass == '1') selected @endif>Access Granted</option>
                                         <option value="0" @if($selected_bypass == '0') selected @endif>Access Restricted</option>
                                     </select>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-2 mb-2">
+                                    <label for="per_page" class="form-label">{{ __('Per page') }}</label>
+                                    <select class="form-control" name="per_page" id="per_page">
+                                        @foreach([25, 50, 100] as $size)
+                                        <option value="{{ $size }}" @if($per_page == $size) selected @endif>{{ $size }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-2">
                                     <label class="form-label d-block">&nbsp;</label>
                                     <button type="submit" class="btn btn-info btn-sm"><i class="fas fa-search"></i> {{ __('btn_search') }}</button>
                                     <a href="{{ route('admin.form-a2-access.index') }}" class="btn btn-danger btn-sm"><i class="fas fa-redo"></i> {{ __('btn_reset') }}</a>
@@ -149,7 +163,7 @@
                                 </div>
                                 <div class="d-inline-block ml-2">
                                     <button type="button" class="btn btn-outline-primary btn-sm" id="btnSelectAll">
-                                        <i class="fas fa-check-square"></i> Select All
+                                        <i class="fas fa-check-square"></i> Select All on This Page
                                     </button>
                                     <button type="button" class="btn btn-outline-secondary btn-sm" id="btnDeselectAll">
                                         <i class="fas fa-square"></i> Deselect All
@@ -157,6 +171,12 @@
                                 </div>
                             </form>
                         </div>
+
+                        <p class="text-muted small mb-0">
+                            @if($rows->total() > 0)
+                            Showing {{ $rows->firstItem() }}–{{ $rows->lastItem() }} of {{ $rows->total() }} student(s)
+                            @endif
+                        </p>
 
                         <div class="table-responsive mt-2">
                             <table id="report-table" class="table table-bordered table-striped table-hover">
@@ -177,7 +197,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach($rows as $row)
+                                    @forelse($rows as $row)
                                     <tr>
                                         <td>
                                             <input type="checkbox" class="form-check-input row-checkbox" 
@@ -262,10 +282,16 @@
                                             @endif
                                         </td>
                                     </tr>
-                                    @endforeach
+                                    @empty
+                                    <tr>
+                                        <td colspan="10" class="text-center text-muted">No students match these filters.</td>
+                                    </tr>
+                                    @endforelse
                                 </tbody>
                             </table>
                         </div>
+
+                        {{ $rows->links() }}
                     </div>
                 </div>
             </div>
@@ -297,6 +323,8 @@
                     $.each(result, function(key, value){
                         $("#program_id").append('<option value="'+value.id+'">'+value.title+'</option>');
                     });
+                    // Refresh the searchable (select2) box so it shows the new list.
+                    $('#program_id').trigger('change.select2');
                 }
             });
         });
