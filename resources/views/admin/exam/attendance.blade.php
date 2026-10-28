@@ -1,414 +1,79 @@
 @extends('admin.layouts.master')
 @section('title', $title)
 
-@section('page_css')
-<style>
-    /* Attendance Status Indicator Styles */
-    .attendance-status-indicator .status-content {
-        background: #f8f9fc;
-        border: 1px solid #e3e6f0;
-        transition: all 0.3s ease;
-    }
-    .attendance-status-indicator .status-content.status-not_taken {
-        background: #fff3cd;
-        border-color: #ffc107;
-    }
-    .attendance-status-indicator .status-content.status-partial {
-        background: #d1ecf1;
-        border-color: #17a2b8;
-    }
-    .attendance-status-indicator .status-content.status-completed {
-        background: #d4edda;
-        border-color: #28a745;
-    }
-    .attendance-status-indicator .status-content.status-no_students {
-        background: #e9ecef;
-        border-color: #6c757d;
-    }
-    .attendance-status-indicator .status-icon {
-        font-size: 14px;
-    }
-    .attendance-status-indicator .status-message {
-        font-weight: 500;
-    }
-    .attendance-status-indicator .status-details span {
-        font-size: 11px;
-    }
-    .attendance-status-indicator .status-details .present-count::before {
-        content: '\f00c';
-        font-family: 'Font Awesome 5 Free';
-        font-weight: 900;
-        margin-right: 2px;
-    }
-    .attendance-status-indicator .status-details .absent-count::before {
-        content: '\f00d';
-        font-family: 'Font Awesome 5 Free';
-        font-weight: 900;
-        margin-right: 2px;
-    }
-    .attendance-status-indicator .status-details .pending-count::before {
-        content: '\f017';
-        font-family: 'Font Awesome 5 Free';
-        font-weight: 400;
-        margin-right: 2px;
-    }
-    .status-loading {
-        text-align: center;
-        color: #6c757d;
-    }
-    .status-loading i {
-        animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    .bg-gradient-primary {
-        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
-    }
-    .course-card {
-        transition: all 0.3s ease;
-    }
-    .course-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
-    }
-    .badge-outline-info {
-        background-color: transparent;
-        border: 1px solid #36b9cc;
-        color: #36b9cc;
-    }
-    .opacity-75 {
-        opacity: 0.75;
-    }
-    #quickProgramSelector {
-        border-left: none;
-        font-weight: 500;
-    }
-    .program-section {
-        animation: fadeIn 0.3s ease;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-</style>
-@endsection
+{{--
+  Exam attendance.
+
+  This screen and the marking screen are two halves of one job, done by the
+  same person in the same sitting, so they now read as one place: the tokens
+  and the components come from partials/theme, which the marking screen also
+  includes, and what is specific to attendance is in partials/attendance_*.
+
+  It was 1,816 lines. The parts that are a list, a band, a roll or a set of
+  notices are partials now, the same way marking's are.
+
+  Four things here were not design at all but broken wiring, which this
+  install's Bootstrap version made silent. They are fixed, and each is noted
+  where it sits:
+
+    * Bootstrap here is 5.2.2, and the markup was written for 4.x. The
+      cross-programme panel's "View Programmes" collapse used data-toggle /
+      data-target, which 5.x does not read, so the button did nothing; the
+      confirmation modal's Cancel and × used data-dismiss, so neither closed
+      it. Both now use the data-bs-* attributes.
+
+    * .custom-control.custom-switch does not exist in 5.x and is not
+      backfilled by this theme, so the All Programmes switch had been
+      rendering as a bare checkbox. It is a real switch now, same id, same
+      handler.
+
+    * mr-* and ml-* are not in 5.x either (they are me-* and ms-*) and are
+      not backfilled, so around eighteen icons were sitting hard against
+      their text. Spacing is done with gap now and depends on neither.
+
+    * the course panel's view toggle was bound to .view-toggle-btn, a class
+      no element carried. See partials/attendance_courses for what that cost.
+
+  Nothing the form submits or the JavaScript binds was renamed.
+--}}
 
 @section('content')
 
 <!-- Start Content-->
-<div class="main-body">
+<div class="main-body exm">
+    @include('admin.exam.partials.theme')
+    @include('admin.exam.partials.attendance_theme')
+
     <div class="page-wrapper">
         <!-- [ Main Content ] start -->
         <div class="row">
-            
-            {{-- My Assigned Courses Quick Access Section --}}
+
             @if(isset($myAssignedCourses) && $myAssignedCourses->count() > 0)
+                @include('admin.exam.partials.attendance_courses')
+            @endif
+
+            {{-- The filter. The markup inside is common/inc/subject_search_filter,
+                 shared with six other views and untouched; the rules in theme
+                 reach it only because it sits inside .exm here. --}}
             <div class="col-sm-12">
-                <div class="card border-primary shadow-sm">
-                    <div class="card-header bg-gradient-primary text-white">
-                        <div class="d-flex justify-content-between align-items-center">
+                <div class="exm-panel" id="advancedFilterCard">
+                    <form class="needs-validation" novalidate method="get" action="{{ route($route.'.index') }}" id="advancedFilterForm">
+                        {{-- Preserve cross-programme toggle state across filter submissions --}}
+                        @if($cross_program)
+                        <input type="hidden" name="cross_program" id="crossProgramHidden" value="1">
+                        @endif
+
+                        {{-- The page names itself. Dropping the old card
+                             header took this with it, and before a course is
+                             chosen there is no band to say where you are. --}}
+                        <div class="exm-actions" style="border-top:0;border-bottom:1px solid var(--rule-soft)">
                             <div>
-                                <h5 class="mb-0">
-                                    <i class="fas fa-chalkboard-teacher"></i> {{ __('My Assigned Courses') }}
-                                </h5>
-                                <small class="opacity-75">
-                                    @if(isset($currentSession))
-                                        <i class="fas fa-calendar-alt"></i> {{ $currentSession->title }}
-                                    @endif
-                                    • {{ $myAssignedCourses->sum(function($p) { return $p['subjects']->count(); }) }} {{ __('Total Courses') }}
-                                </small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="collapse" data-bs-target="#myCoursesCollapse" aria-expanded="false">
-                                <i class="fas fa-chevron-down" id="collapseIcon"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="collapse" id="myCoursesCollapse">
-                        <div class="card-body">
-                            {{-- Program Selector Dropdown --}}
-                            <div class="row mb-4">
-                                <div class="col-md-6">
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="input-group-text bg-primary text-white">
-                                                <i class="fas fa-graduation-cap"></i>
-                                            </span>
-                                        </div>
-                                        <select class="form-control" id="quickProgramSelector">
-                                            <option value="all">{{ __('All Programs') }} ({{ $myAssignedCourses->count() }})</option>
-                                            @foreach($myAssignedCourses as $idx => $programData)
-                                            <option value="{{ $idx }}">{{ $programData['program_title'] }} ({{ $programData['subjects']->count() }})</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 text-right">
-                                    <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-outline-primary active" id="viewCards">
-                                            <i class="fas fa-th-large"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-outline-primary" id="viewTable">
-                                            <i class="fas fa-list"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- Courses by Program --}}
-                            <div id="coursesContainer">
-                                @foreach($myAssignedCourses as $programIndex => $programData)
-                                <div class="program-section mb-4" data-program-index="{{ $programIndex }}">
-                                    <h6 class="text-primary mb-3">
-                                        <i class="fas fa-folder-open"></i> {{ $programData['program_title'] }}
-                                        <span class="badge badge-secondary">{{ $programData['subjects']->count() }} {{ __('courses') }}</span>
-                                    </h6>
-
-                                    {{-- Card View --}}
-                                    <div class="row course-cards-view">
-                                        @foreach($programData['subjects'] as $subjectIndex => $subjectData)
-                                        @php 
-                                            $uniqueId = $programIndex . '_' . $subjectIndex;
-                                        @endphp
-                                        <div class="col-lg-4 col-md-6 mb-3">
-                                            <div class="card h-100 border-left-primary shadow-sm course-card" style="border-left: 4px solid #4e73df !important;">
-                                                <div class="card-body p-3">
-                                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                                        <span class="badge badge-dark">{{ $subjectData['subject_code'] }}</span>
-                                                        <span class="badge badge-outline-info">
-                                                            <i class="fas fa-users"></i> {{ $subjectData['sections']->count() }} {{ __('Section(s)') }}
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    <h6 class="font-weight-bold text-dark mb-2" title="{{ $subjectData['subject_title'] }}">
-                                                        {{ Str::limit($subjectData['subject_title'], 35) }}
-                                                    </h6>
-
-                                                    <div class="mb-3">
-                                                        <span class="badge badge-primary" title="{{ $programData['program_title'] }}">
-                                                            <i class="fas fa-graduation-cap"></i> {{ Str::limit($programData['program_code'], 20) }}
-                                                        </span>
-                                                    </div>
-
-                                                    <div class="row mb-2">
-                                                        <div class="col-6">
-                                                            <label class="small text-muted mb-1">{{ __('Year') }}</label>
-                                                            <select class="form-control form-control-sm quick-year" 
-                                                                    id="year_{{ $uniqueId }}"
-                                                                    data-unique="{{ $uniqueId }}">
-                                                                @foreach($subjectData['years'] as $yr)
-                                                                <option value="{{ $yr }}" {{ $yr == $subjectData['first_year'] ? 'selected' : '' }}>
-                                                                    {{ __('Year') }} {{ $yr }}
-                                                                </option>
-                                                                @endforeach
-                                                            </select>
-                                                        </div>
-                                                        <div class="col-6">
-                                                            <label class="small text-muted mb-1">{{ __('Semester') }}</label>
-                                                            <select class="form-control form-control-sm quick-semester" 
-                                                                    id="semester_{{ $uniqueId }}"
-                                                                    data-subject="{{ $subjectData['subject_id'] }}"
-                                                                    data-semesters="{{ $subjectData['semesters']->toJson() }}">
-                                                                @foreach($subjectData['semesters'] as $sem)
-                                                                <option value="{{ $sem->id }}" 
-                                                                        data-year="{{ $sem->year }}"
-                                                                        data-is-resit="{{ $sem->is_resit ? '1' : '0' }}"
-                                                                        {{ $sem->id == $subjectData['first_semester_id'] ? 'selected' : '' }}>
-                                                                    {{ $sem->title }}@if($sem->is_resit) (Resit)@endif
-                                                                </option>
-                                                                @endforeach
-                                                            </select>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="row mb-2">
-                                                        <div class="col-6">
-                                                            <label class="small text-muted mb-1">{{ __('Section') }}</label>
-                                                            @if($subjectData['sections']->count() > 1)
-                                                            <select class="form-control form-control-sm quick-section" id="section_{{ $uniqueId }}">
-                                                                <option value="0">{{ __('All Sections') }}</option>
-                                                                @foreach($subjectData['sections'] as $secIdx => $sec)
-                                                                <option value="{{ $sec->id }}" {{ $secIdx === 0 ? 'selected' : '' }}>{{ $sec->title }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                            @else
-                                                            <input type="text" class="form-control form-control-sm" value="{{ $subjectData['first_section_title'] }}" disabled>
-                                                            <input type="hidden" id="section_{{ $uniqueId }}" value="{{ $subjectData['first_section_id'] ?? 0 }}">
-                                                            @endif
-                                                        </div>
-                                                        <div class="col-6">
-                                                            <label class="small text-muted mb-1">{{ __('Exam Type') }} <span class="text-danger">*</span></label>
-                                                            <select class="form-control form-control-sm quick-exam-type" id="examtype_{{ $uniqueId }}" required>
-                                                                <option value="">-- {{ __('Select') }} --</option>
-                                                                @foreach($examTypes as $et)
-                                                                <option value="{{ $et->id }}">{{ $et->title }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                        </div>
-                                                    </div>
-
-                                                    <button type="button" 
-                                                            class="btn btn-info btn-block quick-take-attendance"
-                                                            data-faculty="{{ $programData['faculty_id'] }}"
-                                                            data-program="{{ $programData['program_id'] }}"
-                                                            data-session="{{ $currentSession->id ?? '' }}"
-                                                            data-subject="{{ $subjectData['subject_id'] }}"
-                                                            data-unique="{{ $uniqueId }}">
-                                                        <i class="fas fa-user-check"></i> {{ __('Take Attendance') }}
-                                                    </button>
-                                                    
-                                                    {{-- Status Indicator --}}
-                                                    <div class="attendance-status-indicator mt-2" id="status_{{ $uniqueId }}" style="display: none;">
-                                                        <div class="status-content d-flex align-items-center justify-content-between p-2 rounded">
-                                                            <div class="status-info d-flex align-items-center">
-                                                                <i class="status-icon mr-2"></i>
-                                                                <span class="status-message small"></span>
-                                                            </div>
-                                                            <div class="status-details small">
-                                                                <span class="present-count text-success" title="Present"></span>
-                                                                <span class="absent-count text-danger ml-1" title="Absent"></span>
-                                                                <span class="pending-count text-warning ml-1" title="Pending"></span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        @endforeach
-                                    </div>
-
-                                    {{-- Table View (Hidden by default) --}}
-                                    <div class="course-table-view d-none">
-                                        <div class="table-responsive">
-                                            <table class="table table-sm table-hover table-bordered mb-0">
-                                                <thead class="thead-dark">
-                                                    <tr>
-                                                        <th>{{ __('Code') }}</th>
-                                                        <th>{{ __('Course Title') }}</th>
-                                                        <th>{{ __('Program') }}</th>
-                                                        <th>{{ __('Year') }}</th>
-                                                        <th>{{ __('Semester') }}</th>
-                                                        <th>{{ __('Section') }}</th>
-                                                        <th>{{ __('Exam Type') }}</th>
-                                                        <th>{{ __('Action') }}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach($programData['subjects'] as $subjectIndex => $subjectData)
-                                                    @php 
-                                                        $uniqueIdTable = 'tbl_' . $programIndex . '_' . $subjectIndex;
-                                                    @endphp
-                                                    <tr>
-                                                        <td><span class="badge badge-secondary">{{ $subjectData['subject_code'] }}</span></td>
-                                                        <td><strong>{{ Str::limit($subjectData['subject_title'], 25) }}</strong></td>
-                                                        <td>
-                                                            <span class="badge badge-primary" title="{{ $programData['program_title'] }}">
-                                                                {{ Str::limit($programData['program_code'], 15) }}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <select class="form-control form-control-sm quick-year" 
-                                                                    id="year_{{ $uniqueIdTable }}"
-                                                                    data-unique="{{ $uniqueIdTable }}">
-                                                                @foreach($subjectData['years'] as $yr)
-                                                                <option value="{{ $yr }}" {{ $yr == $subjectData['first_year'] ? 'selected' : '' }}>
-                                                                    {{ __('Year') }} {{ $yr }}
-                                                                </option>
-                                                                @endforeach
-                                                            </select>
-                                                        </td>
-                                                        <td>
-                                                            <select class="form-control form-control-sm quick-semester" 
-                                                                    id="semester_{{ $uniqueIdTable }}"
-                                                                    data-subject="{{ $subjectData['subject_id'] }}"
-                                                                    data-semesters="{{ $subjectData['semesters']->toJson() }}">
-                                                                @foreach($subjectData['semesters'] as $sem)
-                                                                <option value="{{ $sem->id }}" 
-                                                                        data-year="{{ $sem->year }}"
-                                                                        data-is-resit="{{ $sem->is_resit ? '1' : '0' }}"
-                                                                        {{ $sem->id == $subjectData['first_semester_id'] ? 'selected' : '' }}>
-                                                                    {{ $sem->title }}@if($sem->is_resit) (Resit)@endif
-                                                                </option>
-                                                                @endforeach
-                                                            </select>
-                                                        </td>
-                                                        <td>
-                                                            @if($subjectData['sections']->count() > 1)
-                                                            <select class="form-control form-control-sm quick-section" id="section_{{ $uniqueIdTable }}">
-                                                                <option value="0">{{ __('All') }}</option>
-                                                                @foreach($subjectData['sections'] as $secIdx => $sec)
-                                                                <option value="{{ $sec->id }}" {{ $secIdx === 0 ? 'selected' : '' }}>{{ $sec->title }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                            @else
-                                                            <span class="badge badge-light">{{ $subjectData['first_section_title'] }}</span>
-                                                            <input type="hidden" id="section_{{ $uniqueIdTable }}" value="{{ $subjectData['first_section_id'] ?? 0 }}">
-                                                            @endif
-                                                        </td>
-                                                        <td>
-                                                            <select class="form-control form-control-sm quick-exam-type" id="examtype_{{ $uniqueIdTable }}" required>
-                                                                <option value="">{{ __('Select') }}</option>
-                                                                @foreach($examTypes as $et)
-                                                                <option value="{{ $et->id }}">{{ $et->title }}</option>
-                                                                @endforeach
-                                                            </select>
-                                                        </td>
-                                                        <td>
-                                                            <button type="button" 
-                                                                    class="btn btn-sm btn-info quick-take-attendance"
-                                                                    data-faculty="{{ $programData['faculty_id'] }}"
-                                                                    data-program="{{ $programData['program_id'] }}"
-                                                                    data-session="{{ $currentSession->id ?? '' }}"
-                                                                    data-subject="{{ $subjectData['subject_id'] }}"
-                                                                    data-unique="{{ $uniqueIdTable }}">
-                                                                <i class="fas fa-user-check"></i>
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                                @endforeach
+                                <span class="exm-label">{{ __('Advanced Filter') }}</span>
+                                <h4 style="margin:.1rem 0 0;font-size:1rem;font-weight:700;color:var(--ink)">{{ $title }}</h4>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-            @endif
 
-            {{-- Divider --}}
-            @if(isset($myAssignedCourses) && $myAssignedCourses->count() > 0)
-            <div class="col-sm-12 my-3">
-                <div class="d-flex align-items-center">
-                    <div class="flex-grow-1 border-bottom"></div>
-                    <span class="badge badge-secondary px-4 py-2 mx-3">
-                        <i class="fas fa-filter"></i> {{ __('Advanced Filter') }}
-                    </span>
-                    <div class="flex-grow-1 border-bottom"></div>
-                </div>
-            </div>
-            @endif
-
-            <div class="col-sm-12">
-                <div class="card" id="advancedFilterCard">
-                    <div class="card-header">
-                        <h5>{{ $title }}</h5>
-
-                        @can($access.'-import')
-                        <a href="{{ route($route.'.import') }}" class="btn btn-dark btn-sm float-right"><i class="fas fa-upload"></i> {{ __('btn_import') }}</a>
-                        @endcan
-                    </div>
-                    <div class="card-block">
-                        <form class="needs-validation" novalidate method="get" action="{{ route($route.'.index') }}" id="advancedFilterForm">
-                            {{-- Preserve cross-programme toggle state across filter submissions --}}
-                            @if($cross_program)
-                            <input type="hidden" name="cross_program" id="crossProgramHidden" value="1">
-                            @endif
+                        <div class="exm-filters">
                             <div class="row gx-2">
                                 @include('common.inc.subject_search_filter')
 
@@ -425,175 +90,125 @@
                                       {{ __('required_field') }} {{ __('field_type') }}
                                     </div>
                                 </div>
-                                <div class="form-group col-md-3">
-                                    <button type="submit" class="btn btn-info btn-filter"><i class="fas fa-search"></i> {{ __('btn_search') }}</button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            {{-- ══════════════════════════════════════════════════════════════════
-                 CROSS-PROGRAMME TOGGLE
-                 Allows supervisors to see students from all programmes taking
-                 the same course (useful for general/shared courses).
-                 Only shows when a subject has been selected and results exist.
-                 ══════════════════════════════════════════════════════════════════ --}}
-            @if(isset($rows) && isset($sharing_programs) && $sharing_programs->count() > 1)
-            <div class="col-sm-12">
-                <div class="card mb-2" style="border-left: 4px solid {{ $cross_program ? '#17a2b8' : '#6c757d' }}; transition: border-color 0.3s;">
-                    <div class="card-block py-3 px-4">
-                        <div class="d-flex align-items-center justify-content-between flex-wrap">
-                            {{-- Toggle switch --}}
-                            <div class="d-flex align-items-center">
-                                <div class="custom-control custom-switch mr-3">
-                                    <input type="checkbox" class="custom-control-input" id="crossProgramToggle"
-                                        {{ $cross_program ? 'checked' : '' }}>
-                                    <label class="custom-control-label font-weight-bold" for="crossProgramToggle" style="font-size: 14px; cursor: pointer;">
-                                        <i class="fas fa-globe mr-1 {{ $cross_program ? 'text-info' : 'text-muted' }}"></i>
-                                        All Programmes Mode
-                                    </label>
-                                </div>
-
-                                <span class="text-muted" style="font-size: 13px;">
-                                    @if($cross_program)
-                                        Showing students from <strong class="text-info">{{ $sharing_programs->count() }} programmes</strong> taking this course
-                                    @else
-                                        This course is shared by <strong>{{ $sharing_programs->count() }} programmes</strong> &mdash; toggle to see all
-                                    @endif
-                                </span>
-                            </div>
-
-                            {{-- Sharing programmes pills (collapsible) --}}
-                            <div>
-                                <button class="btn btn-sm btn-outline-secondary" type="button" data-toggle="collapse" data-target="#sharingProgramsList" aria-expanded="false">
-                                    <i class="fas fa-sitemap mr-1"></i> View Programmes
-                                </button>
                             </div>
                         </div>
 
-                        {{-- Collapsible programmes list --}}
-                        <div class="collapse {{ $cross_program ? 'show' : '' }} mt-3" id="sharingProgramsList">
-                            <div class="border rounded p-3" style="background: #f8f9fa;">
-                                <small class="text-muted d-block mb-2">
-                                    <i class="fas fa-info-circle"></i> Programmes offering this course:
-                                </small>
-                                <div class="d-flex flex-wrap" style="gap: 6px;">
-                                    @foreach($sharing_programs as $sp)
-                                        @php
-                                            $isCurrentProgram = ($sp->id == $selected_program);
-                                            $badgeClass = $isCurrentProgram ? 'badge-primary' : 'badge-light border';
-                                        @endphp
-                                        <span class="badge {{ $badgeClass }} px-2 py-1" style="font-size: 12px;">
-                                            @if($isCurrentProgram)
-                                                <i class="fas fa-map-marker-alt mr-1"></i>
-                                            @endif
-                                            {{ $sp->title }}
-                                            @if($sp->faculty)
-                                                <small class="ml-1 opacity-75">({{ Str::limit($sp->faculty->title, 20) }})</small>
-                                            @endif
-                                        </span>
-                                    @endforeach
-                                </div>
-                                @if($cross_program)
-                                <div class="mt-2">
-                                    <small class="text-info">
-                                        <i class="fas fa-check-circle"></i>
-                                        Cross-programme mode is <strong>active</strong>. Students from all {{ $sharing_programs->count() }} programmes are shown below, grouped by programme.
-                                    </small>
-                                </div>
-                                @endif
+                        <div class="exm-actions">
+                            <button type="submit" class="exm-btn exm-btn-main btn-filter">
+                                <i class="fas fa-search"></i> {{ __('btn_search') }}
+                            </button>
+
+                            @can($access.'-import')
+                            <span class="exm-right">
+                                <a href="{{ route($route.'.import') }}" class="exm-btn">
+                                    <i class="fas fa-upload"></i> {{ __('btn_import') }}
+                                </a>
+                            </span>
+                            @endcan
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {{-- Cross-programme mode. Only offered when the course is actually
+                 shared, which is the only time it means anything. --}}
+            @if(isset($rows) && isset($sharing_programs) && $sharing_programs->count() > 1)
+            <div class="col-sm-12">
+                <div class="exm-panel exm-cross {{ $cross_program ? 'is-on' : '' }}">
+                    <div class="exm-actions" style="border-top:0">
+                        <label class="exm-switch" for="crossProgramToggle">
+                            <input type="checkbox" id="crossProgramToggle" {{ $cross_program ? 'checked' : '' }}>
+                            <span class="track"></span>
+                            <span class="t">{{ __('All programmes') }}</span>
+                        </label>
+
+                        <span style="font-size:.82rem;color:var(--body)">
+                            @if($cross_program)
+                                {{ __('Showing every student taking this course, from all :count programmes, grouped by programme.', ['count' => $sharing_programs->count()]) }}
+                            @else
+                                {{ __(':count programmes share this course. Turn this on to see them all at once.', ['count' => $sharing_programs->count()]) }}
+                            @endif
+                        </span>
+
+                        <span class="exm-right">
+                            {{-- data-bs-*: this install is Bootstrap 5.2, where
+                                 data-toggle / data-target are not read. --}}
+                            <button class="exm-btn" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#sharingProgramsList"
+                                    aria-expanded="{{ $cross_program ? 'true' : 'false' }}"
+                                    aria-controls="sharingProgramsList">
+                                <i class="fas fa-sitemap"></i> {{ __('Which programmes') }}
+                            </button>
+                        </span>
+                    </div>
+
+                    <div class="collapse {{ $cross_program ? 'show' : '' }}" id="sharingProgramsList">
+                        <div style="padding:0 1.1rem 1rem">
+                            <div class="exm-pills">
+                                @foreach($sharing_programs as $sp)
+                                <span class="exm-pill {{ $sp->id == $selected_program ? 'is-here' : '' }}">
+                                    {{ $sp->title }}
+                                    @if($sp->faculty)<small>· {{ $sp->faculty->title }}</small>@endif
+                                </span>
+                                @endforeach
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             @elseif(isset($rows) && isset($sharing_programs) && $sharing_programs->count() == 1)
-            {{-- Single programme - show a subtle note --}}
             <div class="col-sm-12">
-                <div class="text-muted text-center mb-2" style="font-size: 12px;">
-                    <i class="fas fa-lock"></i> This course is exclusive to <strong>{{ $sharing_programs->first()->title }}</strong>
-                </div>
+                <p style="font-size:.78rem;color:var(--muted);margin:0 0 .75rem">
+                    <i class="fas fa-lock"></i>
+                    {{ __('Only :programme takes this course.', ['programme' => $sharing_programs->first()->title]) }}
+                </p>
             </div>
             @endif
 
             <div class="col-sm-12">
-                <div class="card">
+                @php
+                    // The caption and the band name what is being taken. Worked
+                    // out once here rather than by looping the whole subject and
+                    // type lists inside the table body, as this view used to.
+                    //
+                    // $subjects and $types are only set once a course has been
+                    // chosen, so both are read defensively: with no filter there
+                    // is nothing to name.
+                    $cur_subject = null;
+                    $cur_type = null;
+                    $bandSubject = null;
+                    $bandType = null;
+                    $bandSession = null;
+
+                    foreach (($subjects ?? []) as $subject) {
+                        if ($subject->id == $selected_subject) {
+                            $cur_subject = $subject->code;
+                            $bandSubject = trim($subject->code . ' · ' . $subject->title, ' ·');
+                        }
+                    }
+
+                    foreach (($types ?? []) as $type) {
+                        if ($type->id == $selected_type) {
+                            $cur_type = $bandType = $type->title;
+                        }
+                    }
+
+                    if (isset($rows) && count($rows) > 0) {
+                        $firstRow = $rows[array_key_first($rows)] ?? null;
+                        $bandSession = optional(optional($firstRow)->session)->title;
+                    }
+                @endphp
+
+                @if(isset($rows) && count($rows) > 0)
+                    @include('admin.exam.partials.attendance_band')
+                @endif
+
+                <div class="exm-panel">
                     @if(isset($rows))
-                    <div class="card-block">
-                        {{-- Check if exam scheduling is required but not done (only for final exams) --}}
-                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1 && isset($can_take_attendance) && !$can_take_attendance)
-                        <div class="alert alert-danger" role="alert">
-                            <i class="fas fa-exclamation-triangle"></i> <strong>{{ __('Exam Not Scheduled') }}:</strong> 
-                            This is a final exam and has not been scheduled in the <a href="{{ route('admin.exam-routine.create') }}">Exam Routine</a>. 
-                            Please schedule the exam first before taking attendance.
-                        </div>
-                        @else
-                            @if(isset($attendances))
-                            @if(count($attendances) > 0)
-                            <div class="alert alert-success" role="alert">
-                                {{ __('attendance_taken') }}
-                            </div>
-                            @else
-                            <div class="alert alert-danger" role="alert">
-                                {{ __('attendance_not_taken') }}
-                            </div>
-                            @endif
-                            @endif
-                            
-                            {{-- Show exam schedule info if available --}}
-                            @if(isset($exam_routine) && $exam_routine)
-                            <div class="alert alert-info" role="alert">
-                                <i class="fas fa-calendar-alt"></i> <strong>{{ __('Scheduled') }}:</strong> 
-                                {{ \Carbon\Carbon::parse($exam_routine->date)->format('d M, Y') }} 
-                                ({{ \Carbon\Carbon::parse($exam_routine->start_time)->format('h:i A') }} - {{ \Carbon\Carbon::parse($exam_routine->end_time)->format('h:i A') }})
-                            </div>
-                            @elseif(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 0)
-                            <div class="alert alert-warning" role="alert">
-                                <i class="fas fa-info-circle"></i> <strong>{{ __('Note') }}:</strong> 
-                                This is a non-final exam ({{ $selected_exam_type->title }}). Attendance can be taken without exam scheduling.
-                            </div>
-                            @endif
-                        @endif
-                    </div>
+                        @include('admin.exam.partials.attendance_notes')
                     @endif
-                    
+
                     @if(isset($rows) && isset($can_take_attendance) && $can_take_attendance)
-                    <div class="card-header">
-                        <div class="form-group d-inline">
-                            <div class="radio radio-primary d-inline">
-                                <input type="radio" name="all_check" id="attendance-p" class="all_present">
-                                <label for="attendance-p" class="cr">{{ __('all') }} {{ __('attendance_present') }}</label>
-                            </div>
-                        </div>
-                        <div class="form-group d-inline">
-                            <div class="radio radio-danger d-inline">
-                                <input type="radio" name="all_check" id="attendance-a" class="all_absent">
-                                <label for="attendance-a" class="cr">{{ __('all') }} {{ __('attendance_absent') }}</label>
-                            </div>
-                        </div>
-
-                        <a href="{{ route($route.'.index') }}" class="btn btn-info"><i class="fas fa-sync-alt"></i> {{ __('btn_refresh') }}</a>
-
-                        @if(isset($rows))
-                        @can('subject-marking-unlock')
-                        <button type="button" class="btn btn-warning" id="btn-bulk-unlock" style="display: none;">
-                            <i class="fas fa-unlock"></i> Bulk Unlock
-                        </button>
-                        @endcan
-                        <button type="button" class="btn btn-dark btn-print">
-                            <i class="fas fa-print"></i> {{ __('btn_print') }}
-                        </button>
-                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
-                        <a href="#" id="btn-print-sheet" class="btn btn-outline-dark"
-                           data-url="{{ route('admin.exam-attendance.print', ['faculty'=>$selected_faculty,'program'=>$selected_program,'session'=>$selected_session,'semester'=>$selected_semester,'section'=>$selected_section,'subject'=>$selected_subject,'type'=>$selected_type]) }}">
-                            <i class="fas fa-file-signature"></i> {{ __('Print Blank Sign-In/Out Sheet') }}
-                        </a>
-                        @endif
-                        @endif
-                        <div class="clearfix"></div>
-                    </div>
 
                     <form class="needs-validation" novalidate action="{{ route($route.'.store') }}" method="post" enctype="multipart/form-data">
                     @csrf
@@ -607,19 +222,6 @@
                         @endif
                     @endforeach
                     @endif
-                    
-                    <div class="card-block">
-                        <div class="row">
-                            <div class="form-group col-sm-6 col-md-3">
-                                <label for="date">{{ __('field_date') }} <span>*</span></label>
-                                <input type="date" class="form-control date" name="date" id="date" value="{{ $check_data->date ?? '' }}" required>
-                                    
-                                <div class="invalid-feedback">
-                                    {{ __('required_field') }} {{ __('field_date') }}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                     <input type="hidden" name="subject" value="{{ $selected_subject }}">
                     <input type="hidden" name="type" value="{{ $selected_type }}">
@@ -630,366 +232,95 @@
                     <input type="hidden" name="signouts" class="signouts" value="">
                     @endif
 
-                    <div class="card-block">
-                        @if(isset($attendance_setting) && $attendance_setting && $attendance_setting->is_enabled && isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i> 
-                            <strong>Final Exam Attendance Eligibility:</strong> Students require minimum <strong>{{ $attendance_setting->minimum_attendance_percentage }}%</strong> course attendance to be eligible for final exams.
-                            Students below this threshold are automatically marked as "Absent" and cannot write the exam unless bypassed.
-                        </div>
+                    {{-- The date the roll is for, and the two whole-column
+                         shortcuts, on one line above the names. --}}
+                    <div class="exm-actions">
+                        <span>
+                            <label for="date" class="exm-label" style="display:block;margin-bottom:.2rem">
+                                {{ __('field_date') }} *
+                            </label>
+                            <input type="date" class="form-control date" name="date" id="date"
+                                   value="{{ $check_data->date ?? '' }}" required
+                                   style="border:1px solid var(--rule);border-radius:6px;font-size:.86rem;width:auto">
+                            <div class="invalid-feedback">
+                                {{ __('required_field') }} {{ __('field_date') }}
+                            </div>
+                        </span>
+
+                        @if(count($rows) > 0)
+                        <span style="margin-left:.5rem">
+                            <span class="exm-label" style="display:block;margin-bottom:.2rem">{{ __('Mark everyone') }}</span>
+                            <span class="exm-pa">
+                                <span class="form-group d-inline">
+                                    <span class="radio radio-primary d-inline">
+                                        <input type="radio" name="all_check" id="attendance-p" class="all_present">
+                                        <label for="attendance-p" class="cr">{{ __('attendance_present') }}</label>
+                                    </span>
+                                </span>
+                                <span class="form-group d-inline">
+                                    <span class="radio radio-danger d-inline">
+                                        <input type="radio" name="all_check" id="attendance-a" class="all_absent">
+                                        <label for="attendance-a" class="cr">{{ __('attendance_absent') }}</label>
+                                    </span>
+                                </span>
+                            </span>
+                        </span>
                         @endif
-                        
-                        <!-- [ Data table ] start -->
-                        <div class="table-responsive">
-                            <table class="display table nowrap table-striped table-hover printable">
-                                <thead>
-                                    <tr>
-                                        @can('subject-marking-unlock')
-                                        <th class="text-center" style="width: 40px;">
-                                            <div class="checkbox checkbox-warning d-inline">
-                                                <input type="checkbox" id="checkAllUnlock" class="check-all-unlock">
-                                                <label for="checkAllUnlock" class="cr"></label>
-                                            </div>
-                                        </th>
-                                        @endcan
-                                        <th>S/N</th>
-                                        <th>{{ __('field_matricule') }}</th>
-                                        <th>{{ __('field_name') }}</th>
-                                        <th>{{ trans_choice('module_program', 1) }}</th>
-                                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
-                                        <th>{{ __('Attendance Mark') }}</th>
-                                        <th>Eligibility</th>
-                                        @foreach(($ca_types ?? collect()) as $ct)
-                                        <th title="{{ __('CA') }} / {{ rtrim(rtrim(number_format($ct->marks,2),'0'),'.') }}">{{ $ct->title }}</th>
-                                        @endforeach
-                                        <th>{{ __('Sign In') }}</th>
-                                        <th>{{ __('Sign Out') }}</th>
-                                        @endif
-                                        <th>{{ __('field_attendance') }}</th>
-                                        <th>{{ __('Status') }}</th>
-                                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
-                                        @can('exam-attendance-bypass')
-                                        <th>Bypass</th>
-                                        @endcan
-                                        @endif
-                                        <th>{{ __('field_semester') }}</th>
-                                        <th>{{ __('field_section') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach( $subjects as $subject )
-                                    @if($subject->id == $selected_subject)
-                                    @php
-                                        $cur_subject = $subject->code;
-                                    @endphp
-                                    @endif
-                                    @endforeach
-                                    @foreach( $types as $type )
-                                    @if($type->id == $selected_type)
-                                    @php
-                                        $cur_type = $type->title;
-                                    @endphp
-                                    @endif
-                                    @endforeach
-                                  @php $prevProgramId = null; @endphp
-                                  @foreach( $rows as $key => $row )
-                                    @php
-                                        // Check if this is a final exam
-                                        $is_final_exam = isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1;
-                                        
-                                        // Get attendance data for this student (only for final exams)
-                                        $attendance_data = null;
-                                        $attendance_percentage = null;   // null = no class attendance recorded (N/A)
-                                        $attendance_mark = null;
-                                        $attendance_contribution = 0;
-                                        $no_attendance_records = false;
 
-                                        if($is_final_exam){
-                                            $attendance_data = $student_attendance_percentages[$row->id] ?? null;
-                                            $attendance_percentage = $attendance_data['percentage'] ?? null;
-                                            $attendance_mark = $attendance_data['attendance_mark'] ?? null;
-                                            $attendance_contribution = $attendance_data['attendance_contribution'] ?? 0;
-                                            $no_attendance_records = $is_final_exam && is_null($attendance_percentage);
-                                        }
+                        <span class="exm-right">
+                            @can('subject-marking-unlock')
+                            <button type="button" class="exm-btn" id="btn-bulk-unlock" style="display: none;">
+                                <i class="fas fa-unlock"></i> {{ __('Unlock selected') }}
+                            </button>
+                            @endcan
 
-                                        // Check if student is eligible (only for final exams).
-                                        // No class attendance recorded (null %) ⇒ eligible (do not block).
-                                        $is_eligible = true;
-                                        $minimum_percentage = $attendance_setting->minimum_attendance_percentage ?? 70;
+                            @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
+                            <a href="#" id="btn-print-sheet" class="exm-btn"
+                               data-url="{{ route('admin.exam-attendance.print', ['faculty'=>$selected_faculty,'program'=>$selected_program,'session'=>$selected_session,'semester'=>$selected_semester,'section'=>$selected_section,'subject'=>$selected_subject,'type'=>$selected_type]) }}">
+                                <i class="fas fa-file-signature"></i> {{ __('Blank sign-in sheet') }}
+                            </a>
+                            @endif
 
-                                        if($is_final_exam && $attendance_setting && $attendance_setting->is_enabled){
-                                            $is_eligible = is_null($attendance_percentage) ? true : ($attendance_percentage >= $minimum_percentage);
-                                        }
-                                        
-                                        // Check if bypass is already set for this student
-                                        $is_bypassed = false;
-                                        if($is_final_exam && isset($attendances)){
-                                            foreach($attendances as $attendance){
-                                                if($attendance->student_enroll_id == $row->id && $attendance->bypass_course_attendance){
-                                                    $is_bypassed = true;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Student can attend if: not a final exam OR eligible OR bypassed
-                                        $can_attend = !$is_final_exam || $is_eligible || $is_bypassed;
-                                        
-                                        // Show warning even when bypassed (for visibility)
-                                        $show_warning = $is_final_exam && !$is_eligible;
+                            <button type="button" class="exm-btn btn-print">
+                                <i class="fas fa-print"></i> {{ __('btn_print') }}
+                            </button>
 
-                                        // Check lock
-                                        $is_locked = false;
-                                        if(isset($attendances)){
-                                            foreach($attendances as $attendance){
-                                                if($attendance->student_enroll_id == $row->id){
-                                                    $is_locked = $attendance->attendance_locked;
-                                                    break;
-                                                }
-                                            }
-                                        }
-
-                                        // Cross-programme group separator detection
-                                        $currentProgramId = $row->program_id;
-                                        $isNewProgramGroup = isset($cross_program) && $cross_program && ($currentProgramId !== $prevProgramId);
-                                    @endphp
-
-                                    {{-- Programme group separator (cross-programme mode only) --}}
-                                    @if($isNewProgramGroup)
-                                    @php
-                                        // Count students in this programme group
-                                        $programGroupCount = collect($rows)->where('program_id', $currentProgramId)->count();
-                                        $colSpan = 8 + ($is_final_exam ? 2 : 0) + ($is_final_exam && auth()->user()->can('exam-attendance-bypass') ? 1 : 0) + (auth()->user()->can('subject-marking-unlock') ? 1 : 0);
-                                    @endphp
-                                    <tr class="cross-program-separator" style="background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%); border-top: 2px solid #17a2b8;">
-                                        <td colspan="{{ $colSpan }}" class="py-2 px-3">
-                                            <div class="d-flex align-items-center justify-content-between">
-                                                <div>
-                                                    <i class="fas fa-graduation-cap text-info mr-2"></i>
-                                                    <strong style="font-size: 13px; color: #0c5460;">{{ $row->program->title ?? 'Unknown Programme' }}</strong>
-                                                    @if($row->program && $row->program->faculty)
-                                                        <small class="text-muted ml-2">({{ $row->program->faculty->title ?? '' }})</small>
-                                                    @endif
-                                                </div>
-                                                <span class="badge badge-info">{{ $programGroupCount }} {{ Str::plural('student', $programGroupCount) }}</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    @endif
-                                    @php $prevProgramId = $currentProgramId; @endphp
-
-                                    <tr class="{{ $show_warning ? 'table-danger' : '' }}" style="{{ $is_bypassed ? 'background-color: #fff3cd !important;' : '' }}">
-                                        @can('subject-marking-unlock')
-                                        <td class="text-center">
-                                            @if($is_locked)
-                                            <div class="checkbox checkbox-warning d-inline">
-                                                <input type="checkbox" class="bulk-unlock-checkbox" id="unlock-{{ $key }}" value="{{ $row->id }}">
-                                                <label for="unlock-{{ $key }}" class="cr"></label>
-                                            </div>
-                                            @endif
-                                        </td>
-                                        @endcan
-                                        <td>{{ $loop->iteration }}</td>
-                                        <td>
-                                            @isset($row->matricule)
-                                            <a href="{{ route('admin.student.show', $row->student->id) }}">
-                                            <strong style="color: #667eea;">#{{ $row->matricule ?? '' }}</strong>
-                                            @if($row->program)
-                                                <br>
-                                                <span class="badge" style="background: {{ $row->program->academic_level == 'M' ? '#f5576c' : ($row->program->academic_level == 'D' ? '#00f2fe' : '#38f9d7') }}; color: white; font-size: 9px;">
-                                                    {{ $row->program->academic_level == 'A' ? 'UG' : ($row->program->academic_level == 'M' ? 'MS' : 'PhD') }}
-                                                </span>
-                                            @endif
-                                            </a>
-                                            @endisset
-                                        </td>
-                                        <td>{{ $row->student->first_name ?? '' }} {{ $row->student->last_name ?? '' }}</td>
-                                        <td>
-                                            @if($row->program)
-                                                <span class="badge badge-light border" style="font-size: 11px; white-space: normal; text-align: left; max-width: 180px;">
-                                                    {{ Str::limit($row->program->title ?? '', 30) }}
-                                                </span>
-                                                @if(isset($cross_program) && $cross_program && $row->program_id == $selected_program)
-                                                    <br><small class="text-primary"><i class="fas fa-map-marker-alt"></i> primary</small>
-                                                @endif
-                                            @else
-                                                <span class="text-muted">N/A</span>
-                                            @endif
-                                        </td>
-                                        @if($is_final_exam)
-                                        <td>
-                                            @if($no_attendance_records)
-                                                <span class="badge badge-secondary">N/A</span>
-                                                <small class="d-block text-muted">{{ __('No class attendance recorded') }}</small>
-                                            @elseif($attendance_data)
-                                                <span class="badge badge-{{ $attendance_percentage >= $minimum_percentage ? 'success' : 'danger' }}">
-                                                    {{ rtrim(rtrim(number_format($attendance_mark,2),'0'),'.') }} / {{ rtrim(rtrim(number_format($attendance_contribution,2),'0'),'.') }}
-                                                </span>
-                                                <small class="d-block text-muted">
-                                                    {{ $attendance_percentage }}% · P:{{ $attendance_data['present'] }} A:{{ $attendance_data['absent'] }} L:{{ $attendance_data['leave'] }}
-                                                </small>
-                                            @else
-                                                <span class="badge badge-secondary">N/A</span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @if($is_bypassed)
-                                                <span class="badge badge-warning"><i class="fas fa-check-circle"></i> Bypassed</span>
-                                            @elseif($is_eligible)
-                                                <span class="badge badge-success"><i class="fas fa-check-circle"></i> Eligible</span>
-                                            @else
-                                                <span class="badge badge-danger"><i class="fas fa-times-circle"></i> Not Eligible</span>
-                                            @endif
-                                        </td>
-                                        @endif
-
-                                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
-                                        @foreach(($ca_types ?? collect()) as $ct)
-                                            @php $cm = $ca_marks[$row->id][$ct->id] ?? null; @endphp
-                                            <td class="text-center">
-                                                @if($cm && !is_null($cm['achieve']))
-                                                    {{ rtrim(rtrim(number_format($cm['achieve'],2),'0'),'.') }} / {{ rtrim(rtrim(number_format($cm['marks'],2),'0'),'.') }}
-                                                @else
-                                                    <span class="text-muted">&mdash;</span>
-                                                @endif
-                                            </td>
-                                        @endforeach
-                                        @endif
-
-                                        @if(isset($selected_exam_type) && $selected_exam_type && $selected_exam_type->is_final == 1)
-                                        @php
-                                            $rowSignIn = false; $rowSignOut = false;
-                                            if(isset($attendances)){
-                                                foreach($attendances as $att){
-                                                    if($att->student_enroll_id == $row->id){
-                                                        $rowSignIn = (bool) $att->sign_in;
-                                                        $rowSignOut = (bool) $att->sign_out;
-                                                    }
-                                                }
-                                            }
-                                        @endphp
-                                        <td>
-                                            <div class="checkbox checkbox-primary d-inline">
-                                                <input class="c-signin" type="checkbox" data_signin_id="{{ $row->id }}" id="signin-{{ $key }}" value="1"
-                                                    {{ (!$can_attend || $is_locked) ? 'disabled' : '' }} {{ $rowSignIn ? 'checked' : '' }}>
-                                                <label for="signin-{{ $key }}" class="cr">{{ __('Sign In') }}</label>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div class="checkbox checkbox-success d-inline">
-                                                <input class="c-signout" type="checkbox" data_signout_id="{{ $row->id }}" id="signout-{{ $key }}" value="1"
-                                                    {{ (!$can_attend || $is_locked || !$rowSignIn) ? 'disabled' : '' }} {{ $rowSignOut ? 'checked' : '' }}>
-                                                <label for="signout-{{ $key }}" class="cr">{{ __('Sign Out') }}</label>
-                                            </div>
-                                        </td>
-                                        @endif
-
-                                        <td>
-                                        <input type="text" name="students[]" value="{{ $row->id }}" hidden>
-
-                                        <div class="form-group d-inline">
-                                            <div class="radio radio-primary d-inline">
-                                                <input class="c-present" type="radio" data_id="{{ $row->id }}" name="attendances-{{ $key }}" id="attendance-p-{{ $key }}" value="1" required 
-                                                {{ (!$can_attend || $is_locked) ? 'disabled' : '' }}
-                                                @if(isset($attendances))
-                                                @foreach($attendances as $attendance)
-                                                    @if($attendance->student_enroll_id == $row->id && $attendance->attendance == 1)
-                                                        checked
-                                                    @endif
-                                                @endforeach
-                                                @endif
-                                                >
-                                                <label for="attendance-p-{{ $key }}" class="cr">{{ __('attendance_present') }}</label>
-                                            </div>
-                                        </div>
-                                        <div class="form-group d-inline">
-                                            <div class="radio radio-danger d-inline">
-                                                <input class="c-absent" type="radio" data_id="{{ $row->id }}" name="attendances-{{ $key }}" id="attendance-a-{{ $key }}" value="2" required 
-                                                {{ (!$can_attend) ? 'checked' : '' }} {{ (!$can_attend || $is_locked) ? 'disabled' : '' }}
-                                                @if(isset($attendances))
-                                                @foreach($attendances as $attendance)
-                                                    @if($attendance->student_enroll_id == $row->id && $attendance->attendance == 2)
-                                                        checked
-                                                    @endif
-                                                @endforeach
-                                                @endif
-                                                >
-                                                <label for="attendance-a-{{ $key }}" class="cr">{{ __('attendance_absent') }}</label>
-                                            </div>
-                                        </div>
-                                        @if($show_warning)
-                                            <small class="d-block" style="color: {{ $is_bypassed ? '#856404' : '#dc3545' }};">
-                                                <i class="fas fa-exclamation-triangle"></i> Below minimum attendance threshold
-                                                @if($is_bypassed)
-                                                    <span class="badge badge-warning ml-1">Bypassed</span>
-                                                @endif
-                                            </small>
-                                        @endif
-                                        </td>
-                                        <td>
-                                            @if($is_locked)
-                                                <span class="badge badge-danger"><i class="fas fa-lock"></i></span>
-                                                @can('subject-marking-unlock')
-                                                <button type="button" class="btn btn-icon btn-outline-warning btn-sm unlock-attendance" 
-                                                    data-student="{{ $row->id }}" 
-                                                    data-subject="{{ $selected_subject }}" 
-                                                    data-type="{{ $selected_type }}"
-                                                    title="Unlock Attendance">
-                                                    <i class="fas fa-unlock"></i>
-                                                </button>
-                                                @endcan
-                                            @else
-                                                <span class="badge badge-success"><i class="fas fa-lock-open"></i></span>
-                                            @endif
-                                        </td>
-                                        @if($is_final_exam)
-                                        @can('exam-attendance-bypass')
-                                        <td>
-                                            <div class="custom-control custom-checkbox">
-                                                <input type="checkbox" class="custom-control-input c-bypass" id="bypass-{{ $key }}" name="bypass-{{ $key }}" value="{{ $key }}" data_bypass_id="{{ $row->id }}"
-                                                {{ $is_bypassed ? 'checked' : '' }}
-                                                >
-                                                <label class="custom-control-label" for="bypass-{{ $key }}">
-                                                    @if($is_bypassed)
-                                                        <span class="badge badge-warning">Active</span>
-                                                    @else
-                                                        Bypass
-                                                    @endif
-                                                </label>
-                                            </div>
-                                        </td>
-                                        @endcan
-                                        @endif
-                                        <td>{{ $row->semester->title ?? '' }}</td>
-                                        <td>{{ $row->section->title ?? '' }}</td>
-                                    </tr>
-                                  @endforeach
-                                </tbody>
-
-                                <caption>{{ $cur_subject ?? '' }} - {{ $cur_type ?? '' }} - {{ $row->session->title ?? '' }}</caption>
-                            </table>
-                        </div>
-                        <!-- [ Data table ] end -->
+                            <a href="{{ route($route.'.index') }}" class="exm-btn">
+                                <i class="fas fa-sync-alt"></i> {{ __('btn_refresh') }}
+                            </a>
+                        </span>
                     </div>
-                    
-                    @if(count($rows) < 1)
-                    <div class="card-block">
-                        <h5>{{ __('no_result_found') }}</h5>
-                    </div>
-                    @endif
 
                     @if(count($rows) > 0)
-                    <div class="card-footer">
-                        <button type="button" class="btn btn-success" id="btnShowConfirmModal"><i class="fas fa-check"></i> {{ __('btn_update') }}</button>
+                    <div style="padding:0 1.1rem">
+                        @include('admin.exam.partials.attendance_table')
+                    </div>
+
+                    <div class="exm-actions">
+                        <button type="button" class="exm-btn exm-btn-main" id="btnShowConfirmModal">
+                            <i class="fas fa-check"></i> {{ __('btn_update') }}
+                        </button>
+                        <span style="font-size:.78rem;color:var(--muted)">
+                            {{ __('You will be shown a summary before anything is saved.') }}
+                        </span>
+                    </div>
+                    @else
+                    <div class="exm-empty">
+                        <i class="fas fa-user-check"></i>
+                        <p>{{ __('no_result_found') }}</p>
+                        <small>{{ __('No student is enrolled on this course for the filter above.') }}</small>
                     </div>
                     @endif
                     </form>
+
                     @else
-                    {{-- Final exam not scheduled - show info only, no form --}}
+
+                    {{-- Final exam not scheduled: the roll is readable, but there
+                         is nothing to tick, so no form is rendered. --}}
                     @if(isset($rows) && count($rows) > 0)
-                    <div class="card-block">
-                        <div class="table-responsive">
-                            <table class="display table nowrap table-striped table-hover">
+                    <div style="padding:.9rem 1.1rem 1.1rem">
+                        <div class="exm-scroll">
+                            <table class="display table nowrap exm-table">
                                 <thead>
                                     <tr>
                                         <th>{{ __('field_matricule') }}</th>
@@ -1002,24 +333,31 @@
                                 <tbody>
                                     @foreach($rows as $row)
                                     <tr>
-                                        <td>{{ $row->matricule }}</td>
-                                        <td>{{ $row->student->first_name ?? '' }} {{ $row->student->last_name ?? '' }}</td>
-                                        <td><span class="badge badge-light border" style="font-size:11px;">{{ $row->program->title ?? 'N/A' }}</span></td>
-                                        <td>{{ $row->semester->title ?? '' }}</td>
-                                        <td>{{ $row->section->title ?? 'N/A' }}</td>
+                                        <td class="exm-who">{{ $row->matricule }}</td>
+                                        <td class="exm-who">{{ $row->student->first_name ?? '' }} {{ $row->student->last_name ?? '' }}</td>
+                                        <td class="exm-meta">{{ $row->program->title ?? '—' }}</td>
+                                        <td class="exm-meta">{{ $row->semester->title ?? '' }}</td>
+                                        <td class="exm-meta">{{ $row->section->title ?? '—' }}</td>
                                     </tr>
                                     @endforeach
                                 </tbody>
                             </table>
                         </div>
-                        <div class="alert alert-warning mt-3">
-                            <i class="fas fa-info-circle"></i> The student list above is for reference only. 
-                            Please <a href="{{ route('admin.exam-routine.create') }}">schedule the final exam</a> first to enable attendance taking.
+
+                        <div class="exm-notes" style="padding:.9rem 0 0">
+                            <div class="exm-note-row is-warn">
+                                <i class="fas fa-info-circle"></i>
+                                <span>
+                                    {{ __('This list is for reference only.') }}
+                                    <a href="{{ route('admin.exam-routine.create') }}">{{ __('Schedule the final exam') }}</a>
+                                    {{ __('to start taking attendance.') }}
+                                </span>
+                            </div>
                         </div>
                     </div>
                     @endif
-                    @endif
 
+                    @endif
                 </div>
             </div>
         </div>
@@ -1028,163 +366,122 @@
 </div>
 <!-- End Content-->
 
-<!-- Confirmation Modal -->
+{{-- The summary shown before anything is written. Every id the handler fills
+     in is unchanged. --}}
 @if(isset($rows) && count($rows) > 0 && isset($can_take_attendance) && $can_take_attendance)
-<div class="modal fade" id="confirmAttendanceModal" tabindex="-1" role="dialog" aria-labelledby="confirmAttendanceModalLabel" aria-hidden="true">
+<div class="modal fade exm-modal" id="confirmAttendanceModal" tabindex="-1" role="dialog" aria-labelledby="confirmAttendanceModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title" id="confirmAttendanceModalLabel">
-                    <i class="fas fa-clipboard-check"></i> Confirm Exam Attendance Submission
+                    {{ __('Before this is saved') }}
                 </h5>
-                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                {{-- data-bs-dismiss: on 5.x, data-dismiss does not close it. --}}
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"
+                        style="border:0;background:none;font-size:1.4rem;line-height:1;color:var(--muted)">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
-                <!-- Exam Details Section -->
-                <div class="card mb-3 border-primary">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0"><i class="fas fa-info-circle text-primary"></i> Exam Details</h6>
+
+                <dl class="exm-kv" style="margin-bottom:1rem">
+                    <dt>{{ __('field_subject') }}</dt>
+                    <dd>
+                        @foreach(($subjects ?? []) as $subj)
+                            @if($subj->id == $selected_subject){{ $subj->code }} · {{ $subj->title }}@endif
+                        @endforeach
+                    </dd>
+
+                    <dt>{{ __('field_type') }}</dt>
+                    <dd>
+                        @foreach(($types ?? []) as $t)
+                            @if($t->id == $selected_type){{ $t->title }}@endif
+                        @endforeach
+                        @if(isset($selected_exam_type) && $selected_exam_type->is_final == 1)
+                            <span class="exm-tag exm-tag-bad">{{ __('Final exam') }}</span>
+                        @endif
+                    </dd>
+
+                    <dt>{{ __('field_session') }}</dt>
+                    <dd>{{ $bandSession ?? '—' }}</dd>
+
+                    <dt>{{ __('field_date') }}</dt>
+                    <dd><span id="modalExamDate">--</span></dd>
+                </dl>
+
+                <span class="exm-label">{{ __('What you are about to record') }}</span>
+                <div class="exm-tiles" style="margin-top:.35rem">
+                    <div class="exm-tile">
+                        <span class="v" id="totalStudents">0</span>
+                        <span class="k">{{ __('Students') }}</span>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p class="mb-2"><strong><i class="fas fa-book"></i> Subject:</strong> 
-                                    <span class="badge badge-info">
-                                        @foreach($subjects as $subj)
-                                            @if($subj->id == $selected_subject)
-                                                {{ $subj->code }} - {{ $subj->title }}
-                                            @endif
-                                        @endforeach
-                                    </span>
-                                </p>
-                                <p class="mb-2"><strong><i class="fas fa-file-alt"></i> Exam Type:</strong>
-                                    <span class="badge {{ isset($selected_exam_type) && $selected_exam_type->is_final == 1 ? 'badge-danger' : 'badge-warning' }}">
-                                        @foreach($types as $t)
-                                            @if($t->id == $selected_type)
-                                                {{ $t->title }}
-                                                @if(isset($selected_exam_type) && $selected_exam_type->is_final == 1)
-                                                    (Final Exam)
-                                                @endif
-                                            @endif
-                                        @endforeach
-                                    </span>
-                                </p>
-                            </div>
-                            <div class="col-md-6">
-                                <p class="mb-2"><strong><i class="fas fa-calendar-alt"></i> Session:</strong>
-                                    @if(isset($rows) && count($rows) > 0)
-                                        {{ $rows[array_key_first($rows)]->session->title ?? 'N/A' }}
-                                    @endif
-                                </p>
-                                <p class="mb-2"><strong><i class="fas fa-clock"></i> Exam Date:</strong> 
-                                    <span id="modalExamDate" class="text-primary font-weight-bold">--</span>
-                                </p>
-                            </div>
-                        </div>
+                    <div class="exm-tile is-good">
+                        <span class="v" id="presentCount">0</span>
+                        <span class="k">{{ __('attendance_present') }}</span>
+                    </div>
+                    <div class="exm-tile is-bad">
+                        <span class="v" id="absentCount">0</span>
+                        <span class="k">{{ __('attendance_absent') }}</span>
+                    </div>
+                    <div class="exm-tile">
+                        <span class="v" id="unmarkedCount">0</span>
+                        <span class="k">{{ __('Unmarked') }}</span>
                     </div>
                 </div>
 
-                <!-- Attendance Summary Section -->
-                <div class="card mb-3 border-success">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0"><i class="fas fa-users text-success"></i> Attendance Summary</h6>
+                <div style="margin-top:.8rem">
+                    <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted)">
+                        <span class="exm-label">{{ __('Attendance rate') }}</span>
+                        <span class="exm-num" id="attendanceRate" style="color:var(--ink);font-weight:700">0%</span>
                     </div>
-                    <div class="card-body">
-                        <div class="row text-center">
-                            <div class="col-md-3">
-                                <div class="p-3 bg-light rounded">
-                                    <h3 class="mb-0 text-primary" id="totalStudents">0</h3>
-                                    <small class="text-muted">Total Students</small>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="p-3 bg-success text-white rounded">
-                                    <h3 class="mb-0" id="presentCount">0</h3>
-                                    <small>Present</small>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="p-3 bg-danger text-white rounded">
-                                    <h3 class="mb-0" id="absentCount">0</h3>
-                                    <small>Absent</small>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="p-3 bg-secondary text-white rounded">
-                                    <h3 class="mb-0" id="unmarkedCount">0</h3>
-                                    <small>Unmarked</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Attendance Rate Progress Bar -->
-                        <div class="mt-3">
-                            <div class="d-flex justify-content-between mb-1">
-                                <span>Attendance Rate</span>
-                                <span id="attendanceRate">0%</span>
-                            </div>
-                            <div class="progress" style="height: 20px;">
-                                <div class="progress-bar bg-success" role="progressbar" id="attendanceProgressBar" style="width: 0%"></div>
-                                <div class="progress-bar bg-danger" role="progressbar" id="absentProgressBar" style="width: 0%"></div>
-                            </div>
-                        </div>
+                    <div class="exm-split" style="margin-top:.3rem">
+                        <div class="progress-bar" id="attendanceProgressBar" style="width:0%;background:var(--good)"></div>
+                        <div class="progress-bar" id="absentProgressBar" style="width:0%;background:var(--bad)"></div>
                     </div>
                 </div>
 
-                <!-- Warnings Section (for Final Exams) -->
                 @if(isset($selected_exam_type) && $selected_exam_type->is_final == 1)
-                <div class="card mb-3 border-warning" id="warningsSection">
-                    <div class="card-header bg-warning text-dark">
-                        <h6 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Final Exam Eligibility</h6>
+                <div id="warningsSection" style="margin-top:1rem">
+                    <span class="exm-label">{{ __('Eligibility') }}</span>
+                    <div class="exm-tiles" style="grid-template-columns:repeat(3,1fr);margin-top:.35rem">
+                        <div class="exm-tile is-good">
+                            <span class="v" id="eligibleCount">0</span>
+                            <span class="k">{{ __('Eligible') }}</span>
+                        </div>
+                        <div class="exm-tile is-bad">
+                            <span class="v" id="ineligibleCount">0</span>
+                            <span class="k">{{ __('Not eligible') }}</span>
+                        </div>
+                        <div class="exm-tile is-warn">
+                            <span class="v" id="bypassedCount">0</span>
+                            <span class="k">{{ __('Bypassed') }}</span>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row text-center">
-                            <div class="col-md-4">
-                                <div class="p-2 border rounded">
-                                    <h4 class="mb-0 text-success" id="eligibleCount">0</h4>
-                                    <small class="text-muted">Eligible Students</small>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="p-2 border rounded border-danger">
-                                    <h4 class="mb-0 text-danger" id="ineligibleCount">0</h4>
-                                    <small class="text-muted">Not Eligible</small>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="p-2 border rounded border-warning">
-                                    <h4 class="mb-0 text-warning" id="bypassedCount">0</h4>
-                                    <small class="text-muted">Bypassed</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="alert alert-info mt-3 mb-0" id="eligibilityNote">
-                            <i class="fas fa-info-circle"></i> 
-                            <span id="eligibilityMessage">Students require minimum {{ $attendance_setting->minimum_attendance_percentage ?? 70 }}% course attendance to be eligible.</span>
-                        </div>
+
+                    {{-- The handler swaps alert-info / alert-warning /
+                         alert-danger on this element, so those three classes
+                         stay the hook; is-warn is what it looks like here. --}}
+                    <div class="exm-note-row alert-info" id="eligibilityNote" style="margin-top:.5rem">
+                        <i class="fas fa-info-circle"></i>
+                        <span id="eligibilityMessage">
+                            {{ __('A student needs at least :pct% course attendance to be eligible.', ['pct' => $attendance_setting->minimum_attendance_percentage ?? 70]) }}
+                        </span>
                     </div>
                 </div>
                 @endif
 
-                <!-- Confirmation Notice -->
-                <div class="alert alert-warning mb-0">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-exclamation-circle fa-2x mr-3"></i>
-                        <div>
-                            <strong>Please Review Before Submitting!</strong>
-                            <p class="mb-0 small">Once submitted, attendance records will be saved. Make sure all information is correct before proceeding.</p>
-                        </div>
-                    </div>
+                <div class="exm-note-row is-warn" style="margin-top:1rem">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>
+                        <b>{{ __('Read it over first.') }}</b>
+                        {{ __('Once submitted, these records are saved and locked.') }}
+                    </span>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
-                    <i class="fas fa-times"></i> Cancel
-                </button>
-                <button type="button" class="btn btn-success" id="btnConfirmSubmit">
-                    <i class="fas fa-check"></i> Confirm & Submit Attendance
+                <button type="button" class="exm-btn" data-bs-dismiss="modal">{{ __('btn_cancel') }}</button>
+                <button type="button" class="exm-btn exm-btn-main" id="btnConfirmSubmit">
+                    <i class="fas fa-check"></i> {{ __('Save attendance') }}
                 </button>
             </div>
         </div>
@@ -1192,69 +489,55 @@
 </div>
 @endif
 
-{{-- ══════════════════════════════════════════════════════════════
-     SUCCESS MODAL – shown after attendance is saved via session flash
-     ══════════════════════════════════════════════════════════════ --}}
+{{-- Shown once, after a save, from the session flash. --}}
 @if(session('attendance_saved'))
 @php $saved = session('attendance_saved'); @endphp
-<div class="modal fade" id="attendanceSavedModal" tabindex="-1" role="dialog" aria-labelledby="attendanceSavedModalLabel" aria-hidden="true">
+<div class="modal fade exm-modal" id="attendanceSavedModal" tabindex="-1" role="dialog" aria-labelledby="attendanceSavedModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
-        <div class="modal-content border-success">
-            <div class="modal-header bg-success text-white">
+        <div class="modal-content">
+            <div class="modal-header">
                 <h5 class="modal-title" id="attendanceSavedModalLabel">
-                    <i class="fas fa-check-circle"></i> Attendance Submitted Successfully
+                    <i class="fas fa-check-circle" style="color:var(--good)"></i> {{ __('Attendance saved') }}
                 </h5>
-                <button type="button" class="close text-white" data-bs-dismiss="modal" aria-label="Close">
+                <button type="button" class="close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"
+                        style="border:0;background:none;font-size:1.4rem;line-height:1;color:var(--muted)">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <div class="modal-body text-center py-4">
-                {{-- Animated checkmark --}}
-                <div class="mb-3">
-                    <div style="width:80px;height:80px;border-radius:50%;background:#28a745;display:inline-flex;align-items:center;justify-content:center;">
-                        <i class="fas fa-check fa-3x text-white"></i>
-                    </div>
-                </div>
-
-                <h4 class="text-success mb-3">All Done!</h4>
-
-                <p class="mb-2" style="font-size:16px;">
-                    <strong>{{ $saved['count'] }}</strong> student attendance record(s) saved and locked.
+            <div class="modal-body">
+                <p style="font-size:.9rem;color:var(--body);margin-bottom:.9rem">
+                    {{ trans_choice(':count record saved and locked.|:count records saved and locked.', $saved['count'], ['count' => $saved['count']]) }}
                 </p>
 
-                <div class="card bg-light border-0 mx-auto" style="max-width:380px;">
-                    <div class="card-body py-2 px-3 text-left" style="font-size:14px;">
-                        <p class="mb-1"><i class="fas fa-book text-primary mr-1"></i> <strong>Subject:</strong> {{ $saved['subject'] }}</p>
-                        <p class="mb-1"><i class="fas fa-file-alt text-info mr-1"></i> <strong>Exam Type:</strong> {{ $saved['type'] }}</p>
-                        <p class="mb-0"><i class="fas fa-calendar-alt text-secondary mr-1"></i> <strong>Date:</strong> {{ \Carbon\Carbon::parse($saved['date'])->format('d M Y') }}</p>
+                <div class="exm-tiles" style="grid-template-columns:repeat(2,1fr)">
+                    <div class="exm-tile is-good">
+                        <span class="v">{{ $saved['present'] }}</span>
+                        <span class="k">{{ __('attendance_present') }}</span>
+                    </div>
+                    <div class="exm-tile is-bad">
+                        <span class="v">{{ $saved['absent'] }}</span>
+                        <span class="k">{{ __('attendance_absent') }}</span>
                     </div>
                 </div>
 
-                {{-- Present / Absent summary --}}
-                <div class="row mt-3 justify-content-center">
-                    <div class="col-auto">
-                        <span class="badge badge-success px-3 py-2" style="font-size:14px;">
-                            <i class="fas fa-user-check"></i> {{ $saved['present'] }} Present
-                        </span>
-                    </div>
-                    <div class="col-auto">
-                        <span class="badge badge-danger px-3 py-2" style="font-size:14px;">
-                            <i class="fas fa-user-times"></i> {{ $saved['absent'] }} Absent
-                        </span>
-                    </div>
-                </div>
+                <dl class="exm-kv" style="margin-top:1rem">
+                    <dt>{{ __('field_subject') }}</dt>
+                    <dd>{{ $saved['subject'] }}</dd>
+                    <dt>{{ __('field_type') }}</dt>
+                    <dd>{{ $saved['type'] }}</dd>
+                    <dt>{{ __('field_date') }}</dt>
+                    <dd>{{ \Carbon\Carbon::parse($saved['date'])->format('d M Y') }}</dd>
+                </dl>
 
                 @if($saved['locked'] > 0)
-                <div class="alert alert-warning mt-3 mb-0 py-2 small">
+                <div class="exm-note-row is-warn" style="margin-top:.9rem">
                     <i class="fas fa-lock"></i>
-                    {{ $saved['locked'] }} student(s) were skipped because their attendance was already locked.
+                    <span>{{ trans_choice(':count student was skipped because their attendance was already locked.|:count students were skipped because their attendance was already locked.', $saved['locked'], ['count' => $saved['locked']]) }}</span>
                 </div>
                 @endif
             </div>
-            <div class="modal-footer justify-content-center">
-                <button type="button" class="btn btn-success px-4" data-bs-dismiss="modal">
-                    <i class="fas fa-thumbs-up"></i> OK
-                </button>
+            <div class="modal-footer">
+                <button type="button" class="exm-btn exm-btn-main" data-bs-dismiss="modal">{{ __('OK') }}</button>
             </div>
         </div>
     </div>
@@ -1391,7 +674,11 @@
             var totalIneligible = ineligibleCount;
             var effectivelyEligible = eligibleCount + bypassedCount;
             
-            $("#eligibleCount").text($("tbody tr").length - totalIneligible + bypassedCount);
+            // tbody tr also matches the programme heading rows in
+            // all-programmes mode, which inflated this figure by one per
+            // programme. Those are the rows that carry no student.
+            var rollRows = $("tbody tr").not('.cross-program-separator').length;
+            $("#eligibleCount").text(rollRows - totalIneligible + bypassedCount);
             $("#ineligibleCount").text(Math.max(0, totalIneligible - bypassedCount));
             $("#bypassedCount").text(bypassedCount);
             
@@ -1636,6 +923,8 @@
         if (selectedProgram === 'all') {
             // Show all program sections
             $('.program-section').show();
+            // ... except the ones the search box has emptied.
+            $('#courseSearch').trigger('input');
         } else {
             // Show only selected program section (by index)
             $('.program-section').each(function() {
@@ -1648,19 +937,43 @@
         }
     });
     
-    // View toggle for My Assigned Courses
+    // View toggle for My Assigned Courses.
+    //
+    // This was bound to .view-toggle-btn, which no element on the page
+    // carried, and it showed and hid #card-view and #table-view, which did
+    // not exist either - the buttons were #viewCards and #viewTable and had
+    // no handler at all. So the toggle had never worked, and the table half
+    // of the panel (a second full copy of every course) could not be
+    // reached. There is one copy now and the class says how to lay it out.
     $('.view-toggle-btn').on('click', function() {
-        $('.view-toggle-btn').removeClass('active');
-        $(this).addClass('active');
-        
-        var view = $(this).data('view');
-        if (view === 'card') {
-            $('#card-view').show();
-            $('#table-view').hide();
-        } else {
-            $('#card-view').hide();
-            $('#table-view').show();
-        }
+        $('.view-toggle-btn').removeClass('active').attr('aria-pressed', 'false');
+        $(this).addClass('active').attr('aria-pressed', 'true');
+
+        var cards = $(this).data('view') === 'card';
+        $('#coursesContainer .exm-courses').toggleClass('is-cards', cards).toggleClass('is-rows', !cards);
+    });
+
+    // Find a course by code or title. At 283 courses this is the difference
+    // between the panel being usable and being scrolled past.
+    $('#courseSearch').on('input', function() {
+        var q = $(this).val().toLowerCase().trim();
+        var shown = 0;
+
+        $('#coursesContainer .exm-course').each(function() {
+            var hit = q === '' || String($(this).data('search') || '').indexOf(q) !== -1;
+            $(this).toggle(hit);
+            if (hit) { shown++; }
+        });
+
+        // A programme heading with nothing left under it is noise.
+        var selected = $('#quickProgramSelector').val();
+        $('.program-section').each(function() {
+            var any = $(this).find('.exm-course:visible').length > 0;
+            var inScope = selected === 'all' || $(this).data('program-index') == selected;
+            $(this).toggle(any && inScope);
+        });
+
+        $('#courseSearchEmpty').toggle(shown === 0);
     });
     
     // Year narrows the semester list on each card.
@@ -1801,7 +1114,10 @@
     });
     
     // Collapse state management
-    var myCoursesCollapse = document.getElementById('myAssignedCoursesCollapse');
+    // The element is #myCoursesCollapse. Listening on
+    // #myAssignedCoursesCollapse, which does not exist, meant the chevron
+    // never turned over when the panel opened.
+    var myCoursesCollapse = document.getElementById('myCoursesCollapse');
     if (myCoursesCollapse) {
         // My Assigned Courses is collapsed by default (no sessionStorage needed)
         // Just update icon when shown/hidden

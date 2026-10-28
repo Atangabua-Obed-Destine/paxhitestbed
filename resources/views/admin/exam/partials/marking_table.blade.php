@@ -20,8 +20,25 @@
     * every state wears a word as well as a colour.
 
   Expects what the marking view already computed: $rows, $maxMarks,
-  $isFinalExam, $cross_program, $colSpan.
+  $isFinalExam, $cross_program.
+
+  $colSpan is worked out here rather than passed in, because it has to equal
+  the number of <th> this very partial emits. Computed anywhere else it is a
+  second copy of the column list that goes stale the moment a column is added
+  here -- which is how it came to be missing altogether, leaving the
+  cross-programme heading row undefined on exactly the ?cross_program=1 URL.
 --}}
+
+@php
+    /* Keep in step with the thead below: 7 unconditional columns (S/N,
+       exam id or matricule, max marks, note, status, semester, section),
+       the unlock checkbox, the four CA-only columns (name, absences,
+       attendance score, actual mark), and the programme column. */
+    $colSpan = 7
+        + (auth()->user()->can('subject-marking-unlock') ? 1 : 0)
+        + ($isFinalExam ? 0 : 4)
+        + ($cross_program ? 1 : 0);
+@endphp
 
 <div class="exm-scroll">
     <table class="display table nowrap exm-table printable" style="width:100%">

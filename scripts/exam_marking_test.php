@@ -263,6 +263,81 @@ if ($combo) {
     ok('and on every box', substr_count($html, 'data-v-max=') >= count($rows));
 }
 
+/* The cross-programme screen, which nothing here used to render. The marks
+   table emits a programme heading row spanning the whole table only when
+   cross_program is on, so every assertion above passed while that row's
+   colspan was an undefined variable - the screen was broken on exactly the
+   ?cross_program=1 URL and this suite reported 96 passed. */
+$crossSubject = DB::table('program_subject as ps')
+    ->join('programs as p', 'p.id', '=', 'ps.program_id')
+    ->where('p.status', '1')
+    ->groupBy('ps.subject_id')
+    ->havingRaw('COUNT(DISTINCT ps.program_id) > 1')
+    ->selectRaw('ps.subject_id')
+    ->pluck('ps.subject_id');
+
+$crossCombo = DB::table('exams as e')
+    ->join('student_enrolls as se', 'se.id', '=', 'e.student_enroll_id')
+    ->whereIn('e.subject_id', $crossSubject)
+    ->select('e.subject_id', 'e.exam_type_id', 'se.program_id', 'se.session_id',
+             'se.semester_id', 'se.section_id', DB::raw('count(*) n'))
+    ->groupBy('e.subject_id', 'e.exam_type_id', 'se.program_id', 'se.session_id',
+              'se.semester_id', 'se.section_id')
+    ->orderByDesc('n')->first();
+
+ok('there is a subject shared by more than one programme', $crossCombo !== null);
+
+if ($crossCombo) {
+    [$crossHtml, $crossData] = $render([
+        'subject' => $crossCombo->subject_id, 'type' => $crossCombo->exam_type_id,
+        'program' => $crossCombo->program_id, 'session' => $crossCombo->session_id,
+        'semester' => $crossCombo->semester_id, 'section' => $crossCombo->section_id,
+        'cross_program' => 1,
+    ]);
+
+    ok('the cross-programme screen renders', strlen($crossHtml) > 10000);
+    check('and it carries the flag', true, $crossData['cross_program'] ?? null);
+
+    /* No Blade variable went missing. Laravel renders the message into the
+       page rather than throwing when debug is on, so a page that LOOKS like
+       it rendered can still be the error screen. */
+    foreach (['Undefined variable', 'Undefined array key', 'ErrorException'] as $wrong) {
+        ok('the page is not an error about "' . $wrong . '"', !str_contains($crossHtml, $wrong));
+    }
+
+    /* The heading row has to span the marks table exactly. The expectation is
+       the <th> this very page emitted, counted from the page - not the
+       arithmetic the partial uses, which is the thing under test. */
+    preg_match('~<table class="display table nowrap exm-table printable".*?<thead>(.*?)</thead>~s',
+        $crossHtml, $crossHead);
+
+    $columns = substr_count($crossHead[1] ?? '', '<th');
+
+    ok('the marks table has columns', $columns > 0);
+
+    preg_match_all('~<td colspan="(\d+)"~', $crossHtml, $spans);
+
+    check('every heading row spans the whole table',
+        [(string) $columns], array_values(array_unique($spans[1])));
+
+    /* One heading per programme in the list, in the order the rows arrive. */
+    $seen = [];
+
+    foreach ($crossData['rows'] ?? [] as $row) {
+        $pid = optional(optional($row->studentEnroll)->program)->id;
+
+        if ($pid !== null && (end($seen) !== $pid)) {
+            $seen[] = $pid;
+        }
+    }
+
+    check('a heading row for each programme the list changes into',
+        count(array_unique($seen)), count($spans[1]));
+
+    ok('and each one names its programme',
+        substr_count($crossHtml, 'fa-graduation-cap') >= count($spans[1]));
+}
+
 // Nothing listed until a course and type are chosen.
 [$bare, $bareData] = $render([]);
 
