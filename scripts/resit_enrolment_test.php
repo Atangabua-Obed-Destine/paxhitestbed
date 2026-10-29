@@ -201,6 +201,7 @@ if ($subject) {
         'origin_status' => (string) $origin->status,
         'origin_subjects' => $origin->subjects()->count(),
         'origin_marks' => DB::table('subject_markings')->where('student_enroll_id', $origin->id)->count(),
+        'origin_exams' => DB::table('exams')->where('student_enroll_id', $origin->id)->count(),
         'portal' => optional(EnrolmentOrder::furthest(
             StudentEnroll::with(['semester', 'session'])->where('student_id', $student->id)->get()
         ))->id,
@@ -251,10 +252,28 @@ if ($subject) {
             $origin->subjects()->count() === $before['origin_subjects']);
         check('and all of its marks',
             DB::table('subject_markings')->where('student_enroll_id', $origin->id)->count() === $before['origin_marks']);
-        check('no mark anywhere was written',
-            DB::table('subject_markings')->count() === $before['marks']);
-        check('no exam row anywhere was written',
-            DB::table('exams')->count() === $before['exams']);
+        // Raising a sitting DOES write marks and exam rows now: it inherits
+        // the attendance and the CA already earned, which is the whole point
+        // of the sitting. What must still hold is that none of it lands
+        // anywhere but on the new row — above all not on the original, which
+        // carries the fail and has to keep carrying it.
+        $markDelta = DB::table('subject_markings')->count() - $before['marks'];
+        $marksOnSitting = DB::table('subject_markings')
+            ->where('student_enroll_id', $new->id)->count();
+        check('every marking written belongs to the new sitting',
+            $markDelta === $marksOnSitting,
+            sprintf('%d written, %d of them on the sitting', $markDelta, $marksOnSitting));
+
+        $examDelta = DB::table('exams')->count() - $before['exams'];
+        $examsOnSitting = DB::table('exams')->where('student_enroll_id', $new->id)->count();
+        check('every exam row written belongs to the new sitting',
+            $examDelta === $examsOnSitting,
+            sprintf('%d written, %d of them on the sitting', $examDelta, $examsOnSitting));
+
+        check("and the original enrolment's own exam rows are untouched",
+            DB::table('exams')->where('student_enroll_id', $origin->id)->count()
+                === $before['origin_exams'],
+            'the fail must stay where it was recorded');
 
         // -- the portal does not move ------------------------------------
         $portalAfter = optional(EnrolmentOrder::furthest(
@@ -333,17 +352,21 @@ if ($subject) {
         $originMarkBefore = DB::table('subject_markings')
             ->where('student_enroll_id', $origin->id)->where('subject_id', $subjectId)->first();
 
-        DB::table('subject_markings')->insert([
-            'student_enroll_id' => $new->id,
-            'subject_id' => $subjectId,
-            'exam_marks' => 55,
-            'total_marks' => 55,
-            'validated' => 1,
-            'status' => 1,
-            'workflow_state' => 'published',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // updateOrInsert, not insert: raising the sitting inherits a DRAFT
+        // marking for each course, and that is the row the marking screen
+        // fills in. Inserting a second one beside it would be testing a shape
+        // the application never produces.
+        DB::table('subject_markings')->updateOrInsert(
+            ['student_enroll_id' => $new->id, 'subject_id' => $subjectId],
+            [
+                'exam_marks' => 55,
+                'total_marks' => 55,
+                'validated' => 1,
+                'status' => 1,
+                'workflow_state' => 'published',
+                'updated_at' => now(),
+            ]
+        );
 
         $onResit = DB::table('subject_markings')
             ->where('student_enroll_id', $new->id)->where('subject_id', $subjectId)->first();
@@ -506,6 +529,385 @@ check('the controller guards itself too',
 check('the permission is seeded',
     DB::table('permissions')->where('name', 'student-enroll-resit')->exists());
 
+// ---------------------------------------------------------------------------
+section('The sitting inherits what it shadows');
+
+/**
+ * A resit sitting does not start blank. It carries over, from the semester the
+ * resit semester shadows, the attendance records and the continuous-assessment
+ * marks already earned - the student is re-sitting the FINAL, not the course.
+ *
+ * The student-initiated routes have always done this. The admin route created
+ * the enrolment and stopped, which had two consequences, and the second is the
+ * one that made it visible: with no CA exam row at all the student was absent
+ * from the CA marking screen entirely, and the only thing that brings a row
+ * into existence is saving exam attendance - which continuous assessment does
+ * not otherwise require.
+ *
+ * Every expectation below is read from the parent enrolment with its own
+ * query, never from the service under test.
+ */
+
+$inheritCase = $work->first(fn ($i) => $i['resit_semester'] && !$i['existing_enrolment']);
+
+check('there is a case to raise a fresh sitting for', $inheritCase !== null);
+
+if ($inheritCase) {
+    $origin = $inheritCase['origin'];
+    $resitSemester = $inheritCase['resit_semester'];
+
+    // The semester the resit shadows, and the student's enrolment in it.
+    $parentEnrolment = StudentEnroll::where('student_id', $origin->student_id)
+        ->where('program_id', $origin->program_id)
+        ->where('semester_id', $resitSemester->parent_semester_id)
+        ->first();
+
+    check('the resit semester names the semester it shadows',
+        $resitSemester->parent_semester_id !== null);
+    check('and the student has an enrolment there to inherit from',
+        $parentEnrolment !== null);
+
+    if ($parentEnrolment) {
+        $courseIds = collect($inheritCase['courses'])->pluck('subject_id')
+            ->map(fn ($id) => (int) $id)->values()->all();
+
+        // What the parent holds, worked out independently.
+        $parentCa = DB::table('exams')
+            ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+            ->where('exams.student_enroll_id', $parentEnrolment->id)
+            ->where('exam_types.is_final', 0)
+            ->whereIn('exams.subject_id', $courseIds)
+            ->pluck('exams.achieve_marks', 'exams.subject_id')->all();
+
+        $parentAttendance = DB::table('student_attendances')
+            ->where('student_enroll_id', $parentEnrolment->id)
+            ->whereIn('subject_id', $courseIds)
+            ->count();
+
+        DB::beginTransaction();
+
+        try {
+            $result = $backfill->apply($origin, null, $actor);
+            $sitting = $result['enrolment'];
+
+            $counts = function () use ($sitting) {
+                return [
+                    'exams' => DB::table('exams')
+                        ->where('student_enroll_id', $sitting->id)->count(),
+                    'attendance' => DB::table('student_attendances')
+                        ->where('student_enroll_id', $sitting->id)->count(),
+                    'marking' => DB::table('subject_markings')
+                        ->where('student_enroll_id', $sitting->id)->count(),
+                ];
+            };
+
+            // -- the continuous assessment came across -------------------
+            $sittingCa = DB::table('exams')
+                ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+                ->where('exams.student_enroll_id', $sitting->id)
+                ->where('exam_types.is_final', 0)
+                ->pluck('exams.achieve_marks', 'exams.subject_id')->all();
+
+            check('every course on the sitting has its CA exam row',
+                count($sittingCa) === count($parentCa),
+                sprintf('%d rows for %d the parent holds', count($sittingCa), count($parentCa)));
+
+            $wrongMark = [];
+            foreach ($parentCa as $subjectId => $mark) {
+                if (!array_key_exists($subjectId, $sittingCa)
+                    || (string) $sittingCa[$subjectId] !== (string) $mark) {
+                    $wrongMark[] = $subjectId;
+                }
+            }
+            check('and carries the mark the student already earned, unchanged',
+                $wrongMark === [], 'subjects ' . implode(',', $wrongMark));
+
+            // Without this the row exists but the marking roll still hides it.
+            $notPresent = DB::table('exams')
+                ->where('student_enroll_id', $sitting->id)
+                ->where('attendance', '!=', 1)->count();
+            check('each inherited row is marked present, so the roll shows it',
+                $notPresent === 0, $notPresent . ' row(s) not present');
+
+            // -- the final is what they are re-sitting -------------------
+            $finals = DB::table('exams')
+                ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+                ->where('exams.student_enroll_id', $sitting->id)
+                ->where('exam_types.is_final', 1)->count();
+            check('no final-exam mark is inherited, that being the paper re-sat',
+                $finals === 0, $finals . ' final row(s) copied');
+
+            // -- attendance and the marking row --------------------------
+            $sittingAttendance = DB::table('student_attendances')
+                ->where('student_enroll_id', $sitting->id)->count();
+            check('the attendance record is carried over too',
+                $sittingAttendance === $parentAttendance,
+                sprintf('%d copied, parent holds %d', $sittingAttendance, $parentAttendance));
+
+            check('a subject marking exists for each course, so the mark has somewhere to go',
+                DB::table('subject_markings')->where('student_enroll_id', $sitting->id)->count()
+                    === count($parentCa));
+
+            // -- CA must not require exam attendance ---------------------
+            // The symptom that exposed all of this: ensureCaExamRows is what
+            // puts a student on the CA roll without attendance, and it only
+            // ever looked at status 1 - while a sitting is filed as 2.
+            // Scoped to the method, not the file: the same [1, 2] appears
+            // elsewhere in this controller, so a file-wide search would go on
+            // passing with ensureCaExamRows narrowed straight back.
+            $controllerSource = file_get_contents(
+                $base . '/app/Http/Controllers/Admin/ExamMarkingController.php');
+            $netStart = strpos($controllerSource, 'function ensureCaExamRows');
+            $net = $netStart === false
+                ? ''
+                : substr($controllerSource, $netStart, 1200);
+
+            check('the CA safety net admits the status a sitting is filed under',
+                $net !== '' && str_contains($net, "whereIn('status', [1, 2])"),
+                'ensureCaExamRows filters a single status again');
+            check('and does not filter enrolments to active-only',
+                $net !== '' && !str_contains($net, "StudentEnroll::where('status', '1')"),
+                'the single-status filter is back');
+
+            // -- running it again changes nothing ------------------------
+            $snapshot = $counts();
+
+            $backfill->apply($origin, null, $actor);
+
+            check('raising it a second time inherits nothing twice', $snapshot === $counts());
+
+            // -- and it repairs a sitting raised before it inherited -----
+            // The sittings already on this installation were raised without
+            // inheritance, so running the screen over a complete one has to
+            // put the data there rather than return "nothing to do".
+            DB::table('exams')->where('student_enroll_id', $sitting->id)->delete();
+            DB::table('student_attendances')->where('student_enroll_id', $sitting->id)->delete();
+            DB::table('subject_markings')->where('student_enroll_id', $sitting->id)->delete();
+
+            $repair = $backfill->apply($origin, null, $actor);
+            $repaired = $counts();
+
+            check('a sitting with nothing to register still has its data repaired',
+                $repaired === $snapshot,
+                sprintf('%d exam rows back, %d expected', $repaired['exams'], $snapshot['exams']));
+            check('and reports that there was nothing left to register',
+                $repair['registered'] === []);
+        } finally {
+            DB::rollBack();
+        }
+    }
+}
+// ---------------------------------------------------------------------------
+section('The screen finds sittings that never inherited, and repairs them');
+
+/**
+ * The detector behind the panel on the worklist screen, and the button on it.
+ *
+ * WHAT IT MUST AND MUST NOT REPORT. A sitting is affected only when the
+ * semester it shadows holds a CA mark the sitting does not. Two near misses
+ * have to stay off the list, because a button that cannot help, or one that
+ * overwrites a sitting that is already right, is worse than no button:
+ *
+ *  - a course the parent never had assessed has nothing to carry over;
+ *  - a sitting whose attendance has fallen behind the parent's inherited
+ *    correctly and the parent gained days afterwards. One sitting on this
+ *    installation has had its CA re-marked since it inherited, so copying the
+ *    parent's figures back over it would undo somebody's work.
+ *
+ * The repair must also do exactly what the panel advertises and no more --
+ * it touches only the courses reported as missing.
+ */
+
+$audit = app(App\Services\Resit\ResitInheritanceAudit::class);
+
+$affected = $audit->affected();
+
+DB::enableQueryLog();
+DB::flushQueryLog();
+$audit->affected();
+$detectorQueries = count(DB::getQueryLog());
+DB::disableQueryLog();
+
+check('it answers in a fixed number of queries, whatever the roll size',
+    $detectorQueries <= 20, $detectorQueries . ' queries');
+
+// Every sitting it reports must genuinely be missing a mark the parent holds.
+$wronglyReported = [];
+foreach ($affected as $row) {
+    foreach ($row['missing'] as $course) {
+        $onParent = DB::table('exams')
+            ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+            ->where('exams.student_enroll_id', $row['parent_enrolment']->id)
+            ->where('exams.subject_id', $course['subject_id'])
+            ->where('exam_types.is_final', 0)->exists();
+        $onSitting = DB::table('exams')
+            ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+            ->where('exams.student_enroll_id', $row['enrolment']->id)
+            ->where('exams.subject_id', $course['subject_id'])
+            ->where('exam_types.is_final', 0)->exists();
+
+        if (!$onParent || $onSitting) {
+            $wronglyReported[] = $row['enrolment']->id . '/' . $course['subject_code'];
+        }
+    }
+}
+check('everything it reports is a mark the parent holds and the sitting does not',
+    $wronglyReported === [], implode(', ', $wronglyReported));
+
+// And nothing that IS in that state may be left off it.
+$resitSemesterIds = Semester::where('is_resit', 1)->pluck('id')->all();
+$missed = [];
+
+foreach (StudentEnroll::whereIn('semester_id', $resitSemesterIds)->with('subjects')->get() as $sitting) {
+    $resit = Semester::find($sitting->semester_id);
+    $parent = StudentEnroll::where('student_id', $sitting->student_id)
+        ->where('program_id', $sitting->program_id)
+        ->where('semester_id', $resit->parent_semester_id)
+        ->orderByRaw('CASE WHEN status = 0 THEN 1 ELSE 0 END')->orderBy('id')->first();
+
+    if (!$parent) {
+        continue;
+    }
+
+    foreach ($sitting->subjects as $subject) {
+        $onParent = DB::table('exams')
+            ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+            ->where('exams.student_enroll_id', $parent->id)
+            ->where('exams.subject_id', $subject->id)
+            ->where('exam_types.is_final', 0)->exists();
+        $onSitting = DB::table('exams')
+            ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+            ->where('exams.student_enroll_id', $sitting->id)
+            ->where('exams.subject_id', $subject->id)
+            ->where('exam_types.is_final', 0)->exists();
+
+        if ($onParent && !$onSitting) {
+            $reported = $affected->first(fn ($r) => (int) $r['enrolment']->id === (int) $sitting->id
+                && collect($r['missing'])->contains('subject_id', (int) $subject->id));
+
+            if (!$reported) {
+                $missed[] = $sitting->id . '/' . $subject->id;
+            }
+        }
+    }
+}
+check('and nothing in that state is left off it',
+    $missed === [], implode(', ', $missed));
+
+// A sitting that merely drifted on attendance must NOT be offered a repair.
+$driftOnly = StudentEnroll::whereIn('semester_id', $resitSemesterIds)
+    ->get()
+    ->first(function ($sitting) use ($affected) {
+        if ($affected->contains(fn ($r) => (int) $r['enrolment']->id === (int) $sitting->id)) {
+            return false;
+        }
+        $resit = Semester::find($sitting->semester_id);
+        $parent = StudentEnroll::where('student_id', $sitting->student_id)
+            ->where('program_id', $sitting->program_id)
+            ->where('semester_id', $resit->parent_semester_id)->first();
+        if (!$parent) {
+            return false;
+        }
+
+        return DB::table('student_attendances')->where('student_enroll_id', $parent->id)->count()
+            > DB::table('student_attendances')->where('student_enroll_id', $sitting->id)->count();
+    });
+
+check('a sitting that only drifted on attendance is left alone',
+    $driftOnly !== null, 'no such sitting on this installation to check');
+
+// -- the repair itself ---------------------------------------------------
+$target = $affected->first();
+
+if ($target) {
+    DB::beginTransaction();
+
+    try {
+        $sittingId = $target['enrolment']->id;
+        $before = $audit->countsFor($sittingId);
+        $advertisedCa = count($target['missing']);
+        $advertisedAttendance = $target['attendance_missing'];
+        $advertisedMarking = $target['marking_missing'];
+
+        // Published marks on the sitting's other courses must survive.
+        $publishedBefore = DB::table('subject_markings')
+            ->where('student_enroll_id', $sittingId)
+            ->where('workflow_state', 'published')
+            ->pluck('total_marks', 'subject_id')->all();
+
+        $audit->repair($target);
+        $after = $audit->countsFor($sittingId);
+
+        check('the repair restores exactly the CA marks the panel offered',
+            $after['ca'] - $before['ca'] === $advertisedCa,
+            sprintf('%d restored, %d offered', $after['ca'] - $before['ca'], $advertisedCa));
+        check('and exactly the attendance it offered, not every course on the sitting',
+            $after['attendance'] - $before['attendance'] === $advertisedAttendance,
+            sprintf('%d copied, %d offered', $after['attendance'] - $before['attendance'], $advertisedAttendance));
+        check('and exactly the subject markings it offered',
+            $after['marking'] - $before['marking'] === $advertisedMarking,
+            sprintf('%d created, %d offered', $after['marking'] - $before['marking'], $advertisedMarking));
+
+        $restored = [];
+        foreach ($target['missing'] as $course) {
+            $mark = DB::table('exams')
+                ->join('exam_types', 'exam_types.id', '=', 'exams.exam_type_id')
+                ->where('exams.student_enroll_id', $sittingId)
+                ->where('exams.subject_id', $course['subject_id'])
+                ->where('exam_types.is_final', 0)
+                ->first(['exams.achieve_marks', 'exams.attendance']);
+
+            if (!$mark || (string) $mark->achieve_marks !== (string) $course['ca']
+                || (int) $mark->attendance !== 1) {
+                $restored[] = $course['subject_code'];
+            }
+        }
+        check('each restored mark is the parent\'s own, and marked present',
+            $restored === [], implode(', ', $restored));
+
+        $publishedAfter = DB::table('subject_markings')
+            ->where('student_enroll_id', $sittingId)
+            ->where('workflow_state', 'published')
+            ->pluck('total_marks', 'subject_id')->all();
+        check('no published mark on the sitting was disturbed',
+            $publishedBefore == $publishedAfter);
+
+        check('and the sitting drops off the detector',
+            !$audit->affected()->contains(fn ($r) => (int) $r['enrolment']->id === (int) $sittingId));
+
+        // Pressing the button twice is something people do.
+        $audit->repair($target);
+        check('pressing repair again changes nothing', $after === $audit->countsFor($sittingId));
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// -- the button is wired, and guarded ------------------------------------
+check('the repair has a route of its own',
+    \Illuminate\Support\Facades\Route::has('admin.resit-enrolment.repair-inheritance'));
+
+$repairRoute = collect(\Illuminate\Support\Facades\Route::getRoutes())
+    ->first(fn ($r) => $r->getName() === 'admin.resit-enrolment.repair-inheritance');
+
+check('it only answers POST, so no link or crawler can trigger it',
+    $repairRoute && in_array('POST', $repairRoute->methods(), true)
+        && !in_array('GET', $repairRoute->methods(), true));
+check('and it is behind the same permission as raising an enrolment',
+    $repairRoute && in_array('permission:student-enroll-resit', $repairRoute->gatherMiddleware(), true));
+
+$indexSource = file_get_contents($base . '/resources/views/admin/resit-enrolment/index.blade.php');
+check('the panel posts to that route', str_contains($indexSource, "route(\$route.'.repair-inheritance')"));
+check('and its forms carry a CSRF token', substr_count($indexSource, '@csrf') >= 2);
+
+// The controller must repair only what the detector reports, never the id as
+// posted: a stale page or a hand-made request would otherwise run an
+// inheritance over an enrolment nobody judged to need one.
+$controllerSource = file_get_contents(
+    $base . '/app/Http/Controllers/Admin/ResitEnrolmentController.php');
+check('the repair is driven by the detector, not by the posted id',
+    str_contains($controllerSource, '$this->audit->affected(')
+        && !str_contains($controllerSource, 'StudentEnroll::findOrFail($request->enrolment_id)'));
 // ---------------------------------------------------------------------------
 section('Nothing was left behind');
 

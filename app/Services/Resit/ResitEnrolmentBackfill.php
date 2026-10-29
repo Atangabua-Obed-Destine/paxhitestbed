@@ -7,6 +7,7 @@ use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentEnroll;
 use App\Services\Academic\OutstandingCourses;
+use App\Services\Academic\SemesterProgressionService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -57,8 +58,10 @@ class ResitEnrolmentBackfill
     /** A resit sitting is a completed phase, so the row is marked completed. */
     public const ENROLMENT_STATUS = 2;
 
-    public function __construct(protected OutstandingCourses $outstanding)
-    {
+    public function __construct(
+        protected OutstandingCourses $outstanding,
+        protected SemesterProgressionService $progression
+    ) {
     }
 
     /**
@@ -225,19 +228,32 @@ class ResitEnrolmentBackfill
             throw new \RuntimeException(implode(' ', $preview['blockers']));
         }
 
-        // Already complete: hand back what is there and write nothing.
+        /** @var Semester $resitSemester */
+        $resitSemester = $preview['resit_semester'];
+        $courses = collect($preview['courses']);
+
+        // Already complete: there is nothing left to register, but the sitting
+        // may still be missing what it inherits -- every enrolment raised here
+        // before the inheritance was wired up is in exactly that state. The
+        // inheritance checks before it writes, so running it on a sitting that
+        // already has its CA and attendance changes nothing, which is what
+        // makes running the screen again the repair.
         if ($preview['complete']) {
+            $existing = $preview['existing_enrolment'];
+
+            if ($existing) {
+                DB::transaction(function () use ($existing, $resitSemester, $preview) {
+                    $this->inheritFromParent($existing, $resitSemester, $preview['already_registered']);
+                });
+            }
+
             return [
-                'enrolment' => $preview['existing_enrolment'],
+                'enrolment' => $existing,
                 'registered' => [],
                 'requests' => 0,
                 'preview' => $preview,
             ];
         }
-
-        /** @var Semester $resitSemester */
-        $resitSemester = $preview['resit_semester'];
-        $courses = collect($preview['courses']);
 
         return DB::transaction(function () use ($origin, $resitSemester, $courses, $actorId, $preview) {
             $enrolment = $this->existingResitEnrolment($origin, $resitSemester);
@@ -267,6 +283,12 @@ class ResitEnrolmentBackfill
                 $enrolment->subjects()->syncWithoutDetaching($subjectIdsToAdd);
             }
 
+            $this->inheritFromParent(
+                $enrolment,
+                $resitSemester,
+                array_merge($preview['already_registered'], $courses->all())
+            );
+
             $requests = 0;
 
             foreach ($courses as $row) {
@@ -287,6 +309,39 @@ class ResitEnrolmentBackfill
                 'preview' => $preview,
             ];
         });
+    }
+
+    /**
+     * Carry attendance and continuous assessment over from the semester the
+     * resit semester shadows.
+     *
+     * This is the same call the request workflow and progressToResitSemester()
+     * make, and it is what the rest of the system assumes has happened. Left
+     * out, the sitting holds no exam row at all for the course -- so the
+     * student is absent from the CA marking screen entirely, and the only
+     * thing that brings a row into existence is saving exam attendance, which
+     * continuous assessment otherwise never requires.
+     *
+     * Every step of the inheritance checks before it writes, so calling this
+     * for a course that already carries its data does nothing.
+     *
+     * @param  list<array>  $courses  rows carrying a subject_id
+     */
+    protected function inheritFromParent(StudentEnroll $enrolment, Semester $resitSemester, array $courses): void
+    {
+        $courseIds = collect($courses)
+            ->pluck('subject_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($courseIds === []) {
+            return;
+        }
+
+        $this->progression->inheritParentSemesterData($enrolment, $resitSemester, $courseIds);
     }
 
     /**

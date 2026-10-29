@@ -428,6 +428,11 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('student/resit-enrolment', 'ResitEnrolmentController@store')
         ->middleware('permission:student-enroll-resit')
         ->name('resit-enrolment.store');
+    // Carries attendance and CA into sittings raised before the enrolment
+    // route inherited them. Adds only what is missing, so it is safe to repeat.
+    Route::post('student/resit-enrolment/repair-inheritance', 'ResitEnrolmentController@repairInheritance')
+        ->middleware('permission:student-enroll-resit')
+        ->name('resit-enrolment.repair-inheritance');
     Route::resource('student/course-complete', 'CourseCompleteController');
     Route::resource('student/student-alumni', 'StudentAlumniController');
     Route::get('student/max-credit-config', 'MaxCreditConfigController@index')->name('max-credit-config.index');

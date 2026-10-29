@@ -1325,7 +1325,12 @@ class ExamMarkingController extends Controller
             $maxMarks     = (float) ($examType->marks ?? 0);
             $contribution = \App\Services\ResultContributionService::getExamTypeContribution($subjectId, $type);
 
-            $enrolls = StudentEnroll::where('status', '1')
+            // Live enrolments, which here means active AND completed - the same
+            // [1, 2] the marking roll itself admits. A resit sitting is filed as
+            // completed (status 2), so narrowing this to '1' left those students
+            // with no CA exam row, and with no row the only way onto the CA
+            // screen was to take exam attendance, which CA does not require.
+            $enrolls = StudentEnroll::whereIn('status', [1, 2])
                 ->whereHas('subjects', fn($q) => $q->where('subject_id', $subjectId))
                 ->whereHas('student', fn($q) => $q->where('status', '1'));
 

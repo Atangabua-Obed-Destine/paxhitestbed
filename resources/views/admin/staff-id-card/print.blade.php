@@ -77,6 +77,44 @@
             height: 100%;
         }
 
+        /* Barcode - stood on end in the clear strip beside the photo, so it
+           answers the vertical rule printed down the right edge of the card.
+
+           It is rotated about its top-left corner, which turns the panel's
+           330px length down the card and its thickness across it: `left` is
+           therefore the strip's RIGHT edge, not its left, and `width` runs
+           vertically. The 30px ends are the quiet zone - Code 39 needs a
+           clear margin of at least ten narrow bars or a scanner will not
+           find the symbol. */
+        .id-card .barcode {
+            position: absolute;
+            top: 325px;
+            left: 107px;
+            box-sizing: border-box;
+            width: 330px;
+            padding: 5px 30px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            transform: rotate(90deg);
+            transform-origin: top left;
+        }
+        .id-card .barcode svg {
+            display: block;
+            width: 100%;
+            height: 38px;
+        }
+        .id-card .barcode-label {
+            display: block;
+            margin-top: 3px;
+            font-family: 'Oswald', sans-serif !important;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-align: center;
+            color: #001F5B;
+        }
+
         /* First Name - Large text on top */
         .id-card .first-name {
             position: absolute;
@@ -173,6 +211,9 @@
                 <img src="{{ $qrCode }}" alt="QR Code">
             </div>
 
+            <!-- Barcode of the staff id, stood on end beside the photo -->
+            @include('admin.id-card.partials.barcode', ['matricule' => $row->staff_id, 'width' => 270, 'height' => 38])
+
             <!-- First Name on top (large) -->
             <div class="first-name">{{ $row->first_name }}</div>
 
@@ -210,6 +251,9 @@
             @endphp
             <img src="{{ $qrCode }}" alt="QR Code">
         </div>
+
+        <!-- Barcode of the staff id, stood on end beside the photo -->
+        @include('admin.id-card.partials.barcode', ['matricule' => $row->staff_id, 'width' => 270, 'height' => 38])
 
         <!-- First Name on top (large) -->
         <div class="first-name">{{ $row->first_name }}</div>

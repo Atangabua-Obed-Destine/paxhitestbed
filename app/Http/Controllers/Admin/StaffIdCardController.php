@@ -221,6 +221,16 @@ class StaffIdCardController extends Controller
                     ? asset('uploads/user/'.$staff->photo) 
                     : asset('dashboard/images/user.jpg'),
                 'qr_url' => url('verify-staff/'.$staff->id),
+                // The cards in the zip are built in the browser rather than
+                // from the print view, so the barcode is rendered here and
+                // sent with the row. Generating it a second time in
+                // JavaScript is how the printed card and the zipped one would
+                // come to carry different symbols for the same person.
+                'barcode' => view('admin.id-card.partials.barcode', [
+                    'matricule' => $staff->staff_id,
+                    'width' => 270,
+                    'height' => 38,
+                ])->render(),
             ];
         }
 

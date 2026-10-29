@@ -370,6 +370,33 @@
                 width: 100%;
                 height: 100%;
             }
+            .zip-id-card .barcode {
+                position: absolute;
+                bottom: 35px;
+                left: 38px;
+                box-sizing: border-box;
+                width: 290px;
+                margin-top: 0;
+                background: white;
+                padding: 5px 14px;
+                border: 2px solid #001F5B;
+                border-radius: 5px;
+            }
+            .zip-id-card .barcode svg {
+                display: block;
+                width: 100%;
+                height: 38px;
+            }
+            .zip-id-card .barcode-label {
+                display: block;
+                margin-top: 3px;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                text-align: center;
+                color: #001F5B;
+            }
         `;
         container.appendChild(style);
         
@@ -392,6 +419,7 @@
                         <div class="faculty">${student.faculty}</div>
                         <div class="date-issued">${new Date().toLocaleDateString('en-GB')}</div>
                         <div class="qr-code"><img src="${qrCode}" crossorigin="anonymous"></div>
+                        ${student.barcode}
                     </div>
                 `;
                 

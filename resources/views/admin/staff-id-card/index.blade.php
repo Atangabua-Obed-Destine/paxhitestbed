@@ -509,7 +509,28 @@
         // QR (110x110) centered on photo's bottom-right corner -> top 555, left 430 (matches print/download views)
         const photoLeft = (639 - 330) / 2;
 
+        // The barcode arrives as markup from the server, so it is styled by
+        // class rather than inline like everything else here. The rule travels
+        // with the card: innerHTML replaces the container on every staff
+        // member, so a style element added once alongside it would be gone.
+        const barcodeCss = `
+            <style>
+            .zip-id-card .barcode {
+                position: absolute; top: 325px; left: 107px; width: 330px;
+                padding: 5px 30px; background: #fff; border-radius: 10px;
+                box-sizing: border-box; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+                transform: rotate(90deg); transform-origin: top left;
+            }
+            .zip-id-card .barcode svg { display: block; width: 100%; height: 38px; }
+            .zip-id-card .barcode-label {
+                display: block; margin-top: 3px; ${oswald}; font-size: 12px;
+                font-weight: 500; letter-spacing: 2px; text-align: center;
+                color: #001F5B;
+            }
+            </style>`;
+
         return `
+            ${barcodeCss}
             <div class="zip-id-card" style="width: 639px; height: 1011px; position: relative; background-image: url('${templateBase64}'); background-repeat: no-repeat; background-position: center center; background-size: 639px 1011px; ${anton};">
                 <div style="position: absolute; top: 325px; left: ${photoLeft}px; width: 330px; height: 330px; border-radius: 70px; overflow: hidden; background: #fff;">
                     <img src="${photoBase64}" style="width: 330px; height: 330px; object-fit: cover; display: block;">
@@ -522,6 +543,7 @@
                 <div style="position: absolute; top: 815px; left: 0; width: 639px; text-align: center; ${oswald}; font-size: 28px; font-weight: 500; letter-spacing: 2px; color: #000; text-transform: uppercase;">${staff.designation}</div>
                 <div style="position: absolute; top: 885px; left: 0; width: 639px; text-align: center; ${oswald}; font-size: 44px; font-weight: 500; letter-spacing: 2px; color: #000;">ID:${staff.staff_id}</div>
                 <div style="position: absolute; top: 938px; left: 0; width: 639px; text-align: center; ${oswald}; font-size: 28px; font-weight: 300; color: #000;">VALIDITY: ${staff.validity}</div>
+                ${staff.barcode}
             </div>
         `;
     }

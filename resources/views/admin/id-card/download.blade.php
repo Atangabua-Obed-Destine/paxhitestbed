@@ -164,6 +164,48 @@
             height: 100%;
         }
         
+        /* Barcode
+           Sits on the same 35px baseline as the QR code and the photo. The
+           white panel is both the quiet zone a scanner needs against the
+           watermark and what hides the decorative barcode printed into the
+           card artwork. */
+        .id-card .barcode {
+            position: absolute;
+            bottom: 35px;
+            left: 38px;
+            /* border-box, stated here rather than inherited: this panel is
+               drawn inside pages with different resets, and the width has to
+               keep meaning the same thing or the bars silently lose two
+               quiet zones. */
+            box-sizing: border-box;
+            width: 290px;
+            margin-top: 0;
+            background: white;
+            /* 14px at the sides, not 5px: Code 39 needs a clear margin of at
+               least ten narrow bars either end or a scanner will not see the
+               symbol. */
+            padding: 5px 14px;
+            border: 2px solid #001F5B;
+            border-radius: 5px;
+        }
+
+        .id-card .barcode svg {
+            display: block;
+            width: 100%;
+            height: 38px;
+        }
+
+        .id-card .barcode-label {
+            display: block;
+            margin-top: 3px;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-align: center;
+            color: #001F5B;
+        }
+
         .id-card .validity {
             position: absolute;
             top: -5px;
@@ -273,6 +315,8 @@
                     @endphp
                     <img src="{{ $qrCode }}" alt="QR Code" crossorigin="anonymous">
                 </div>
+
+                @include('admin.id-card.partials.barcode', ['matricule' => $displayMatricule])
             </div>
         </div>
     @endforeach

@@ -8,6 +8,7 @@ use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentEnroll;
 use App\Services\Resit\ResitEnrolmentBackfill;
+use App\Services\Resit\ResitInheritanceAudit;
 use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -41,8 +42,10 @@ class ResitEnrolmentController extends Controller
 {
     protected $title, $route, $view, $path, $access;
 
-    public function __construct(protected ResitEnrolmentBackfill $backfill)
-    {
+    public function __construct(
+        protected ResitEnrolmentBackfill $backfill,
+        protected ResitInheritanceAudit $audit
+    ) {
         $this->title = __('Resit Enrolments');
         $this->route = 'admin.resit-enrolment';
         $this->view = 'admin.resit-enrolment';
@@ -119,7 +122,83 @@ class ResitEnrolmentController extends Controller
         $data['rows'] = $rows;
         $data['course_total'] = $rows->sum('course_count');
 
+        // Sittings already raised that never received what they inherit. This
+        // is a different population from the worklist above — those students
+        // have no enrolment yet, these have one that is missing its marks —
+        // so it is reported separately rather than mixed into the same table.
+        $data['gaps'] = $this->audit->affected();
+
         return view($this->view . '.index', $data);
+    }
+
+    /**
+     * Carry the inheritance over for sittings that never received it.
+     *
+     * The repair is the same call the enrolment routes make, so a sitting put
+     * right here is indistinguishable from one raised correctly. It only ever
+     * adds what is missing — every step of the inheritance checks before it
+     * writes — so it cannot overwrite a mark somebody has since entered.
+     */
+    public function repairInheritance(Request $request)
+    {
+        $request->validate([
+            'enrolment_id' => 'nullable|integer|exists:student_enrolls,id',
+        ]);
+
+        // Repair only what the detector itself reports. Taking the id straight
+        // from the form would let a stale page, or a hand-made request, run an
+        // inheritance over an enrolment nobody has judged to need one.
+        $affected = $this->audit->affected(
+            $request->filled('enrolment_id') ? [(int) $request->enrolment_id] : null
+        );
+
+        if ($affected->isEmpty()) {
+            Flasher::addInfo(
+                __('Nothing to repair: every resit sitting already carries what it inherits.'),
+                __('msg_info')
+            );
+
+            return redirect()->route($this->route . '.index');
+        }
+
+        $sittings = 0;
+        $courses = 0;
+
+        try {
+            foreach ($affected as $row) {
+                $result = $this->audit->repair($row);
+
+                if ($result['repaired'] > 0) {
+                    $sittings++;
+                    $courses += $result['repaired'];
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Resit inheritance could not be repaired', [
+                'enrolment' => $request->enrolment_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            Flasher::addError(__('msg_updated_error'), __('msg_error'));
+
+            return redirect()->route($this->route . '.index');
+        }
+
+        if ($sittings === 0) {
+            Flasher::addWarning(
+                __('Nothing could be carried over. The semester these sittings shadow holds no continuous assessment to inherit.'),
+                __('msg_warning')
+            );
+
+            return redirect()->route($this->route . '.index');
+        }
+
+        Flasher::addSuccess(__(':courses course(s) across :sittings resit sitting(s) now carry the attendance and CA mark from the semester they shadow.', [
+            'courses' => $courses,
+            'sittings' => $sittings,
+        ]), __('msg_success'));
+
+        return redirect()->route($this->route . '.index');
     }
 
     /**

@@ -363,6 +363,14 @@ class StudentIdCardController extends Controller
                     : asset('dashboard/images/user.jpg'),
                 'validity' => $currentYear . '-' . $expiryYear,
                 'prefix' => $print->prefix ?? '',
+                // The cards in the zip are built in the browser rather than
+                // from the print view, so the barcode is rendered here and
+                // sent with the row. Generating it a second time in JavaScript
+                // is how the printed card and the zipped one would come to
+                // carry different symbols for the same student.
+                'barcode' => view('admin.id-card.partials.barcode', [
+                    'matricule' => $displayMatricule,
+                ])->render(),
             ];
         }
 

@@ -16,6 +16,127 @@
 
 <div class="main-body">
     <div class="page-wrapper">
+
+        {{--
+            Sittings already raised that never received what they inherit.
+
+            A different population from the worklist below: those students have
+            no resit enrolment yet, these have one that is missing its marks.
+            The enrolment route inherits on its own now, so nothing new arrives
+            in this state and the panel disappears once the backlog is cleared.
+
+            It is listed only when the PARENT holds a CA mark the sitting does
+            not. A course the parent never had assessed has nothing to carry
+            over, and a sitting whose attendance has merely fallen behind has
+            inherited correctly — offering a repair for either would be
+            offering a button that cannot help, or one that overwrites a
+            sitting that is already right.
+        --}}
+        @if($gaps->isNotEmpty())
+        <div class="row">
+            <div class="col-sm-12">
+                <div class="card border-warning">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                        <div>
+                            <h5 class="text-warning mb-1">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ __(':count resit sitting(s) are missing the marks they should have inherited', ['count' => $gaps->count()]) }}
+                            </h5>
+                            <span class="text-muted" style="font-size:13px">
+                                {{ __('A resit sitting carries over the attendance and the continuous assessment already earned — the student is re-sitting the final, not the course. These were raised before that happened automatically.') }}
+                            </span>
+                        </div>
+                        <form method="post" action="{{ route($route.'.repair-inheritance') }}" class="mt-2">
+                            @csrf
+                            <button type="submit" class="btn btn-warning"
+                                    onclick="return confirm('{{ __('Carry the attendance and CA mark over for every sitting listed? This only adds what is missing.') }}')">
+                                <i class="fas fa-wrench"></i> {{ __('Repair all') }}
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="card-block">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-info-circle"></i>
+                            {{ __('Until this is repaired the student has no exam row for the course at all, so they do not appear on the CA marking screen and the mark cannot be entered — the only thing that puts them there is taking exam attendance, which CA does not otherwise require.') }}
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered nowrap">
+                                <thead>
+                                    <tr>
+                                        <th>{{ __('field_matricule') }}</th>
+                                        <th>{{ __('field_name') }}</th>
+                                        <th>{{ __('Sitting') }}</th>
+                                        <th>{{ __('Inherits from') }}</th>
+                                        <th>{{ __('Courses missing their CA') }}</th>
+                                        <th>{{ __('Repair will restore') }}</th>
+                                        <th class="text-center">{{ __('field_action') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($gaps as $gap)
+                                    <tr>
+                                        <td>{{ $gap['enrolment']->matricule ?? optional($gap['enrolment']->student)->student_id }}</td>
+                                        <td>
+                                            {{ optional($gap['enrolment']->student)->first_name }}
+                                            {{ optional($gap['enrolment']->student)->last_name }}
+                                            <div class="text-muted" style="font-size:11px">
+                                                {{ optional($gap['enrolment']->program)->shortcode ?? optional($gap['enrolment']->program)->title }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {{ optional($gap['resit_semester'])->title }}
+                                            <div class="text-muted" style="font-size:11px">
+                                                {{ __('enrolment #:id', ['id' => $gap['enrolment']->id]) }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {{ __('enrolment #:id', ['id' => $gap['parent_enrolment']->id]) }}
+                                        </td>
+                                        <td>
+                                            @foreach($gap['missing'] as $course)
+                                                <span class="badge bg-danger" title="{{ $course['subject_title'] }}">
+                                                    {{ $course['subject_code'] }}
+                                                </span>
+                                                <span class="text-muted" style="font-size:11px">
+                                                    {{ __('CA') }} {{ $course['ca'] }}@if(!$loop->last),&nbsp;@endif
+                                                </span>
+                                            @endforeach
+                                        </td>
+                                        <td style="font-size:12px">
+                                            {{ trans_choice(':count CA mark|:count CA marks', count($gap['missing']), ['count' => count($gap['missing'])]) }}
+                                            @if($gap['attendance_missing'] > 0)
+                                                <div class="text-muted">
+                                                    {{ __(':count attendance record(s)', ['count' => $gap['attendance_missing']]) }}
+                                                </div>
+                                            @endif
+                                            @if($gap['marking_missing'] > 0)
+                                                <div class="text-muted">
+                                                    {{ __(':count subject marking(s)', ['count' => $gap['marking_missing']]) }}
+                                                </div>
+                                            @endif
+                                        </td>
+                                        <td class="text-center">
+                                            <form method="post" action="{{ route($route.'.repair-inheritance') }}">
+                                                @csrf
+                                                <input type="hidden" name="enrolment_id" value="{{ $gap['enrolment']->id }}">
+                                                <button type="submit" class="btn btn-sm btn-warning">
+                                                    <i class="fas fa-wrench"></i> {{ __('Repair') }}
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
         <div class="row">
             <div class="col-sm-12">
                 <div class="card">
