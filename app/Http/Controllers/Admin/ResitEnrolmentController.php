@@ -184,9 +184,14 @@ class ResitEnrolmentController extends Controller
             return redirect()->route($this->route . '.index');
         }
 
+        // The detector only reports sittings whose parent holds a mark they do
+        // not, so reaching here means the picture changed under the registrar
+        // — someone else repaired it, or a mark was entered — rather than that
+        // there was nothing to inherit. Saying the latter sent people looking
+        // for a missing parent semester that was there all along.
         if ($sittings === 0) {
             Flasher::addWarning(
-                __('Nothing could be carried over. The semester these sittings shadow holds no continuous assessment to inherit.'),
+                __('Nothing was carried over, so these sittings were already dealt with. Reload the screen to see where they stand now.'),
                 __('msg_warning')
             );
 

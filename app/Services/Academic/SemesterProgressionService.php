@@ -1063,13 +1063,12 @@ class SemesterProgressionService
 
             $copiedCount = 0;
             foreach ($caExams as $exam) {
-                // Check if exam already exists (prevent duplicates)
-                $exists = Exam::where('student_enroll_id', $resitEnrollmentId)
+                $existing = Exam::where('student_enroll_id', $resitEnrollmentId)
                     ->where('subject_id', $subjectId)
                     ->where('exam_type_id', $exam->exam_type_id)
-                    ->exists();
+                    ->first();
 
-                if (!$exists) {
+                if (!$existing) {
                     Exam::create([
                         'student_enroll_id' => $resitEnrollmentId,
                         'subject_id' => $subjectId,
@@ -1083,6 +1082,25 @@ class SemesterProgressionService
                         'note' => $exam->note ? "Inherited from parent semester: " . $exam->note : "Inherited from parent semester",
                         'status' => $exam->status,
                     ]);
+                    $copiedCount++;
+                    continue;
+                }
+
+                // A row carrying no achieved mark is an empty shell, not a
+                // result somebody entered. Saving CA exam attendance creates
+                // exactly that, and registrars do take it when a student is
+                // missing from the CA screen — which was the whole symptom of
+                // the sitting never having inherited. Skipping such a row
+                // strands the mark on the parent for good, with no route left
+                // to carry it over. A row that DOES hold a mark is somebody's
+                // entry, or a re-mark, and is never touched.
+                if ($existing->achieve_marks === null) {
+                    $existing->achieve_marks = $exam->achieve_marks;
+                    $existing->marks = $exam->marks;
+                    $existing->contribution = $exam->contribution;
+                    $existing->attendance = $exam->attendance;
+                    $existing->note = 'Inherited from parent semester';
+                    $existing->save();
                     $copiedCount++;
                 }
             }

@@ -134,14 +134,25 @@ class ResitInheritanceAudit
                     continue;
                 }
 
-                // The missing CA row is the defect, and the only trigger. A
-                // sitting that holds its CA has inherited; if its attendance
-                // has since fallen behind the parent's that is the parent
-                // having gained days afterwards, not a failed inheritance, and
-                // copying them over would overwrite a sitting that is already
-                // correct — one on this installation has had its CA re-marked
-                // since, which a blind repair must not disturb.
-                if (isset($sittingCa[$sitting->id . ':' . $subjectId])) {
+                // The trigger is the MARK, not the row. Two states count as
+                // not having inherited:
+                //
+                //  - no CA row at all, which is how a sitting raised by the
+                //    old admin route looks, and why the student never appears
+                //    on the CA screen;
+                //  - a CA row carrying no mark, which is what saving CA exam
+                //    attendance leaves behind. Registrars do take it, because
+                //    taking it is the only thing that makes the student
+                //    appear — so this is the state the first symptom leads
+                //    people into, and it still needs the mark carried over.
+                //
+                // A row that holds a mark has inherited, or has been re-marked
+                // since, and must not be touched. Attendance drifting behind
+                // the parent is not a failed inheritance either: that is the
+                // parent gaining days afterwards.
+                $sittingMark = $sittingCa->get($sitting->id . ':' . $subjectId);
+
+                if ($sittingMark !== null) {
                     continue;
                 }
 
@@ -215,15 +226,33 @@ class ResitInheritanceAudit
         }
 
         $before = $this->countsFor($sitting->id);
+        $marksBefore = $this->caMarks([$sitting->id]);
 
         DB::transaction(function () use ($sitting, $resitSemester, $courseIds) {
             $this->progression->inheritParentSemesterData($sitting, $resitSemester, $courseIds);
         });
 
         $after = $this->countsFor($sitting->id);
+        $marksAfter = $this->caMarks([$sitting->id]);
+
+        // Count marks that arrived, not rows that were created. Where the
+        // sitting already held an empty CA row — the one CA exam attendance
+        // leaves behind — the mark is written into it and the row count does
+        // not move, so counting rows would report a successful repair as a
+        // failure and send the registrar back to a button that had in fact
+        // just worked.
+        $carried = 0;
+
+        foreach ($courseIds as $subjectId) {
+            $key = $sitting->id . ':' . $subjectId;
+
+            if ($marksBefore->get($key) === null && $marksAfter->get($key) !== null) {
+                $carried++;
+            }
+        }
 
         return [
-            'repaired' => $after['ca'] - $before['ca'],
+            'repaired' => $carried,
             'attendance' => $after['attendance'] - $before['attendance'],
             'marking' => $after['marking'] - $before['marking'],
         ];

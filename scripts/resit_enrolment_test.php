@@ -909,6 +909,158 @@ check('the repair is driven by the detector, not by the posted id',
     str_contains($controllerSource, '$this->audit->affected(')
         && !str_contains($controllerSource, 'StudentEnroll::findOrFail($request->enrolment_id)'));
 // ---------------------------------------------------------------------------
+section('A sitting someone already took CA attendance for');
+
+/**
+ * The state registrars actually get into, and the one that used to be a dead
+ * end.
+ *
+ * The first symptom of a sitting that never inherited is that the student is
+ * missing from the CA marking screen. The only thing that puts them there is
+ * saving CA exam attendance — so that is what people do. It creates an exam
+ * row with an attendance flag and NO mark.
+ *
+ * From then on the sitting was stuck for good: the detector still reported it
+ * (rightly — the mark had not come across), while the inheritance skipped any
+ * row that already existed, so the mark could never arrive. The repair button
+ * reported "nothing could be carried over" even though the parent plainly held
+ * the mark, and the row stayed on the list however many times it was pressed.
+ *
+ * A row with no mark on it is an empty shell and is filled. A row that holds a
+ * mark is somebody's entry and is never touched — the check for that is the
+ * one that matters most here, because this writes to a service four routes
+ * share.
+ */
+
+$audit = app(App\Services\Resit\ResitInheritanceAudit::class);
+$progression = app(App\Services\Academic\SemesterProgressionService::class);
+$caTypeId = DB::table('exam_types')->where('is_final', 0)->orderBy('id')->value('id');
+
+check('there is a continuous-assessment exam type to work with', $caTypeId !== null);
+
+// A healthy sitting: one that holds its CA, with a parent that holds the same.
+$healthy = null;
+
+foreach (Semester::where('is_resit', 1)->pluck('id') as $resitSemesterId) {
+    $resit = Semester::find($resitSemesterId);
+
+    foreach (StudentEnroll::where('semester_id', $resitSemesterId)->get() as $candidate) {
+        $parent = StudentEnroll::where('student_id', $candidate->student_id)
+            ->where('program_id', $candidate->program_id)
+            ->where('semester_id', $resit->parent_semester_id)
+            ->orderByRaw('CASE WHEN status = 0 THEN 1 ELSE 0 END')->orderBy('id')->first();
+
+        if (!$parent) {
+            continue;
+        }
+
+        $subjectId = DB::table('student_enroll_subject')
+            ->where('student_enroll_id', $candidate->id)->pluck('subject_id')
+            ->first(function ($id) use ($candidate, $parent, $caTypeId) {
+                return DB::table('exams')->where('student_enroll_id', $candidate->id)
+                        ->where('subject_id', $id)->where('exam_type_id', $caTypeId)
+                        ->whereNotNull('achieve_marks')->exists()
+                    && DB::table('exams')->where('student_enroll_id', $parent->id)
+                        ->where('subject_id', $id)->where('exam_type_id', $caTypeId)
+                        ->whereNotNull('achieve_marks')->exists();
+            });
+
+        if ($subjectId) {
+            $healthy = ['sitting' => $candidate, 'parent' => $parent,
+                        'resit' => $resit, 'subject_id' => (int) $subjectId];
+            break 2;
+        }
+    }
+}
+
+check('there is a healthy sitting to build the scenario from', $healthy !== null);
+
+if ($healthy) {
+    $sittingId = $healthy['sitting']->id;
+    $subjectId = $healthy['subject_id'];
+
+    $parentMark = DB::table('exams')->where('student_enroll_id', $healthy['parent']->id)
+        ->where('subject_id', $subjectId)->where('exam_type_id', $caTypeId)->value('achieve_marks');
+
+    DB::beginTransaction();
+
+    try {
+        // Put it back to "never inherited", then do what the registrar did:
+        // save CA exam attendance, which leaves a row with no mark on it.
+        DB::table('exams')->where('student_enroll_id', $sittingId)
+            ->where('subject_id', $subjectId)->delete();
+        DB::table('exams')->insert([
+            'student_enroll_id' => $sittingId,
+            'subject_id' => $subjectId,
+            'exam_type_id' => $caTypeId,
+            'attendance' => 1,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $shell = DB::table('exams')->where('student_enroll_id', $sittingId)
+            ->where('subject_id', $subjectId)->where('exam_type_id', $caTypeId)->first();
+        check('taking CA attendance leaves a row with no mark on it',
+            $shell !== null && $shell->achieve_marks === null);
+
+        $reported = $audit->affected()
+            ->first(fn ($r) => (int) $r['enrolment']->id === (int) $sittingId
+                && collect($r['missing'])->contains('subject_id', $subjectId));
+
+        check('the detector still reports it — the mark has not come across',
+            $reported !== null);
+
+        if ($reported) {
+            $result = $audit->repair($reported);
+
+            check('the repair says it carried the mark over, rather than reporting failure',
+                $result['repaired'] >= 1, 'reported ' . $result['repaired']);
+
+            $filled = DB::table('exams')->where('student_enroll_id', $sittingId)
+                ->where('subject_id', $subjectId)->where('exam_type_id', $caTypeId)->first();
+
+            check("the shell is filled with the parent's own mark",
+                $filled && (string) $filled->achieve_marks === (string) $parentMark,
+                sprintf('%s, parent holds %s', var_export($filled->achieve_marks ?? null, true), $parentMark));
+            check('and it is still a single row, not a duplicate beside the shell',
+                DB::table('exams')->where('student_enroll_id', $sittingId)
+                    ->where('subject_id', $subjectId)->where('exam_type_id', $caTypeId)->count() === 1);
+            check('the mark is now out of the parent\'s total, not out of nothing',
+                $filled && $filled->marks !== null);
+
+            check('and the sitting drops off the list instead of sticking on it',
+                !$audit->affected()->contains(fn ($r) => (int) $r['enrolment']->id === (int) $sittingId
+                    && collect($r['missing'])->contains('subject_id', $subjectId)));
+        }
+    } finally {
+        DB::rollBack();
+    }
+
+    // THE SAFETY PROPERTY. inheritParentSemesterData is shared by four routes,
+    // so an inheritance forced over a sitting whose CA was entered or
+    // re-marked must leave that mark exactly where it is.
+    DB::beginTransaction();
+
+    try {
+        DB::table('exams')->where('student_enroll_id', $sittingId)
+            ->where('subject_id', $subjectId)->where('exam_type_id', $caTypeId)
+            ->update(['achieve_marks' => 7.77]);
+
+        $progression->inheritParentSemesterData(
+            $healthy['sitting'], $healthy['resit'], [$subjectId]);
+
+        $afterForce = DB::table('exams')->where('student_enroll_id', $sittingId)
+            ->where('subject_id', $subjectId)->where('exam_type_id', $caTypeId)->value('achieve_marks');
+
+        check('a mark somebody entered survives a forced inheritance',
+            (float) $afterForce === 7.77,
+            sprintf('%s, and the parent holds %s', $afterForce, $parentMark));
+    } finally {
+        DB::rollBack();
+    }
+}
+// ---------------------------------------------------------------------------
 section('Nothing was left behind');
 
 Auth::guard('web')->logout();
