@@ -89,7 +89,7 @@
                     <div>
                         <h3 class="font-semibold text-surface-800 mb-1">{{ $service->title }}</h3>
                         @if($service->description)
-                        <p class="text-sm text-surface-500 leading-relaxed">{{ Str::limit(strip_tags($service->description), 150) }}</p>
+                        <p class="text-sm text-surface-500 leading-relaxed">{{ excerpt($service->description, 150) }}</p>
                         @endif
                         @if($service->contact_info)
                         <p class="text-xs text-primary-500 font-medium mt-2"><i class="fas fa-phone-alt mr-1"></i>{{ $service->contact_info }}</p>

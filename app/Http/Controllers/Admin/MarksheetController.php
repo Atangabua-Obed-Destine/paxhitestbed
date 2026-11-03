@@ -191,10 +191,17 @@ class MarksheetController extends Controller
         $cumulative_quality_points = 0;
         $cumulative_credits = 0;
 
-        // Filter enrollments by program if specified
-        $enrollments = $programId 
-            ? $student->studentEnrolls->where('program_id', $programId)
-            : $student->studentEnrolls;
+        // Filter enrollments by program if specified.
+        //
+        // The trend accumulates as it walks this list, so unlike the transcript
+        // -- whose cumulative GPA is summed in a pass of its own -- the order
+        // here moves the numbers, not just the sequence of points. It has to be
+        // the order the transcript beside it prints in.
+        $enrollments = app(\App\Services\Academic\TranscriptSemesterOrder::class)->sort(
+            $programId
+                ? $student->studentEnrolls->where('program_id', $programId)
+                : $student->studentEnrolls
+        );
 
         // Get unique semester combinations
         $semester_items = [];

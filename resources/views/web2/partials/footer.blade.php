@@ -124,8 +124,12 @@
                 <div class="space-y-4">
                     @forelse($footerNews as $newsItem)
                     <a href="{{ route('news.single', ['id' => $newsItem->id, 'slug' => $newsItem->slug]) }}" class="group flex gap-3">
-                        @if($newsItem->attach)
-                        <img src="{{ asset('uploads/news/'.$newsItem->attach) }}" alt="" class="w-16 h-12 rounded-lg object-cover flex-shrink-0 ring-1 ring-white/10">
+                        {{-- Same existence check the logo above already does,
+                             via the helper, so a filename with no file behind
+                             it falls through to the placeholder. --}}
+                        @php $thumb = upload_or('news', $newsItem->attach); @endphp
+                        @if($thumb)
+                        <img src="{{ $thumb }}" alt="" class="w-16 h-12 rounded-lg object-cover flex-shrink-0 ring-1 ring-white/10">
                         @else
                         <div class="w-16 h-12 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
                             <i class="fas fa-newspaper text-white/30"></i>

@@ -41,8 +41,8 @@
         "name": "{{ institution_name() }}",
         "alternateName": "{{ institution_code() }}",
         "url": "{{ url('/') }}",
-        @if($setting->logo_path)
-        "logo": "{{ asset('uploads/setting/'.$setting->logo_path) }}",
+        @if(upload_or('setting', $setting->logo_path))
+        "logo": "{{ upload_or('setting', $setting->logo_path) }}",
         @endif
         "description": "{{ $setting->meta_description ?? 'A Catholic institution of higher learning.' . (site_subtitle() ? ' ' . site_subtitle() . '.' : '') }}",
         "address": {

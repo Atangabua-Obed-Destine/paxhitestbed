@@ -26,6 +26,12 @@ use App\Models\PaymentAccount;
 use App\Models\PaymentAccountTransaction;
 use App\Models\PaymentReceipt;
 use App\Models\SubjectMarking;
+use App\Exports\FeeReportExport;
+use App\Services\FeeReport;
+use App\Services\LetterheadService;
+use App\Support\FeeReportFilter;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
 
 class FeesStudentController extends Controller
 {
@@ -50,8 +56,11 @@ class FeesStudentController extends Controller
         $this->middleware('permission:'.$this->access.'-quick-assign', ['only' => ['quickAssign','quickAssignStore']]);
         $this->middleware('permission:'.$this->access.'-quick-received', ['only' => ['quickReceived','quickReceivedStore']]);
         $this->middleware('permission:'.$this->access.'-action', ['only' => ['index','pay','unpay','cancel','splitPreview']]);
-        $this->middleware('permission:'.$this->access.'-report', ['only' => ['report']]);
-        $this->middleware('permission:'.$this->access.'-print', ['only' => ['report','print','multiPrint']]);
+        $this->middleware('permission:'.$this->access.'-report', ['only' => ['report', 'reportPdf', 'reportExcel']]);
+        // The two exports are granted exactly as the screen is -- report AND
+        // print, both. Granting them on '-report' alone would let somebody who
+        // cannot open the screen download the whole register from it.
+        $this->middleware('permission:'.$this->access.'-print', ['only' => ['report','print','multiPrint','reportPdf','reportExcel']]);
     }
 
     /**
@@ -538,60 +547,17 @@ class FeesStudentController extends Controller
         $data['access'] = $this->access;
 
 
-        if(!empty($request->faculty) || $request->faculty != null){
-            $data['selected_faculty'] = $faculty = $request->faculty;
-        }
-        else{
-            $data['selected_faculty'] = $faculty = '0';
-        }
+        // One answer to "which fees match this form?", shared with the report
+        // screen, the PDF and the workbook. See App\Support\FeeReportFilter:
+        // written three times, the three would drift apart the first time
+        // somebody added a filter to one of them.
+        $filter = FeeReportFilter::fromRequest($request);
+        $data = array_merge($data, $filter->selected);
 
-        if(!empty($request->program) || $request->program != null){
-            $data['selected_program'] = $program = $request->program;
-        }
-        else{
-            $data['selected_program'] = $program = '0';
-        }
-
-        if(!empty($request->session) || $request->session != null){
-            $data['selected_session'] = $session = $request->session;
-        }
-        else{
-            $data['selected_session'] = $session = '0';
-        }
-
-        if(!empty($request->semester) || $request->semester != null){
-            $data['selected_semester'] = $semester = $request->semester;
-        }
-        else{
-            $data['selected_semester'] = $semester = '0';
-        }
-
-        if(!empty($request->section) || $request->section != null){
-            $data['selected_section'] = $section = $request->section;
-        }
-        else{
-            $data['selected_section'] = $section = '0';
-        }
-
-        // Fees type: any number of categories. None chosen (or "All") means every
-        // category. A single value from an old link still works.
-        $data['selected_category'] = $category = collect((array) $request->input('category', []))
-            ->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
-
-        if(!empty($request->student_id) || $request->student_id != null){
-            $data['selected_student_id'] = $student_id = $request->student_id;
-        }
-        else{
-            $data['selected_student_id'] = $student_id = null;
-        }
-
-        // Payment status: any number of statuses, shown if a fee matches any of
-        // them. None chosen (or "all") means every status. A single value from
-        // an old link still works.
-        $data['selected_payment_status'] = $payment_status = collect((array) $request->input('payment_status', []))
-            ->map(fn ($value) => (string) $value)
-            ->filter(fn ($value) => in_array($value, ['0', '1', '2', '3', '4', '5'], true))
-            ->unique()->values()->all();
+        // The dropdowns below still read these.
+        $faculty = $filter->selected['selected_faculty'];
+        $program = $filter->selected['selected_program'];
+        $semester = $filter->selected['selected_semester'];
 
 
 
@@ -628,154 +594,100 @@ class FeesStudentController extends Controller
         $data['sections'] = $sections->orderBy('title', 'asc')->get();}
 
 
-        if(isset($request->faculty) || isset($request->program) || isset($request->session) || isset($request->semester) || isset($request->section) || isset($request->category) || isset($request->student_id)){
-            // Filter Fees - Include all paid and partially paid
-            $fees = Fee::with(['studentEnroll.student', 'studentEnroll.session', 'studentEnroll.semester', 'studentEnroll.program', 'category', 'approvedReceipts', 'paymentPlan', 'creditApplications', 'generatedCredits', 'resitRequest.subject', 'resitRequest.session', 'resitRequest.resitSession', 'resitRequest.resitSemester'])
-                ->withCreditMovedOut();
+        if($filter->isSearching()){
+            $rows = $filter->rows();
 
-            // Paid and overpaid are judged on the net paid amount: overpayment
-            // credit applied to another fee counts on that fee, not on this one
-            // as well. See Fee::netPaidSql().
-            $netPaid = Fee::netPaidSql('fees');
-            $netDue = '(fees.fee_amount - COALESCE(fees.discount_amount, 0) + COALESCE(fees.fine_amount, 0))';
+            $data['rows'] = $rows;
+            $data['resitMarkings'] = $this->resitMarkingsFor($rows);
 
-            // Payment status filter: a fee is shown if it matches any chosen status.
-            $statusFilters = [
-                // Unpaid
-                '0' => fn ($q) => $q->where('status', 0),
-                // Fully paid but NOT overpaid
-                '1' => fn ($q) => $q->where('status', 1)->whereRaw("{$netPaid} <= {$netDue}"),
-                // Partially paid
-                '2' => fn ($q) => $q->where('status', 2),
-                // Cancelled
-                '3' => fn ($q) => $q->where('status', 3),
-                // On an active payment plan
-                '4' => fn ($q) => $q->whereNotNull('payment_plan_id')
-                    ->whereHas('paymentPlan', fn ($plan) => $plan->where('status', 'active')),
-                // Overpaid: still holding an excess that has not been applied
-                // to another fee.
-                '5' => fn ($q) => $q->whereRaw("{$netPaid} > {$netDue}"),
-            ];
-
-            if(!empty($payment_status)){
-                $fees->where(function ($any) use ($payment_status, $statusFilters) {
-                    foreach($payment_status as $status){
-                        $any->orWhere(fn ($q) => $statusFilters[$status]($q));
-                    }
-                });
-            } else {
-                // All statuses (including status 0 = unpaid)
-                $fees->whereIn('status', [0, 1, 2, 3]);
-            }
-
-            if(!empty($request->faculty) || !empty($request->program) || !empty($request->session) || !empty($request->semester) || !empty($request->section)){
-                $fees->whereHas('studentEnroll.program', function ($query) use ($faculty){
-                    if($faculty != 0){
-                    $query->where('faculty_id', $faculty);
-                    }
-                });
-
-                $fees->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section){
-                    if($program != 0){
-                    $query->where('program_id', $program);
-                    }
-                    if($session != 0){
-                    $query->where('session_id', $session);
-                    }
-                    if($semester != 0){
-                    $query->where('semester_id', $semester);
-                    }
-                    if($section != 0){
-                    $query->where('section_id', $section);
-                    }
-                });
-            }
-            if(!empty($category)){
-                $fees->whereIn('category_id', $category);
-            }
-            if(!empty($request->student_id)){
-                $fees->whereHas('studentEnroll', function ($query) use ($student_id){
-                    if($student_id != 0){
-                        $query->where('matricule', 'LIKE', '%'.$student_id.'%')
-                              ->orWhereHas('student', function($q) use ($student_id) {
-                                  $q->where('student_id', 'LIKE', '%'.$student_id.'%');
-                              });
-                    }
-                });
-            }
-
-            $fees->whereHas('studentEnroll.student', function ($query){
-                $query->orderBy('matricule', 'asc');
-            });
-
-            $rows = $fees->orderBy('updated_at', 'desc')->get();
-            $data['rows'] = $rows->sortBy(function($row){
-                return $row->studentEnroll->matricule ?? $row->studentEnroll->student->student_id;
-            });
-            
-            // Calculate statistics
-            $all_fees = clone $fees;
-            $all_fees = $all_fees->get();
-            
-            // Count overpaid fees
-            $overpaid_count = $all_fees->filter(function($fee) {
-                // Still holding an excess not applied to another fee. A First
-                // Instalment whose overpayment went to the Second is not overpaid.
-                return $fee->isNetOverpaid();
-            })->count();
-            
-            // Calculate total overpayment amount
-            $total_overpayment = $all_fees->sum(function($fee) {
-                // Only the excess still held, not what has already been applied.
-                return $fee->net_overpayment_amount;
-            });
-            
-            // Pre-load resit markings for all resit fees in one query
-            $resitFees = $rows->filter(fn($f) => $f->resitRequest !== null);
-            $resitMarkings = collect();
-            if ($resitFees->isNotEmpty()) {
-                $markingKeys = $resitFees->map(fn($f) => [
-                    'student_enroll_id' => $f->resitRequest->student_enroll_id,
-                    'subject_id'        => $f->resitRequest->subject_id,
-                ]);
-                $resitMarkings = SubjectMarking::where(function ($q) use ($markingKeys) {
-                    foreach ($markingKeys as $key) {
-                        $q->orWhere(function ($sub) use ($key) {
-                            $sub->where('student_enroll_id', $key['student_enroll_id'])
-                                ->where('subject_id', $key['subject_id']);
-                        });
-                    }
-                })->get()->keyBy(fn($m) => $m->student_enroll_id . '-' . $m->subject_id);
-            }
-            $data['resitMarkings'] = $resitMarkings;
-
-            $data['stats'] = [
-                'total_fees' => $all_fees->count(),
-                // A First Instalment whose overpayment has been moved to the
-                // Second is fully paid, not overpaid — it used to be left out.
-                'fully_paid_count' => $all_fees->filter(function($fee) {
-                    return $fee->status == 1 && !$fee->isNetOverpaid();
-                })->count(),
-                'partially_paid_count' => $all_fees->where('status', 2)->count(),
-                'cancelled_count' => $all_fees->where('status', 3)->count(),
-                'overpaid_count' => $overpaid_count,
-                'total_amount' => $all_fees->sum(function($fee) {
-                    return $fee->total_amount;
-                }),
-                // Cash actually received: overpayment credit applied to another
-                // fee is counted on that fee and no longer on this one as well.
-                'total_collected' => $all_fees->sum(function($fee) {
-                    return $fee->net_paid_amount;
-                }),
-                'total_remaining' => $all_fees->sum(function($fee) {
-                    return max(0, $fee->net_remaining_balance); // Only positive remaining
-                }),
-                'total_overpayment' => $total_overpayment,
-            ];
+            // The band's figures, from the rows on the page. Shared with both
+            // exports (App\Services\FeeReport), so the headline on a printed
+            // copy is the same computation as the band on the screen rather
+            // than a second one that agrees today.
+            $data['stats'] = app(FeeReport::class)->stats($rows);
         }
 
 
         return view($this->view.'.report', $data);
+    }
+
+    /**
+     * The report as a document, for printing and filing.
+     *
+     * Covers exactly the fees the filters select, because it reads them
+     * through the same FeeReportFilter the screen does.
+     */
+    public function reportPdf(Request $request)
+    {
+        $report = $this->reportData($request);
+        $letterhead = app(LetterheadService::class);
+
+        // Rendered for PDF: filesystem image paths, which dompdf can read,
+        // rather than URLs, which it cannot fetch. Font subsetting embeds only
+        // the characters the report uses -- without it dompdf embeds both
+        // DejaVu faces whole, which on a long register is megabytes of font.
+        $pdf = Pdf::loadView('admin.fees-student.report.pdf', [
+            'report' => $report,
+            'letterhead' => $letterhead->render(true),
+            'letterheadStyles' => $letterhead->styles(),
+        ])
+            ->setPaper('a4', 'landscape')
+            ->setOption('isRemoteEnabled', true)
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isFontSubsettingEnabled', true);
+
+        return $pdf->download($this->reportFilename() . '.pdf');
+    }
+
+    /** The same figures as a workbook, for anyone who wants to work with them. */
+    public function reportExcel(Request $request)
+    {
+        return Excel::download(
+            new FeeReportExport($this->reportData($request)),
+            $this->reportFilename() . '.xlsx'
+        );
+    }
+
+    /** Everything both documents are built from. */
+    protected function reportData(Request $request): array
+    {
+        $filter = FeeReportFilter::fromRequest($request);
+
+        return app(FeeReport::class)->build($filter->rows(), $filter);
+    }
+
+    protected function reportFilename(): string
+    {
+        return 'fees-report-' . now()->format('Y-m-d');
+    }
+
+    /**
+     * The resit markings for whichever of these fees are resits, in one query.
+     *
+     * Screen only: the report table shows them, and without this it asked once
+     * per resit row.
+     */
+    protected function resitMarkingsFor($rows)
+    {
+        $resitFees = $rows->filter(fn ($fee) => $fee->resitRequest !== null);
+
+        if ($resitFees->isEmpty()) {
+            return collect();
+        }
+
+        $markingKeys = $resitFees->map(fn ($fee) => [
+            'student_enroll_id' => $fee->resitRequest->student_enroll_id,
+            'subject_id'        => $fee->resitRequest->subject_id,
+        ]);
+
+        return SubjectMarking::where(function ($q) use ($markingKeys) {
+            foreach ($markingKeys as $key) {
+                $q->orWhere(function ($sub) use ($key) {
+                    $sub->where('student_enroll_id', $key['student_enroll_id'])
+                        ->where('subject_id', $key['subject_id']);
+                });
+            }
+        })->get()->keyBy(fn ($m) => $m->student_enroll_id . '-' . $m->subject_id);
     }
 
     /**

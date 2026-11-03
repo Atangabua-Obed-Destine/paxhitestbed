@@ -39,8 +39,8 @@
                data-aos="fade-up" data-aos-delay="{{ min($idx * 80, 320) }}">
                 {{-- Image --}}
                 <div class="relative aspect-[16/10] overflow-hidden">
-                    @if($event->attach)
-                    <img src="{{ asset('uploads/web-event/'.$event->attach) }}" alt="{{ $event->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
+                    @if(upload_or('web-event', $event->attach))
+                    <img src="{{ upload_or('web-event', $event->attach) }}" alt="{{ $event->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
                     @else
                     <div class="w-full h-full bg-gradient-to-br from-secondary-100 to-secondary-200 flex items-center justify-center"><i class="fas fa-calendar-day text-3xl text-secondary-300"></i></div>
                     @endif
@@ -66,7 +66,7 @@
                         <p class="flex items-center gap-2"><i class="fas fa-map-marker-alt text-primary-400 w-4 text-center"></i>{{ Str::limit($event->address, 50) }}</p>
                         @endif
                     </div>
-                    <p class="text-sm text-surface-500 mt-3 line-clamp-2">{{ Str::limit(strip_tags($event->description), 120) }}</p>
+                    <p class="text-sm text-surface-500 mt-3 line-clamp-2">{{ excerpt($event->description, 120) }}</p>
                     <span class="inline-flex items-center gap-1.5 text-sm font-medium text-primary-500 mt-4 group-hover:gap-2.5 transition-all">View Details <i class="fas fa-arrow-right text-xs"></i></span>
                 </div>
             </a>

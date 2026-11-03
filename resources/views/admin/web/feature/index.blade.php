@@ -26,14 +26,22 @@
                                 </div>
                             </div>
 
-                            {{-- <div class="form-group">
-                                <label for="icon" class="form-label">{{ __('field_icon') }} </label>
-                                <input type="text" class="form-control" name="icon" id="icon" value="{{ old('icon') }}">
-
-                                <div class="invalid-feedback">
-                                  {{ __('required_field') }} {{ __('field_icon') }}
-                                </div>
-                            </div> --}}
+                            {{-- Was commented out, while FeatureController still
+                                 saved $request->icon and the public site still
+                                 read it. The result was that no feature could
+                                 ever be given an icon, so every card on the home
+                                 page fell back to the same graduation cap --
+                                 Research and Counselling included. --}}
+                            <div class="form-group">
+                                <label for="icon" class="form-label">{{ __('field_icon') }}</label>
+                                <input type="text" class="form-control" name="icon" id="icon"
+                                       value="{{ old('icon') }}" placeholder="fas fa-flask">
+                                <small class="form-text text-muted">
+                                    {{ __('A Font Awesome class, for example') }} <code>fas fa-flask</code>,
+                                    <code>fas fa-heart</code>, <code>fas fa-book</code>.
+                                    {{ __('Leave blank to use the default icon.') }}
+                                </small>
+                            </div>
 
                             <div class="form-group">
                                 <label for="description" class="form-label">{{ __('field_description') }} <span>*</span></label>

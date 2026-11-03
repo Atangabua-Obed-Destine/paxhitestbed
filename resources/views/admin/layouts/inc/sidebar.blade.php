@@ -140,6 +140,14 @@
                         <li class="{{ Request::is('admin/student-attendance-report*') ? 'active' : '' }}"><a href="{{ route('admin.student-attendance.report') }}" class="">{{ trans_choice('module_student_subject_report', 2) }}</a></li>
                         @endcan
 
+                        {{-- A lecturer's own course, whole: the class list and its
+                             attendance together, without having to pick a programme
+                             that the register does not actually have. Reached in one
+                             click from the dashboard too. --}}
+                        @canany(['report-subject-students', 'student-attendance-report'])
+                        <li class="{{ Request::is('admin/course-class-list*') ? 'active' : '' }}"><a href="{{ route('admin.course-class-list.index') }}" class=""><i class="fas fa-clipboard-list mr-1"></i> {{ __('Course Class List') }}</a></li>
+                        @endcanany
+
                         @can('class-session-view')
                         <li class="{{ Request::is('admin/class-session') ? 'active' : '' }}"><a href="{{ route('admin.class-session.index') }}" class=""><i class="fas fa-chalkboard-teacher mr-1"></i> Class Sessions & Logbook</a></li>
                         @endcan

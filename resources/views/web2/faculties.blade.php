@@ -39,8 +39,8 @@
 
                 {{-- Banner Image --}}
                 <div class="relative h-52 overflow-hidden">
-                    @if($faculty->featured_image)
-                    <img src="{{ asset('uploads/faculties/'.$faculty->featured_image) }}"
+                    @if(upload_or('faculties', $faculty->featured_image))
+                    <img src="{{ upload_or('faculties', $faculty->featured_image) }}"
                          alt="{{ $faculty->title }}"
                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                          loading="lazy">
@@ -68,14 +68,14 @@
                     @if($faculty->excerpt)
                     <p class="text-surface-500 text-sm leading-relaxed mb-4 line-clamp-3">{{ $faculty->excerpt }}</p>
                     @elseif($faculty->description)
-                    <p class="text-surface-500 text-sm leading-relaxed mb-4 line-clamp-3">{{ Str::limit(strip_tags($faculty->description), 150) }}</p>
+                    <p class="text-surface-500 text-sm leading-relaxed mb-4 line-clamp-3">{{ excerpt($faculty->description, 150) }}</p>
                     @endif
 
                     {{-- Dean info --}}
                     @if($faculty->dean_name)
                     <div class="flex items-center gap-3 pt-4 border-t border-surface-100">
-                        @if($faculty->dean_photo)
-                        <img src="{{ asset('uploads/faculties/deans/'.$faculty->dean_photo) }}" alt="{{ $faculty->dean_name }}" class="w-10 h-10 rounded-full object-cover ring-2 ring-primary-100">
+                        @if(upload_or('faculties/deans', $faculty->dean_photo))
+                        <img src="{{ upload_or('faculties/deans', $faculty->dean_photo) }}" alt="{{ $faculty->dean_name }}" class="w-10 h-10 rounded-full object-cover ring-2 ring-primary-100">
                         @else
                         <div class="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center"><i class="fas fa-user text-primary-300"></i></div>
                         @endif

@@ -31,18 +31,89 @@
 
 @section('content')
 
+<style>
+    /* The hero arrows carry `hidden md:flex`, which is correct Tailwind and
+       compiles fine -- but Swiper's own stylesheet ships
+
+           .swiper-button-prev, .swiper-button-next { display: flex }
+
+       and loads after it. Same specificity, later rule wins, so the arrows
+       stayed on screen at 390px sitting over the headline. Expressing the
+       author's intent as a rule of our own, after Swiper's, is what makes it
+       hold; `md:!flex` would be tidier but is not in the compiled build, and
+       inventing a class the build has never seen silently does nothing. */
+    @media (max-width: 767.98px) {
+        .hero-swiper .swiper-button-prev,
+        .hero-swiper .swiper-button-next { display: none !important; }
+    }
+
+    /* ---- Hero: keep the copy clear of the wave ----------------------------
+       The slide content is centred with `h-full flex items-center`, i.e. in
+       the hero's FULL height. But the bottom strip of that height is not
+       usable: the white wave is absolutely positioned there at z-20 (above
+       the content's z-10), and the features bar is then pulled up over it
+       again with -mt-8. Centring in the full height while the bottom is
+       painted over is what puts the buttons under the curve.
+
+       Measured overlap before this: 20px at 1280x720, 13px at 1920x800, 4px
+       at 1366x768 -- short, wide windows, because the hero is 85vh (so it
+       shrinks with HEIGHT) while the wave is a 1440x60 SVG at width:100%
+       (so it grows with WIDTH). The two move in opposite directions and the
+       buttons, being last in the stack, are what gets covered.
+
+       So the content box reserves the wave's own height -- width/24, the
+       SVG's aspect ratio, which tracks it automatically at every width --
+       plus the 2rem the features bar overlaps by. `items-center` then centres
+       within the part of the hero that is actually visible.
+
+       Expressed here rather than as `pb-[calc(...)]` because arbitrary
+       Tailwind values must exist at build time, and this theme ships a
+       prebuilt stylesheet: a class the build has never seen does nothing. */
+    .hero-shell .swiper-slide > .relative.h-full {
+        padding-bottom: calc(100vw / 24 + 2rem);
+    }
+
+    /* With that strip reserved, the tallest slide (a four-line headline, a
+       two-line standfirst and two buttons: 546px) no longer fits inside a
+       600px hero on a short window. The floor is raised to what the content
+       actually needs; 85vh still governs on taller screens. */
+    .hero-shell { min-height: 700px; }
+
+    @media (max-width: 767.98px) {
+        /* The wave is only ~16px tall at phone widths, and vertical room is
+           scarcer than the reservation is worth. */
+        .hero-shell .swiper-slide > .relative.h-full {
+            padding-bottom: calc(100vw / 24 + 1.5rem);
+        }
+        .hero-shell { min-height: 640px; }
+    }
+</style>
+
 {{-- ================================================================
      1. HERO SLIDER
      ================================================================ --}}
-<section class="relative h-[85vh] min-h-[600px] max-h-[900px] bg-primary-900 overflow-hidden">
+<section class="hero-shell relative h-[85vh] min-h-[600px] max-h-[900px] bg-primary-900 overflow-hidden">
     <div class="swiper hero-swiper absolute inset-0 w-full h-full">
         <div class="swiper-wrapper">
             @forelse($sliders as $slider)
             <div class="swiper-slide relative">
-                {{-- Background Image --}}
-                @if($slider->attach)
-                <img src="{{ asset('uploads/slider/'.$slider->attach) }}"
-                     alt="{{ $slider->title }}"
+                {{-- Background Image.
+
+                     Resolved through upload_or(), which returns null when the
+                     FILE is absent -- not merely when the column is empty. The
+                     two are different and the difference showed: every slider
+                     row here names a file that is not on disk, so the old
+                     check passed, a broken <img> was emitted, and the browser
+                     painted its alt text as grey prose across the top of the
+                     hero. With no image the gradient over bg-primary-900 is a
+                     deliberate plain background instead.
+
+                     alt is empty on purpose: this is a backdrop, and the same
+                     words are already the <h1> directly on top of it. --}}
+                @php $heroImage = upload_or('slider', $slider->attach); @endphp
+                @if($heroImage)
+                <img src="{{ $heroImage }}"
+                     alt=""
                      class="absolute inset-0 w-full h-full object-cover"
                      loading="{{ $loop->first ? 'eager' : 'lazy' }}"
                 >
@@ -53,19 +124,58 @@
 
                 {{-- Content --}}
                 <div class="relative h-full flex items-center z-10">
-                    <div class="section-container">
+                    {{-- w-full is load-bearing.
+
+                         .section-container is `max-w-7xl mx-auto`, which only
+                         behaves as intended on a block-level box. Here it is a
+                         FLEX ITEM, and a flex item sizes to its content by
+                         default -- so instead of spanning 1280px with the copy
+                         at its left edge, the container shrank to 736px (the
+                         672px column plus its padding) and mx-auto then centred
+                         that little box. Measured at 1920px wide: 592px of dead
+                         space on EACH side, with the copy floating in the
+                         middle of the screen.
+
+                         That also broke the hero's design. The overlay is a
+                         left-to-right gradient, dense on the left and clearing
+                         to the right, because the copy is meant to sit against
+                         the left edge and let the photograph show beside it.
+                         Centring the column put the text over the clear part
+                         and left two voids instead of one picture. --}}
+                    <div class="section-container w-full">
                         <div class="max-w-2xl">
-                            {{-- Catholic accent --}}
+                            {{-- Catholic accent.
+
+                                 Only drawn when there is something to say. Every
+                                 slider row here has a null pre_title and the site
+                                 subtitle is blank, so this was rendering as a bare
+                                 pill holding one cross glyph and no words --
+                                 decoration that reads as a broken element. --}}
+                            @php $eyebrow = trim((string) ($slider->pre_title ?: site_subtitle())); @endphp
+                            @if($eyebrow !== '')
                             <div class="inline-flex items-center gap-2 mb-5 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 text-white/80 text-xs font-medium">
                                 <i class="fas fa-cross text-accent-400 text-[10px]"></i>
-                                {{ $slider->pre_title ?? site_subtitle() }}
+                                {{ $eyebrow }}
                             </div>
-                            <h1 class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white leading-tight mb-5 [text-shadow:_0_2px_20px_rgba(0,0,0,0.3)]">
-                                {!! $slider->title !!}
-                            </h1>
+                            @endif
+
+                            {{-- One <h1> per page, not one per slide.
+
+                                 Every slide carried an <h1>, so the home page
+                                 shipped five of them. Only the first slide is
+                                 the page's heading; the rest are the same type
+                                 at the same size, which is a styling job, not a
+                                 structural one. Escaped rather than raw: no
+                                 slider title on this install contains markup,
+                                 and a CMS field printed raw into an <h1> is an
+                                 injection point for whoever edits it next. --}}
+                            @php $titleTag = $loop->first ? 'h1' : 'p'; @endphp
+                            <{{ $titleTag }} class="text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white leading-tight mb-5 [text-shadow:_0_2px_20px_rgba(0,0,0,0.3)]">
+                                {{ $slider->title }}
+                            </{{ $titleTag }}>
                             @if($slider->sub_title)
                             <p class="text-lg md:text-xl text-white/80 mb-8 leading-relaxed max-w-xl">
-                                {!! $slider->sub_title !!}
+                                {{ $slider->sub_title }}
                             </p>
                             @endif
                             @if($slider->button_text && $slider->button_link)
@@ -89,7 +199,8 @@
             {{-- Fallback if no sliders --}}
             <div class="swiper-slide relative bg-gradient-to-br from-primary-500 to-primary-800">
                 <div class="relative h-full flex items-center z-10">
-                    <div class="section-container text-center">
+                    {{-- Same flex-item fix as the real slide above. --}}
+                    <div class="section-container w-full text-center">
                         <div class="max-w-2xl mx-auto">
                             <h1 class="text-4xl md:text-5xl font-heading font-bold text-white mb-4">Welcome to {{ institution_name() }}</h1>
                             <p class="text-lg text-white/80 mb-8">Academic Excellence Rooted in Catholic Values</p>
@@ -155,8 +266,12 @@
             {{-- Image Side --}}
             <div class="relative" data-aos="fade-right">
                 <div class="relative rounded-2xl overflow-hidden shadow-xl">
-                    @if($welcomeMessage->image)
-                    <img src="{{ asset('uploads/welcome-message/'.$welcomeMessage->image) }}"
+                    {{-- upload_or(), so a filename whose file is missing falls
+                         through to the placeholder below rather than leaving a
+                         broken image and a wall of alt text. --}}
+                    @php $welcomeImage = upload_or('welcome-message', $welcomeMessage->image); @endphp
+                    @if($welcomeImage)
+                    <img src="{{ $welcomeImage }}"
                          alt="{{ $welcomeMessage->title }}"
                          class="w-full h-auto object-cover aspect-[4/3]"
                     >
@@ -191,7 +306,7 @@
                 </div>
                 @endif
                 <div class="text-surface-600 leading-relaxed space-y-4 text-base">
-                    {!! Str::limit(strip_tags($welcomeMessage->message), 600) !!}
+                    {{ excerpt($welcomeMessage->message, 600) }}
                 </div>
                 <div class="mt-8 flex flex-wrap gap-3">
                     <a href="{{ url('/about') }}" class="btn-primary">
@@ -280,7 +395,7 @@
                     </span>
                 </div>
                 <h3 class="font-heading font-bold text-surface-800 text-base mb-1 group-hover:text-primary-500 transition-colors">{{ $faculty->title }}</h3>
-                <p class="text-surface-500 text-sm line-clamp-2">{{ Str::limit(strip_tags($faculty->description ?: $faculty->excerpt ?: 'Explore programs offered under '.$faculty->title.'.'), 100) }}</p>
+                <p class="text-surface-500 text-sm line-clamp-2">{{ excerpt($faculty->description ?: $faculty->excerpt ?: 'Explore programs offered under '.$faculty->title.'.', 100) }}</p>
             </a>
             @endforeach
         </div>
@@ -313,16 +428,42 @@
             <h2 class="text-3xl md:text-4xl font-heading font-bold text-white">Numbers That Speak</h2>
         </div>
 
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-10">
-            @php
-                $stats = [
-                    ['target' => \App\Models\Student::count() ?: 1200, 'label' => 'Students', 'icon' => 'fas fa-user-graduate', 'suffix' => '+'],
-                    ['target' => \App\Models\Program::where('status', 1)->count() ?: 25, 'label' => 'Programs', 'icon' => 'fas fa-book', 'suffix' => '+'],
-                    ['target' => \App\Models\StaffAssignment::distinct('user_id')->count('user_id') ?: 100, 'label' => 'Faculty & Staff', 'icon' => 'fas fa-chalkboard-teacher', 'suffix' => '+'],
-                    ['target' => \App\Models\Faculty::where('status', 1)->count() ?: 5, 'label' => 'Faculties', 'icon' => 'fas fa-university', 'suffix' => ''],
-                ];
-            @endphp
+        @php
+            /*
+             * Live counts, published as they are.
+                 *
+                 * Two things were wrong here and both put a wrong number in
+                 * front of the public:
+                 *
+                 * 1. "Faculty & Staff" counted staff_assignments, which is an
+                 *    access-control table -- only the handful of people given
+                 *    an explicit faculty or course scope have a row in it. It
+                 *    read 5 against 38 members of staff, 25 of them lecturers.
+                 *    It now counts staff.
+                 *
+                 * 2. Every figure carried an "?: 1200" style fallback, so an
+                 *    empty table or a failed count would have advertised 1200
+                 *    students and 100 staff. An institution must not publish a
+                 *    number it did not measure, so a figure of zero now hides
+                 *    its tile instead of inventing one.
+                 *
+                 * The "+" is gone too: these are exact counts, and "73+" reads
+                 * as "more than 73" when the number IS 73.
+                 */
+            $stats = collect([
+                ['target' => \App\Models\Student::where('status', 1)->count(), 'label' => 'Students', 'icon' => 'fas fa-user-graduate'],
+                ['target' => \App\Models\Program::where('status', 1)->count(), 'label' => 'Programs', 'icon' => 'fas fa-book'],
+                ['target' => \App\User::where('status', 1)->count(), 'label' => 'Faculty & Staff', 'icon' => 'fas fa-chalkboard-teacher'],
+                ['target' => \App\Models\Faculty::where('status', 1)->count(), 'label' => 'Faculties', 'icon' => 'fas fa-university'],
+            ])->filter(fn ($s) => $s['target'] > 0)->values();
 
+            // The column count follows the tiles that survived, so a hidden
+            // tile does not leave a gap in a hard-coded four-across row.
+            $statCols = ['1' => 'lg:grid-cols-1', '2' => 'lg:grid-cols-2', '3' => 'lg:grid-cols-3', '4' => 'lg:grid-cols-4'][(string) max(1, $stats->count())];
+        @endphp
+
+        @if($stats->isNotEmpty())
+        <div class="grid grid-cols-2 {{ $statCols }} gap-8 lg:gap-10">
             @foreach($stats as $stat)
             <div class="text-center" data-aos="zoom-in" data-aos-delay="{{ $loop->index * 100 }}">
                 <div class="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center mx-auto mb-4">
@@ -332,14 +473,12 @@
                     <span class="text-4xl lg:text-5xl font-heading font-bold text-white"
                           x-data="counter({{ $stat['target'] }}, 2000)"
                           x-text="current">0</span>
-                    @if($stat['suffix'])
-                    <span class="text-2xl lg:text-3xl font-bold text-accent-400">{{ $stat['suffix'] }}</span>
-                    @endif
                 </div>
                 <div class="text-white/60 text-sm mt-2 font-medium">{{ $stat['label'] }}</div>
             </div>
             @endforeach
         </div>
+        @endif
     </div>
 </section>
 
@@ -366,8 +505,9 @@
                      data-aos="fade-up" data-aos-delay="{{ $loop->index * 100 }}">
                 {{-- Image --}}
                 <div class="relative overflow-hidden aspect-[16/10]">
-                    @if($news->attach)
-                    <img src="{{ asset('uploads/news/'.$news->attach) }}"
+                    @php $newsImage = upload_or('news', $news->attach); @endphp
+                    @if($newsImage)
+                    <img src="{{ $newsImage }}"
                          alt="{{ $news->title }}"
                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                          loading="lazy"
@@ -390,7 +530,7 @@
                         <a href="{{ route('news.single', ['id' => $news->id, 'slug' => $news->slug]) }}">{{ $news->title }}</a>
                     </h3>
                     <p class="text-surface-500 text-sm leading-relaxed line-clamp-3 mb-4">
-                        {{ Str::limit(strip_tags($news->description), 120) }}
+                        {{ excerpt($news->description, 120) }}
                     </p>
                     <a href="{{ route('news.single', ['id' => $news->id, 'slug' => $news->slug]) }}"
                        class="text-sm font-semibold text-primary-500 hover:text-accent-500 inline-flex items-center gap-1 group/link transition-colors">
@@ -439,12 +579,13 @@
                         @endif
                         {{-- Text --}}
                         <p class="text-surface-600 text-sm leading-relaxed flex-grow mb-5">
-                            "{{ Str::limit(strip_tags($testimonial->description), 200) }}"
+                            "{{ excerpt($testimonial->description, 200) }}"
                         </p>
                         {{-- Author --}}
                         <div class="flex items-center gap-3 pt-4 border-t border-surface-100">
-                            @if($testimonial->attach)
-                            <img src="{{ asset('uploads/testimonial/'.$testimonial->attach) }}"
+                            @php $authorPhoto = upload_or('testimonial', $testimonial->attach); @endphp
+                            @if($authorPhoto)
+                            <img src="{{ $authorPhoto }}"
                                  alt="{{ $testimonial->name }}"
                                  class="w-11 h-11 rounded-full object-cover ring-2 ring-primary-100"
                                  loading="lazy"
@@ -517,8 +658,8 @@
 @if($callToAction)
 <section class="relative py-24 lg:py-32 overflow-hidden">
     {{-- Background --}}
-    @if($callToAction->bg_image)
-    <img src="{{ asset('uploads/call-to-action/'.$callToAction->bg_image) }}"
+    @if(upload_or('call-to-action', $callToAction->bg_image))
+    <img src="{{ upload_or('call-to-action', $callToAction->bg_image) }}"
          alt="" class="absolute inset-0 w-full h-full object-cover" loading="lazy">
     @endif
     <div class="absolute inset-0 bg-gradient-to-r from-primary-900/90 via-primary-900/80 to-primary-800/90"></div>

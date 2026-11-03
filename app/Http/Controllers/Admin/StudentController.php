@@ -1215,7 +1215,13 @@ class StudentController extends Controller
             $enrollments = $enrollments->where('matricule', $matricule);
         }
 
-        // Get unique semester combinations
+        // Get unique semester combinations.
+        //
+        // The trend accumulates as it walks this list, so the order moves the
+        // numbers and not merely the sequence of points: it has to match the
+        // transcript, which prints a resit behind the semester it shadows.
+        $enrollments = app(\App\Services\Academic\TranscriptSemesterOrder::class)->sort($enrollments);
+
         $semester_items = [];
         $semester_keys = [];
 

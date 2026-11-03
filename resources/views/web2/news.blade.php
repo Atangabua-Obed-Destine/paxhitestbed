@@ -38,8 +38,8 @@
         <div class="mb-12" data-aos="fade-up">
             <a href="{{ route('news.single', ['id' => $featured->id, 'slug' => $featured->slug]) }}" class="group grid grid-cols-1 lg:grid-cols-2 gap-8 bg-surface-50 rounded-2xl overflow-hidden border border-surface-100 hover:shadow-xl transition-all">
                 <div class="aspect-[16/10] lg:aspect-auto lg:min-h-[320px] overflow-hidden">
-                    @if($featured->attach)
-                    <img src="{{ asset('uploads/news/'.$featured->attach) }}" alt="{{ $featured->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
+                    @if(upload_or('news', $featured->attach))
+                    <img src="{{ upload_or('news', $featured->attach) }}" alt="{{ $featured->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
                     @else
                     <div class="w-full h-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center"><i class="fas fa-newspaper text-5xl text-primary-300"></i></div>
                     @endif
@@ -49,7 +49,7 @@
                         <i class="fas fa-star"></i> Latest
                     </span>
                     <h2 class="text-2xl lg:text-3xl font-heading font-bold text-surface-800 group-hover:text-primary-500 transition-colors mb-3 leading-tight">{{ $featured->title }}</h2>
-                    <p class="text-surface-500 mb-4 line-clamp-3">{{ Str::limit(strip_tags($featured->description), 200) }}</p>
+                    <p class="text-surface-500 mb-4 line-clamp-3">{{ excerpt($featured->description, 200) }}</p>
                     <div class="flex items-center gap-4 text-sm text-surface-400">
                         @if($featured->date)<span><i class="far fa-calendar mr-1"></i>{{ \Carbon\Carbon::parse($featured->date)->format('M d, Y') }}</span>@endif
                     </div>
@@ -65,8 +65,8 @@
                class="group bg-white rounded-xl border border-surface-100 hover:border-primary-200 hover:shadow-lg overflow-hidden transition-all"
                data-aos="fade-up" data-aos-delay="{{ min($idx * 80, 320) }}">
                 <div class="aspect-[16/10] overflow-hidden">
-                    @if($news->attach)
-                    <img src="{{ asset('uploads/news/'.$news->attach) }}" alt="{{ $news->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
+                    @if(upload_or('news', $news->attach))
+                    <img src="{{ upload_or('news', $news->attach) }}" alt="{{ $news->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
                     @else
                     <div class="w-full h-full bg-gradient-to-br from-surface-100 to-surface-200 flex items-center justify-center"><i class="fas fa-newspaper text-3xl text-surface-300"></i></div>
                     @endif
@@ -76,7 +76,7 @@
                     <p class="text-xs font-medium text-accent-500 mb-2">{{ \Carbon\Carbon::parse($news->date)->format('F d, Y') }}</p>
                     @endif
                     <h3 class="font-heading font-bold text-surface-800 group-hover:text-primary-500 transition-colors leading-snug mb-2">{{ Str::limit($news->title, 80) }}</h3>
-                    <p class="text-sm text-surface-500 line-clamp-2">{{ Str::limit(strip_tags($news->description), 120) }}</p>
+                    <p class="text-sm text-surface-500 line-clamp-2">{{ excerpt($news->description, 120) }}</p>
                     <span class="inline-flex items-center gap-1.5 text-sm font-medium text-primary-500 mt-4 group-hover:gap-2.5 transition-all">Read More <i class="fas fa-arrow-right text-xs"></i></span>
                 </div>
             </a>

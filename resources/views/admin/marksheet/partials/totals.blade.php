@@ -30,23 +30,31 @@
              it can be read by someone outside the school. --}}
         <div class="tp-key">
             <div class="tp-grade-scale-title">Key to this Transcript</div>
+            {{-- Wording kept short on purpose.
+
+                 Every definition that wraps to a second line costs the whole
+                 key a row, and the key is competing with the signature block
+                 for the bottom of the sheet. Widening to four columns made it
+                 WORSE -- narrower columns wrap more -- so the saving comes
+                 from the words, not the layout. Each entry says the same thing
+                 as before in one line at the printed column width. --}}
             <div class="tp-key-grid">
-                <div class="tp-key-item"><span class="tp-key-term">Code</span> The course code as it appears in the programme.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Code</span> Course code in the programme.</div>
                 {{-- The three course types get a line each: bundled into one
                      "Type" entry, a reader looking up C or UR did not find them.
                      The wording is the school's own, from the subject form. --}}
-                <div class="tp-key-item"><span class="tp-key-term">Type</span> What kind of course it is: C, UR or E.</div>
-                <div class="tp-key-item"><span class="tp-key-term">C</span> Compulsory — required for this programme.</div>
-                <div class="tp-key-item"><span class="tp-key-term">UR</span> University Requirement — required of every student.</div>
-                <div class="tp-key-item"><span class="tp-key-term">E</span> Elective — chosen by the student.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Credit</span> The credit value of the course.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Attempted</span> Credits the student sat for.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Earned</span> Credits passed. A failed course earns none.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Grade Pt</span> The point value of the grade, from the Grading Scale on this transcript.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Grade</span> The letter grade awarded.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Quality Pts</span> Grade Pt &times; Credit — what the course contributes to the GPA.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Semester GPA</span> Quality Points for the semester &divide; credits attempted in it.</div>
-                <div class="tp-key-item"><span class="tp-key-term">Cumulative GPA</span> The same, across every semester on this transcript.</div>
-                <div class="tp-key-item"><span class="tp-key-term">&mdash;</span> No mark has been published for that course yet.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Type</span> C, UR or E.</div>
+                <div class="tp-key-item"><span class="tp-key-term">C</span> Compulsory for this programme.</div>
+                <div class="tp-key-item"><span class="tp-key-term">UR</span> University Requirement — for all.</div>
+                <div class="tp-key-item"><span class="tp-key-term">E</span> Elective — student's choice.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Credit</span> Credit value of the course.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Attempted</span> Credits sat for.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Earned</span> Credits passed; a fail earns none.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Grade Pt</span> Point value, per the Grading Scale.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Grade</span> Letter grade awarded.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Quality Pts</span> Grade Pt &times; Credit.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Semester GPA</span> Quality Pts &divide; credits attempted.</div>
+                <div class="tp-key-item"><span class="tp-key-term">Cumulative GPA</span> The same, across all semesters.</div>
+                <div class="tp-key-item"><span class="tp-key-term">&mdash;</span> No mark published yet.</div>
             </div>
         </div>

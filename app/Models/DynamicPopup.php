@@ -222,11 +222,20 @@ class DynamicPopup extends Model
      */
     public function getImageUrlAttribute(): ?string
     {
-        if (!$this->image) {
-            return null;
-        }
-
-        return asset('uploads/dynamic-popups/' . $this->image);
+        /*
+         * Null unless the file is actually on disk, not merely named in the
+         * column. The popup is drawn in the browser from this URL, so a
+         * filename with nothing behind it meant a guaranteed 404 and a broken
+         * image inside the modal -- and because the old markup put the popup's
+         * title in the image's alt, that title then appeared twice, once as
+         * grey broken-image text and once as the real heading.
+         *
+         * Returning null here makes the client take its existing no-image
+         * branch, so nothing is requested and the placeholder is drawn first
+         * time. The onerror handler in the component stays as a backstop for
+         * a file that disappears between this check and the request.
+         */
+        return upload_or('dynamic-popups', $this->image);
     }
 
     /**

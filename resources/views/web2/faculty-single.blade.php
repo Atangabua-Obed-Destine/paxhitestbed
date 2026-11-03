@@ -6,16 +6,16 @@
 @extends('web2.layouts.master')
 
 @section('title', $faculty->title . ' — ' . (institution_code()))
-@section('description', Str::limit(strip_tags($faculty->excerpt ?? $faculty->description), 160))
+@section('description', excerpt($faculty->excerpt ?? $faculty->description, 160))
 
 @section('content')
 
 {{-- HERO BANNER --}}
 <section class="relative min-h-[400px] lg:min-h-[450px] flex items-end overflow-hidden">
-    @if($faculty->banner_image)
-    <img src="{{ asset('uploads/faculties/'.$faculty->banner_image) }}" alt="{{ $faculty->title }}" class="absolute inset-0 w-full h-full object-cover">
-    @elseif($faculty->featured_image)
-    <img src="{{ asset('uploads/faculties/'.$faculty->featured_image) }}" alt="{{ $faculty->title }}" class="absolute inset-0 w-full h-full object-cover">
+    @if(upload_or('faculties', $faculty->banner_image))
+    <img src="{{ upload_or('faculties', $faculty->banner_image) }}" alt="{{ $faculty->title }}" class="absolute inset-0 w-full h-full object-cover">
+    @elseif(upload_or('faculties', $faculty->featured_image))
+    <img src="{{ upload_or('faculties', $faculty->featured_image) }}" alt="{{ $faculty->title }}" class="absolute inset-0 w-full h-full object-cover">
     @endif
     <div class="absolute inset-0 bg-gradient-to-t from-primary-900/95 via-primary-900/60 to-primary-900/30"></div>
     <div class="section-container relative z-10 pb-12 pt-32">
@@ -94,9 +94,9 @@
                 {{-- Dean Card --}}
                 @if($faculty->dean_name)
                 <div class="bg-white rounded-2xl border border-surface-100 shadow-sm overflow-hidden" data-aos="fade-left">
-                    @if($faculty->dean_photo)
+                    @if(upload_or('faculties/deans', $faculty->dean_photo))
                     <div class="p-4 pb-0">
-                        <img src="{{ asset('uploads/faculties/deans/'.$faculty->dean_photo) }}"
+                        <img src="{{ upload_or('faculties/deans', $faculty->dean_photo) }}"
                              alt="{{ $faculty->dean_name }}"
                              class="w-full rounded-xl aspect-[4/3] object-cover" loading="lazy">
                     </div>

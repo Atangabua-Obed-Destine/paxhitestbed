@@ -423,16 +423,83 @@
                         @endif
                         
                         <!-- My Courses -->
-                        @if($teacher_subjects->count() > 0)
+                        {{-- A tile is a SUBJECT; the classes it is taught to sit inside it.
+                             Collapsing them, as this card did before, hides 200 of this
+                             install's 305 classes behind 105 tiles -- and leaves a single
+                             link no way to say which of them it means.
+
+                             The primary action is therefore the WHOLE course: attendance is
+                             kept per (student, subject, date) with no programme on it, so
+                             for a service course taught to twelve programmes the whole
+                             course IS the register the lecturer keeps. The per-group links
+                             are there for when they want one programme's slice. --}}
+                        @if($teacher_courses->count() > 0)
                         <div class="mt-3">
                             <h6><i class="fas fa-book"></i> My Courses This Session</h6>
                             <div class="row">
-                                @foreach($teacher_subjects as $subject)
-                                <div class="col-md-3 mb-2">
-                                    <div class="card" style="border-left: 4px solid #667eea;">
-                                        <div class="card-block" style="padding: 10px;">
-                                            <strong>{{ $subject->code }}</strong><br>
-                                            <small>{{ $subject->title }}</small>
+                                @foreach($teacher_courses as $course)
+                                @php
+                                    $subject = $course['subject'];
+                                    $groups  = $course['classes'];
+                                    $base    = ['session' => $course['session_id'], 'subject' => $subject->id];
+                                @endphp
+                                <div class="col-md-6 col-xl-4 mb-3">
+                                    <div class="card h-100 mb-0" style="border-left: 4px solid #667eea;">
+                                        <div class="card-block" style="padding: 12px;">
+
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="pr-2">
+                                                    <strong>{{ $subject->code }}</strong><br>
+                                                    <small class="text-muted">{{ $subject->title }}</small>
+                                                </div>
+                                                <span class="badge badge-light text-nowrap" title="{{ __('Students taking this course') }}">
+                                                    <i class="fas fa-user-graduate"></i> {{ $course['students'] }}
+                                                </span>
+                                            </div>
+
+                                            <a href="{{ route('admin.course-class-list.index', $base) }}"
+                                               class="btn btn-sm btn-primary btn-block mt-2">
+                                                <i class="fas fa-clipboard-list"></i> {{ __('Class list & attendance') }}
+                                            </a>
+
+                                            @if($groups->count() > 1)
+                                            <a class="d-block text-center small mt-2 text-muted" data-bs-toggle="collapse"
+                                               data-toggle="collapse" href="#course-groups-{{ $subject->id }}"
+                                               role="button" aria-expanded="false"
+                                               aria-controls="course-groups-{{ $subject->id }}">
+                                                {{ __('Taught to :n groups — pick one', ['n' => $groups->count()]) }}
+                                                <i class="fas fa-chevron-down"></i>
+                                            </a>
+                                            <div class="collapse mt-1" id="course-groups-{{ $subject->id }}">
+                                                <ul class="list-unstyled mb-0 small">
+                                                    @foreach($groups as $group)
+                                                    <li class="border-top py-1">
+                                                        {{-- array_merge, not +: the + operator keeps the
+                                                             left-hand value on a key collision, which is a
+                                                             silent no-op the day $base grows one of these keys. --}}
+                                                        <a href="{{ route('admin.course-class-list.index', array_merge($base, [
+                                                                'program'  => $group['program_id'],
+                                                                'semester' => $group['semester_id'],
+                                                                'section'  => $group['section_id'],
+                                                           ])) }}">
+                                                            {{ $group['program'] }}
+                                                        </a>
+                                                        <span class="text-muted">
+                                                            — {{ $group['semester'] }}
+                                                            @if($group['section']) · {{ $group['section'] }} @endif
+                                                            · {{ $group['students'] }}
+                                                        </span>
+                                                    </li>
+                                                    @endforeach
+                                                </ul>
+                                            </div>
+                                            @elseif($groups->count() === 1)
+                                            <div class="small text-muted mt-2">
+                                                {{ $groups[0]['program'] }}
+                                                <span class="text-muted">— {{ $groups[0]['semester'] }}@if($groups[0]['section']) · {{ $groups[0]['section'] }}@endif</span>
+                                            </div>
+                                            @endif
+
                                         </div>
                                     </div>
                                 </div>

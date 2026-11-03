@@ -68,8 +68,8 @@
                data-aos="fade-up" data-aos-delay="{{ ($loop->index % 3) * 80 }}">
                 {{-- Image --}}
                 <div class="relative overflow-hidden aspect-[16/10]">
-                    @if($program->featured_image)
-                    <img src="{{ asset('uploads/programs/'.$program->featured_image) }}"
+                    @if(upload_or('programs', $program->featured_image))
+                    <img src="{{ upload_or('programs', $program->featured_image) }}"
                          alt="{{ $program->title }}"
                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                          loading="lazy">

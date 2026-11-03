@@ -6,14 +6,14 @@
 @extends('web2.layouts.master')
 
 @section('title', ($news->title ?? 'News') . ' — ' . (institution_code()))
-@section('description', Str::limit(strip_tags($news->description ?? ''), 160))
+@section('description', excerpt($news->description ?? '', 160))
 
 @section('content')
 
 {{-- HERO BANNER --}}
 <section class="relative min-h-[360px] lg:min-h-[420px] flex items-end overflow-hidden">
-    @if($news->attach)
-    <img src="{{ asset('uploads/news/'.$news->attach) }}" alt="{{ $news->title }}" class="absolute inset-0 w-full h-full object-cover">
+    @if(upload_or('news', $news->attach))
+    <img src="{{ upload_or('news', $news->attach) }}" alt="{{ $news->title }}" class="absolute inset-0 w-full h-full object-cover">
     @endif
     <div class="absolute inset-0 bg-gradient-to-t from-primary-900/95 via-primary-900/60 to-primary-900/30"></div>
     <div class="section-container relative z-10 pb-12 pt-32 max-w-4xl mx-auto">
@@ -41,8 +41,8 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
             {{-- Article --}}
             <article class="lg:col-span-8" data-aos="fade-up">
-                @if($news->attach)
-                <img src="{{ asset('uploads/news/'.$news->attach) }}" alt="{{ $news->title }}" class="w-full rounded-2xl mb-8 shadow-sm" loading="lazy">
+                @if(upload_or('news', $news->attach))
+                <img src="{{ upload_or('news', $news->attach) }}" alt="{{ $news->title }}" class="w-full rounded-2xl mb-8 shadow-sm" loading="lazy">
                 @endif
 
                 <div class="prose prose-lg prose-surface max-w-none [&>p]:mb-5 [&>p]:leading-relaxed [&>h2]:font-heading [&>h2]:text-2xl [&>h2]:mt-10 [&>h2]:mb-4 [&>h3]:font-heading [&>h3]:text-xl [&>ul]:my-4 [&>ol]:my-4">
@@ -88,8 +88,8 @@
                         @foreach($latestNews as $latest)
                         <a href="{{ route('news.single', ['id' => $latest->id, 'slug' => $latest->slug]) }}" class="flex gap-3 group">
                             <div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                                @if($latest->attach)
-                                <img src="{{ asset('uploads/news/'.$latest->attach) }}" alt="{{ $latest->title }}" class="w-full h-full object-cover" loading="lazy">
+                                @if(upload_or('news', $latest->attach))
+                                <img src="{{ upload_or('news', $latest->attach) }}" alt="{{ $latest->title }}" class="w-full h-full object-cover" loading="lazy">
                                 @else
                                 <div class="w-full h-full bg-surface-200 flex items-center justify-center"><i class="fas fa-newspaper text-surface-400 text-xs"></i></div>
                                 @endif

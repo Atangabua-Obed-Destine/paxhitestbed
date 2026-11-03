@@ -233,9 +233,12 @@
                 $semester_keys = [];
                 // $blockedSemesters is provided by TranscriptController and keyed by "{session_id}|{semester_id}"
                 if(!isset($blockedSemesters)) { $blockedSemesters = []; }
+                // Printed order, not the order the enrolments were raised: a
+                // resit sits directly behind the semester it shadows.
+                $orderedEnrolls = app(\App\Services\Academic\TranscriptSemesterOrder::class)->sort($row->studentEnrolls);
             @endphp
 
-            @foreach( $row->studentEnrolls as $key => $enroll )
+            @foreach( $orderedEnrolls as $key => $enroll )
             @if(isset($enroll->session) && isset($enroll->semester) && isset($enroll->section) && $enroll->program_id == $selectedProgramId)
             @php
                 $semester_key = $enroll->session->title . '|' . $enroll->semester->title;

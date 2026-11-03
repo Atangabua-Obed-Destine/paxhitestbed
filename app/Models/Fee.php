@@ -365,40 +365,77 @@ class Fee extends Model
     }
 
     /**
+     * How this fee stands, as one word.
+     *
+     * The badge below and anything that needs the state in plain words — a
+     * report column, an export — both read from here, so a printed sheet
+     * cannot call a fee something the screen does not.
+     *
+     * Judged on the money still on this fee. An overpayment that has since
+     * been moved to another fee as credit is no longer sitting here, so a fee
+     * whose excess was transferred reads as settled rather than "Overpaid" —
+     * which is what it looked like on the fees report long after the transfer
+     * had been made. isOverpaid() and isFullyPaid() compare the raw
+     * paid_amount and are left alone: other code uses them.
+     *
+     * @return string  plan|overpaid|paid|partial|cancelled|unpaid
+     */
+    public function getPaymentStateAttribute(): string
+    {
+        // A plan comes first: it describes the arrangement, not the balance.
+        if ($this->hasActivePaymentPlan()) {
+            return 'plan';
+        }
+
+        $due = (float) ($this->total_amount ?? 0);
+        $netPaid = $this->net_paid_amount;
+
+        if ($this->isNetOverpaid()) {
+            return 'overpaid';
+        }
+
+        // The amounts are more reliable than the status column.
+        if ($due > 0 && $netPaid >= $due - 0.005) {
+            return 'paid';
+        }
+
+        if ($netPaid > 0.005) {
+            return 'partial';
+        }
+
+        return $this->status == 3 ? 'cancelled' : 'unpaid';
+    }
+
+    /** What that state is called. */
+    public function getStatusLabelAttribute(): string
+    {
+        return self::PAYMENT_STATES[$this->payment_state][0];
+    }
+
+    /**
+     * Each state's wording and how the badge paints it.
+     *
+     * @var array<string, array{0:string, 1:string, 2:string}>  label, badge class, icon
+     */
+    public const PAYMENT_STATES = [
+        'plan' => ['Payment Plan Active', 'badge-info', ''],
+        'overpaid' => ['Overpaid', 'badge-primary', '<i class="fas fa-plus-circle"></i> '],
+        'paid' => ['Fully Paid', 'badge-success', ''],
+        'partial' => ['Partially Paid', 'badge-warning', ''],
+        'cancelled' => ['Cancelled', 'badge-danger', ''],
+        'unpaid' => ['Unpaid', 'badge-secondary', ''],
+    ];
+
+    /**
      * Get the payment status badge HTML.
      *
      * @return string
      */
     public function getStatusBadgeAttribute()
     {
-        // Check for payment plan first
-        if ($this->hasActivePaymentPlan()) {
-            return '<span class="badge badge-info">Payment Plan Active</span>';
-        }
-        
-        // Judged on the money still on this fee. An overpayment that has since
-        // been moved to another fee as credit is no longer sitting here, so a
-        // fee whose excess was transferred reads as settled rather than
-        // "Overpaid" — which is what it looked like on the fees report long
-        // after the transfer had been made. isOverpaid() and isFullyPaid()
-        // compare the raw paid_amount and are left alone: other code uses them.
-        $due = (float) ($this->total_amount ?? 0);
-        $netPaid = $this->net_paid_amount;
+        [$label, $class, $icon] = self::PAYMENT_STATES[$this->payment_state];
 
-        if ($this->isNetOverpaid()) {
-            return '<span class="badge badge-primary"><i class="fas fa-plus-circle"></i> Overpaid</span>';
-        }
-
-        // Check actual payment amounts first (more reliable than status field)
-        if ($due > 0 && $netPaid >= $due - 0.005) {
-            return '<span class="badge badge-success">Fully Paid</span>';
-        } elseif ($netPaid > 0.005) {
-            return '<span class="badge badge-warning">Partially Paid</span>';
-        } elseif ($this->status == 3) {
-            return '<span class="badge badge-danger">Cancelled</span>';
-        } else {
-            return '<span class="badge badge-secondary">Unpaid</span>';
-        }
+        return '<span class="badge ' . $class . '">' . $icon . $label . '</span>';
     }
 
     /**

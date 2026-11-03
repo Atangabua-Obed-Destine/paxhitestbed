@@ -42,7 +42,11 @@ class StudentAttendanceController extends Controller
 
         $this->middleware('permission:'.$this->access.'-action', ['only' => ['index','store','scanner','scan','bulkMigration','bulkMigrationStore']]);
         $this->middleware('permission:'.$this->access.'-report', ['only' => ['report']]);
-        $this->middleware('permission:'.$this->access.'-import', ['only' => ['index','import','importStore']]);
+        // downloadClassList was in none of the three lists above, so the only
+        // thing standing in front of it was auth:web -- any signed-in staff
+        // account could fetch the names and matricules of any course. It is an
+        // import template, so it belongs with the importer's own permission.
+        $this->middleware('permission:'.$this->access.'-import', ['only' => ['index','import','importStore','downloadClassList']]);
     }
 
     /**

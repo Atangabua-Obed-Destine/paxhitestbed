@@ -617,6 +617,87 @@
     @media screen {
       .tp-page { box-shadow: 0 2px 20px rgba(0,0,0,0.12); margin: 20px auto; }
     }
+@if(!$tpLandscape)
+    /* --- Portrait: earning room for a signature -------------------------
+       Measured on a 32-course record: the sheet ran to 1325px against A4's
+       1123px, so the key, the totals and the signature lines were pushed
+       onto a second page, and the signature block itself was 28px of margin
+       above a hairline -- no room to sign, let alone stamp.
+
+       The marks are not touched: the table is already 16px rows of 10px type
+       with 1px padding, and squeezing a transcript's actual content to make
+       room for furniture is the wrong trade. Everything that is NOT the marks
+       is tightened instead, and what that frees is given to the signatures. */
+
+    /* The scale fits one row of eight rather than two of five. */
+    .tp-grade-scale-item { flex: 0 0 12.5%; padding: 1px 0; font-size: 8.5px; }
+    .tp-grade-scale-top { margin-bottom: 2px; }
+    .tp-grade-scale-title { margin-bottom: 2px; padding-bottom: 1px; }
+
+    /* Student details: the rows carry two short lines of text each, so the
+       leading was doing more work than it needed to. */
+    /* Five rows of two short fields. The value keeps its 10px -- a matricule
+       and a date of birth are the two things a registrar reads off a
+       transcript -- but the leading was set for prose it does not contain. */
+    .tp-info-cell { padding: 0; font-size: 10px; line-height: 1.18; }
+    .tp-info-label { font-size: 9px; }
+    .tp-info-section { margin-bottom: 4px; }
+
+    .tp-doc-title { margin-bottom: 3px; padding-bottom: 2px; }
+    .tp-content { padding: 8px 36px 4px 36px; }
+
+    /* The cumulative GPA still reads as the headline figure at 16px; it does
+       not need to be half again the size of the numbers beside it. */
+    .tp-summary-bar { margin-top: 4px; padding: 2px 14px; }
+    .tp-summary-value { font-size: 13px; line-height: 1.2; }
+    .tp-summary-value.tp-gpa-big { font-size: 16px; }
+    .tp-end-marker { margin-top: 6px; }
+
+    /* Four columns and a tighter line: fourteen short definitions do not need
+       five rows. */
+    .tp-key { margin-top: 6px; }
+    /* Three columns, not four: narrower columns wrap the definitions more and
+       the key got TALLER at four. The height came out of the wording instead. */
+    .tp-key-grid { column-count: 3; column-gap: 14px; }
+    .tp-key-item { font-size: 7.5px; line-height: 1.25; padding: 0.25px 0; }
+    .tp-key-term { min-width: 0; margin-right: 3px; }
+
+    /* The letterhead's own height is left alone.
+
+       Capping the crest to 68px was tried and reclaimed 58px -- the single
+       biggest saving available, and enough to put a 32-course transcript on
+       one sheet. It is not worth it: shrinking the letterhead lifts everything
+       below it, and at the new height the verification block lands under the
+       diagonal watermark. The URL and reference stop being readable, and
+       scripts/transcript_layout_test.php catches it -- "Verify this
+       transcript" comes out of the printed page as VERIFYTHISTRANSCRIPT,
+       the spaces lost where the two sets of glyphs collide.
+
+       A transcript that runs to a second sheet is a nuisance. One whose
+       verification cannot be read is not a verifiable document. Only the
+       margin below the letterhead is tightened. */
+    .tp-page .letterhead { margin-bottom: 2px; }
+
+    /* Three course titles were wrapping to a second line and costing 13px
+       each. Widening the title column unwraps them -- cheaper than shrinking
+       the type, and it is the one column whose content is prose. The width
+       comes from the numeric columns, which were padded well past the width
+       of the figures they hold. */
+    .tp-col-title { width: 32%; }
+    .tp-col-code { width: 8%; }
+    .tp-col-type { width: 5%; }
+    .tp-col-cv { width: 7%; }
+
+    /* 15px rows rather than 16: still 1.5 line-height on 10px type, which is
+       ordinary density for a transcript, and it is 29 rows. */
+    .tp-records-table tbody td { padding: 0.5px 4px; }
+
+    /* What all of the above bought, spent where it was wanted: a clear band
+       to sign across and set a stamp in, above each rule. */
+    .tp-footer-section { margin-top: 6px; }
+    .tp-signatures { margin-top: 62px; }
+@endif
+
     </style>
 @php
     $version = App\Models\Language::version();

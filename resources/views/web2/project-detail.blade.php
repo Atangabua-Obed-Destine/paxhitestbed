@@ -6,14 +6,14 @@
 @extends('web2.layouts.master')
 
 @section('title', ($project->title ?? 'Project') . ' — ' . (institution_code()))
-@section('description', Str::limit(strip_tags($project->description ?? ''), 160))
+@section('description', excerpt($project->description ?? '', 160))
 
 @section('content')
 
 {{-- HERO --}}
 <section class="relative min-h-[380px] lg:min-h-[420px] flex items-end overflow-hidden">
-    @if($project->attach)
-    <img src="{{ asset('uploads/projects/'.$project->attach) }}" alt="{{ $project->title }}" class="absolute inset-0 w-full h-full object-cover">
+    @if(upload_or('projects', $project->attach))
+    <img src="{{ upload_or('projects', $project->attach) }}" alt="{{ $project->title }}" class="absolute inset-0 w-full h-full object-cover">
     @endif
     <div class="absolute inset-0 bg-gradient-to-t from-primary-900/95 via-primary-900/60 to-primary-900/30"></div>
     <div class="section-container relative z-10 pb-12 pt-32">
@@ -58,8 +58,8 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
             {{-- Main --}}
             <div class="lg:col-span-2" data-aos="fade-up">
-                @if($project->attach)
-                <img src="{{ asset('uploads/projects/'.$project->attach) }}" alt="{{ $project->title }}" class="w-full rounded-2xl mb-8 shadow-sm" loading="lazy">
+                @if(upload_or('projects', $project->attach))
+                <img src="{{ upload_or('projects', $project->attach) }}" alt="{{ $project->title }}" class="w-full rounded-2xl mb-8 shadow-sm" loading="lazy">
                 @endif
 
                 <div class="prose prose-lg prose-surface max-w-none [&>p]:mb-5 [&>p]:leading-relaxed [&>h2]:font-heading [&>h2]:text-2xl [&>h2]:mt-10 [&>h2]:mb-4">
@@ -133,8 +133,8 @@
                         @foreach($related as $rel)
                         <a href="{{ url('/projects/'.$rel->id) }}" class="flex gap-3 group">
                             <div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0">
-                                @if($rel->attach)
-                                <img src="{{ asset('uploads/projects/'.$rel->attach) }}" alt="{{ $rel->title }}" class="w-full h-full object-cover" loading="lazy">
+                                @if(upload_or('projects', $rel->attach))
+                                <img src="{{ upload_or('projects', $rel->attach) }}" alt="{{ $rel->title }}" class="w-full h-full object-cover" loading="lazy">
                                 @else
                                 <div class="w-full h-full bg-surface-200 flex items-center justify-center"><i class="fas fa-flask text-surface-400 text-xs"></i></div>
                                 @endif

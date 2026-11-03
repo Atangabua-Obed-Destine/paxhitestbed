@@ -359,6 +359,14 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('student-attendance-import', 'StudentAttendanceController@import')->name('student-attendance.import');
     Route::post('student-attendance-import-store', 'StudentAttendanceController@importStore')->name('student-attendance.import.store');
     Route::get('student-attendance-download-template', 'StudentAttendanceController@downloadClassList')->name('student-attendance.download-template');
+
+    // A lecturer's own course: the class list and its attendance in one place,
+    // reachable in one click from the dashboard. Deliberately not under the
+    // report/ prefix -- it is a teaching tool, not a registry report, and it
+    // answers for a whole course rather than one programme's slice of it.
+    Route::get('course-class-list', 'CourseClassListController@index')->name('course-class-list.index');
+    Route::get('course-class-list/pdf', 'CourseClassListController@pdf')->name('course-class-list.pdf');
+    Route::get('course-class-list/excel', 'CourseClassListController@excel')->name('course-class-list.excel');
     
     // Bulk Attendance Migration Routes
     Route::get('student-attendance-bulk-migration', 'StudentAttendanceController@bulkMigration')->name('student-attendance.bulk-migration');
@@ -599,6 +607,10 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('fees-student-unpay/{id}', 'FeesStudentController@unpay')->name('fees-student.unpay');
     Route::post('fees-student-cancel/{id}', 'FeesStudentController@cancel')->name('fees-student.cancel');
     Route::get('fees-student-report', 'FeesStudentController@report')->name('fees-student.report');
+    // The report as a document. Both read the screen's filters, so they cover
+    // exactly the fees it is showing.
+    Route::get('fees-student-report/pdf', 'FeesStudentController@reportPdf')->name('fees-student.report.pdf');
+    Route::get('fees-student-report/excel', 'FeesStudentController@reportExcel')->name('fees-student.report.excel');
     Route::get('fees-student-split/{id}', 'FeesStudentController@splitPreview')->name('fees-student.split');
     Route::get('fees-student-print/{id}', 'FeesStudentController@print')->name('fees-student.print');
 

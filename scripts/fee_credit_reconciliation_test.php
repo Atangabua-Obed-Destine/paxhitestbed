@@ -88,9 +88,15 @@ echo "\n== Every total uses the same definition ==\n";
 
 $source = fn (string $path) => file_get_contents(__DIR__ . '/../' . $path);
 
+// The report's figures moved out of the controller and into
+// App\Services\FeeReport, which the screen and the two exported documents now
+// all read -- so that is where the definition has to be right, and checking
+// the controller for the word would only prove where the code used to live.
+// The controller is still held to not summing raw paid_amount itself.
 check('the fees report sums net paid, not paid_amount',
     !str_contains($source('app/Http/Controllers/Admin/FeesStudentController.php'), "\$all_fees->sum('paid_amount')")
-    && str_contains($source('app/Http/Controllers/Admin/FeesStudentController.php'), 'net_paid_amount'));
+    && str_contains($source('app/Services/FeeReport.php'), 'net_paid_amount')
+    && !str_contains($source('app/Services/FeeReport.php'), "sum(fn (\$fee) => (float) \$fee->paid_amount)"));
 // Two views of the same money. Settlement (net paid) puts moved credit on the
 // fee it went to: right for whether a fee is paid. Cash puts money on the fee
 // and in the month it actually arrived: right for anything dated. Undated

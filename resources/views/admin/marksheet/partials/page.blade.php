@@ -83,10 +83,12 @@
     elseif ($total_courses > 0) $standing = 'Fail';
     else $standing = 'N/A';
 
-    // Semester items
+    // Semester items, in the order a transcript prints them rather than the
+    // order the enrolments were raised: a resit sits directly behind the
+    // semester it shadows.
     $semester_items = [];
     $semester_keys = [];
-    foreach ($row->studentEnrolls as $enroll) {
+    foreach (app(\App\Services\Academic\TranscriptSemesterOrder::class)->sort($row->studentEnrolls) as $enroll) {
         if (isset($enroll->session) && isset($enroll->semester) && isset($enroll->section) && $enroll->program_id == $selectedProgramId && $enroll->matricule == $currentEnroll->matricule) {
             // A resit semester whose every course moved into the semester it
             // belongs to has nothing left to show, so it is left off entirely

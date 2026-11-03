@@ -14,7 +14,7 @@
 @extends('web2.layouts.master')
 
 @section('title', 'About Us — ' . (institution_code()))
-@section('description', $about ? Str::limit(strip_tags($about->short_desc), 160) : 'Learn about ' . institution_name() . (site_subtitle() ? ', ' . site_subtitle() : '') . '.')
+@section('description', $about ? excerpt($about->short_desc, 160) : 'Learn about ' . institution_name() . (site_subtitle() ? ', ' . site_subtitle() : '') . '.')
 
 @section('content')
 
@@ -51,8 +51,8 @@
             {{-- Image Column --}}
             <div class="lg:col-span-5 relative" data-aos="fade-right">
                 <div class="relative">
-                    @if($about->attach)
-                    <img src="{{ asset('uploads/about-us/'.$about->attach) }}" alt="About {{ institution_name() }}" class="w-full rounded-2xl shadow-xl object-cover aspect-[3/4]">
+                    @if(upload_or('about-us', $about->attach))
+                    <img src="{{ upload_or('about-us', $about->attach) }}" alt="About {{ institution_name() }}" class="w-full rounded-2xl shadow-xl object-cover aspect-[3/4]">
                     @else
                     <div class="w-full aspect-[3/4] rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center">
                         <i class="fas fa-university text-6xl text-primary-300"></i>
@@ -205,8 +205,8 @@
             @foreach($leadership as $member)
             <div class="group text-center" data-aos="fade-up" data-aos-delay="{{ ($loop->index % 4) * 80 }}">
                 <div class="relative mb-5 overflow-hidden rounded-2xl aspect-[3/4] bg-surface-100">
-                    @if($member->photo)
-                    <img src="{{ asset('uploads/leadership-team/'.$member->photo) }}"
+                    @if(upload_or('leadership-team', $member->photo))
+                    <img src="{{ upload_or('leadership-team', $member->photo) }}"
                          alt="{{ $member->name }}"
                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                          loading="lazy">
@@ -256,8 +256,8 @@
             @foreach($accreditations as $acc)
             <a href="{{ $acc->url ?? '#' }}" target="{{ $acc->url ? '_blank' : '_self' }}" rel="noopener"
                class="bg-white rounded-xl p-6 flex flex-col items-center justify-center text-center hover:shadow-md border border-surface-100 transition-all group" data-aos="zoom-in" data-aos-delay="{{ $loop->index * 60 }}">
-                @if($acc->logo)
-                <img src="{{ asset('uploads/accreditation/'.$acc->logo) }}" alt="{{ $acc->title }}" class="h-16 w-auto object-contain mb-3 grayscale group-hover:grayscale-0 transition-all" loading="lazy">
+                @if(upload_or('accreditation', $acc->logo))
+                <img src="{{ upload_or('accreditation', $acc->logo) }}" alt="{{ $acc->title }}" class="h-16 w-auto object-contain mb-3 grayscale group-hover:grayscale-0 transition-all" loading="lazy">
                 @else
                 <div class="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mb-3">
                     <i class="fas fa-award text-2xl text-primary-400"></i>

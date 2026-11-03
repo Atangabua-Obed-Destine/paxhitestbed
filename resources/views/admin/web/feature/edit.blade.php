@@ -21,14 +21,19 @@
                     </div>
                 </div>
 
-                {{-- <div class="form-group">
+                {{-- See the note on the create form: this was commented out
+                     while the controller and the public site both still used
+                     the column. --}}
+                <div class="form-group">
                     <label for="icon" class="form-label">{{ __('field_icon') }}</label>
-                    <input type="text" class="form-control" name="icon" id="icon" value="{{ $row->icon }}">
-
-                    <div class="invalid-feedback">
-                        {{ __('required_field') }} {{ __('field_icon') }}
-                    </div>
-                </div> --}}
+                    <input type="text" class="form-control" name="icon" id="icon"
+                           value="{{ old('icon', $row->icon) }}" placeholder="fas fa-flask">
+                    <small class="form-text text-muted">
+                        {{ __('A Font Awesome class, for example') }} <code>fas fa-flask</code>,
+                        <code>fas fa-heart</code>, <code>fas fa-book</code>.
+                        {{ __('Leave blank to use the default icon.') }}
+                    </small>
+                </div>
 
                 <div class="form-group">
                     <label for="description" class="form-label">{{ __('field_description') }} <span>*</span></label>

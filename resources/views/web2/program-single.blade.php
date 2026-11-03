@@ -6,13 +6,13 @@
 @extends('web2.layouts.master')
 
 @section('title', $program->title . ' — ' . (institution_code()))
-@section('description', Str::limit(strip_tags($program->excerpt ?? $program->description), 160))
+@section('description', excerpt($program->excerpt ?? $program->description, 160))
 
 @section('social_meta_tags')
 <meta property="og:title" content="{{ $program->title }} — {{ institution_code() }}">
-<meta property="og:description" content="{{ Str::limit(strip_tags($program->excerpt ?? $program->description), 160) }}">
-@if($program->featured_image)
-<meta property="og:image" content="{{ asset('uploads/programs/'.$program->featured_image) }}">
+<meta property="og:description" content="{{ excerpt($program->excerpt ?? $program->description, 160) }}">
+@if(upload_or('programs', $program->featured_image))
+<meta property="og:image" content="{{ upload_or('programs', $program->featured_image) }}">
 @endif
 @endsection
 
@@ -20,10 +20,10 @@
 
 {{-- HERO BANNER --}}
 <section class="relative min-h-[400px] lg:min-h-[450px] flex items-end overflow-hidden">
-    @if($program->banner_image)
-    <img src="{{ asset('uploads/programs/'.$program->banner_image) }}" alt="{{ $program->title }}" class="absolute inset-0 w-full h-full object-cover">
-    @elseif($program->featured_image)
-    <img src="{{ asset('uploads/programs/'.$program->featured_image) }}" alt="{{ $program->title }}" class="absolute inset-0 w-full h-full object-cover">
+    @if(upload_or('programs', $program->banner_image))
+    <img src="{{ upload_or('programs', $program->banner_image) }}" alt="{{ $program->title }}" class="absolute inset-0 w-full h-full object-cover">
+    @elseif(upload_or('programs', $program->featured_image))
+    <img src="{{ upload_or('programs', $program->featured_image) }}" alt="{{ $program->title }}" class="absolute inset-0 w-full h-full object-cover">
     @endif
     <div class="absolute inset-0 bg-gradient-to-t from-primary-900/95 via-primary-900/60 to-primary-900/30"></div>
     <div class="section-container relative z-10 pb-12 pt-32">
@@ -76,9 +76,9 @@
             {{-- LEFT: Main Content --}}
             <div class="lg:col-span-2 space-y-10">
                 {{-- Featured Image --}}
-                @if($program->featured_image)
+                @if(upload_or('programs', $program->featured_image))
                 <div class="rounded-2xl overflow-hidden shadow-md" data-aos="fade-up">
-                    <img src="{{ asset('uploads/programs/'.$program->featured_image) }}" alt="{{ $program->title }}" class="w-full h-auto object-cover">
+                    <img src="{{ upload_or('programs', $program->featured_image) }}" alt="{{ $program->title }}" class="w-full h-auto object-cover">
                 </div>
                 @endif
 

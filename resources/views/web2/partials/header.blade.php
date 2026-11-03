@@ -90,23 +90,34 @@
         <div class="flex items-center justify-between">
 
             {{-- ===== LOGO ===== --}}
+            {{-- The wordmark was "hidden sm:block", so below 640px the logo
+                 image was the only brand element. With no logo file on disk --
+                 which is the case here -- a phone got a header with nothing in
+                 it at all, and an empty link where the masthead should be.
+
+                 So the wordmark now hides on small screens ONLY when there is
+                 a logo to stand in for it. Something always identifies the
+                 institution. --}}
+            @php $brandLogo = upload_or('setting', $setting->logo_path); @endphp
             <a href="{{ url('/') }}" class="flex items-center gap-3 flex-shrink-0 group" aria-label="Home">
-                @if($setting->logo_path && file_exists(public_path('uploads/setting/'.$setting->logo_path)))
-                    <img src="{{ asset('uploads/setting/'.$setting->logo_path) }}"
+                @if($brandLogo)
+                    <img src="{{ $brandLogo }}"
                          alt="{{ $setting->title }}"
                          class="h-12 lg:h-14 w-auto transition-transform duration-300 group-hover:scale-105"
                          :class="scrolled ? 'h-10 lg:h-11' : 'h-12 lg:h-14'"
                     >
                 @endif
-                <div class="hidden sm:block">
+                <div class="{{ $brandLogo ? 'hidden sm:block' : 'block' }}">
                     <div class="text-primary-500 font-heading font-bold text-base lg:text-lg leading-tight"
                          style="max-width: 260px; white-space: normal; word-wrap: break-word;"
                          :class="scrolled ? 'text-sm lg:text-base' : ''">
                         {{ institution_name() }}
                     </div>
+                    @if(site_subtitle() !== '')
                     <div class="text-[10px] text-surface-400 font-medium tracking-wide uppercase">
                         {{ site_subtitle() }}
                     </div>
+                    @endif
                 </div>
             </a>
 

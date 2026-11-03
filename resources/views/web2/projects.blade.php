@@ -74,8 +74,8 @@
                data-aos="fade-up" data-aos-delay="{{ min($idx * 70, 350) }}">
                 {{-- Image --}}
                 <div class="relative aspect-[16/10] overflow-hidden">
-                    @if($project->attach)
-                    <img src="{{ asset('uploads/projects/'.$project->attach) }}" alt="{{ $project->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
+                    @if(upload_or('projects', $project->attach))
+                    <img src="{{ upload_or('projects', $project->attach) }}" alt="{{ $project->title }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
                     @else
                     <div class="w-full h-full bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center"><i class="fas fa-flask text-3xl text-primary-200"></i></div>
                     @endif
@@ -96,7 +96,7 @@
                     <span class="text-xs font-semibold uppercase tracking-wider text-secondary-500 mb-2 block">{{ $project->theme }}</span>
                     @endif
                     <h3 class="font-heading font-bold text-surface-800 group-hover:text-primary-500 transition-colors leading-snug mb-2">{{ Str::limit($project->title, 80) }}</h3>
-                    <p class="text-sm text-surface-500 line-clamp-2 mb-3">{{ Str::limit(strip_tags($project->description), 120) }}</p>
+                    <p class="text-sm text-surface-500 line-clamp-2 mb-3">{{ excerpt($project->description, 120) }}</p>
                     <div class="flex flex-wrap gap-3 text-xs text-surface-400">
                         @if($project->lead_researcher)
                         <span><i class="fas fa-user-tie mr-1 text-primary-400"></i>{{ $project->lead_researcher }}</span>

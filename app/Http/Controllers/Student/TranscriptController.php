@@ -109,11 +109,17 @@ class TranscriptController extends Controller
         $cumulative_cgpa_credits = 0; // For CGPA calculation (includes all attempts/retakes)
         $cumulative_unique_courses = []; // Track unique courses ACROSS ALL semesters
 
-        // Get unique semester combinations (filtered by program)
+        // Get unique semester combinations (filtered by program).
+        //
+        // The trend accumulates as it walks this list, so the order moves the
+        // numbers and not merely the sequence of points: it has to match the
+        // transcript, which prints a resit behind the semester it shadows.
+        $orderedEnrolls = app(\App\Services\Academic\TranscriptSemesterOrder::class)->sort($student->studentEnrolls);
+
         $semester_items = [];
         $semester_keys = [];
 
-        foreach ($student->studentEnrolls as $enroll) {
+        foreach ($orderedEnrolls as $enroll) {
             // CRITICAL: Filter by selected program
             if ($selectedProgramId && $enroll->program_id != $selectedProgramId) {
                 continue;

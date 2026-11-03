@@ -6,14 +6,14 @@
 @extends('web2.layouts.master')
 
 @section('title', ($event->title ?? 'Event') . ' — ' . (institution_code()))
-@section('description', Str::limit(strip_tags($event->description ?? ''), 160))
+@section('description', excerpt($event->description ?? '', 160))
 
 @section('content')
 
 {{-- HERO --}}
 <section class="relative min-h-[380px] lg:min-h-[440px] flex items-end overflow-hidden">
-    @if($event->attach)
-    <img src="{{ asset('uploads/web-event/'.$event->attach) }}" alt="{{ $event->title }}" class="absolute inset-0 w-full h-full object-cover">
+    @if(upload_or('web-event', $event->attach))
+    <img src="{{ upload_or('web-event', $event->attach) }}" alt="{{ $event->title }}" class="absolute inset-0 w-full h-full object-cover">
     @endif
     <div class="absolute inset-0 bg-gradient-to-t from-primary-900/95 via-primary-900/60 to-primary-900/30"></div>
     <div class="section-container relative z-10 pb-12 pt-32 max-w-4xl mx-auto">
@@ -54,8 +54,8 @@
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
             {{-- Article --}}
             <article class="lg:col-span-8" data-aos="fade-up">
-                @if($event->attach)
-                <img src="{{ asset('uploads/web-event/'.$event->attach) }}" alt="{{ $event->title }}" class="w-full rounded-2xl mb-8 shadow-sm" loading="lazy">
+                @if(upload_or('web-event', $event->attach))
+                <img src="{{ upload_or('web-event', $event->attach) }}" alt="{{ $event->title }}" class="w-full rounded-2xl mb-8 shadow-sm" loading="lazy">
                 @endif
 
                 <div class="prose prose-lg prose-surface max-w-none [&>p]:mb-5 [&>p]:leading-relaxed [&>h2]:font-heading [&>h2]:text-2xl [&>h2]:mt-10 [&>h2]:mb-4">
@@ -125,7 +125,7 @@
                     <p class="text-sm text-surface-500 mb-3">Add this event to your calendar so you don't forget.</p>
                     @php
                         $dtStart = \Carbon\Carbon::parse($event->date)->format('Ymd');
-                        $gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' . urlencode($event->title) . '&dates=' . $dtStart . '/' . $dtStart . '&details=' . urlencode(Str::limit(strip_tags($event->description), 200)) . '&location=' . urlencode($event->address ?? '');
+                        $gcalUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' . urlencode($event->title) . '&dates=' . $dtStart . '/' . $dtStart . '&details=' . urlencode(excerpt($event->description, 200)) . '&location=' . urlencode($event->address ?? '');
                     @endphp
                     <a href="{{ $gcalUrl }}" target="_blank" rel="noopener"
                        class="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-white border border-surface-200 rounded-lg text-sm font-medium text-surface-700 hover:border-primary-300 hover:text-primary-500 transition-colors">
@@ -150,8 +150,8 @@
                         @foreach($moreEvents as $more)
                         <a href="{{ route('event.single', ['id' => $more->id, 'slug' => $more->slug]) }}" class="flex gap-3 group">
                             <div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0">
-                                @if($more->attach)
-                                <img src="{{ asset('uploads/web-event/'.$more->attach) }}" alt="{{ $more->title }}" class="w-full h-full object-cover" loading="lazy">
+                                @if(upload_or('web-event', $more->attach))
+                                <img src="{{ upload_or('web-event', $more->attach) }}" alt="{{ $more->title }}" class="w-full h-full object-cover" loading="lazy">
                                 @else
                                 <div class="w-full h-full bg-surface-200 flex items-center justify-center"><i class="fas fa-calendar-day text-surface-400 text-xs"></i></div>
                                 @endif

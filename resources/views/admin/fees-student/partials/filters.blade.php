@@ -44,4 +44,27 @@
                                     <button type="submit" class="btn btn-info btn-filter"><i class="fas fa-search"></i> {{ __('btn_search') }}</button>
                                 </div>
                             </div>
+
+                            {{-- The full report. The buttons submit this same form,
+                                 so each document covers exactly the fees these
+                                 filters select — there is no need to search first,
+                                 and no second copy of the filters to keep in step.
+
+                                 formaction, not a link: a link would carry the last
+                                 SEARCHED filters, so a changed dropdown that had not
+                                 been searched yet would silently not be in the file. --}}
+                            <div class="row align-items-end border-top pt-3 mt-2">
+                                <div class="col-md-7 mb-2">
+                                    <h6 class="mb-1"><i class="fas fa-file-invoice-dollar"></i> {{ __('Full fees report') }}</h6>
+                                    <p class="text-muted small mb-0">{{ __('Billed, collected and outstanding, broken down by fee type, programme, faculty and term, with every student most-owed-first and the full register of fees — for the fees matching the filters above.') }}</p>
+                                </div>
+                                <div class="form-group col-md-5 mb-2 text-md-end">
+                                    <button type="submit" class="btn btn-primary" formaction="{{ route($route.'.report.pdf') }}">
+                                        <i class="fas fa-file-pdf"></i> {{ __('Report (PDF)') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-success" formaction="{{ route($route.'.report.excel') }}">
+                                        <i class="fas fa-file-excel"></i> {{ __('Workbook (Excel)') }}
+                                    </button>
+                                </div>
+                            </div>
                         </form>

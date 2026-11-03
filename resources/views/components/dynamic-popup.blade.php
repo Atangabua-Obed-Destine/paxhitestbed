@@ -274,9 +274,20 @@
         
         let imageHtml = '';
         if (popup.image) {
+            /*
+             * alt is empty and a failed load swaps in the placeholder below.
+             *
+             * The popup only knows the image's URL, not whether the file is
+             * behind it, and on this install it is not. The old markup put the
+             * popup's own title in alt, so a missing file rendered a broken
+             * icon followed by that title in grey -- which read as the popup
+             * announcing itself twice, once broken. The title is already the
+             * <h3> a few lines down, so the image is decorative: alt="".
+             */
             imageHtml = `
                 <div class="dynamic-popup-image-wrapper">
-                    <img src="${popup.image}" alt="${popup.title}" class="dynamic-popup-image">
+                    <img src="${popup.image}" alt="" class="dynamic-popup-image"
+                         onerror="dynamicPopupImageFailed(this)">
                 </div>
             `;
         } else {
@@ -346,6 +357,20 @@
     }
     
     // Close popup and show next in queue
+    /**
+     * Swap a popup image that failed to load for the same placeholder the
+     * no-image case already uses, so the two look alike. On window because the
+     * markup is built as a string and wired with an inline onerror.
+     */
+    window.dynamicPopupImageFailed = function(img) {
+        const wrapper = img.closest('.dynamic-popup-image-wrapper');
+        if (!wrapper) return;
+        const placeholder = document.createElement('div');
+        placeholder.className = 'dynamic-popup-no-image';
+        placeholder.innerHTML = '<i class="fas fa-bullhorn"></i>';
+        wrapper.replaceWith(placeholder);
+    };
+
     window.closeDynamicPopup = function(popupId) {
         const overlay = document.getElementById(`dynamic-popup-${popupId}`);
         if (overlay) {

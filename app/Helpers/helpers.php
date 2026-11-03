@@ -187,3 +187,72 @@ if (!function_exists('admin_rich_text')) {
         return $html;
     }
 }
+
+if (!function_exists('excerpt')) {
+    /**
+     * A plain-text summary of rich-text content, safe to print and to put in a
+     * <meta> description.
+     *
+     * strip_tags() on its own is not enough, and the difference is visible on
+     * the live site: it removes the TAGS but leaves the ENTITIES, so a
+     * paragraph pasted from Word opens with a literal "&nbsp;" and an em dash
+     * reads "&mdash;". Seven of this install's nine news and welcome records
+     * carry one. Those six characters also eat into the character budget, so
+     * the summary is cut six characters early as well.
+     *
+     * Order matters. Tags are stripped FIRST and entities decoded second: the
+     * other way round, "&lt;script&gt;" would decode into a real tag that
+     * strip_tags would then have to catch. Decoding last means the result can
+     * still contain "<", so every caller must print it escaped -- with {{ }},
+     * never {!! !!}.
+     *
+     * @param  string|null $html   rich text from the CMS
+     * @param  int         $limit  characters, cut on a word boundary
+     */
+    function excerpt($html, int $limit = 160, string $end = '…'): string
+    {
+        $text = html_entity_decode(strip_tags((string) $html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        // Non-breaking spaces survive the decode as U+00A0, which is not
+        // matched by \s in a non-unicode regex and reads as a stray gap.
+        $text = trim(preg_replace('/\s+/u', ' ', str_replace("\xC2\xA0", ' ', $text)));
+
+        if ($text === '' || mb_strlen($text) <= $limit) {
+            return $text;
+        }
+
+        // Cut on a word boundary. Str::limit() cuts mid-word, which is how
+        // "University of Bamenda" became "University of…" on the home page.
+        $cut = mb_substr($text, 0, $limit);
+        $space = mb_strrpos($cut, ' ');
+
+        if ($space !== false && $space > $limit * 0.6) {
+            $cut = mb_substr($cut, 0, $space);
+        }
+
+        return rtrim($cut, " \t\n\r\0\x0B.,;:–-") . $end;
+    }
+}
+
+if (!function_exists('upload_or')) {
+    /**
+     * The URL of an uploaded file, or null when the file is not on disk.
+     *
+     * Same check as upload_asset(), but it takes the directory and the stored
+     * filename separately, which is how every call site in the public theme is
+     * already written. The point is that a caller can BRANCH: a missing image
+     * should produce a designed placeholder, not a broken <img> that paints its
+     * alt text across the page.
+     *
+     * @param  string      $dir   directory under public/uploads, no slashes
+     * @param  string|null $file  the stored filename
+     */
+    function upload_or(string $dir, $file): ?string
+    {
+        if (empty($file)) {
+            return null;
+        }
+
+        return upload_asset(trim($dir, '/') . '/' . ltrim((string) $file, '/'));
+    }
+}

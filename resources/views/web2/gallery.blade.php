@@ -30,13 +30,31 @@
 </section>
 
 {{-- GALLERY GRID --}}
+@php
+    /*
+     * Filtered ONCE, here, and both loops below read the filtered list.
+     *
+     * The lightbox array and the visible grid are two passes over the same
+     * collection, and the grid passes its loop index into open($idx) to say
+     * which picture to show. Filter one and not the other and every click
+     * after the first missing file opens the wrong photo -- so the list has
+     * to be narrowed before either of them runs, not inside them.
+     *
+     * 28 of this install's 28 gallery rows name a file that is not on disk,
+     * which is what made this page a wall of broken images.
+     */
+    $galleries = collect($galleries)
+        ->map(fn ($g) => tap($g, fn ($row) => $row->resolved_url = upload_or('gallery', $row->attach)))
+        ->filter(fn ($g) => $g->resolved_url !== null)
+        ->values();
+@endphp
 <section class="py-16 lg:py-20 bg-white"
     x-data="{
         lightbox: false,
         current: 0,
         images: [
             @foreach($galleries as $g)
-            { src: '{{ asset('uploads/gallery/'.$g->attach) }}', title: '{{ addslashes($g->title) }}' },
+            { src: '{{ $g->resolved_url }}', title: '{{ addslashes($g->title) }}' },
             @endforeach
         ],
         open(idx) { this.current = idx; this.lightbox = true; document.body.style.overflow = 'hidden'; },
@@ -59,7 +77,7 @@
             @foreach($galleries as $idx => $gallery)
             <div class="break-inside-avoid cursor-pointer group" @click="open({{ $idx }})" data-aos="fade-up" data-aos-delay="{{ min($idx * 50, 300) }}">
                 <div class="relative rounded-xl overflow-hidden">
-                    <img src="{{ asset('uploads/gallery/'.$gallery->attach) }}" alt="{{ $gallery->title }}"
+                    <img src="{{ $gallery->resolved_url }}" alt="{{ $gallery->title }}"
                          class="w-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
                         <div>

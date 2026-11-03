@@ -208,6 +208,7 @@ class DashboardController extends Controller
 		$data['is_teacher'] = false;
 		$data['teacher_today_classes'] = collect();
 		$data['teacher_subjects'] = collect();
+		$data['teacher_courses'] = collect();
 		$data['teacher_total_classes'] = 0;
 		$data['teacher_weekly_schedule'] = collect();
 		
@@ -240,13 +241,21 @@ class DashboardController extends Controller
 					->get();
 				
 				// Get all subjects the teacher teaches this session
-				$data['teacher_subjects'] = \App\Models\ClassRoutine::where('teacher_id', $user->id)
+				$teacher_routines = \App\Models\ClassRoutine::where('teacher_id', $user->id)
 					->where('session_id', $current_session->id)
 					->where('status', '1')
-					->with('subject')
-					->get()
-					->pluck('subject')
-					->unique('id');
+					->with(['subject', 'program', 'semester', 'section'])
+					->get();
+
+				$data['teacher_subjects'] = $teacher_routines->pluck('subject')->filter()->unique('id');
+
+				// A SUBJECT IS NOT A CLASS. The card used to pluck the subject and
+				// drop the rest of the routine row, which on this install collapses
+				// 305 real classes into 105 tiles -- 68% of them standing for more
+				// than one class, one of them for twelve. A single link on such a
+				// tile would silently pick one of the twelve, so the tile now lists
+				// its classes and each carries its own link.
+				$data['teacher_courses'] = $this->teacherCourses($teacher_routines, $current_session->id);
 				
 				// Get total weekly classes count
 				$data['teacher_total_classes'] = \App\Models\ClassRoutine::where('teacher_id', $user->id)
@@ -362,4 +371,78 @@ class DashboardController extends Controller
 
       	return view($this->view.'.index', $data)->with('months', json_encode($months,JSON_NUMERIC_CHECK))->with('fees', json_encode($fees,JSON_NUMERIC_CHECK))->with('expenses', json_encode($expenses, JSON_NUMERIC_CHECK))->with('incomes', json_encode($incomes, JSON_NUMERIC_CHECK))->with('salaries', json_encode($salaries, JSON_NUMERIC_CHECK))->with('student_fee', json_encode($student_fee, JSON_NUMERIC_CHECK))->with('discounts', json_encode($discounts, JSON_NUMERIC_CHECK))->with('fines', json_encode($fines, JSON_NUMERIC_CHECK))->with('fee_paid', json_encode($fee_paid, JSON_NUMERIC_CHECK))->with('net_salary', json_encode($net_salary, JSON_NUMERIC_CHECK))->with('total_tax', json_encode($total_tax, JSON_NUMERIC_CHECK))->with('total_deduction', json_encode($total_deduction, JSON_NUMERIC_CHECK))->with('total_allowance', json_encode($total_allowance, JSON_NUMERIC_CHECK))->with('monthly_visitors', json_encode($monthly_visitors,JSON_NUMERIC_CHECK))->with('monthly_phone_logs', json_encode($monthly_phone_logs,JSON_NUMERIC_CHECK))->with('monthly_enqueries', json_encode($monthly_enqueries,JSON_NUMERIC_CHECK))->with('monthly_complains', json_encode($monthly_complains,JSON_NUMERIC_CHECK))->with('monthly_postals', json_encode($monthly_postals,JSON_NUMERIC_CHECK))->with('monthly_schedules', json_encode($monthly_schedules,JSON_NUMERIC_CHECK));
    	}
+
+	/**
+	 * The lecturer's courses this session, each with the classes it is taught to.
+	 *
+	 * A subject taught to several programmes is one tile with several classes
+	 * under it, because that is what the lecturer sees from the front of the
+	 * room: CPT 127 here is one register kept for twelve programmes. Collapsing
+	 * them, as the card did before, leaves no way to say WHICH class a link means.
+	 *
+	 * The head count is one grouped query for every class at once -- a count per
+	 * tile would be a query per class, and the busiest lecturer here has 43.
+	 */
+	protected function teacherCourses($routines, $sessionId)
+	{
+		$routines = $routines->filter(function ($row) {
+			return $row->subject;
+		});
+
+		if ($routines->isEmpty()) {
+			return collect();
+		}
+
+		$counts = \Illuminate\Support\Facades\DB::table('student_enrolls as e')
+			->join('student_enroll_subject as es', 'es.student_enroll_id', '=', 'e.id')
+			->where('e.session_id', $sessionId)
+			->whereIn('es.subject_id', $routines->pluck('subject_id')->unique()->all())
+			->groupBy('es.subject_id', 'e.program_id', 'e.semester_id', 'e.section_id')
+			->get([
+				'es.subject_id', 'e.program_id', 'e.semester_id', 'e.section_id',
+				\Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT e.student_id) as students'),
+			])
+			->keyBy(function ($row) {
+				return $row->subject_id.'|'.$row->program_id.'|'.$row->semester_id.'|'.$row->section_id;
+			});
+
+		return $routines
+			->groupBy('subject_id')
+			->map(function ($group) use ($counts, $sessionId) {
+				$subject = $group->first()->subject;
+
+				$classes = $group
+					->unique(function ($row) {
+						return $row->program_id.'|'.$row->semester_id.'|'.$row->section_id;
+					})
+					->map(function ($row) use ($counts, $subject) {
+						$key = $subject->id.'|'.$row->program_id.'|'.$row->semester_id.'|'.$row->section_id;
+
+						return [
+							'program_id'  => $row->program_id,
+							'semester_id' => $row->semester_id,
+							'section_id'  => $row->section_id,
+							'program'     => $row->program->title ?? '',
+							'semester'    => $row->semester->title ?? '',
+							'section'     => $row->section->title ?? '',
+							'students'    => (int) (optional($counts->get($key))->students ?? 0),
+						];
+					})
+					->sortBy(function ($row) {
+						return $row['program'].$row['semester'].$row['section'];
+					})
+					->values();
+
+				return [
+					'subject'    => $subject,
+					'session_id' => $sessionId,
+					'classes'    => $classes,
+					'students'   => $classes->sum('students'),
+				];
+			})
+			->sortBy(function ($course) {
+				return $course['subject']->code ?? '';
+			})
+			->values();
+	}
 }
