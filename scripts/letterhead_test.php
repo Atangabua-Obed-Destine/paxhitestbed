@@ -23,6 +23,7 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 $passed = 0;
 $failed = 0;
+$skipped = 0;
 
 function check(string $label, bool $ok, string $detail = ''): void
 {
@@ -34,6 +35,20 @@ function check(string $label, bool $ok, string $detail = ''): void
         $failed++;
         echo "  FAIL  $label" . ($detail !== '' ? "\n          $detail" : '') . "\n";
     }
+}
+
+/**
+ * A check that could not be made, said out loud.
+ *
+ * A conditional check that just falls off the end of its if leaves the suite
+ * shorter and still green, which is the quietest way for coverage to go
+ * missing. Counted and printed so the reader sees the hole.
+ */
+function skip(string $why): void
+{
+    global $skipped;
+    $skipped++;
+    echo "  SKIP  $why\n";
 }
 
 echo "\n== No partial includes itself ==\n";
@@ -140,10 +155,22 @@ if (!$enroll) {
 
             // The author sizes the logo in the editor; without those attributes
             // it renders at its natural size and pushes the document down.
-            if (preg_match('#<div class="letterhead">.*?</div>#s', $html, $lh)
-                && str_contains($lh[0], '<img')) {
+            //
+            // The absent case is skipped out loud rather than passed over. It
+            // used to fall off the end of the if, so when DocumentHtml began
+            // dropping images whose file is gone, this check simply stopped
+            // running and the suite got two checks shorter while staying green
+            // — the quietest way for coverage to disappear.
+            $hasLetterhead = (bool) preg_match('#<div class="letterhead">.*?</div>#s', $html, $lh);
+
+            if ($hasLetterhead && str_contains($lh[0], '<img')) {
                 check($action . ' keeps the logo\'s configured size',
                     (bool) preg_match('#<img[^>]+(?:width|height)=#i', $lh[0]));
+            } elseif ($hasLetterhead) {
+                skip($action . ': the configured letterhead has no image to size '
+                    . '(or its file is missing, and it was dropped)');
+            } else {
+                skip($action . ': no letterhead block to look in');
             }
 
             // The watermark carries the institution's name from Settings, so a
@@ -234,4 +261,4 @@ check('a fixed width elsewhere is still stripped', !str_contains($clean, '900px'
 check('Word properties are still stripped', !str_contains($clean, 'mso-'), $clean);
 check('no placeholder is left behind', !str_contains($clean, 'dochtml-img'), $clean);
 
-echo "\n$passed passed, $failed failed\n";
+echo "\n$passed passed, $failed failed" . ($skipped ? ", $skipped skipped" : "") . "\n";

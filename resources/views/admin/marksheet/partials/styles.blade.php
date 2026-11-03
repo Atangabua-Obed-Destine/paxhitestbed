@@ -54,6 +54,37 @@
        is not changed at the source. On a transcript it was taking 56mm of a
        297mm page — a fifth of the sheet before a single mark was printed — so
        it is scaled down here only, where the space is needed. */
+    /* --- The sheet, as a table, so the letterhead repeats ---
+       .tp-sheet holds the whole transcript: its <thead> is the letterhead and
+       its one body cell is the record. A table header is drawn again at the
+       top of every page the table breaks onto, so a transcript that runs to a
+       second or third sheet carries the institution's name on each of them.
+
+       table-layout is fixed on purpose. The letterhead HTML a school pastes
+       into Academic -> Letterhead can carry its own table at a width over
+       100% (this install's is 109.167%); with automatic layout that widens
+       the column the record sits in, and the marks drift off the right edge
+       rather than being clipped at the page boundary as they are now. */
+    .tp-sheet {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      border-spacing: 0;
+    }
+    .tp-sheet > thead > tr > td,
+    .tp-sheet > tbody > tr > td {
+      padding: 0;
+      border: 0;
+      vertical-align: top;
+    }
+    /* Above the watermark rather than behind it. The band is the one part of
+       the page a reader uses to tell whose document this is, and on a second
+       sheet it lands where the diagonal is at its darkest. */
+    .tp-sheet-head {
+      position: relative;
+      z-index: 1;
+    }
+
     .tp-page .letterhead {
       /* Not scaled down. A zoom here shrank the institution's name and address
          to three-quarters size, which left them looking small and marooned in
@@ -114,19 +145,51 @@
 
     /* --- Watermark ---
        The institution's name, from Settings, laid diagonally behind the record.
-       It sits at z-index 0 while .tp-content is z-index 1, so it is genuinely
-       behind the text rather than over it, and .tp-page already clips overflow.
        Light enough to read straight through: a transcript has to stay legible
-       when photocopied, and a watermark that fights the marks defeats itself. */
+       when photocopied, and a watermark that fights the marks defeats itself.
+
+       One per sheet of paper, which took three attempts to get right, each one
+       measured off the printed PDF rather than reasoned about:
+
+         - absolute, inset 0 on .tp-page -- one mark stretched over the whole
+           record and centred in it, so on a two-page transcript it sat across
+           the fold and page 2 came out with none at all. This is what it was.
+         - inside the repeated letterhead header, so it would repeat with it --
+           Chrome clips a repeated header's overflow to the table fragment, and
+           page 2's came out sliced down the diagonal with its left third gone.
+         - fixed, in print only. A fixed box is laid out against the page box,
+           so the printer draws one on every sheet, in the same place on each.
+
+       On screen there are no pages to be fixed to, and a viewport-pinned
+       watermark would follow the reader down a scrolling document, so the
+       screen keeps the old absolute mark inside the page it belongs to.
+
+       z-index 0 against .tp-content's z-index 1: genuinely behind the record
+       rather than over it.
+
+       It is centred on the upper part of the sheet, not the middle of it, and
+       `bottom` is what does that. The foot of the page carries the signature
+       rules and the verification block, and a watermark glyph sharing a
+       baseline with 8px type does not sit politely behind it -- the two sets
+       of glyphs collide and the printed page reads VERIFYTHISTRANSCRIPT, with
+       the spaces gone. scripts/transcript_layout_test.php checks for exactly
+       that. A transcript that runs long is a nuisance; one whose verification
+       cannot be read is not a verifiable document. */
     .tp-watermark {
       position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 22%;
       z-index: 0;
       display: flex;
       align-items: center;
       justify-content: center;
       pointer-events: none;
       overflow: hidden;
+    }
+    @media print {
+      .tp-watermark {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 22%;
+      }
     }
     .tp-watermark span {
       transform: rotate(-32deg);

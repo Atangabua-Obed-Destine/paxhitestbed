@@ -14,6 +14,20 @@
     @media print {
       .tp-page { page-break-after: always; }
       .tp-page:last-of-type { page-break-after: auto; }
+
+      /* One watermark for the run, not one per transcript.
+
+         In print the watermark is position:fixed, which is what puts one on
+         every sheet of a transcript that runs long. A fixed box belongs to the
+         document rather than to the element it was written in, so a run of
+         three students stamped three identical marks on top of each other on
+         every page and the diagonal came out three times as dark -- measured
+         at six text runs a page where there should be two.
+
+         They all carry the same institution name, so the first one serves the
+         whole run. The sibling combinator, not :first-of-type: the toolbar
+         above is also a div, so the first .tp-page is not the first div. */
+      .tp-page ~ .tp-page .tp-watermark { display: none; }
     }
     @media screen {
       .bulk-bar {

@@ -1,8 +1,13 @@
 {{--
     The institution's letterhead, configured under Academic > Letterhead.
 
-    Place as the first element of a document body. It renders on the first page
-    only, by design - it is normal flow content, not a fixed page header.
+    Place as the first element of a document body. On its own it renders on the
+    first page only - it is normal flow content, not a fixed page header.
+
+    To repeat it on every page, put the include inside the <thead> of a table
+    that wraps the document: a table header is redrawn wherever that table
+    breaks across a page. The transcript does exactly this, in
+    admin/marksheet/partials/page.blade.php.
 
     Usage:
         @include('partials.letterhead')                     for the screen

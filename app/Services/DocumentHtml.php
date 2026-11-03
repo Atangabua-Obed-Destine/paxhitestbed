@@ -28,7 +28,8 @@ class DocumentHtml
      *
      * dompdf reads the filesystem directly, which is faster and does not depend
      * on the server being able to reach its own public URL. A browser needs a
-     * URL. Genuinely remote images are left alone.
+     * URL. Genuinely remote images are left alone, and a local one whose file
+     * is gone is removed rather than printed as a broken-image box.
      */
     public static function resolveImages(?string $html, bool $forPdf = false): ?string
     {
@@ -36,12 +37,32 @@ class DocumentHtml
             return $html;
         }
 
+        // The whole tag is matched, not just its src attribute: an image that
+        // cannot be placed has to go, and a tag cannot be removed from inside
+        // one of its own attributes.
         return preg_replace_callback(
-            '/(<img\b[^>]*\bsrc\s*=\s*)(["\'])(.*?)\2/i',
+            '/<img\b[^>]*>/i',
             function ($match) use ($forPdf) {
-                $resolved = static::resolveOne($match[3], $forPdf);
+                $tag = $match[0];
 
-                return $match[1] . $match[2] . $resolved . $match[2];
+                if (!preg_match('/\bsrc\s*=\s*(["\'])(.*?)\1/i', $tag, $attribute)) {
+                    return $tag;
+                }
+
+                $resolved = static::resolveOne($attribute[2], $forPdf);
+
+                if ($resolved === null) {
+                    return '';
+                }
+
+                // Spliced in by offset rather than with preg_replace: for a PDF
+                // the resolved value is a Windows filesystem path, and its
+                // backslashes are escape sequences in a replacement string.
+                $at = strpos($tag, $attribute[0]);
+
+                return substr($tag, 0, $at)
+                    . 'src=' . $attribute[1] . $resolved . $attribute[1]
+                    . substr($tag, $at + strlen($attribute[0]));
             },
             $html
         );
@@ -51,8 +72,10 @@ class DocumentHtml
      * Turn one src into an absolute path or URL.
      *
      * @param  string $src  as the editor stored it
+     * @return string|null  null when this is a local image whose file is not
+     *                      there, and the tag should be dropped
      */
-    protected static function resolveOne(string $src, bool $forPdf): string
+    protected static function resolveOne(string $src, bool $forPdf): ?string
     {
         $src = trim($src);
 
@@ -67,7 +90,18 @@ class DocumentHtml
 
         $relative = null;
 
-        if (preg_match('#^https?://#i', $src)) {
+        // Protocol-relative, so somebody else's host. Not a path into public/,
+        // and not ours to remove.
+        if (str_starts_with($src, '//')) {
+            return $src;
+        }
+
+        // A URL is at least openable, and may be served by a route rather than
+        // by a file under public/. Only a bare path — which is what the editor
+        // writes — is ours to drop when the file behind it is gone.
+        $isUrl = (bool) preg_match('#^https?://#i', $src);
+
+        if ($isUrl) {
             // A full URL pointing at this installation still becomes a local
             // path for PDF: dompdf fetching over the network can fail on a
             // self-signed certificate or an unresolvable hostname.
@@ -94,12 +128,57 @@ class DocumentHtml
         }
 
         if ($relative === '' || !is_file(public_path($relative))) {
-            // Leave anything we cannot place untouched rather than producing a
-            // path that is confidently wrong.
-            return $src;
+            if ($isUrl) {
+                return $src;
+            }
+
+            // A bare editor path whose file is not there.
+            //
+            // This used to be returned unchanged, which read as leaving it
+            // alone but is not: "../../uploads/editor/x.jpg" is resolved by the
+            // browser against the URL of the page it is on, so on
+            // /admin/transcript/marksheet-download/12 it asks for
+            // /admin/uploads/editor/x.jpg. That is wrong at every depth and for
+            // every route, so the document printed a broken-image box in the
+            // middle of its letterhead — twice, once the letterhead began
+            // repeating on each page of a transcript.
+            //
+            // Nothing is lost by dropping it: a browser could never have opened
+            // that path, and dompdf drops an image it cannot resolve anyway. It
+            // is recorded in the log instead, because an administrator needs to
+            // know a file is missing and an embassy reading the transcript does
+            // not.
+            static::reportMissing($src, $relative);
+
+            return null;
         }
 
         return $forPdf ? public_path($relative) : asset($relative);
+    }
+
+    /** Images already reported this request, so a bulk print logs each once. */
+    protected static array $reportedMissing = [];
+
+    /**
+     * Note an image a document had to go without.
+     *
+     * Once per src per request: a bulk transcript print renders the same
+     * letterhead fifty times, and fifty identical lines would bury the one
+     * fact worth reading.
+     */
+    protected static function reportMissing(string $src, string $relative): void
+    {
+        if (isset(static::$reportedMissing[$src])) {
+            return;
+        }
+
+        static::$reportedMissing[$src] = true;
+
+        \Illuminate\Support\Facades\Log::warning(
+            'Document image dropped: the file is not there, so the image was '
+            . 'left out rather than printed as a broken image.',
+            ['src' => $src, 'looked_for' => public_path($relative)]
+        );
     }
 
     /**

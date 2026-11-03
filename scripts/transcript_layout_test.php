@@ -166,6 +166,38 @@ function printedPages(string $chrome, string $work, int $studentId, int $enrollI
 }
 
 /**
+ * The same printed pages, read in painting order rather than page order.
+ *
+ * printedPages() uses -layout, which places glyphs by geometry. That is right
+ * for the record but useless for the watermark: the two lines of a rotated
+ * mark overlap on the same band, and -layout interleaves them character by
+ * character into "PAIXNSHTIIGTHU T E". -raw follows the order Chrome painted
+ * in, so the watermark comes back as its own lines.
+ *
+ * Reads the PDF printedPages() already produced, so nothing is rendered twice.
+ */
+function printedPagesRaw(string $work, string $tag, int $pageCount): array
+{
+    $pdf = $work . DIRECTORY_SEPARATOR . $tag . '.pdf';
+
+    if (!is_file($pdf)) {
+        return [];
+    }
+
+    $pages = [];
+
+    for ($i = 1; $i <= $pageCount; $i++) {
+        $txt = $work . DIRECTORY_SEPARATOR . $tag . ".raw$i.txt";
+        exec('pdftotext -raw -f ' . $i . ' -l ' . $i . ' '
+            . escapeshellarg($pdf) . ' ' . escapeshellarg($txt) . ' 2>&1', $o, $c);
+
+        $pages[] = $c === 0 && is_file($txt) ? (string) file_get_contents($txt) : '';
+    }
+
+    return $pages;
+}
+
+/**
  * Pages on which a semester was cut in half.
  *
  * Counted from the printed text, not from the CSS: each semester prints one
@@ -300,6 +332,143 @@ if ($smallPages === null || $smallPages === []) {
             && preg_match('/Verify this transcript/i', $smallPages[0]) === 1
             && preg_match('/END OF TRANSCRIPT/i', $smallPages[0]) === 1,
         'summary, key, verification and end marker must all still be there');
+}
+
+// ---------------------------------------------------------------------------
+section('The letterhead is on every page');
+// ---------------------------------------------------------------------------
+// A transcript that runs to a second sheet used to carry the institution's
+// name on the first one only, so page 2 was a loose table of marks that named
+// nobody. The letterhead is the <thead> of the sheet's own table now, which
+// browsers redraw at the top of every page the table breaks onto.
+//
+// Checked on the printed text, not the markup: the word looked for is taken
+// from the letterhead the school actually configured, and any word it shares
+// with the diagonal watermark is discarded first -- the watermark is extracted
+// too, and a probe word that appears in both would pass on every page whether
+// the letterhead repeated or not.
+$letterheadText = html_entity_decode(
+    strip_tags(app(\App\Services\LetterheadService::class)->render(false)),
+    ENT_QUOTES | ENT_HTML5,
+    'UTF-8'
+);
+$watermarkWords = [];
+foreach (preg_split('/[^A-Za-z]+/', (string) institution_name()) as $w) {
+    if ($w !== '') {
+        $watermarkWords[strtolower($w)] = true;
+    }
+}
+$probe = null;
+foreach (preg_split('/[^A-Za-z]+/', $letterheadText) as $w) {
+    if (mb_strlen($w) >= 6 && !isset($watermarkWords[strtolower($w)])
+        && (!$probe || mb_strlen($w) > mb_strlen($probe))) {
+        $probe = $w;
+    }
+}
+
+if ($probe === null) {
+    skip('the configured letterhead has no word of its own to look for');
+} else {
+    echo "  (looking for \"$probe\")\n";
+
+    $headPages = printedPages($chrome, $work, $largest['student'], $largest['enroll'], 'letterhead');
+
+    if ($headPages === null || $headPages === []) {
+        skip('could not print a multi-page transcript');
+    } else {
+        $missing = [];
+        foreach ($headPages as $i => $text) {
+            if (!preg_match('/' . preg_quote($probe, '/') . '/i', $text)) {
+                $missing[] = 'p' . ($i + 1);
+            }
+        }
+
+        check('a transcript spanning pages carries its letterhead on each one',
+            count($headPages) > 1 && $missing === [],
+            count($headPages) === 1
+                ? 'only one page printed, so a repeat proves nothing'
+                : 'no letterhead on ' . implode(', ', $missing));
+
+        // Once per page, not twice: a repeated header that also stayed in the
+        // flow would print the band twice at the top of page 1.
+        $doubled = [];
+        foreach ($headPages as $i => $text) {
+            if (preg_match_all('/' . preg_quote($probe, '/') . '/i', $text) > 1) {
+                $doubled[] = 'p' . ($i + 1);
+            }
+        }
+
+        check('and prints it once on each, not twice',
+            $doubled === [],
+            'letterhead appears more than once on ' . implode(', ', $doubled));
+    }
+
+    // The repeated band costs every page after the first the height of a
+    // letterhead, so the thing it must not have done is break a semester in
+    // half to make room.
+    if (isset($headPages) && $headPages) {
+        check('and does not cut a semester in half to make room',
+            severedSemesters($headPages) === 0,
+            severedSemesters($headPages) . ' of ' . count($headPages)
+                . ' page(s) hold a semester whose GPA is on another sheet');
+    }
+}
+
+// ---------------------------------------------------------------------------
+section('The watermark is on every page too');
+// ---------------------------------------------------------------------------
+// The diagonal is what makes the sheet hard to pass off as something else, so
+// a second sheet without one is a second sheet that is easier to forge. It
+// used to be a single mark stretched over the whole record and centred in it,
+// which on a two-page transcript put it across the fold.
+//
+// Read in painting order. -layout places glyphs by geometry, and the two lines
+// of a rotated mark overlap on one band, so it comes back interleaved as
+// "PAIXNSHTIIGTHU T E"; -raw follows the order Chrome painted in and gives the
+// watermark its own lines.
+//
+// Counted against what the letterhead itself contributes, not simply looked
+// for: this school's letterhead opens with its own name, so "the name is on
+// the page" was true on a page with no watermark at all. Measured — the first
+// version of this check passed its own sabotage for exactly that reason.
+$institution = trim((string) institution_name());
+
+if ($institution === '' || !isset($headPages) || !$headPages || count($headPages) < 2) {
+    skip('no multi-page transcript, or no institution name to look for');
+} else {
+    $flatten = fn (string $text): string => strtoupper(trim(preg_replace('/\s+/', ' ', $text)));
+
+    $needle = $flatten($institution);
+    $fromLetterhead = substr_count($flatten($letterheadText), $needle);
+
+    $rawPages = printedPagesRaw($work, 'letterhead', count($headPages));
+    $counts = [];
+    $without = [];
+
+    foreach ($rawPages as $i => $text) {
+        $counts[] = $found = substr_count($flatten($text), $needle);
+
+        if ($found <= $fromLetterhead) {
+            $without[] = 'p' . ($i + 1);
+        }
+    }
+
+    check('every page of a multi-page transcript is watermarked',
+        $rawPages !== [] && $without === [],
+        $rawPages === []
+            ? 'could not read the pages in painting order'
+            : 'no watermark on ' . implode(', ', $without)
+                . ' (the letterhead alone accounts for ' . $fromLetterhead
+                . ' per page; found ' . implode(', ', $counts) . ')');
+
+    // One, not one per transcript. The bulk print puts many transcripts in one
+    // document and the watermark is position:fixed, so without the rule in
+    // bulk.blade.php each student's would stamp on every page of the run.
+    check('and exactly one of them, not a stack',
+        $rawPages !== [] && $counts !== []
+            && max($counts) === $fromLetterhead + 1,
+        'found ' . implode(', ', $counts) . ' per page against a letterhead share of '
+            . $fromLetterhead);
 }
 
 // ---------------------------------------------------------------------------

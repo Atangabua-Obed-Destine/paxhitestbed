@@ -8,10 +8,17 @@ use App\Models\Setting;
 /**
  * Renders the institution's letterhead for whichever destination is asking.
  *
- * The letterhead is flow content at the top of a document, deliberately not a
- * running page header — it belongs on the first page only. Making it repeat
- * would mean position:fixed, which is exactly what dompdf treats as a running
- * header on every page.
+ * What this returns is flow content: a block to place at the top of a
+ * document body. It is deliberately not a running page header, and on its own
+ * it does not repeat — it prints on the first page and no other.
+ *
+ * A document that wants it on every page arranges that at the call site. The
+ * transcript does, by making the sheet a table and this block its <thead>,
+ * which browsers redraw at the top of every page the table breaks onto; see
+ * resources/views/admin/marksheet/partials/page.blade.php. position:fixed
+ * would repeat it too, and is the wrong tool wherever one document holds more
+ * than one letterhead — the bulk transcript print holds one per student —
+ * because every fixed band would then stack on every page.
  */
 class LetterheadService
 {

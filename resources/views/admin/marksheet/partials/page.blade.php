@@ -107,14 +107,6 @@
 @endphp
 
 <div class="tp-page printable">
-    {{-- Letterhead, configured under Academic → Letterhead. Was a hardcoded
-         filename, so changing it meant editing this view. --}}
-    {{-- forPdf must stay false: this page is rendered by the browser, not by
-         dompdf. With it true the letterhead's image src becomes a local
-         filesystem path (C:\xampp\...), which dompdf can read and a browser
-         cannot — so the logo silently failed to load. --}}
-    @include('partials.letterhead', ['forPdf' => false])
-
     @php
         // The site title from Settings, so the watermark follows the
         // institution rather than being written into the markup. Sized down for
@@ -123,11 +115,53 @@
         $watermarkSize = mb_strlen($watermark) > 34 ? 34 : (mb_strlen($watermark) > 22 ? 44 : 56);
     @endphp
 
+    {{-- The watermark, one per sheet of paper.
+
+         It is a direct child of the page rather than part of the record, and
+         in print it is position:fixed, which is the only arrangement that puts
+         one on every page. Two others were tried against the printed PDF and
+         measured: stretched over the whole record (what it used to be) it
+         straddled the fold and page 2 got none, and inside the repeated header
+         Chrome clips it to the table fragment, so page 2 got two thirds of one
+         sliced off down the diagonal.
+
+         The bulk print is why fixed is not simply right either -- see the rule
+         that hides all but the first in admin/marksheet/bulk.blade.php. --}}
     @if($watermark !== '')
     <div class="tp-watermark" aria-hidden="true">
         <span style="font-size: {{ $watermarkSize }}px;">{{ $watermark }}</span>
     </div>
     @endif
+
+    {{-- The sheet is a table so that the letterhead can be its <thead>.
+
+         A table header is drawn again at the top of every page the table
+         breaks onto, so a transcript that runs to two or three sheets carries
+         its letterhead on each of them. Nothing else about the record changes:
+         the whole of it sits in the single body cell below.
+
+         position:fixed repeats too, and is wrong here. The bulk print puts
+         many transcripts in one document, and one fixed band per transcript
+         would stack every student's letterhead on top of every page of the
+         run. A <thead> belongs to its own table, so each transcript repeats
+         only its own. --}}
+    <table class="tp-sheet">
+        <thead>
+            <tr>
+                <td class="tp-sheet-head">
+                    {{-- Letterhead, configured under Academic → Letterhead. Was a hardcoded
+                         filename, so changing it meant editing this view. --}}
+                    {{-- forPdf must stay false: this page is rendered by the browser, not by
+                         dompdf. With it true the letterhead's image src becomes a local
+                         filesystem path (C:\xampp\...), which dompdf can read and a browser
+                         cannot — so the logo silently failed to load. --}}
+                    @include('partials.letterhead', ['forPdf' => false])
+                </td>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="tp-sheet-body">
 
     <div class="tp-content">
 
@@ -427,4 +461,9 @@
         <div class="tp-end-marker">End of Transcript</div>
 
     </div>{{-- end .tp-content --}}
+
+                </td>
+            </tr>
+        </tbody>
+    </table>{{-- end .tp-sheet --}}
 </div>{{-- end .tp-page --}}

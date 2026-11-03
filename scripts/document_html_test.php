@@ -300,6 +300,112 @@ if (trim($rendered) === '') {
     }
 }
 
+// ---------------------------------------------------------------------------
+section('An image whose file is gone is left out, not left broken');
+// ---------------------------------------------------------------------------
+// The editor stores "../../uploads/editor/x.jpg". When the file is there that
+// becomes an absolute URL, and everything below is about the case where it is
+// not.
+//
+// Returning the stored value unchanged reads like leaving it alone, and is
+// not: a browser resolves it against the URL of the page it is on, so on
+// /admin/transcript/marksheet-download/12 it asks the server for
+// /admin/uploads/editor/x.jpg. That is wrong at every depth and on every
+// route, and what it draws is a broken-image box in the middle of the
+// institution's letterhead.
+//
+// A real file is needed for the other half of the pair, so one is written to
+// public/uploads and removed again at the end.
+$dir = public_path('uploads/editor');
+$present = 'doc_html_test_' . getmypid() . '.png';
+$madeDir = !is_dir($dir);
+
+if ($madeDir) {
+    @mkdir($dir, 0777, true);
+}
+
+// A 1x1 PNG, so the file on disk is a real image and not just bytes.
+file_put_contents($dir . DIRECTORY_SEPARATOR . $present, base64_decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+));
+
+try {
+    $gone = '<p>before</p><img src="../../uploads/editor/doc_html_test_gone.png" alt=""><p>after</p>';
+    $out = (string) DocumentHtml::resolveImages($gone, false);
+
+    check('the tag is removed entirely',
+        !str_contains($out, '<img'), $out);
+
+    check('and nothing around it is disturbed',
+        str_contains($out, '<p>before</p>') && str_contains($out, '<p>after</p>'), $out);
+
+    check('so no relative path survives to be resolved against the page URL',
+        !str_contains($out, '../'), $out);
+
+    // The same for the PDF path, where dompdf would have dropped it anyway but
+    // silently.
+    check('the same for a PDF',
+        !str_contains((string) DocumentHtml::resolveImages($gone, true), '<img'));
+
+    // The other half of the pair: an image that IS there must still survive,
+    // or "drop what is missing" would quietly become "drop everything".
+    $here = '<img src="../../uploads/editor/' . $present . '" width="56" height="57">';
+    $kept = (string) DocumentHtml::resolveImages($here, false);
+
+    check('an image that is there is kept',
+        str_contains($kept, '<img') && str_contains($kept, $present), $kept);
+
+    check('and keeps the size the editor gave it',
+        str_contains($kept, 'width="56"') && str_contains($kept, 'height="57"'), $kept);
+
+    check('and is pointed at a URL a browser can open',
+        str_contains($kept, '://') && !str_contains($kept, '../'), $kept);
+
+    $keptPdf = (string) DocumentHtml::resolveImages($here, true);
+
+    check('and at a filesystem path for the PDF',
+        str_contains($keptPdf, '<img') && str_contains($keptPdf, public_path('uploads')),
+        $keptPdf);
+
+    // Not ours to remove. A URL may be served by something other than a file
+    // under public/, and a protocol-relative one is somebody else's host
+    // entirely — dropping either would be deleting an image that works.
+    foreach ([
+        'a protocol-relative image' => '//cdn.example.com/missing.png',
+        'a remote image' => 'https://example.com/missing.png',
+        'an embedded image' => 'data:image/png;base64,AAAA',
+    ] as $label => $src) {
+        $out = (string) DocumentHtml::resolveImages('<img src="' . $src . '">', false);
+
+        check($label . ' is left exactly as it was',
+            str_contains($out, 'src="' . $src . '"'), $out);
+    }
+
+    // Two images, one of each: the one that is gone goes and the one that is
+    // there stays, in the same pass.
+    $mixed = (string) DocumentHtml::resolveImages(
+        '<img src="../../uploads/editor/' . $present . '">'
+        . '<img src="../../uploads/editor/doc_html_test_gone.png">',
+        false
+    );
+
+    check('a document with one of each keeps only the one it can show',
+        substr_count($mixed, '<img') === 1 && str_contains($mixed, $present), $mixed);
+
+    // A tag with no src at all is not an image we can judge.
+    check('a tag with no src is not touched',
+        str_contains((string) DocumentHtml::resolveImages('<img alt="x">', false), '<img alt="x">'));
+} finally {
+    @unlink($dir . DIRECTORY_SEPARATOR . $present);
+
+    if ($madeDir) {
+        @rmdir($dir);
+    }
+
+    check('the test left no file behind in public/uploads',
+        !is_file($dir . DIRECTORY_SEPARATOR . $present));
+}
+
 echo "\n----\npassed $passed, failed $failed\n";
 
 exit($failed > 0 ? 1 : 0);
