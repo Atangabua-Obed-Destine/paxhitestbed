@@ -80,9 +80,9 @@ if (!$subject) {
     exit(1);
 }
 
-// Inside the same faculty: a programme change may not cross faculties, so a
-// cross-faculty target would make every money case below fail for the wrong
-// reason.
+// Inside the same faculty for the money cases, so they test the money rules
+// and nothing else; the cross-faculty sections further down pick their own
+// target.
 $subjectFaculty = optional(Program::find($subject->program_id))->faculty_id;
 
 $targetId = $configured->first(function ($id) use ($subject, $subjectFaculty) {
@@ -511,63 +511,289 @@ check('the subject of this suite is one the rule permits',
     'otherwise every case above fails on eligibility rather than on what it tests');
 
 // ---------------------------------------------------------------------------
-section('A student may only move within their own faculty');
+section('A student may move to another faculty');
 // ---------------------------------------------------------------------------
-// Across faculties is a different act - different curriculum, different
-// matricule series, usually a fresh admission rather than a transfer - and
-// this screen reconciles fees, not admissions.
-$elsewhere = Program::where('status', '1')
-    ->where('faculty_id', '!=', $subjectFaculty)
-    ->whereNotNull('faculty_id')
+// This used to be refused. The faculty is never stored on the student - every
+// screen reads it through the programme - so repointing the programme carries
+// the faculty with it. What a cross-faculty move changes beyond a within-
+// faculty one is the matricule series and the term ladder, both tested below.
+$abroadId = $configured->first(function ($id) use ($subject, $subjectFaculty) {
+    $p = Program::find($id);
+
+    return $p && (int) $p->id !== (int) $subject->program_id
+        && $p->faculty_id && (int) $p->faculty_id !== (int) $subjectFaculty;
+});
+
+if (!$abroadId) {
+    skip('every configured programme is in the same faculty');
+} else {
+    $abroad = Program::with('faculty')->find($abroadId);
+    $home = Program::with('faculty')->find($subject->program_id);
+
+    $reasons = $service->blockers($subject->fresh(), (int) $abroadId);
+
+    check('a configured programme in another faculty is not refused on faculty grounds',
+        !collect($reasons)->contains(fn ($r) => stripos($r, 'faculty') !== false),
+        implode(' | ', $reasons));
+
+    $warnings = $service->warnings($subject->fresh(), (int) $abroadId);
+
+    check('but the admin is warned, naming both faculties',
+        collect($warnings)->contains(fn ($w) => str_contains($w, $home->faculty->title)
+            && str_contains($w, $abroad->faculty->title)),
+        implode(' | ', $warnings));
+
+    check('and the warning says where the money goes',
+        collect($warnings)->contains(fn ($w) => str_contains($w, 'budget analysis')),
+        'tuition already banked follows the programme in the budget analysis; the admin must hear that before, not after');
+
+    // The series is the faculty's: PAX25MFH055 is the FBMS series, PAX25MBH
+    // the SMBS one.
+    $abroadCode = strtoupper($abroad->faculty->matric_code ?: $abroad->faculty->shortcode);
+    $proposed = $service->proposedMatricule($subject->fresh(), (int) $abroadId);
+
+    check('the proposed matricule is in the new faculty\'s series',
+        $proposed && str_contains($proposed, $abroadCode),
+        'proposed ' . $proposed . ', faculty code ' . $abroadCode);
+
+    DB::beginTransaction();
+
+    try {
+        $oldMatricule = $subject->fresh()->matricule;
+        $result = $service->apply($subject->fresh(), (int) $abroadId, 'test: across faculties', null);
+        $moved = StudentEnroll::find($subject->id);
+        $student = Student::find($subject->student_id);
+
+        check('the move goes ahead', $result['moved'] === true, implode('; ', $result['blockers']));
+
+        check('the enrolment now points at the new programme',
+            (int) $moved->program_id === (int) $abroadId
+            && (int) $moved->previous_program_id === (int) $subject->program_id);
+
+        check('and so does the student record',
+            (int) $student->program_id === (int) $abroadId);
+
+        check('the matricule moved series',
+            $moved->matricule === $result['matricule'] && str_contains($moved->matricule, $abroadCode)
+            && $moved->matricule !== $oldMatricule,
+            'enrolment reads ' . $moved->matricule);
+
+        check('the student\'s canonical id follows it',
+            $student->student_id === $moved->matricule,
+            'students.student_id is ' . $student->student_id);
+
+        check('and the old number is remembered',
+            $moved->previous_matricule === $oldMatricule,
+            'previous_matricule is ' . var_export($moved->previous_matricule, true));
+
+        // Faculty is derived, so the dean of the new faculty now sees the
+        // student and the old one does not. Checked the way the screens do it.
+        $seenBy = fn (int $facultyId) => StudentEnroll::where('id', $subject->id)
+            ->whereHas('program', fn ($q) => $q->where('faculty_id', $facultyId))->exists();
+
+        check('the new faculty\'s lists now include the student',
+            $seenBy((int) $abroad->faculty_id) && !$seenBy((int) $subjectFaculty));
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// ---------------------------------------------------------------------------
+section('Fees reconcile across faculties exactly as within one');
+// ---------------------------------------------------------------------------
+// The money rules are not faculty-aware and must not become so. One move,
+// every rule at once, against two programmes with different fee structures.
+if (!$abroadId) {
+    skip('no programme in another faculty to price against');
+} else {
+    DB::beginTransaction();
+
+    try {
+        $fees = $subject->fees()->orderBy('id')->get();
+
+        if ($fees->count() < 2) {
+            skip('the student needs at least two fees for this');
+        } else {
+            $paid = $fees[0];       // paid against: can only go up
+            $untouched = $fees[1];  // nothing paid: simply replaced
+            $paid->paymentReceipts()->delete();
+            $untouched->paymentReceipts()->delete();
+            $paid->update(['fee_amount' => 150000, 'paid_amount' => 50000, 'discount_amount' => 0, 'fine_amount' => 0, 'status' => 2]);
+            $untouched->update(['fee_amount' => 200000, 'paid_amount' => 0, 'discount_amount' => 0, 'fine_amount' => 0, 'status' => 0]);
+
+            // A category the student has no fee for, which the new programme charges.
+            $missingCategory = DB::table('fees_categories')
+                ->whereNotIn('id', $fees->pluck('category_id'))->value('id');
+
+            // The new programme's structure for the student's semester:
+            // dearer for the paid one, cheaper for the untouched one, plus the
+            // category the student lacks. Anything else the student has is
+            // simply not charged there.
+            ProgramSemesterFee::where('program_id', $abroadId)->where('semester_id', $subject->semester_id)->delete();
+            $structure = [[$paid->category_id, 175000], [$untouched->category_id, 120000]];
+            if ($missingCategory) {
+                $structure[] = [$missingCategory, 10000];
+            }
+            foreach ($structure as [$category, $amount]) {
+                ProgramSemesterFee::create([
+                    'program_id' => $abroadId, 'semester_id' => $subject->semester_id,
+                    'fees_category_id' => $category, 'amount' => $amount, 'status' => 1,
+                ]);
+            }
+
+            $plan = $service->feePlan($subject->fresh(), (int) $abroadId);
+            $byFee = fn ($fee) => $plan->first(fn ($l) => $l['fee'] && (int) $l['fee']->id === (int) $fee->id);
+
+            check('the preview raises the paid fee', optional($byFee($paid))['action'] === 'raise');
+            check('replaces the untouched one', optional($byFee($untouched))['action'] === 'replace');
+            if ($missingCategory) {
+                check('and adds the one the student lacks', $plan->where('action', 'add')->count() === 1);
+            }
+            $others = $fees->slice(2);
+            check('and leaves what the new programme does not charge',
+                $others->every(fn ($f) => optional($byFee($f))['action'] === 'not_charged'),
+                $others->map(fn ($f) => optional($byFee($f))['action'])->implode(','));
+
+            $before = Fee::whereHas('studentEnroll', fn ($q) => $q->where('student_id', $subject->student_id))->count();
+            $result = $service->apply($subject->fresh(), (int) $abroadId, 'test: fees across faculties', null);
+
+            check('the move went ahead', $result['moved'] === true, implode('; ', $result['blockers']));
+
+            $paidAfter = Fee::find($paid->id);
+            $untouchedAfter = Fee::find($untouched->id);
+
+            check('the paid fee is raised to the new programme\'s figure, keeping its payment',
+                abs((float) $paidAfter->fee_amount - 175000) < 0.005 && abs((float) $paidAfter->paid_amount - 50000) < 0.005
+                && (int) $paidAfter->status !== 1,
+                'amount ' . $paidAfter->fee_amount . ', paid ' . $paidAfter->paid_amount . ', status ' . $paidAfter->status);
+
+            check('the untouched fee takes the cheaper figure outright',
+                abs((float) $untouchedAfter->fee_amount - 120000) < 0.005,
+                'amount ' . $untouchedAfter->fee_amount);
+
+            check('what the new programme does not charge is untouched',
+                $others->every(fn ($f) => abs((float) Fee::find($f->id)->fee_amount - (float) $f->fee_amount) < 0.005));
+
+            if ($missingCategory) {
+                $added = Fee::where('student_enroll_id', $subject->id)->where('category_id', $missingCategory)->first();
+                check('the missing fee is raised once, at the new programme\'s amount',
+                    $added && abs((float) $added->fee_amount - 10000) < 0.005
+                    && Fee::whereHas('studentEnroll', fn ($q) => $q->where('student_id', $subject->student_id))->count() === $before + 1,
+                    $added ? 'amount ' . $added->fee_amount : 'nothing was raised');
+            }
+        }
+    } finally {
+        DB::rollBack();
+    }
+
+    // The one rule that is about money already banked, across faculties too.
+    DB::beginTransaction();
+
+    try {
+        $fee = $subject->fees()->orderBy('id')->first();
+        $fee->update(['fee_amount' => 200000, 'paid_amount' => 120000, 'status' => 2]);
+        ProgramSemesterFee::where('program_id', $abroadId)->where('semester_id', $subject->semester_id)->delete();
+        ProgramSemesterFee::create([
+            'program_id' => $abroadId, 'semester_id' => $subject->semester_id,
+            'fees_category_id' => $fee->category_id, 'amount' => 90000, 'status' => 1,
+        ]);
+
+        $service->apply($subject->fresh(), (int) $abroadId, 'test: cheaper faculty', null);
+
+        check('a cheaper programme in another faculty does not lower a paid fee either',
+            abs((float) Fee::find($fee->id)->fee_amount - 200000) < 0.005,
+            'fee_amount is ' . Fee::find($fee->id)->fee_amount);
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// ---------------------------------------------------------------------------
+section('A retired matricule is never handed to somebody else');
+// ---------------------------------------------------------------------------
+// The generator issues max + 1 in a faculty's series. Within a faculty the new
+// number is max + 1 of the same series, so the old one is safely below it.
+// Across faculties the old number leaves its series, the max drops back, and
+// without previous_matricule the next admission into that faculty would be
+// given this student's number - the one on their receipts.
+if (!$abroadId) {
+    skip('no other faculty to retire a number into');
+} else {
+    DB::beginTransaction();
+
+    try {
+        // Make the subject the highest number in their series.
+        $top = Student::generateEnrollmentMatricule($subject->student_id, (int) $subject->program_id, $subject->student->batch_id);
+        StudentEnroll::where('id', $subject->id)->update(['matricule' => $top]);
+        Student::where('id', $subject->student_id)->update(['student_id' => $top]);
+
+        check('the fixture holds the top of its series',
+            substr($top, 0, 8) === substr((string) $subject->matricule, 0, 8), $top . ' vs ' . $subject->matricule);
+
+        $result = $service->apply($subject->fresh(), (int) $abroadId, 'test: retire a number', null);
+
+        check('the student has left the series', $result['moved'] && !str_starts_with($result['matricule'], substr($top, 0, 8)),
+            'now ' . $result['matricule']);
+
+        // What the next admission into the old faculty would be given.
+        $next = Student::generateEnrollmentMatricule($subject->student_id, (int) $subject->program_id, $subject->student->batch_id);
+
+        check('the next number issued in the old series is not the retired one',
+            $next !== $top, 'the generator handed out ' . $next . ' again');
+
+        check('it is the one after it',
+            (int) substr($next, -3) === (int) substr($top, -3) + 1,
+            $top . ' -> ' . $next);
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// ---------------------------------------------------------------------------
+section('The target must run the term the student is in');
+// ---------------------------------------------------------------------------
+// Twenty-seven programmes here are attached to year two only. Moved onto one,
+// a first-year student sits on a semester the programme does not have and
+// vanishes from every screen that lists by the programme's own semesters.
+$yearTwoOnly = Program::where('status', '1')
+    ->where('id', '!=', $subject->program_id)
+    ->whereDoesntHave('semesters', fn ($q) => $q->where('semesters.id', $subject->semester_id))
     ->first();
 
-if (!$elsewhere) {
-    skip('every programme is in the same faculty');
+if (!$yearTwoOnly) {
+    skip('every programme runs the subject\'s semester');
 } else {
-    $reasons = $service->blockers($subject->fresh(), (int) $elsewhere->id);
+    $reasons = $service->blockers($subject->fresh(), (int) $yearTwoOnly->id);
 
-    check('a programme in another faculty is refused',
-        $reasons !== [],
-        'moving to ' . $elsewhere->title . ' was allowed');
-
-    check('and the refusal names both faculties',
-        collect($reasons)->contains(fn ($r) => str_contains($r, 'faculty')),
+    check('a programme without the student\'s semester is refused',
+        collect($reasons)->contains(fn ($r) => str_contains($r, 'does not run')),
         implode(' | ', $reasons));
+
+    check('and the refusal names the semester',
+        collect($reasons)->contains(fn ($r) => str_contains($r, (string) optional($subject->semester)->title)));
 
     DB::beginTransaction();
 
     try {
         $before = StudentEnroll::find($subject->id)->program_id;
-        $result = $service->apply($subject->fresh(), (int) $elsewhere->id, 'test: across faculties', null);
+        $result = $service->apply($subject->fresh(), (int) $yearTwoOnly->id, 'test: no such semester', null);
 
         check('and the move writes nothing',
-            $result['moved'] === false
-            && (int) StudentEnroll::find($subject->id)->program_id === (int) $before);
+            $result['moved'] === false && (int) StudentEnroll::find($subject->id)->program_id === (int) $before);
     } finally {
         DB::rollBack();
     }
 
-    // Same faculty must still be allowed, or the rule has gone too far.
-    $sibling = Program::where('status', '1')
-        ->where('faculty_id', $subjectFaculty)
-        ->where('id', '!=', $subject->program_id)
-        ->first();
-
-    if (!$sibling) {
-        skip('the student\'s faculty has no other programme');
-    } else {
-        check('a programme in the same faculty is not refused on faculty grounds',
-            !collect($service->blockers($subject->fresh(), (int) $sibling->id))
-                ->contains(fn ($r) => str_contains($r, 'same faculty')),
-            'moving within the faculty must stay possible');
-    }
+    check('a programme that runs the term passes this rule',
+        $service->ladderGaps($subject->fresh(), Program::find($targetId)) === []);
 }
 
 $enrollView = (string) file_get_contents($root . '/resources/views/admin/single-enroll/index.blade.php');
 
-check('the dropdown offers only the student\'s own faculty',
-    str_contains($enrollView, '->where(' . "'faculty_id', " . '$pcFaculty)'),
-    'the admin should never be offered a choice the server would refuse');
+check('the dropdown offers other faculties, grouped',
+    str_contains($enrollView, '<optgroup') && str_contains($enrollView, "__('another faculty')")
+    && !str_contains($enrollView, '->where(' . "'faculty_id', " . '$pcFaculty)'),
+    'a choice the server now allows must be offered');
 
 // Matched on the exclusion itself rather than on the variable that holds the
 // enrolment: the variable was renamed when the modal was made safe to render

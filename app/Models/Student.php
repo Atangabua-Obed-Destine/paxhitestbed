@@ -578,14 +578,23 @@ class Student extends Authenticatable
                                                ->whereNotNull('matricule')
                                                ->pluck('matricule')
                                                ->toArray();
-            
+
             // Also check student_id from students table (they might conflict)
             $existingStudentIds = self::where('student_id', 'LIKE', $prefix . '%')
                                       ->pluck('student_id')
                                       ->toArray();
-            
-            // Merge both arrays to check all possible conflicts
-            $allExistingIds = array_merge($existingMatricules, $existingStudentIds);
+
+            // A number retired by a programme change still counts as taken.
+            // A student who moves to another faculty leaves this series, and
+            // without this their old number — already printed on their
+            // receipts — would be handed to the next admission into it.
+            $retiredMatricules = StudentEnroll::where('previous_matricule', 'LIKE', $prefix . '%')
+                                              ->whereNotNull('previous_matricule')
+                                              ->pluck('previous_matricule')
+                                              ->toArray();
+
+            // Merge all arrays to check all possible conflicts
+            $allExistingIds = array_merge($existingMatricules, $existingStudentIds, $retiredMatricules);
             
             $maxNumber = 0;
             foreach ($allExistingIds as $id) {
@@ -615,8 +624,9 @@ class Student extends Authenticatable
             while ($attempts < 100) {
                 $existsInEnrollments = StudentEnroll::where('matricule', $matricule)->exists();
                 $existsInStudents = self::where('student_id', $matricule)->exists();
-                
-                if (!$existsInEnrollments && !$existsInStudents) {
+                $wasRetired = StudentEnroll::where('previous_matricule', $matricule)->exists();
+
+                if (!$existsInEnrollments && !$existsInStudents && !$wasRetired) {
                     break; // Found a unique matricule
                 }
                 

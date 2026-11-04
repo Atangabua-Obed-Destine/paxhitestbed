@@ -519,8 +519,9 @@
             <select class="form-control" name="program" id="pcProgram" required>
               <option value="">{{ __('select') }}</option>
               @php
-                  // The faculty the student is in now. A programme change is
-                  // only possible within it, so nothing else is offered.
+                  // Every other programme, grouped by faculty with the
+                  // student's own faculty first. A move across faculties is
+                  // allowed; the preview says what follows from it.
                   //
                   // $displayEnroll is defined inside the block that renders a
                   // selected student. This modal sits outside it, so on the
@@ -529,17 +530,22 @@
                   // "Undefined variable $displayEnroll".
                   $pcEnrolment = $displayEnroll ?? null;
                   $pcFaculty = optional(optional($pcEnrolment)->program)->faculty_id;
-                  $pcChoices = $pcFaculty
-                      ? \App\Models\Program::where('status', '1')
-                          ->where('faculty_id', $pcFaculty)
+                  $pcChoices = $pcEnrolment
+                      ? \App\Models\Program::with('faculty')->where('status', '1')
                           ->where('id', '!=', optional($pcEnrolment)->program_id)
                           ->orderBy('title')->get()
+                          ->groupBy(fn ($p) => (int) $p->faculty_id)
+                          ->sortBy(fn ($group, $facultyId) => $facultyId === (int) $pcFaculty ? 0 : 1)
                       : collect();
               @endphp
-              @forelse($pcChoices as $pcProgram)
-                <option value="{{ $pcProgram->id }}">{{ $pcProgram->title }}</option>
+              @forelse($pcChoices as $pcFacultyId => $pcGroup)
+                <optgroup label="{{ optional($pcGroup->first()->faculty)->title ?? __('No faculty') }}{{ $pcFacultyId === (int) $pcFaculty ? '' : ' — ' . __('another faculty') }}">
+                  @foreach($pcGroup as $pcProgram)
+                    <option value="{{ $pcProgram->id }}">{{ $pcProgram->title }}</option>
+                  @endforeach
+                </optgroup>
               @empty
-                <option value="" disabled>{{ __('No other programme in this faculty') }}</option>
+                <option value="" disabled>{{ __('No other programme to move to') }}</option>
               @endforelse
             </select>
             <small class="text-muted">{{ __('The preview below updates as soon as you choose.') }}</small>

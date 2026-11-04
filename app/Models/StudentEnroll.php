@@ -16,7 +16,7 @@ class StudentEnroll extends Model
      */
     protected $fillable = [
         'student_id', 'program_id', 'previous_program_id', 'program_change_reason', 'is_program_change',
-        'session_id', 'semester_id', 'section_id', 'status', 'matricule',
+        'session_id', 'semester_id', 'section_id', 'status', 'matricule', 'previous_matricule',
         'religion', 'is_catholic_baptised', 'is_confirmed', 'has_first_communion',
         'created_by', 'updated_by', 'bypass_payment_restriction',
     ];

@@ -47,6 +47,15 @@ use Illuminate\Support\Facades\DB;
  * Fees are collected BY STUDENT, not by enrolment: 62 of 73 students have their
  * first and second instalment on different enrolment rows in different
  * semesters, so a per-enrolment scan finds one and misses the other.
+ *
+ * A move may cross faculties. The faculty is never stored on the student - it
+ * is read through the programme by every screen, report and permission - so
+ * repointing the programme carries the faculty with it. What a cross-faculty
+ * move changes beyond a within-faculty one is exactly two things, and both are
+ * handled: the matricule moves to the new faculty's series (and the retired
+ * number is kept in previous_matricule so it is not reissued to somebody
+ * else), and the target must actually run the term the student is in, since
+ * most programmes outside the student's faculty are attached to year two only.
  */
 class ProgrammeChange
 {
@@ -90,18 +99,26 @@ class ProgrammeChange
             $reasons[] = __('The student is already on this programme.');
         }
 
-        // Within the faculty only. A move across faculties is a different
-        // thing entirely - a different curriculum, a different matricule
-        // series, usually a fresh admission rather than a transfer - and this
-        // screen reconciles fees, not admissions.
-        $current = Program::find($enrolment->program_id);
+        // Across faculties is allowed. It used to be refused here on the
+        // grounds that it is "usually a fresh admission rather than a
+        // transfer"; but the faculty is never stored on the student - it is
+        // read through the programme everywhere - so the move is the same
+        // repointing as any other, and the two things that genuinely differ
+        // are handled: the matricule changes series (generateEnrollmentMatricule
+        // builds the prefix from the target's faculty, and the retired number
+        // is kept so it is not reissued) and the admin is told, in warnings().
 
-        if ($current && $target->faculty_id && $current->faculty_id
-            && (int) $target->faculty_id !== (int) $current->faculty_id) {
-            $reasons[] = __(':target is in :newFaculty, but the student is in :oldFaculty. A programme change is only possible within the same faculty.', [
-                'target' => $target->title,
-                'newFaculty' => optional($target->faculty)->title ?? __('another faculty'),
-                'oldFaculty' => optional($current->faculty)->title ?? __('their faculty'),
+        // The target must actually run the term the student is sitting in.
+        // Twenty-seven programmes here are attached to year two only. Moved
+        // onto one of those, a first-year student sits on a semester their
+        // programme does not have, and disappears from every enrolment screen
+        // that lists by the programme's own semesters.
+        $ladder = $this->ladderGaps($enrolment, $target);
+
+        if ($ladder !== []) {
+            $reasons[] = __(':programme does not run :what the student is enrolled in. Attach it under the programme\'s settings first.', [
+                'programme' => $target->title,
+                'what' => implode(', ', $ladder),
             ]);
         }
 
@@ -189,6 +206,23 @@ class ProgrammeChange
             return $warnings;
         }
 
+        // Leaving the faculty. Nothing here breaks - the faculty is read
+        // through the programme everywhere - but three things follow that the
+        // admin should know before, not after: the matricule moves to the new
+        // faculty's series, the student passes from one dean's list to
+        // another's, and tuition already banked is counted towards the new
+        // faculty in the budget analysis, because that too follows the
+        // programme the student is on now.
+        $current = Program::find($enrolment->program_id);
+
+        if ($current && $target->faculty_id && $current->faculty_id
+            && (int) $target->faculty_id !== (int) $current->faculty_id) {
+            $warnings[] = __('This moves the student from :oldFaculty to :newFaculty. Their matricule changes to the :newFaculty series, they leave the old faculty\'s lists for the new one\'s, and any tuition already paid counts towards :newFaculty in the budget analysis from now on.', [
+                'oldFaculty' => optional($current->faculty)->title ?? __('their faculty'),
+                'newFaculty' => optional($target->faculty)->title ?? __('the new faculty'),
+            ]);
+        }
+
         if (!DB::table('program_subject')->where('program_id', $newProgramId)->exists()) {
             $warnings[] = __(':programme has no subject list configured, so no course can be checked against it.', [
                 'programme' => $target->title,
@@ -202,6 +236,38 @@ class ProgrammeChange
         }
 
         return $warnings;
+    }
+
+    /**
+     * Which of the enrolment's session, semester and section the target
+     * programme is not attached to, named for the admin.
+     *
+     * @return array<int, string>
+     */
+    public function ladderGaps(StudentEnroll $enrolment, Program $target): array
+    {
+        $gaps = [];
+
+        if ($enrolment->session_id
+            && !DB::table('program_session')->where('program_id', $target->id)
+                ->where('session_id', $enrolment->session_id)->exists()) {
+            $gaps[] = __('session :name', ['name' => optional($enrolment->session)->title ?? $enrolment->session_id]);
+        }
+
+        if ($enrolment->semester_id
+            && !DB::table('program_semester')->where('program_id', $target->id)
+                ->where('semester_id', $enrolment->semester_id)->exists()) {
+            $gaps[] = __('semester :name', ['name' => optional($enrolment->semester)->title ?? $enrolment->semester_id]);
+        }
+
+        if ($enrolment->semester_id && $enrolment->section_id
+            && !DB::table('program_semester_sections')->where('program_id', $target->id)
+                ->where('semester_id', $enrolment->semester_id)
+                ->where('section_id', $enrolment->section_id)->exists()) {
+            $gaps[] = __('section :name', ['name' => optional($enrolment->section)->title ?? $enrolment->section_id]);
+        }
+
+        return $gaps;
     }
 
     /**
@@ -454,7 +520,12 @@ class ProgrammeChange
             $enrolment->program_change_reason = $reason;
             $enrolment->program_id = $newProgramId;
 
-            if ($matricule) {
+            if ($matricule && $matricule !== $enrolment->matricule) {
+                // The old number is kept so the generator never issues it
+                // again. Within a faculty it could not anyway; across one the
+                // old series' max drops back and the next admission into it
+                // would otherwise be given this student's number.
+                $enrolment->previous_matricule = $enrolment->matricule;
                 $enrolment->matricule = $matricule;
             }
 
