@@ -300,15 +300,7 @@ class ProgrammeChange
         $plan = collect();
 
         foreach ($this->feesOf($enrolment) as $fee) {
-            $semesterId = optional($fee->studentEnroll)->semester_id;
-
-            $target = $semesterId
-                ? ProgramSemesterFee::where('program_id', $newProgramId)
-                    ->where('semester_id', $semesterId)
-                    ->where('fees_category_id', $fee->category_id)
-                    ->where('status', 1)
-                    ->first()
-                : null;
+            $target = $this->targetChargeFor($fee, (int) $enrolment->program_id, $newProgramId);
 
             $current = round((float) ($fee->fee_amount ?? 0), 2);
             $untouched = FeePaymentState::isUntouched($fee);
@@ -361,6 +353,55 @@ class ProgrammeChange
         return $plan;
     }
 
+    /**
+     * What the new programme charges for this fee's category, at the term the
+     * fee belongs to.
+     *
+     * The term is NOT simply the semester of the enrolment the fee hangs on.
+     * Eleven of 73 students carry their second instalment on their
+     * first-semester enrolment row - the auto-assign raised it there, noting
+     * "for SECOND SEMESTER" - while every programme configures the second
+     * instalment under semester two. Looking the target up at the enrolment's
+     * semester found nothing and the preview said "Nursing does not charge
+     * Second Installment", beside a fee screen showing that it does, at
+     * 200,000. The student would have kept the old programme's 150,000.
+     *
+     * So: the enrolment's semester first, since that is right whenever the
+     * fee sits where it was configured; failing that, the semester at which
+     * the programme being LEFT configures this category, which is where the
+     * fee actually came from; failing that, the one semester at which the
+     * target charges it, if there is exactly one. Only then is it genuinely
+     * not charged.
+     */
+    protected function targetChargeFor(Fee $fee, int $oldProgramId, int $newProgramId): ?ProgramSemesterFee
+    {
+        $charges = ProgramSemesterFee::where('program_id', $newProgramId)
+            ->where('fees_category_id', $fee->category_id)
+            ->where('status', 1)
+            ->get();
+
+        if ($charges->isEmpty()) {
+            return null;
+        }
+
+        $enrolmentSemester = (int) optional($fee->studentEnroll)->semester_id;
+
+        if ($hit = $charges->firstWhere('semester_id', $enrolmentSemester)) {
+            return $hit;
+        }
+
+        $configuredAt = ProgramSemesterFee::where('program_id', $oldProgramId)
+            ->where('fees_category_id', $fee->category_id)
+            ->where('status', 1)
+            ->pluck('semester_id');
+
+        if ($configuredAt->count() === 1 && ($hit = $charges->firstWhere('semester_id', (int) $configuredAt->first()))) {
+            return $hit;
+        }
+
+        return $charges->count() === 1 ? $charges->first() : null;
+    }
+
     /** Fees the new programme charges which the student does not have at all. */
     protected function missingFees(StudentEnroll $enrolment, int $newProgramId)
     {
@@ -379,9 +420,12 @@ class ProgrammeChange
             ->get();
 
         foreach ($configured as $config) {
+            // By category alone. The student's fee for a category may hang
+            // on a different enrolment row than the one the category is
+            // configured under (see targetChargeFor), and matching on the
+            // semester too would raise a second charge for the same thing.
             $already = $existing->first(function ($fee) use ($config) {
-                return (int) $fee->category_id === (int) $config->fees_category_id
-                    && (int) optional($fee->studentEnroll)->semester_id === (int) $config->semester_id;
+                return (int) $fee->category_id === (int) $config->fees_category_id;
             });
 
             if ($already) {

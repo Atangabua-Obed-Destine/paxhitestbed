@@ -625,11 +625,15 @@ if (!$abroadId) {
             $missingCategory = DB::table('fees_categories')
                 ->whereNotIn('id', $fees->pluck('category_id'))->value('id');
 
-            // The new programme's structure for the student's semester:
-            // dearer for the paid one, cheaper for the untouched one, plus the
-            // category the student lacks. Anything else the student has is
-            // simply not charged there.
-            ProgramSemesterFee::where('program_id', $abroadId)->where('semester_id', $subject->semester_id)->delete();
+            // The new programme's structure: dearer for the paid one, cheaper
+            // for the untouched one, plus the category the student lacks.
+            // Anything else the student has is charged NOWHERE on the target
+            // - at any semester, since a charge is found at the term the fee
+            // came from, not only on the row it hangs on.
+            ProgramSemesterFee::where('program_id', $abroadId)
+                ->where(fn ($q) => $q->where('semester_id', $subject->semester_id)
+                    ->orWhereIn('fees_category_id', $fees->pluck('category_id')))
+                ->delete();
             $structure = [[$paid->category_id, 175000], [$untouched->category_id, 120000]];
             if ($missingCategory) {
                 $structure[] = [$missingCategory, 10000];
@@ -692,7 +696,7 @@ if (!$abroadId) {
     try {
         $fee = $subject->fees()->orderBy('id')->first();
         $fee->update(['fee_amount' => 200000, 'paid_amount' => 120000, 'status' => 2]);
-        ProgramSemesterFee::where('program_id', $abroadId)->where('semester_id', $subject->semester_id)->delete();
+        ProgramSemesterFee::where('program_id', $abroadId)->where('fees_category_id', $fee->category_id)->delete();
         ProgramSemesterFee::create([
             'program_id' => $abroadId, 'semester_id' => $subject->semester_id,
             'fees_category_id' => $fee->category_id, 'amount' => 90000, 'status' => 1,
@@ -703,6 +707,71 @@ if (!$abroadId) {
         check('a cheaper programme in another faculty does not lower a paid fee either',
             abs((float) Fee::find($fee->id)->fee_amount - 200000) < 0.005,
             'fee_amount is ' . Fee::find($fee->id)->fee_amount);
+    } finally {
+        DB::rollBack();
+    }
+}
+
+// ---------------------------------------------------------------------------
+section('A fee is priced at the term it belongs to, not the row it hangs on');
+// ---------------------------------------------------------------------------
+// Eleven of 73 students carry their second instalment on their first-semester
+// enrolment row, while every programme configures it under semester two. The
+// preview looked the target up at the row's semester, found nothing, and said
+// "does not charge" beside a fee screen that plainly showed the charge.
+if (!$abroadId) {
+    skip('no programme in another faculty to price against');
+} else {
+    DB::beginTransaction();
+
+    try {
+        $fee = $subject->fees()->orderBy('id')->first();
+        $fee->paymentReceipts()->delete();
+        $fee->update(['fee_amount' => 150000, 'paid_amount' => 0, 'discount_amount' => 0, 'fine_amount' => 0, 'status' => 0]);
+
+        // Another semester of the ladder, where the category is configured
+        // by both programmes - but the fee sits on the subject's own row.
+        $otherSemester = DB::table('program_semester')->where('program_id', $abroadId)
+            ->where('semester_id', '!=', $subject->semester_id)->value('semester_id');
+
+        if (!$otherSemester) {
+            skip('the target runs only one semester');
+        } else {
+            foreach ([(int) $subject->program_id => 150000, (int) $abroadId => 200000] as $programme => $amount) {
+                ProgramSemesterFee::where('program_id', $programme)->where('fees_category_id', $fee->category_id)->delete();
+                ProgramSemesterFee::create([
+                    'program_id' => $programme, 'semester_id' => $otherSemester,
+                    'fees_category_id' => $fee->category_id, 'amount' => $amount, 'status' => 1,
+                ]);
+            }
+
+            $plan = $service->feePlan($subject->fresh(), (int) $abroadId);
+            $line = $plan->first(fn ($l) => $l['fee'] && (int) $l['fee']->id === (int) $fee->id);
+
+            check('the new programme\'s charge is found at the term the fee came from',
+                $line && $line['action'] === 'replace' && abs($line['new'] - 200000) < 0.005,
+                $line ? 'action ' . $line['action'] . ', new ' . $line['new'] : 'no line');
+
+            check('and it is not also proposed as a missing fee',
+                $plan->where('action', 'add')->where('category', optional($fee->category)->title)->isEmpty(),
+                'that would charge the student twice for one thing');
+
+            $service->apply($subject->fresh(), (int) $abroadId, 'test: term not row', null);
+
+            check('after the move the fee carries the new programme\'s figure',
+                abs((float) Fee::find($fee->id)->fee_amount - 200000) < 0.005,
+                'fee_amount is ' . Fee::find($fee->id)->fee_amount);
+
+            // Teeth for "genuinely not charged": take the category away from
+            // the target entirely and the line must say so.
+            ProgramSemesterFee::where('program_id', $abroadId)->where('fees_category_id', $fee->category_id)->delete();
+            $line = $service->feePlan($subject->fresh(), (int) $abroadId)
+                ->first(fn ($l) => $l['fee'] && (int) $l['fee']->id === (int) $fee->id);
+
+            check('a category the target charges nowhere is still reported as not charged',
+                $line && $line['action'] === 'not_charged',
+                $line ? 'action ' . $line['action'] : 'no line');
+        }
     } finally {
         DB::rollBack();
     }
