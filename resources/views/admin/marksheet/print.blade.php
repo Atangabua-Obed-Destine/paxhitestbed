@@ -15,10 +15,23 @@
 
 
 <script type="text/javascript">
-$(document).ready(function() {
+(function () {
     "use strict";
-    $.print(".printable");
-});
+    // Print once the page has fully loaded, not on DOM-ready. The letterhead's
+    // crest is an image fetched after the markup, and a print dialog opened
+    // before it arrived takes its preview from a letterhead with no logo.
+    // window's load event waits for every image; the fonts are waited for
+    // too, so the preview is set in the face the sheet was designed in.
+    function printNow() {
+        var fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+        fonts.then(function () { window.print(); }, function () { window.print(); });
+    }
+    if (document.readyState === 'complete') {
+        printNow();
+    } else {
+        window.addEventListener('load', printNow);
+    }
+})();
 </script>
 
 </body>

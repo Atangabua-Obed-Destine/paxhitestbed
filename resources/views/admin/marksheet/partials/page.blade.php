@@ -175,7 +175,7 @@
         <div class="tp-info-section">
             <div class="tp-info-grid">
                 <div class="tp-info-row">
-                    <div class="tp-info-cell tp-info-label">{{ __('field_matricule') }}</div>
+                    <div class="tp-info-cell tp-info-label">{{ __('Matriculation Number') }}</div>
                     <div class="tp-info-cell tp-info-value"><span class="tp-matricule">{{ $currentEnroll->matricule ?? $row->student_id }}</span></div>
                     <div class="tp-info-cell tp-info-label">{{ __('field_program') }}</div>
                     <div class="tp-info-cell tp-info-value">{{ $currentEnroll->program->title ?? $row->program->title ?? 'N/A' }}</div>
@@ -222,8 +222,8 @@
                         @elseif($row->gender == 3) {{ __('gender_other') }}
                         @endif
                     </div>
-                    <div class="tp-info-cell tp-info-label">{{ __('field_starting_year') }}</div>
-                    <div class="tp-info-cell tp-info-value">{{ $starting_year }}</div>
+                    <div class="tp-info-cell tp-info-label">{{ __('Academic Year') }}</div>
+                    <div class="tp-info-cell tp-info-value">{{ $starting_year }}@if($ending_year && $ending_year !== $starting_year) &ndash; {{ $ending_year }}@endif</div>
                 </div>
                 <div class="tp-info-row">
                     <div class="tp-info-cell tp-info-label">{{ __('field_dob') }}</div>
@@ -416,46 +416,50 @@
         @include('admin.marksheet.partials.totals')
         @endif
 
-        {{-- Signatures --}}
-        <div class="tp-footer-section">
-            <div class="tp-signatures">
-                <div class="tp-sig-block">
-                    <div class="tp-sig-line"></div>
-                    <div class="tp-sig-label">{!! $marksheet->footer_left !!}</div>
-                </div>
-                <div class="tp-sig-block">
-                    <div class="tp-sig-line"></div>
-                    <div class="tp-sig-label">{!! $marksheet->footer_center !!}</div>
-                </div>
-                <div class="tp-sig-block">
-                    <div class="tp-sig-line"></div>
-                    <div class="tp-sig-label">{!! $marksheet->footer_right !!}</div>
-                </div>
-            </div>
-        </div>
+        {{-- The foot of the record: the verification at the left, the
+             Registrar's signature at the right, on one band.
 
-        {{-- Verification --}}
-        @if(!empty($transcriptRecord))
-        <div class="tp-verify">
-            <div class="tp-verify-qr">
-                {{-- SVG, because the PNG back end needs the imagick extension
-                     and this has to work on any server. --}}
-                {!! SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
-                        ->size(220)->margin(0)
-                        ->errorCorrection('M')
-                        ->generate($transcriptRecord->verification_url) !!}
-            </div>
-            <div class="tp-verify-text">
-                <strong>{{ __('Verify this transcript') }}</strong>
-                {{ __('Scan the code, or visit') }}
-                {{ $transcriptRecord->verification_url }}<br>
-                {{ __('Reference') }}:
-                <span class="tp-verify-code">{{ $transcriptRecord->verification_code }}</span>
-                &middot; {{ __('Issued') }}
-                {{ $transcriptRecord->issued_at?->format('d/m/Y') }}
+             The Registrar signs the transcript and nobody else does, so there
+             is one rule and one caption. The three captioned rules that were
+             here (left, centre, right -- the footer captions under Transcript
+             -> Marksheet Setting, which are no longer read) took a band of
+             their own above the verification, and that second band was what
+             pushed a two-semester transcript's foot onto a second sheet.
+             One signatory needs a third of the width, so the verification
+             takes the rest beside it. --}}
+        <div class="tp-footer-section">
+            <div class="tp-foot">
+                @if(!empty($transcriptRecord))
+                <div class="tp-verify">
+                    <div class="tp-verify-qr">
+                        {{-- SVG, because the PNG back end needs the imagick extension
+                             and this has to work on any server. --}}
+                        {!! SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
+                                ->size(220)->margin(0)
+                                ->errorCorrection('M')
+                                ->generate($transcriptRecord->verification_url) !!}
+                    </div>
+                    <div class="tp-verify-text">
+                        <strong>{{ __('Verify this transcript') }}</strong>
+                        {{ __('Scan the code, or visit') }}
+                        {{ $transcriptRecord->verification_url }}<br>
+                        {{ __('Reference') }}:
+                        <span class="tp-verify-code">{{ $transcriptRecord->verification_code }}</span>
+                        &middot; {{ __('Issued') }}
+                        {{ $transcriptRecord->issued_at?->format('d/m/Y') }}
+                    </div>
+                </div>
+                @else
+                <div class="tp-verify"></div>
+                @endif
+                <div class="tp-signatures">
+                    <div class="tp-sig-block">
+                        <div class="tp-sig-line"></div>
+                        <div class="tp-sig-label">{{ __('Registrar') }}</div>
+                    </div>
+                </div>
             </div>
         </div>
-        @endif
 
         {{-- End marker --}}
         <div class="tp-end-marker">End of Transcript</div>

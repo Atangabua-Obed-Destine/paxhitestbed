@@ -91,6 +91,14 @@
          the middle of a full-width band - the letterhead stopped reading as a
          letterhead. The space it was buying is found in the margins instead. */
       width: 100%;
+      /* Inside the paper's margins. The page prints edge to edge (@page margin
+         is 0, so the watermark can be placed) and the record below keeps 36px
+         of side padding, but the letterhead had none: the name, address and
+         crest ran to the top and to both edges of the sheet. The sides now
+         line up with the record's, and the top is clear of the printer's
+         unprintable strip. The letterhead is the sheet's repeated <thead>, so
+         every page gets this top margin, not only the first. */
+      padding: 8mm 36px 0 36px;
     }
 
     /* --- Letterhead background --- */
@@ -111,9 +119,8 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-top: 10px;
-      padding-top: 7px;
-      border-top: 1px solid #ccc;
+      flex: 1 1 auto;
+      min-width: 0;
     }
     /* 70px still scans reliably at this error-correction level; the code is
        only carrying a short verification URL. */
@@ -582,17 +589,25 @@
       text-transform: uppercase;
       letter-spacing: 1px;
       color: #1a1a1a;
+      text-align: center;
       margin-bottom: 5px;
       border-bottom: 1px solid #999;
       padding-bottom: 3px;
     }
+    /* Centred under its title. The entries used to take a fixed share of the
+       width each, which filled the row from the left and left each grade
+       pushed to the left of its own cell; they now take the width they need
+       and the row is centred, so a scale of five grades or of ten sits in the
+       middle of the page either way. */
     .tp-grade-scale-grid {
       display: flex;
       flex-wrap: wrap;
-      gap: 0;
+      justify-content: center;
+      column-gap: 14px;
+      row-gap: 0;
     }
     .tp-grade-scale-item {
-      flex: 0 0 20%;
+      flex: 0 0 auto;
       display: flex;
       align-items: baseline;
       gap: 4px;
@@ -610,21 +625,37 @@
       font-weight: 700;
     }
 
-    /* --- Footer / Signatures --- */
+    /* --- The foot: verification and signature on one band ---
+       One signatory, the Registrar, so one rule, set at the right where the
+       issuing officer signs and stamps; the verification code sits at the
+       left of the same band. They were two bands, three signature rules
+       across the page and the verification underneath, and the second band
+       was what carried a two-semester transcript's foot onto a second sheet.
+       Side by side, the clear space to sign in is above the rule as before,
+       and the band is only as tall as the taller of the two. */
     .tp-footer-section {
       margin-top: 12px;
       page-break-inside: avoid;
     }
-    /* Still a clear hand's width above the rule to sign in, but 50px left
-       13mm of empty page that the marks needed. */
-    .tp-signatures {
+    .tp-foot {
       display: flex;
       justify-content: space-between;
-      margin-top: 28px;
+      align-items: flex-end;
+      gap: 24px;
+      margin-top: 10px;
+      padding-top: 7px;
+      border-top: 1px solid #ccc;
     }
+    .tp-signatures {
+      display: flex;
+      justify-content: flex-end;
+      flex: 0 0 36%;
+    }
+    /* Still a clear hand's width above the rule to sign in and set a stamp. */
     .tp-sig-block {
       text-align: center;
-      width: 30%;
+      width: 100%;
+      padding-top: 46px;
     }
     .tp-sig-line {
       border-top: 1.5px solid #1a1a1a;
@@ -692,8 +723,8 @@
        room for furniture is the wrong trade. Everything that is NOT the marks
        is tightened instead, and what that frees is given to the signatures. */
 
-    /* The scale fits one row of eight rather than two of five. */
-    .tp-grade-scale-item { flex: 0 0 12.5%; padding: 1px 0; font-size: 8.5px; }
+    /* One row, centred; the entries are sized to their text (see above). */
+    .tp-grade-scale-item { padding: 1px 0; font-size: 8.5px; }
     .tp-grade-scale-top { margin-bottom: 2px; }
     .tp-grade-scale-title { margin-bottom: 2px; padding-bottom: 1px; }
 
@@ -756,9 +787,9 @@
     .tp-records-table tbody td { padding: 0.5px 4px; }
 
     /* What all of the above bought, spent where it was wanted: a clear band
-       to sign across and set a stamp in, above each rule. */
+       to sign across and set a stamp in, above the rule. */
     .tp-footer-section { margin-top: 6px; }
-    .tp-signatures { margin-top: 62px; }
+    .tp-sig-block { padding-top: 62px; }
 @endif
 
     </style>
