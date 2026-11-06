@@ -5,7 +5,7 @@
 @push('styles')
 <style>
     .kiosk-container {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background-color: #eef1f5;
         min-height: 100vh;
         padding: 20px;
     }
@@ -30,7 +30,7 @@
     }
     .session-card.active {
         border: 3px solid #28a745;
-        background: linear-gradient(145deg, #f0fff4, #ffffff);
+        background: #f6fcf8;
     }
     .session-card.pending {
         border-left: 5px solid #ffc107;
@@ -43,10 +43,7 @@
         border-left: 5px solid #dc3545;
         opacity: 0.6;
     }
-    .session-card.joint-class {
-        border-left: 5px solid #17a2b8;
-        background: linear-gradient(145deg, #f0f9ff, #ffffff);
-    }
+    /* A joint class is marked by its "Joint Class" chip; the left stripe stays the status colour. */
     .session-card.joint-class .joint-class-badge {
         border-bottom: 1px dashed #dee2e6;
         padding-bottom: 8px;
@@ -145,14 +142,14 @@
         100% { background: transparent; }
     }
     .btn-start-class {
-        background: linear-gradient(135deg, #28a745, #20c997);
+        background: #28a745;
         border: none;
         padding: 12px 30px;
         font-size: 1.1rem;
         border-radius: 8px;
     }
     .btn-end-class {
-        background: linear-gradient(135deg, #dc3545, #c82333);
+        background: #dc3545;
         border: none;
         padding: 12px 30px;
         font-size: 1.1rem;
@@ -181,7 +178,7 @@
         position: relative;
     }
     .activity-tab.active {
-        color: #667eea;
+        color: #04a9f5;
     }
     .activity-tab.active::after {
         content: '';
@@ -190,7 +187,7 @@
         left: 0;
         right: 0;
         height: 3px;
-        background: linear-gradient(135deg, #667eea, #764ba2);
+        background: #04a9f5;
         border-radius: 2px;
     }
     .activity-tab .badge {
@@ -209,14 +206,14 @@
         border-radius: 10px;
     }
     .chat-message-lecturer.from-lecturer {
-        background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+        background: #eaf5fe;
         border-left: 3px solid #2196f3;
     }
     .chat-avatar-sm {
         width: 35px;
         height: 35px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #667eea, #764ba2);
+        background: #5b6b82;
         color: white;
         display: flex;
         align-items: center;
@@ -226,7 +223,7 @@
         flex-shrink: 0;
     }
     .chat-avatar-sm.lecturer {
-        background: linear-gradient(135deg, #2196f3, #1976d2);
+        background: #04a9f5;
     }
     .lecturer-chat-input {
         border-top: 1px solid #eee;
@@ -308,6 +305,435 @@
         margin-bottom: 15px;
         opacity: 0.5;
     }
+
+    /* ==================================================================
+       Alignment & spacing — layout only, colours unchanged.
+       Spacing scale: 4 · 8 · 12 · 16 · 24 px.
+       ================================================================== */
+
+    /* Bootstrap 4 helpers this page (and its script) still uses. The app
+       runs Bootstrap 5, where they no longer exist, so icons sat glued to
+       their labels and "block" buttons were only as wide as their text. */
+    .kiosk-container .mr-1, .kiosk-ui .mr-1 { margin-right: 4px !important; }
+    .kiosk-container .mr-2, .kiosk-ui .mr-2 { margin-right: 8px !important; }
+    .kiosk-container .ml-1, .kiosk-ui .ml-1 { margin-left: 4px !important; }
+    .kiosk-container .ml-2, .kiosk-ui .ml-2 { margin-left: 8px !important; }
+    .kiosk-container .text-right, .kiosk-ui .text-right { text-align: right !important; }
+    .kiosk-container .btn-block, .kiosk-ui .btn-block { display: block; width: 100%; }
+    .kiosk-container .input-group-append { display: flex; }
+
+    .kiosk-container { padding: 24px; }
+
+    /* Header */
+    .kiosk-header { padding: 16px 24px; margin-bottom: 24px; }
+    .kiosk-header h2 {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 24px;
+        margin-bottom: 4px !important;
+    }
+    .kiosk-header h2 i { margin: 0 !important; }
+    .kiosk-header-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+    }
+    .kiosk-header-right .time-display { line-height: 1.2; font-variant-numeric: tabular-nums; }
+
+    /* Column headings: the three columns start level */
+    .kiosk-col-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 24px;
+        margin: 0 0 16px;
+        color: #fff;
+        font-size: 16px;
+    }
+    .kiosk-col-subtitle { margin-top: 24px; font-size: 14px; }
+
+    /* Headings inside cards */
+    .kiosk-card-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 16px;
+    }
+
+    /* Session cards */
+    .session-card { padding: 16px; margin-bottom: 16px; }
+    .session-card .session-main { display: flex; align-items: flex-start; gap: 16px; }
+    .session-card .session-info { flex: 1 1 auto; min-width: 0; }
+    .session-card .session-info h6 { line-height: 1.35; }
+    .session-card .session-action { flex: none; }
+    .session-card .session-action .btn { white-space: nowrap; }
+    .session-card .session-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .session-card .joint-class-badge { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px !important; }
+    .session-card .joint-class-badge .ml-1,
+    .session-card .joint-class-badge .ml-2 { margin-left: 0 !important; }
+    .session-card.joint-class .joint-sessions-list { margin: 16px -16px -16px; padding: 12px 16px 16px; border-radius: 0 0 15px 15px; }
+
+    /* Program short codes on joint classes. These were badge-light, which
+       this theme draws white on white, so the programs could not be read. */
+    .program-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .program-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        border: 1px solid #e3e6ea;
+        border-radius: 4px;
+        background: #f8f9fa;
+        color: #495057;
+        font-size: 11px;
+        line-height: 16px;
+        white-space: nowrap;
+    }
+
+    /* One scan button per program, in a wrapping grid */
+    .joint-scan-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+    .joint-scan-buttons .btn { margin: 0; white-space: nowrap; }
+
+    /* Middle column */
+    .scanner-section { padding: 24px; }
+    #activeSessionTitle { line-height: 1.35; margin-bottom: 8px; }
+    #activeSessionTime .badge { margin: 0 4px 4px 0 !important; }
+    #reader { margin-bottom: 16px !important; }
+    #scannerControls { margin-bottom: 24px !important; }
+    #scannerControls .btn { margin: 0 4px; }
+    .stats-card { padding: 16px; height: 100%; }
+    #endSessionBtn { display: inline-flex; align-items: center; gap: 8px; }
+    #endSessionBtn i { margin: 0 !important; }
+
+    /* Right column */
+    .logbook-form { padding: 16px; }
+    .logbook-form .form-group { margin-bottom: 12px; }
+    .logbook-form label { margin-bottom: 4px; }
+    #studentListSection { margin-bottom: 16px !important; }
+    .kiosk-side-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 24px 16px;
+        text-align: center;
+        color: #6c757d;
+    }
+    .kiosk-side-placeholder i { font-size: 2rem; opacity: .5; }
+    .student-item { gap: 12px; padding: 8px 12px; }
+    .student-item > div:first-child { min-width: 0; }
+    .student-item > div:last-child { flex: none; }
+    .program-header { padding: 8px 12px; }
+
+    .activity-section { padding: 16px; margin-top: 16px; }
+    .activity-tabs { margin-bottom: 12px; }
+    .activity-tab {
+        flex: 1 1 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-width: 0;
+        padding: 8px 2px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .activity-tab .badge { margin-left: 0; font-size: 10px; padding: 2px 5px; }
+    .lecturer-chat-input { padding-top: 12px; }
+
+    @media (max-width: 991.98px) {
+        .kiosk-container { padding: 16px; }
+        .kiosk-header-right { align-items: flex-start; margin-top: 12px; }
+        .col-lg-5 .kiosk-lane,
+        .col-lg-3 .kiosk-lane { margin-top: 16px; }
+    }
+
+    /* ==================================================================
+       Design — a classroom console. Same layout, same behaviour.
+       A calm light surface with a faint dot grid (graph paper), a dark
+       console bar, white cards with a status stripe, and a camera
+       viewfinder. No gradients; colour only where it means something.
+       ================================================================== */
+    .kiosk-container {
+        --k-ink: #1e2a3b;          /* console navy */
+        --k-text: #1f2937;
+        --k-muted: #64748b;
+        --k-line: #e3e8ef;
+        --k-blue: #04a9f5;         /* the theme's accent */
+        --k-green: #22a55b;
+        --k-amber: #f0ad4e;
+        --k-red: #dc3545;
+        --k-grey: #94a3b8;
+        --k-head: #5b4bb7;         /* this screen's purple, solid */
+        --k-purple: #7c5cc4;
+        background: #f6f8fb;       /* plain, near-white */
+        border-radius: 12px;
+    }
+
+    /* Header bar */
+    .kiosk-header {
+        background: var(--k-head);
+        color: #fff;
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(91, 75, 183, .25);
+    }
+    .kiosk-header h2 { color: #fff; font-weight: 600; letter-spacing: .01em; }
+    .kiosk-header h2 i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, .16);
+        color: #fff;
+        font-size: 20px;
+    }
+    .kiosk-header .text-muted { color: rgba(255, 255, 255, .8) !important; }
+    .kiosk-header .time-display {
+        padding: 4px 14px;
+        border-radius: 8px;
+        background: #fff;
+        color: var(--k-head);
+        font-size: 1.4rem;
+        letter-spacing: .04em;
+    }
+    .kiosk-header .btn-outline-secondary {
+        border-color: rgba(255, 255, 255, .3);
+        color: #fff;
+        background: transparent;
+    }
+    .kiosk-header .btn-outline-secondary:hover { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .5); color: #fff; }
+
+    /* Column headings: a coloured icon chip per column */
+    .kiosk-col-title {
+        gap: 10px;
+        color: #1f2937;
+        font-size: 15px;
+        font-weight: 600;
+    }
+    .kiosk-col-title i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: #fff4e0;
+        color: #d98a12;
+        font-size: 14px;
+    }
+    .lane-attendance .kiosk-col-title i { background: #e3f6ec; color: var(--k-green); }
+    .lane-details .kiosk-col-title i { background: #e4f4fe; color: #0b8fd0; }
+    .kiosk-col-subtitle { font-size: 14px; }
+    .kiosk-col-subtitle i { background: #efe9fb !important; color: var(--k-purple) !important; }
+
+    /* Lanes: each column is a panel that holds its heading and its cards,
+       so the screen reads as three clear sections. */
+    .kiosk-lane {
+        height: 100%;
+        padding: 0 16px 16px;
+        background: #edf1f7;
+        border: 1px solid #dde4ee;
+        border-top: 4px solid #f0ad4e;
+        border-radius: 14px;
+    }
+    .kiosk-lane.lane-attendance { border-top-color: var(--k-green); }
+    .kiosk-lane.lane-details { border-top-color: #0b8fd0; }
+    .kiosk-lane > .kiosk-col-title {
+        margin: 0 -16px 16px;
+        padding: 12px 16px;
+        background: #fff;
+        border-bottom: 1px solid #dde4ee;
+        border-radius: 10px 10px 0 0;
+    }
+    .kiosk-lane > .kiosk-col-subtitle {
+        margin: 24px 0 12px;
+        padding: 0;
+        background: none;
+        border: 0;
+    }
+    .kiosk-lane-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: auto;
+        padding: 2px 10px;
+        border-radius: 999px;
+        background: #eef1f5;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 20px;
+    }
+    .lane-classes .kiosk-lane-pill { background: #fff4e0; color: #b9700a; }
+    .kiosk-lane-pill.is-live { background: #e3f6ec; color: #1b8a4b; }
+    .kiosk-lane-pill.is-live::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--k-green);
+        animation: kiosk-live 1.6s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) { .kiosk-lane-pill.is-live::before { animation: none; } }
+    .kiosk-lane .session-card:last-of-type { margin-bottom: 0; }
+
+    /* Cards: white, fine border, quiet shadow */
+    .session-card,
+    .scanner-section,
+    .logbook-form,
+    .activity-section {
+        border: 1px solid var(--k-line);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .05);
+    }
+    .session-card { transition: box-shadow .15s ease, border-color .15s ease; }
+    .session-card:hover { transform: none; box-shadow: 0 4px 12px rgba(16, 24, 40, .08); }
+    .session-card h6 { color: var(--k-text); font-weight: 600; }
+
+    /* Status stripe */
+    .session-card.pending { border-left: 4px solid var(--k-amber); }
+    .session-card.in_progress {
+        border-left: 4px solid var(--k-green);
+        background: #f6fcf8;
+        box-shadow: 0 0 0 1px #bfe6cc, 0 4px 12px rgba(34, 165, 91, .08);
+    }
+    .session-card.completed { border-left: 4px solid var(--k-grey); opacity: 1; }
+    .session-card.completed h6 { color: #475569; }
+    .session-card.cancelled { border-left: 4px solid var(--k-red); opacity: .7; }
+    .session-card.joint-class .joint-class-badge { border-bottom-color: var(--k-line); }
+    .session-card.joint-class .joint-sessions-list { background: #f8fafc; border-top: 1px solid var(--k-line); }
+
+    /* "Live" dot on the class in progress */
+    .session-card.in_progress .badge-success { display: inline-flex; align-items: center; gap: 5px; }
+    .session-card.in_progress .badge-success::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #fff;
+        animation: kiosk-live 1.6s ease-in-out infinite;
+    }
+    @keyframes kiosk-live { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+    @media (prefers-reduced-motion: reduce) {
+        .session-card.in_progress .badge-success::before { animation: none; }
+    }
+
+    /* Add Extra Class: a dashed "add" tile in the extra-class purple */
+    .kiosk-add-btn {
+        padding: 12px 16px;
+        border: 1px dashed #b9a6e6;
+        border-radius: 12px;
+        background: #f6f2fd;
+        color: var(--k-purple);
+        font-weight: 500;
+    }
+    .kiosk-add-btn:hover,
+    .kiosk-add-btn:focus { border-style: solid; border-color: var(--k-purple); background: #efe9fb; color: #5e40a8; }
+
+    /* Camera viewfinder */
+    .kiosk-viewfinder {
+        position: relative;
+        max-width: 500px;
+        margin: 0 auto 16px;
+        padding: 12px;
+        border-radius: 12px;
+        background: var(--k-ink);
+    }
+    .kiosk-viewfinder #reader {
+        max-width: none;
+        min-height: 280px;
+        margin: 0 !important;
+        border-radius: 8px;
+        background: #263347;
+        color: #cbd5e1;
+        overflow: hidden;
+    }
+    .kiosk-viewfinder #reader:empty::before {
+        content: "Camera preview appears here";
+        font-size: 13px;
+        color: #94a3b8;
+    }
+    .vf-corner {
+        position: absolute;
+        z-index: 2;
+        width: 24px;
+        height: 24px;
+        border: 3px solid var(--k-blue);
+        pointer-events: none;
+    }
+    .vf-corner.tl { top: 6px; left: 6px; border-right: 0; border-bottom: 0; border-top-left-radius: 8px; }
+    .vf-corner.tr { top: 6px; right: 6px; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; }
+    .vf-corner.bl { bottom: 6px; left: 6px; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; }
+    .vf-corner.br { bottom: 6px; right: 6px; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
+
+    /* Stat tiles: softly tinted, the number in its own colour */
+    .stats-card {
+        border: 0;
+        border-radius: 10px;
+        box-shadow: none;
+        background: #f1f5f9;
+    }
+    .stats-card.present { background: #e7f6ee; }
+    .stats-card.late { background: #fff4e0; }
+    .stats-card.late .count { color: #d98a12; }
+    .stats-card .count { font-size: 2rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .stats-card small { color: #475569; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; font-weight: 600; }
+
+    /* The attendance panel shows it is live with a green top edge */
+    #scannerSection { border-top: 4px solid var(--k-green); }
+
+    .btn-end-class { border-radius: 10px; box-shadow: 0 2px 6px rgba(220, 53, 69, .25); }
+    .btn-end-class:hover { background: #c82333; }
+
+    /* No class running: a friendly placeholder with a tinted icon */
+    #noSessionPlaceholder .fa-chalkboard {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        background: #e3f6ec;
+        color: var(--k-green) !important;
+        font-size: 2.2rem !important;
+    }
+    #noSessionPlaceholder h4 { color: #1f2937 !important; font-weight: 600; }
+    .kiosk-side-placeholder i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #e4f4fe;
+        color: #0b8fd0;
+        font-size: 1.4rem !important;
+        opacity: 1 !important;
+    }
+
+    /* Right column: each card has its own colour on the top edge and icon */
+    .kiosk-card-title { color: var(--k-text); font-weight: 600; }
+    .kiosk-card-title i {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        font-size: 12px;
+        background: #e4f4fe;
+        color: #0b8fd0;
+    }
+    #studentListSection { border-top: 4px solid #0b8fd0; }
+    #logbookSection { border-top: 4px solid var(--k-purple); }
+    #logbookSection .kiosk-card-title i { background: #efe9fb; color: var(--k-purple); }
+    #activitySection { border-top: 4px solid #17a2b8; }
+    #activitySection .kiosk-card-title i { background: #e0f5f8; color: #138496; }
+    .scanner-section .kiosk-card-title i { background: #f1f5f9; color: #475569; }
+    .activity-tabs { border-bottom-color: var(--k-line); }
+    .student-item { border-bottom-color: #eef1f5; }
 </style>
 @endpush
 
@@ -326,9 +752,9 @@
                     {{ date('l, d F Y', strtotime($today)) }}
                 </p>
             </div>
-            <div class="col-md-6 text-right">
+            <div class="col-md-6 kiosk-header-right">
                 <div class="time-display" id="currentTime">{{ date('H:i:s') }}</div>
-                <a href="{{ route('admin.dashboard.index') }}" class="btn btn-outline-secondary btn-sm mt-2">
+                <a href="{{ route('admin.dashboard.index') }}" class="btn btn-outline-secondary btn-sm">
                     <i class="fas fa-arrow-left mr-1"></i> Back to Dashboard
                 </a>
             </div>
@@ -338,9 +764,13 @@
     <div class="row">
         <!-- Left Column: Sessions List -->
         <div class="col-lg-4">
-            <div class="mb-3">
-                <h5 class="text-white"><i class="fas fa-calendar-day mr-2"></i>Today's Classes</h5>
-            </div>
+            @php
+                // One card per joint class, so count joint groups once.
+                $classCount = collect($scheduled_sessions)->map(fn ($s) => $s->joint_key ?? 'id'.$s->id)->unique()->count()
+                    + collect($extra_sessions)->map(fn ($s) => $s->joint_key ?? 'id'.$s->id)->unique()->count();
+            @endphp
+            <div class="kiosk-lane lane-classes">
+            <h5 class="kiosk-col-title"><i class="fas fa-calendar-day"></i> Today's Classes <span class="kiosk-lane-pill">{{ $classCount }}</span></h5>
 
             <!-- Scheduled Sessions -->
             @php
@@ -366,25 +796,25 @@
                     </small>
                 </div>
                 @endif
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
+                <div class="session-main">
+                    <div class="session-info">
                         <h6 class="mb-1">{{ $session->subject->code ?? 'N/A' }} - {{ $session->subject->title ?? 'Unknown' }}</h6>
                         @if($isJoint)
-                        <small class="text-muted d-block mb-1">
+                        <div class="program-chips">
                             @foreach($session->joint_programs as $idx => $prog)
-                                <span class="badge badge-light mr-1">{{ $prog->short_form ?? $prog->title }}</span>
+                                <span class="program-chip" title="{{ $prog->title }}">{{ $prog->shortcode ?? $prog->title }}</span>
                             @endforeach
-                        </small>
+                        </div>
                         @else
                         <small class="text-muted">
-                            {{ $session->program->short_form ?? $session->program->title ?? 'N/A' }} | 
+                            {{ $session->program->shortcode ?? $session->program->title ?? 'N/A' }} | 
                             {{ $session->semester->title ?? 'N/A' }}
                             @if($session->section)
                              | {{ $session->section->title }}
                             @endif
                         </small>
                         @endif
-                        <div class="mt-2">
+                        <div class="session-meta">
                             <span class="badge badge-info">
                                 {{ \Carbon\Carbon::parse($session->scheduled_start_time)->format('H:i') }} - 
                                 {{ \Carbon\Carbon::parse($session->scheduled_end_time)->format('H:i') }}
@@ -400,7 +830,7 @@
                             @endif
                         </div>
                     </div>
-                    <div class="text-right">
+                    <div class="session-action">
                         @if($session->status == 'pending')
                             @if($isJoint)
                             <button class="btn btn-success btn-sm start-joint-session-btn" 
@@ -428,12 +858,14 @@
                 @if($isJoint && $session->status == 'in_progress')
                 {{-- Show all joint session scan buttons when in progress --}}
                 <div class="joint-sessions-list mt-2 pt-2 border-top">
-                    <small class="text-muted d-block mb-1">Scan attendance for each program:</small>
+                    <small class="text-muted d-block mb-2">Scan attendance for each program:</small>
+                    <div class="joint-scan-buttons">
                     @foreach($joint_sessions[$jointKey]['sessions'] ?? [] as $jointSession)
-                    <button class="btn btn-outline-primary btn-sm mr-1 mb-1 select-session-btn" data-id="{{ $jointSession->id }}">
-                        <i class="fas fa-qrcode"></i> {{ $jointSession->program->short_form ?? $jointSession->program->title }}
+                    <button class="btn btn-outline-primary btn-sm select-session-btn" data-id="{{ $jointSession->id }}" title="{{ $jointSession->program->title }}">
+                        <i class="fas fa-qrcode"></i> {{ $jointSession->program->shortcode ?? $jointSession->program->title }}
                     </button>
                     @endforeach
+                    </div>
                 </div>
                 @endif
             </div>
@@ -446,9 +878,7 @@
 
             <!-- Extra Sessions -->
             @if($extra_sessions->count() > 0)
-            <div class="mt-4">
-                <h6 class="text-white"><i class="fas fa-plus-circle mr-2"></i>Extra Classes</h6>
-            </div>
+            <h6 class="kiosk-col-title kiosk-col-subtitle"><i class="fas fa-plus-circle"></i> Extra Classes</h6>
             @php
                 $displayedExtraJointKeys = [];
             @endphp
@@ -475,25 +905,25 @@
                 @else
                 <span class="badge badge-primary mb-2">Extra Class</span>
                 @endif
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
+                <div class="session-main">
+                    <div class="session-info">
                         <h6 class="mb-1">{{ $session->subject->code ?? 'N/A' }} - {{ $session->subject->title ?? 'Unknown' }}</h6>
                         @if($isJoint)
-                        <small class="text-muted d-block mb-1">
+                        <div class="program-chips">
                             @foreach($session->joint_programs as $idx => $prog)
-                                <span class="badge badge-light mr-1">{{ $prog->short_form ?? $prog->title }}</span>
+                                <span class="program-chip" title="{{ $prog->title }}">{{ $prog->shortcode ?? $prog->title }}</span>
                             @endforeach
-                        </small>
+                        </div>
                         @else
                         <small class="text-muted">
-                            {{ $session->program->short_form ?? $session->program->title ?? 'N/A' }} | 
+                            {{ $session->program->shortcode ?? $session->program->title ?? 'N/A' }} | 
                             {{ $session->semester->title ?? 'N/A' }}
                             @if($session->section)
                              | {{ $session->section->title }}
                             @endif
                         </small>
                         @endif
-                        <div class="mt-2">
+                        <div class="session-meta">
                             <span class="badge badge-info">
                                 {{ \Carbon\Carbon::parse($session->scheduled_start_time)->format('H:i') }} - 
                                 {{ \Carbon\Carbon::parse($session->scheduled_end_time)->format('H:i') }}
@@ -509,7 +939,7 @@
                             @endif
                         </div>
                     </div>
-                    <div class="text-right">
+                    <div class="session-action">
                         @if($session->status == 'pending')
                             @if($isJoint)
                             <button class="btn btn-success btn-sm start-joint-session-btn" 
@@ -537,12 +967,14 @@
                 @if($isJoint && $session->status == 'in_progress')
                 {{-- Show all joint session scan buttons when in progress --}}
                 <div class="joint-sessions-list mt-2 pt-2 border-top">
-                    <small class="text-muted d-block mb-1">Scan attendance for each program:</small>
+                    <small class="text-muted d-block mb-2">Scan attendance for each program:</small>
+                    <div class="joint-scan-buttons">
                     @foreach($extra_joint_sessions[$jointKey]['sessions'] ?? [] as $jointSession)
-                    <button class="btn btn-outline-primary btn-sm mr-1 mb-1 select-session-btn" data-id="{{ $jointSession->id }}">
-                        <i class="fas fa-qrcode"></i> {{ $jointSession->program->short_form ?? $jointSession->program->title }}
+                    <button class="btn btn-outline-primary btn-sm select-session-btn" data-id="{{ $jointSession->id }}" title="{{ $jointSession->program->title }}">
+                        <i class="fas fa-qrcode"></i> {{ $jointSession->program->shortcode ?? $jointSession->program->title }}
                     </button>
                     @endforeach
+                    </div>
                 </div>
                 @endif
             </div>
@@ -552,14 +984,23 @@
 
             <!-- Add Extra Class Button -->
             @if($allow_extra_classes)
-            <button class="btn btn-outline-light btn-block mt-3" id="addExtraClassBtn">
+            <button class="btn kiosk-add-btn btn-block mt-3" id="addExtraClassBtn">
                 <i class="fas fa-plus mr-2"></i> Add Extra Class
             </button>
             @endif
+            </div>
         </div>
 
         <!-- Middle Column: Scanner & Stats -->
         <div class="col-lg-5">
+            <div class="kiosk-lane lane-attendance">
+            <h5 class="kiosk-col-title"><i class="fas fa-qrcode"></i> Attendance
+                @if($active_session)
+                <span class="kiosk-lane-pill is-live">Live</span>
+                @else
+                <span class="kiosk-lane-pill">Idle</span>
+                @endif
+            </h5>
             <!-- Active Session Scanner -->
             <div class="scanner-section" id="scannerSection" style="{{ $active_session ? '' : 'display:none;' }}">
                 <div class="text-center mb-3">
@@ -625,7 +1066,10 @@
                 </div>
 
                 <!-- QR Scanner -->
-                <div id="reader" class="mb-4"></div>
+                <div class="kiosk-viewfinder">
+                    <span class="vf-corner tl"></span><span class="vf-corner tr"></span><span class="vf-corner bl"></span><span class="vf-corner br"></span>
+                    <div id="reader" class="mb-4"></div>
+                </div>
                 
                 <!-- Scanner Controls -->
                 <div class="text-center mb-3" id="scannerControls" style="display: none;">
@@ -669,7 +1113,7 @@
 
                 <!-- Recent Scans -->
                 <div class="mt-4">
-                    <h6><i class="fas fa-history mr-2"></i>Recent Scans</h6>
+                    <h6 class="kiosk-card-title"><i class="fas fa-history"></i> Recent Scans</h6>
                     <div id="recentScans" class="student-list" style="max-height: 200px;">
                         <!-- Populated via JS -->
                     </div>
@@ -682,13 +1126,22 @@
                 <h4 class="text-muted">No Active Class</h4>
                 <p class="text-muted">Start a class from the left panel to begin attendance tracking</p>
             </div>
+            </div>
         </div>
 
         <!-- Right Column: Student List & Logbook -->
         <div class="col-lg-3">
+            <div class="kiosk-lane lane-details">
+            <h5 class="kiosk-col-title"><i class="fas fa-clipboard-list"></i> Class Details</h5>
+            @unless($active_session)
+            <div class="logbook-form kiosk-side-placeholder">
+                <i class="fas fa-users"></i>
+                <p class="mb-0">Students, the logbook and class chat appear here once a class is running.</p>
+            </div>
+            @endunless
             <!-- Student List -->
             <div class="logbook-form mb-4" id="studentListSection" style="{{ $active_session ? '' : 'display:none;' }}">
-                <h6><i class="fas fa-users mr-2"></i>Students</h6>
+                <h6 class="kiosk-card-title"><i class="fas fa-users"></i> Students</h6>
                 <div class="student-list" id="studentList">
                     <!-- Populated via JS -->
                 </div>
@@ -696,7 +1149,7 @@
 
             <!-- Logbook Form -->
             <div class="logbook-form" id="logbookSection" style="{{ $active_session ? '' : 'display:none;' }}">
-                <h6><i class="fas fa-book mr-2"></i>Class Logbook</h6>
+                <h6 class="kiosk-card-title"><i class="fas fa-book"></i> Class Logbook</h6>
                 <form id="logbookForm">
                     <input type="hidden" id="logbookSessionId" value="{{ $active_session ? $active_session->id : '' }}">
                     <div class="form-group">
@@ -757,7 +1210,7 @@
 
             <!-- Student Activity Section -->
             <div class="activity-section" id="activitySection" style="{{ $active_session ? '' : 'display:none;' }}">
-                <h6 class="mb-3"><i class="fas fa-comments mr-2"></i>Student Activity</h6>
+                <h6 class="kiosk-card-title"><i class="fas fa-comments"></i> Student Activity</h6>
                 
                 <div class="activity-tabs">
                     <button class="activity-tab active" data-tab="chat" onclick="switchActivityTab('chat')">
@@ -830,17 +1283,18 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
     </div>
 </div>
 
 <!-- Add Extra Class Modal -->
-<div class="modal fade" id="extraClassModal" tabindex="-1">
+<div class="modal fade kiosk-ui" id="extraClassModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Add Extra Class</h5>
-                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <button type="button" class="btn-close" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="extraClassForm">
@@ -920,7 +1374,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success" id="createExtraClassBtn">Create Class</button>
             </div>
         </div>
@@ -928,14 +1382,12 @@
 </div>
 
 <!-- Manage Completed Session Modal -->
-<div class="modal fade" id="manageCompletedModal" tabindex="-1" role="dialog">
+<div class="modal fade kiosk-ui" id="manageCompletedModal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header bg-secondary text-white">
                 <h5 class="modal-title"><i class="fas fa-edit mr-2"></i>Manage Completed Session</h5>
-                <button type="button" class="close text-white" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <button type="button" class="btn-close btn-close-white" data-dismiss="modal" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div id="completedSessionInfo" class="mb-3">
@@ -1034,7 +1486,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>

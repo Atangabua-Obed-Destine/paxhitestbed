@@ -1,10 +1,15 @@
 @extends('admin.layouts.master')
 @section('title', $title)
+
+@push('css')
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/admin-ui.css') }}?v={{ filemtime(public_path('dashboard/css/pages/admin-ui.css')) }}">
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/payment-verification.css') }}?v={{ filemtime(public_path('dashboard/css/pages/payment-verification.css')) }}">
+@endpush
 @section('content')
 
 <!-- Start Content-->
 <div class="main-body">
-    <div class="page-wrapper">
+    <div class="page-wrapper pv-page">
         <!-- [ breadcrumb ] start -->
         <div class="page-header">
             <div class="page-block">
@@ -63,8 +68,8 @@
                         <div class="row">
                             <!-- Student Information -->
                             <div class="col-md-6">
-                                <h6 class="mb-3"><strong>{{ __('student_information') }}</strong></h6>
-                                <table class="table table-borderless">
+                                <h6 class="pv-section-title"><strong>{{ __('student_information') }}</strong></h6>
+                                <table class="table table-borderless pv-details">
                                     <tr>
                                         <td width="40%"><strong>{{ __('field_name') }}:</strong></td>
                                         <td>{{ $row->student ? $row->student->first_name . ' ' . $row->student->last_name : 'N/A' }}</td>
@@ -86,8 +91,8 @@
 
                             <!-- Payment Information -->
                             <div class="col-md-6">
-                                <h6 class="mb-3"><strong>Payment Information</strong></h6>
-                                <table class="table table-borderless">
+                                <h6 class="pv-section-title"><strong>Payment Information</strong></h6>
+                                <table class="table table-borderless pv-details">
                                     <tr>
                                         <td width="40%"><strong>{{ __('field_payment_date') }}:</strong></td>
                                         <td>
@@ -139,7 +144,7 @@
                         <!-- Payment Distribution -->
                         <div class="row mt-4">
                             <div class="col-md-12">
-                                <h6 class="mb-3"><strong><i class="fas fa-chart-pie"></i> Payment Distribution</strong></h6>
+                                <h6 class="pv-section-title"><strong><i class="fas fa-chart-pie"></i> Payment Distribution</strong></h6>
                                 <div class="table-responsive">
                                     <table class="table table-bordered table-hover">
                                         <thead class="thead-light">
@@ -233,7 +238,7 @@
                         <!-- Receipt Display -->
                         <div class="row mt-4">
                             <div class="col-md-12">
-                                <h6 class="mb-3"><strong>{{ __('field_payment_receipt') }}</strong></h6>
+                                <h6 class="pv-section-title"><strong>{{ __('field_payment_receipt') }}</strong></h6>
                                 @if($row->receipt_path)
                                     @php
                                         $fileExtension = pathinfo($row->receipt_path, PATHINFO_EXTENSION);

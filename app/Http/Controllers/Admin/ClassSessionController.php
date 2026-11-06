@@ -103,6 +103,13 @@ class ClassSessionController extends Controller
             $query->where('status', $status);
         }
 
+        // Summary counts cover everything the filters match, not only the
+        // twenty rows on the current page (which is what the cards used to count).
+        $data['status_counts'] = (clone $query)->reorder()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         $data['rows'] = $query->orderBy('date', 'desc')->orderBy('scheduled_start_time', 'desc')->paginate(20);
 
         return view($this->view.'.index', $data);

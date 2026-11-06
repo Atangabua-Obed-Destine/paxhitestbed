@@ -849,19 +849,36 @@ class ExamRoutineController extends Controller
 
             $data['routines'] = $routines;
 
-            // Group by date for the timeline view
-            $data['routines_by_date'] = $routines->groupBy(function($item) {
+            $groupByDate = fn ($items) => $items->groupBy(function ($item) {
                 return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
             })->sortKeys();
 
-            // Calculate statistics
+            // Statistics describe the whole schedule, not the page on screen.
+            $allByDate = $groupByDate($routines);
             if ($routines->count() > 0) {
                 $data['statistics']['total_exams'] = $routines->count();
                 $data['statistics']['total_programs'] = $routines->pluck('program_id')->unique()->count();
                 $data['statistics']['total_subjects'] = $routines->pluck('subject_id')->unique()->count();
-                $data['statistics']['total_days'] = $data['routines_by_date']->count();
+                $data['statistics']['total_days'] = $allByDate->count();
                 $data['statistics']['earliest_date'] = $routines->min('date');
                 $data['statistics']['latest_date'] = $routines->max('date');
+            }
+
+            // The screen shows the schedule a page at a time; printing asks
+            // for all of it (?all=1) so the paper copy is never one page of many.
+            if ($request->boolean('all')) {
+                $data['routines_by_date'] = $allByDate;
+            } else {
+                $perPage = 50;
+                $page = max(1, (int) $request->input('page', 1));
+                $data['routines_page'] = new \Illuminate\Pagination\LengthAwarePaginator(
+                    $routines->forPage($page, $perPage)->values(),
+                    $routines->count(),
+                    $perPage,
+                    $page,
+                    ['path' => $request->url(), 'query' => $request->except('page')]
+                );
+                $data['routines_by_date'] = $groupByDate($data['routines_page']->getCollection());
             }
         }
 

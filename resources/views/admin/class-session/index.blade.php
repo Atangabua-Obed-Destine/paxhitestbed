@@ -2,226 +2,280 @@
 
 @section('title', $title)
 
+@push('css')
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/admin-ui.css') }}?v={{ filemtime(public_path('dashboard/css/pages/admin-ui.css')) }}">
+<style>
+    /* Class sessions — spacing scale 8 · 16 · 24 px. */
+    .cs-page .cs-filter .card-body { padding: 16px 24px 24px; }
+    .cs-page .cs-filter label { margin-bottom: 8px; font-weight: 500; }
+    .cs-page .cs-filter .select2-container { width: 100% !important; }
+    .cs-page .cs-filter-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid #e9ecef;
+    }
+    .cs-page .cs-filter-actions .btn { margin: 0; }
+    .cs-page .btn i { margin-right: 4px; }
+
+    .cs-page .cs-count {
+        padding: 2px 10px;
+        border-radius: 999px;
+        background: #eef1f5;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .cs-page .cs-table th { white-space: nowrap; vertical-align: middle; }
+    .cs-page .cs-table td { vertical-align: middle; }
+    .cs-page .cs-nowrap { white-space: nowrap; }
+    .cs-page .cs-sub { display: block; margin-top: 2px; font-size: 12px; color: #6c757d; }
+    .cs-page .cs-table .badge { white-space: nowrap; }
+    .cs-page .cs-table .badge i { margin-right: 2px; }
+    .cs-page .cs-tag { margin-left: 4px; vertical-align: middle; }
+
+    /* One divider row per day, instead of the date on every row */
+    .cs-page .cs-day-row td {
+        padding: 8px 24px !important;
+        background: #f4f6f9;
+        border-top: 1px solid #e3e8ef;
+        border-bottom: 1px solid #e3e8ef;
+        font-size: 12px;
+        color: #475569;
+    }
+    .cs-page .cs-day-row:hover td { background: #f4f6f9; }
+    .cs-page .cs-day { font-weight: 600; color: #1f2937; }
+    .cs-page .cs-day-count { margin-left: 8px; color: #6c757d; }
+    .cs-page .cs-day-today {
+        margin-left: 8px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: #e4f4fe;
+        color: #0b8fd0;
+        font-weight: 600;
+    }
+    .cs-page .cs-day-row.is-today td { background: #f0f8fe; }
+
+    .cs-page .cs-empty { padding: 32px 16px !important; color: #6c757d; text-align: center; }
+    .cs-page .cs-empty i { display: block; margin-bottom: 8px; font-size: 28px; opacity: .5; }
+    .cs-page .cs-empty strong { display: block; margin-bottom: 4px; color: #343a40; }
+</style>
+@endpush
+
 @section('content')
-<section class="content-header">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-sm-6">
-                <h1><i class="fas fa-chalkboard-teacher mr-2"></i>{{ $title }}</h1>
-            </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard.index') }}">{{ __('Dashboard') }}</a></li>
-                    <li class="breadcrumb-item active">{{ $title }}</li>
-                </ol>
+
+@php
+    $count = fn ($status) => (int) ($status_counts[$status] ?? 0);
+    $periodLabel = \Carbon\Carbon::parse($selected_date_from)->format('d M Y').' – '.\Carbon\Carbon::parse($selected_date_to)->format('d M Y');
+@endphp
+
+<div class="main-body">
+    <div class="page-wrapper cs-page">
+        <!-- [ breadcrumb ] start -->
+        <div class="page-header">
+            <div class="page-block">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <div class="page-header-title">
+                            <h5>{{ $title }}</h5>
+                        </div>
+                        <ul class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{{ route('admin.dashboard.index') }}"><i class="feather icon-home"></i></a></li>
+                            <li class="breadcrumb-item"><a href="#!">{{ $title }}</a></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</section>
+        <!-- [ breadcrumb ] end -->
 
-<section class="content">
-    <div class="container-fluid">
-        <!-- Filter Card -->
-        <div class="card card-primary card-outline">
-            <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-filter mr-2"></i>Filters</h3>
-                <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
-                    </button>
-                </div>
+        <!-- Filter -->
+        <div class="card cs-filter">
+            <div class="card-header ui-card-header">
+                <h5>Filter</h5>
+                <a href="{{ route($route.'.kiosk') }}" class="btn btn-success btn-sm">
+                    <i class="fas fa-qrcode"></i> Open Kiosk
+                </a>
             </div>
             <div class="card-body">
                 <form method="GET" action="{{ route($route.'.index') }}">
-                    <div class="row">
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label>Program</label>
-                                <select name="program" class="form-control select2">
-                                    <option value="0">-- All Programs --</option>
-                                    @foreach($programs as $program)
-                                    <option value="{{ $program->id }}" {{ $selected_program == $program->id ? 'selected' : '' }}>
-                                        {{ $program->title }}
-                                    </option>
-                                    @endforeach
-                                </select>
-                            </div>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-xl-2 col-md-4">
+                            <label for="cs-program">Program</label>
+                            <select name="program" id="cs-program" class="form-control select2">
+                                <option value="0">-- All Programs --</option>
+                                @foreach($programs as $program)
+                                <option value="{{ $program->id }}" {{ $selected_program == $program->id ? 'selected' : '' }}>
+                                    {{ $program->title }}
+                                </option>
+                                @endforeach
+                            </select>
                         </div>
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label>Academic Year</label>
-                                <select name="session" class="form-control select2">
-                                    <option value="0">-- All Sessions --</option>
-                                    @foreach($sessions as $session)
-                                    <option value="{{ $session->id }}" {{ $selected_session == $session->id ? 'selected' : '' }}>
-                                        {{ $session->title }}
-                                    </option>
-                                    @endforeach
-                                </select>
-                            </div>
+                        <div class="col-xl-2 col-md-4">
+                            <label for="cs-session">Academic Year</label>
+                            <select name="session" id="cs-session" class="form-control select2">
+                                <option value="0">-- All Sessions --</option>
+                                @foreach($sessions as $session)
+                                <option value="{{ $session->id }}" {{ $selected_session == $session->id ? 'selected' : '' }}>
+                                    {{ $session->title }}
+                                </option>
+                                @endforeach
+                            </select>
                         </div>
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label>Teacher</label>
-                                <select name="teacher" class="form-control select2">
-                                    <option value="0">-- All Teachers --</option>
-                                    @foreach($teachers as $teacher)
-                                    <option value="{{ $teacher->id }}" {{ $selected_teacher == $teacher->id ? 'selected' : '' }}>
-                                        {{ $teacher->first_name }} {{ $teacher->last_name }}
-                                    </option>
-                                    @endforeach
-                                </select>
-                            </div>
+                        <div class="col-xl-2 col-md-4">
+                            <label for="cs-teacher">Teacher</label>
+                            <select name="teacher" id="cs-teacher" class="form-control select2">
+                                <option value="0">-- All Teachers --</option>
+                                @foreach($teachers as $teacher)
+                                <option value="{{ $teacher->id }}" {{ $selected_teacher == $teacher->id ? 'selected' : '' }}>
+                                    {{ $teacher->first_name }} {{ $teacher->last_name }}
+                                </option>
+                                @endforeach
+                            </select>
                         </div>
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label>Date From</label>
-                                <input type="date" name="date_from" class="form-control" value="{{ $selected_date_from }}">
-                            </div>
+                        <div class="col-xl-2 col-md-4">
+                            <label for="cs-from">Date From</label>
+                            <input type="date" name="date_from" id="cs-from" class="form-control" value="{{ $selected_date_from }}">
                         </div>
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label>Date To</label>
-                                <input type="date" name="date_to" class="form-control" value="{{ $selected_date_to }}">
-                            </div>
+                        <div class="col-xl-2 col-md-4">
+                            <label for="cs-to">Date To</label>
+                            <input type="date" name="date_to" id="cs-to" class="form-control" value="{{ $selected_date_to }}">
                         </div>
-                        <div class="col-md-2">
-                            <div class="form-group">
-                                <label>Status</label>
-                                <select name="status" class="form-control">
-                                    <option value="">-- All --</option>
-                                    <option value="pending" {{ $selected_status == 'pending' ? 'selected' : '' }}>Pending</option>
-                                    <option value="in_progress" {{ $selected_status == 'in_progress' ? 'selected' : '' }}>In Progress</option>
-                                    <option value="completed" {{ $selected_status == 'completed' ? 'selected' : '' }}>Completed</option>
-                                    <option value="cancelled" {{ $selected_status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-                                </select>
-                            </div>
+                        <div class="col-xl-2 col-md-4">
+                            <label for="cs-status">Status</label>
+                            <select name="status" id="cs-status" class="form-control">
+                                <option value="">-- All --</option>
+                                <option value="pending" {{ $selected_status == 'pending' ? 'selected' : '' }}>Pending</option>
+                                <option value="in_progress" {{ $selected_status == 'in_progress' ? 'selected' : '' }}>In Progress</option>
+                                <option value="completed" {{ $selected_status == 'completed' ? 'selected' : '' }}>Completed</option>
+                                <option value="cancelled" {{ $selected_status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                            </select>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-search mr-2"></i>Filter
-                            </button>
-                            <a href="{{ route($route.'.index') }}" class="btn btn-secondary">
-                                <i class="fas fa-redo mr-2"></i>Reset
-                            </a>
-                            <a href="{{ route($route.'.kiosk') }}" class="btn btn-success float-right">
-                                <i class="fas fa-qrcode mr-2"></i>Open Kiosk
-                            </a>
-                        </div>
+                    <div class="cs-filter-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+                        <a href="{{ route($route.'.index') }}" class="btn btn-secondary"><i class="fas fa-redo"></i> Reset</a>
                     </div>
                 </form>
             </div>
         </div>
 
-        <!-- Summary Cards -->
-        <div class="row">
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h3>{{ $rows->where('status', 'completed')->count() }}</h3>
-                        <p>Completed Classes</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-success">
-                    <div class="inner">
-                        <h3>{{ $rows->where('status', 'in_progress')->count() }}</h3>
-                        <p>In Progress</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-play-circle"></i>
+        <!-- Summary: everything the filters match -->
+        <div class="row stat-cards">
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-info text-white">
+                    <div class="card-body">
+                        <i class="fas fa-check-circle stat-card-icon"></i>
+                        <h6 class="text-white">Completed Classes</h6>
+                        <h2 class="text-white">{{ number_format($count('completed')) }}</h2>
+                        <p>{{ $periodLabel }}</p>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-warning">
-                    <div class="inner">
-                        <h3>{{ $rows->where('status', 'pending')->count() }}</h3>
-                        <p>Pending</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-clock"></i>
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-success text-white">
+                    <div class="card-body">
+                        <i class="fas fa-play-circle stat-card-icon"></i>
+                        <h6 class="text-white">In Progress</h6>
+                        <h2 class="text-white">{{ number_format($count('in_progress')) }}</h2>
+                        <p>{{ $periodLabel }}</p>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-danger">
-                    <div class="inner">
-                        <h3>{{ $rows->where('status', 'cancelled')->count() }}</h3>
-                        <p>Cancelled</p>
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-warning text-white">
+                    <div class="card-body">
+                        <i class="fas fa-clock stat-card-icon"></i>
+                        <h6 class="text-white">Pending</h6>
+                        <h2 class="text-white">{{ number_format($count('pending')) }}</h2>
+                        <p>{{ $periodLabel }}</p>
                     </div>
-                    <div class="icon">
-                        <i class="fas fa-times-circle"></i>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-danger text-white">
+                    <div class="card-body">
+                        <i class="fas fa-times-circle stat-card-icon"></i>
+                        <h6 class="text-white">Cancelled</h6>
+                        <h2 class="text-white">{{ number_format($count('cancelled')) }}</h2>
+                        <p>{{ $periodLabel }}</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Data Table -->
+        <!-- Sessions -->
         <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Class Sessions ({{ $rows->total() }} records)</h3>
+            <div class="card-header ui-card-header">
+                <h5>Class Sessions</h5>
+                <span class="cs-count">{{ number_format($rows->total()) }} {{ $rows->total() == 1 ? 'record' : 'records' }}</span>
             </div>
             <div class="card-body table-responsive p-0">
-                <table class="table table-hover table-striped">
+                <table class="table table-hover ui-table-flush cs-table">
                     <thead>
                         <tr>
-                            <th>Date</th>
                             <th>Time</th>
-                            <th>Subject</th>
+                            <th>Course</th>
                             <th>Teacher</th>
                             <th>Program</th>
                             <th>Duration</th>
                             <th>Attendance</th>
                             <th>Logbook</th>
                             <th>Status</th>
-                            <th>Action</th>
+                            <th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
+                        @php
+                            $perDay = $rows->getCollection()->countBy(fn ($r) => $r->date->format('Y-m-d'));
+                            $lastDay = null;
+                        @endphp
                         @forelse($rows as $row)
+                        @php $day = $row->date->format('Y-m-d'); @endphp
+                        @if($day !== $lastDay)
+                        <tr class="cs-day-row {{ $row->date->isToday() ? 'is-today' : '' }}">
+                            <td colspan="9">
+                                <span class="cs-day">{{ $row->date->format('l, d M Y') }}</span>
+                                @if($row->date->isToday())<span class="cs-day-today">Today</span>@endif
+                                <span class="cs-day-count">{{ $perDay[$day] }} {{ $perDay[$day] == 1 ? 'session' : 'sessions' }}</span>
+                            </td>
+                        </tr>
+                        @php $lastDay = $day; @endphp
+                        @endif
                         <tr>
-                            <td>{{ $row->date->format('d M Y') }}</td>
-                            <td>
-                                {{ \Carbon\Carbon::parse($row->scheduled_start_time)->format('H:i') }} -
-                                {{ \Carbon\Carbon::parse($row->scheduled_end_time)->format('H:i') }}
+                            <td class="cs-nowrap">
+                                {{ \Carbon\Carbon::parse($row->scheduled_start_time)->format('H:i') }} – {{ \Carbon\Carbon::parse($row->scheduled_end_time)->format('H:i') }}
                                 @if($row->is_extra_class)
-                                <span class="badge badge-info">Extra</span>
+                                <span class="badge badge-info cs-tag">Extra</span>
                                 @endif
                             </td>
                             <td>
-                                <strong>{{ $row->subject->code ?? 'N/A' }}</strong><br>
-                                <small class="text-muted">{{ $row->subject->title ?? '' }}</small>
+                                <strong>{{ $row->subject->code ?? 'N/A' }}</strong>
+                                <span class="cs-sub">{{ $row->subject->title ?? '' }}</span>
                             </td>
                             <td>{{ $row->teacher->first_name ?? '' }} {{ $row->teacher->last_name ?? '' }}</td>
                             <td>
-                                {{ $row->program->short_form ?? $row->program->title ?? 'N/A' }}
+                                <span title="{{ $row->program->title ?? '' }}">{{ $row->program->shortcode ?? $row->program->title ?? 'N/A' }}</span>
                                 @if($row->semester)
-                                <br><small class="text-muted">{{ $row->semester->title }}</small>
+                                <span class="cs-sub">{{ $row->semester->title }}</span>
                                 @endif
                             </td>
-                            <td>
+                            <td class="cs-nowrap">
                                 @if($row->actual_duration_minutes)
                                     {{ $row->actual_duration_minutes }} mins
-                                    <br>
-                                    <small class="text-{{ $row->duration_percentage >= 70 ? 'success' : 'warning' }}">
-                                        ({{ $row->duration_percentage }}%)
-                                    </small>
+                                    <span class="cs-sub text-{{ $row->duration_percentage >= 70 ? 'success' : 'warning' }}">{{ $row->duration_percentage }}% of scheduled</span>
                                 @else
-                                    <span class="text-muted">--</span>
+                                    <span class="text-muted">—</span>
                                 @endif
                             </td>
-                            <td>
+                            <td class="cs-nowrap">
                                 @if($row->status == 'completed')
                                     <span class="badge badge-success">{{ $row->present_count }}</span> Present
                                 @else
-                                    <span class="text-muted">--</span>
+                                    <span class="text-muted">—</span>
                                 @endif
                             </td>
                             <td>
@@ -244,24 +298,33 @@
                                     <span class="badge badge-danger">Cancelled</span>
                                 @endif
                             </td>
-                            <td>
-                                <a href="{{ route($route.'.show', $row->id) }}" class="btn btn-info btn-sm">
-                                    <i class="fas fa-eye"></i>
+                            <td class="text-end">
+                                <a href="{{ route($route.'.show', $row->id) }}" class="btn btn-info btn-sm" title="View session">
+                                    <i class="fas fa-eye"></i> View
                                 </a>
                             </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="10" class="text-center text-muted">No class sessions found</td>
+                            <td colspan="9" class="cs-empty">
+                                <i class="fas fa-chalkboard"></i>
+                                <strong>No class sessions found</strong>
+                                Try a wider date range or fewer filters.
+                            </td>
                         </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
-            <div class="card-footer">
+            @if($rows->total() > 0)
+            <div class="card-footer ui-pagination-footer">
+                <small class="text-muted">
+                    Showing {{ number_format($rows->firstItem()) }}–{{ number_format($rows->lastItem()) }} of {{ number_format($rows->total()) }}
+                </small>
                 {{ $rows->appends(request()->query())->links() }}
             </div>
+            @endif
         </div>
     </div>
-</section>
+</div>
 @endsection

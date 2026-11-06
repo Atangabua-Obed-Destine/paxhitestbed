@@ -1,0 +1,91 @@
+/*
+ * Shared admin UI touches — reused across screens so they stay consistent.
+ *
+ * Colours, fonts, cards and tables stay the application's own; this file
+ * only evens out spacing and alignment. One spacing scale throughout:
+ *   8 · 16 · 24 (px)
+ */
+
+/* ---------- Stat cards ----------
+ * Markup:
+ *   <div class="row stat-cards">
+ *     <div class="col-…"><div class="card stat-card bg-… text-white"><div class="card-body">
+ *       <i class="fas fa-… stat-card-icon"></i>
+ *       <h6 class="text-white">Title</h6>
+ *       <h2 class="text-white">123</h2>
+ *       <p class="mb-0">Caption</p>          (or <a class="stat-card-foot">)
+ *     </div></div></div>
+ *
+ * Title sits at the top; number and caption are pinned to the bottom. Cards
+ * in a row share one height, so if a title wraps the numbers and captions
+ * still line up across every card. */
+
+.stat-cards > [class*="col-"] { margin-bottom: 24px; }
+.stat-card {
+    position: relative;
+    height: 100%;
+    margin-bottom: 0;
+    overflow: hidden;
+}
+.stat-card .card-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px 24px;
+}
+.stat-card h6 { margin: 0 0 16px; padding-right: 32px; }
+.stat-card h2 { margin: auto 0 8px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-card p,
+.stat-card .stat-card-foot {
+    margin: 0;
+    opacity: .85;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.stat-card a.stat-card-foot { color: inherit; text-decoration: none; }
+.stat-card a.stat-card-foot:hover { opacity: 1; text-decoration: underline; }
+.stat-card .stat-card-foot i { margin-right: 4px; }
+.stat-card .stat-card-icon {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-size: 20px;
+    opacity: .35;
+}
+
+/* ---------- Card header with an action on the right ---------- */
+
+.ui-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.ui-card-header h5 { margin: 0; }
+.ui-card-header .btn { margin: 0; }
+
+/* ---------- Card footer: "Showing x–y of z" left, page links right ---------- */
+
+.ui-pagination-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px 24px;
+}
+.ui-pagination-footer nav,
+.ui-pagination-footer .pagination { margin: 0; }
+
+/* ---------- Tables flush inside a card ---------- */
+
+.ui-table-flush { margin-bottom: 0; }
+.ui-table-flush th,
+.ui-table-flush td { vertical-align: middle; }
+.ui-table-flush th:first-child,
+.ui-table-flush td:first-child { padding-left: 24px; }
+.ui-table-flush th:last-child,
+.ui-table-flush td:last-child { padding-right: 24px; }

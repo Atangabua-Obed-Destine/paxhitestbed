@@ -593,23 +593,29 @@ class ClassRoutineController extends Controller
         });
         $data['teachers'] = $teachers->orderBy('staff_id', 'asc')->get();
 
+        // Any session can be looked at; the current one is the default. This
+        // used to be fixed to the current session, so before a new session's
+        // timetable was entered every teacher's page came up empty.
+        $data['sessions'] = Session::where('status', '1')->orderBy('id', 'desc')->get();
+        $currentSession = $data['sessions']->firstWhere('current', '1');
+        $data['selected_session'] = $request->filled('session')
+            ? (int) $request->session
+            : ($currentSession->id ?? null);
+        $data['session_obj'] = $data['sessions']->firstWhere('id', $data['selected_session']);
 
-        if(!empty($request->teacher) && $request->teacher != Null){
+        $data['selected_staff'] = $request->filled('teacher') ? $request->teacher : null;
+        $data['teacher_obj'] = $data['selected_staff'] ? $data['teachers']->firstWhere('id', $data['selected_staff']) : null;
 
-            $data['selected_staff'] = $request->teacher;
+        if ($data['selected_staff'] && $data['selected_session']) {
+            $rows = ClassRoutine::with(['subject', 'room', 'program', 'semester', 'section'])
+                ->where('status', '1')
+                ->where('session_id', $data['selected_session'])
+                ->where('teacher_id', $data['selected_staff'])
+                ->orderBy('day')
+                ->orderBy('start_time', 'asc')
+                ->get();
 
-            $session = Session::where('status', '1')->where('current', '1')->first();
-
-            if(isset($session)){
-            $data['rows'] = ClassRoutine::where('status', '1')
-                        ->where('session_id', $session->id)
-                        ->where('teacher_id', $request->teacher)
-                        ->orderBy('start_time', 'asc')
-                        ->get();
-            }
-        }
-        else {
-            $data['selected_staff'] = Null;
+            $data['timetable'] = new \App\Support\TeacherTimetable($rows);
         }
 
         return view($this->view.'.teacher', $data);
