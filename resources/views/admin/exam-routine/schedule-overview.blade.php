@@ -1,110 +1,96 @@
 @extends('admin.layouts.master')
 @section('title', $title)
 
+@push('css')
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/admin-ui.css') }}?v={{ filemtime(public_path('dashboard/css/pages/admin-ui.css')) }}">
+@endpush
+
 @section('page_css')
 <style>
-    /* Filter Section */
-    .filter-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 15px;
-        color: white;
-        margin-bottom: 25px;
-    }
-    
-    .filter-card .card-header {
-        background: transparent;
-        border-bottom: 1px solid rgba(255,255,255,0.2);
-    }
-    
-    .filter-card .card-header h5 {
-        color: white;
-        font-weight: 600;
-    }
-    
+    /* Spacing scale used on this screen: 8 · 16 · 24 px. */
+
+    /* Filter Section — the application's plain card, no gradient */
+    .filter-card { margin-bottom: 24px; }
+    .filter-card .card-body { padding: 16px 24px 24px; }
+    .filter-card .form-group { margin-bottom: 16px; }
     .filter-card label {
-        color: rgba(255,255,255,0.9);
+        margin-bottom: 8px;
         font-weight: 500;
         font-size: 13px;
     }
-    
-    .filter-card .form-control {
-        background: rgba(255,255,255,0.95);
-        border: none;
-        border-radius: 8px;
+    .filter-card label i { color: #adb5bd; margin-right: 4px; }
+    .filter-card .filter-optional-title {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: #6c757d;
     }
-    
-    .filter-card .btn-filter {
-        background: white;
-        color: #667eea;
-        font-weight: 600;
-        border-radius: 8px;
-        padding: 10px 25px;
+    .filter-card .filter-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding-top: 16px;
+        border-top: 1px solid #e9ecef;
     }
-    
-    .filter-card .btn-filter:hover {
-        background: #f8f9fa;
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-    
+    .filter-card .filter-actions .btn { margin: 0; }
+
     /* Primary vs Secondary Filters */
     .primary-filters {
-        border-right: 1px solid rgba(255,255,255,0.2);
-        padding-right: 20px;
+        border-right: 1px solid #e9ecef;
+        padding-right: 24px;
     }
-    
-    .secondary-filters {
-        padding-left: 20px;
-        opacity: 0.9;
-    }
-    
-    .secondary-filters label {
-        font-size: 12px;
-    }
-    
+    .secondary-filters { padding-left: 24px; }
+
     /* Statistics Cards */
-    .stats-row {
-        margin-bottom: 20px;
-    }
-    
-    .stat-card {
-        background: white;
-        border-radius: 10px;
-        padding: 15px;
+    .stats-row { margin-bottom: 8px; }
+    .stats-row > [class*="col"] { margin-bottom: 16px; }
+
+    .eso-stat {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        height: 100%;
+        min-height: 88px;
+        padding: 16px;
         text-align: center;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+        background: #fff;
+        border-radius: 6px;
         border-left: 4px solid;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
     }
-    
-    .stat-card.exams { border-color: #4CAF50; }
-    .stat-card.programs { border-color: #2196F3; }
-    .stat-card.subjects { border-color: #FF9800; }
-    .stat-card.days { border-color: #9C27B0; }
-    .stat-card.range { border-color: #00BCD4; }
-    
-    .stat-card .stat-number {
+    .eso-stat.exams { border-color: #4CAF50; }
+    .eso-stat.programs { border-color: #2196F3; }
+    .eso-stat.subjects { border-color: #FF9800; }
+    .eso-stat.days { border-color: #9C27B0; }
+    .eso-stat.range { border-color: #00BCD4; }
+
+    .eso-stat .stat-number {
+        margin-bottom: 4px;
         font-size: 24px;
         font-weight: 700;
+        line-height: 1.2;
         color: #333;
+        font-variant-numeric: tabular-nums;
     }
-    
-    .stat-card .stat-label {
+    .eso-stat .stat-number.is-text { font-size: 16px; }
+    .eso-stat .stat-label {
         font-size: 11px;
         text-transform: uppercase;
+        letter-spacing: .04em;
         color: #888;
     }
-    
+
     /* Table Styles */
     .schedule-table {
         width: 100%;
         border-collapse: collapse;
         font-size: 13px;
     }
-    
+
     .schedule-table thead th {
         background: #343a40;
         color: white;
-        padding: 12px 10px;
+        padding: 12px;
         font-weight: 600;
         text-align: left;
         border: none;
@@ -113,12 +99,15 @@
         top: 0;
         z-index: 10;
     }
-    
+
     .schedule-table tbody td {
-        padding: 10px 8px;
+        padding: 12px;
         border-bottom: 1px solid #e9ecef;
         vertical-align: middle;
     }
+
+    .schedule-table .semester-cell,
+    .program-badge { white-space: nowrap; }
     
     .schedule-table tbody tr:hover {
         background: #f1f5f9;
@@ -134,7 +123,7 @@
     /* Date Column Styling */
     .date-cell {
         background: #f8f9fa;
-        border-left: 3px solid #667eea;
+        border-left: 3px solid #04a9f5;
     }
     
     .date-cell .date-day {
@@ -142,7 +131,7 @@
         font-weight: 700;
         font-size: 11px;
         text-transform: uppercase;
-        color: #667eea;
+        color: #04a9f5;
     }
     
     .date-cell .date-full {
@@ -343,7 +332,7 @@
             padding: 0 !important;
         }
         
-        .filter-card, .btn-print, .no-print, .stats-row, .page-wrapper > .row:first-child {
+        .filter-card, .btn-print, .no-print, .stats-row, .page-header, .ui-pagination-footer, .page-wrapper > .row:first-child {
             display: none !important;
         }
         
@@ -446,10 +435,10 @@
     @media (max-width: 768px) {
         .primary-filters {
             border-right: none;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
+            border-bottom: 1px solid #e9ecef;
             padding-right: 0;
-            padding-bottom: 15px;
-            margin-bottom: 15px;
+            padding-bottom: 16px;
+            margin-bottom: 16px;
         }
         
         .secondary-filters {
@@ -473,12 +462,31 @@
 <!-- Start Content-->
 <div class="main-body">
     <div class="page-wrapper">
+        <!-- [ breadcrumb ] start -->
+        <div class="page-header no-print">
+            <div class="page-block">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <div class="page-header-title">
+                            <h5>{{ $title }}</h5>
+                        </div>
+                        <ul class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{{ route('admin.dashboard.index') }}"><i class="feather icon-home"></i></a></li>
+                            <li class="breadcrumb-item"><a href="#">{{ trans_choice('module_routine', 2) }}</a></li>
+                            <li class="breadcrumb-item"><a href="#!">{{ $title }}</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- [ breadcrumb ] end -->
+
         <!-- [ Main Content ] start -->
-        
+
         <!-- Filter Card -->
         <div class="card filter-card no-print">
             <div class="card-header">
-                <h5><i class="fas fa-calendar-check"></i> {{ $title }}</h5>
+                <h5>{{ __('Filter') }}</h5>
             </div>
             <div class="card-body">
                 <form method="get" action="{{ route($route.'.schedule-overview') }}" id="filter-form">
@@ -487,7 +495,7 @@
                         <div class="col-lg-8 primary-filters">
                             <div class="row">
                                 <div class="form-group col-md-3">
-                                    <label for="session"><i class="fas fa-graduation-cap"></i> {{ __('field_session') }} <span class="text-warning">*</span></label>
+                                    <label for="session"><i class="fas fa-graduation-cap"></i> {{ __('field_session') }} <span class="text-danger">*</span></label>
                                     <select class="form-control" name="session" id="session" required>
                                         <option value="">{{ __('select') }}</option>
                                         @foreach($sessions as $sess)
@@ -524,7 +532,7 @@
                                 </div>
                                 
                                 <div class="form-group col-md-4">
-                                    <label for="exam_type"><i class="fas fa-file-alt"></i> {{ __('field_type') }} <span class="text-warning">*</span></label>
+                                    <label for="exam_type"><i class="fas fa-file-alt"></i> {{ __('field_type') }} <span class="text-danger">*</span></label>
                                     <select class="form-control" name="exam_type" id="exam_type" required>
                                         <option value="">{{ __('select') }}</option>
                                         @foreach($exam_types as $type)
@@ -539,11 +547,10 @@
                         
                         <!-- Secondary Filters (Optional) -->
                         <div class="col-lg-4 secondary-filters">
-                            <small class="d-block mb-2" style="opacity: 0.7;"><i class="fas fa-filter"></i> Optional</small>
                             <div class="row">
                                 <div class="form-group col-6">
-                                    <label for="faculty">{{ __('field_faculty') }}</label>
-                                    <select class="form-control form-control-sm" name="faculty" id="faculty">
+                                    <label for="faculty">{{ __('field_faculty') }} <span class="text-muted fw-normal">({{ __('optional') }})</span></label>
+                                    <select class="form-control" name="faculty" id="faculty">
                                         <option value="0">{{ __('All') }}</option>
                                         @foreach($faculties as $fac)
                                         <option value="{{ $fac->id }}" {{ $selected_faculty == $fac->id ? 'selected' : '' }}>
@@ -554,8 +561,8 @@
                                 </div>
                                 
                                 <div class="form-group col-6">
-                                    <label for="program">{{ __('field_program') }}</label>
-                                    <select class="form-control form-control-sm" name="program" id="program">
+                                    <label for="program">{{ __('field_program') }} <span class="text-muted fw-normal">({{ __('optional') }})</span></label>
+                                    <select class="form-control" name="program" id="program">
                                         <option value="0">{{ __('All') }}</option>
                                         @foreach($programs as $prog)
                                         <option value="{{ $prog->id }}" {{ $selected_program == $prog->id ? 'selected' : '' }}>
@@ -568,20 +575,19 @@
                         </div>
                     </div>
                     
-                    <div class="row mt-2">
-                        <div class="col-12 text-center">
-                            <button type="submit" class="btn btn-filter">
-                                <i class="fas fa-search"></i> Load Schedule
-                            </button>
-                            <a href="{{ route($route.'.schedule-overview') }}" class="btn btn-secondary ml-2" style="border-radius: 8px;">
-                                <i class="fas fa-sync-alt"></i> Reset
-                            </a>
-                            @if($routines->count() > 0)
-                            <button type="button" class="btn btn-dark ml-2 btn-print" style="border-radius: 8px;" onclick="window.print()">
-                                <i class="fas fa-print"></i> Print
-                            </button>
-                            @endif
-                        </div>
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Load Schedule
+                        </button>
+                        <a href="{{ route($route.'.schedule-overview') }}" class="btn btn-secondary">
+                            <i class="fas fa-sync-alt"></i> Reset
+                        </a>
+                        @if($routines->count() > 0)
+                        {{-- Prints the whole schedule, not just the page on screen. --}}
+                        <a href="{{ request()->fullUrlWithQuery(['all' => 1, 'print' => 1, 'page' => null]) }}" class="btn btn-dark btn-print">
+                            <i class="fas fa-print"></i> Print
+                        </a>
+                        @endif
                     </div>
                 </form>
             </div>
@@ -590,33 +596,33 @@
         @if($routines->count() > 0)
         <!-- Statistics Row -->
         <div class="row stats-row no-print">
-            <div class="col-6 col-md mb-2">
-                <div class="stat-card exams">
+            <div class="col-6 col-md">
+                <div class="eso-stat exams">
                     <div class="stat-number">{{ $statistics['total_exams'] }}</div>
                     <div class="stat-label">Exams</div>
                 </div>
             </div>
-            <div class="col-6 col-md mb-2">
-                <div class="stat-card programs">
+            <div class="col-6 col-md">
+                <div class="eso-stat programs">
                     <div class="stat-number">{{ $statistics['total_programs'] }}</div>
                     <div class="stat-label">Programs</div>
                 </div>
             </div>
-            <div class="col-6 col-md mb-2">
-                <div class="stat-card subjects">
+            <div class="col-6 col-md">
+                <div class="eso-stat subjects">
                     <div class="stat-number">{{ $statistics['total_subjects'] }}</div>
                     <div class="stat-label">Courses</div>
                 </div>
             </div>
-            <div class="col-6 col-md mb-2">
-                <div class="stat-card days">
+            <div class="col-6 col-md">
+                <div class="eso-stat days">
                     <div class="stat-number">{{ $statistics['total_days'] }}</div>
                     <div class="stat-label">Days</div>
                 </div>
             </div>
-            <div class="col-12 col-md mb-2">
-                <div class="stat-card range">
-                    <div class="stat-number" style="font-size: 14px;">
+            <div class="col-12 col-md">
+                <div class="eso-stat range">
+                    <div class="stat-number is-text">
                         {{ $statistics['earliest_date'] ? \Carbon\Carbon::parse($statistics['earliest_date'])->format('M j') : 'N/A' }} - {{ $statistics['latest_date'] ? \Carbon\Carbon::parse($statistics['latest_date'])->format('M j, Y') : 'N/A' }}
                     </div>
                     <div class="stat-label">Period</div>
@@ -656,14 +662,15 @@
                                 <th style="width: 110px;">Time</th>
                                 <th>Course</th>
                                 <th style="width: 110px;">Program</th>
-                                <th style="width: 90px;">Semester</th>
+                                <th style="width: 150px;">Semester</th>
                                 <th style="width: 100px;">Room(s)</th>
                                 <th>Supervisor(s)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @php 
-                                $counter = 0; 
+                            @php
+                                // Numbering carries on across pages.
+                                $counter = isset($routines_page) ? $routines_page->firstItem() - 1 : 0;
                                 $lastDate = null;
                             @endphp
                             @foreach($routines_by_date as $date => $dayRoutines)
@@ -748,8 +755,16 @@
                     </table>
                 </div>
             </div>
+            @if(isset($routines_page))
+            <div class="card-footer ui-pagination-footer">
+                <small class="text-muted">
+                    Showing {{ number_format($routines_page->firstItem()) }}–{{ number_format($routines_page->lastItem()) }} of {{ number_format($routines_page->total()) }} exams
+                </small>
+                {{ $routines_page->links() }}
+            </div>
+            @endif
         </div>
-        
+
         @else
         <!-- Empty State -->
         <div class="empty-state">
@@ -780,6 +795,11 @@
 "use strict";
 
 $(document).ready(function() {
+    // Opened from the Print button: the whole schedule is on the page, so print it.
+    @if(request()->boolean('print'))
+    window.print();
+    @endif
+
     const $session = $('#session');
     const $semesterYear = $('#semester_year');
     const $semester = $('#semester');

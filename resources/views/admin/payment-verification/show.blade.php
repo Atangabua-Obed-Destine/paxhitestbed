@@ -1,10 +1,15 @@
 @extends('admin.layouts.master')
 @section('title', $title)
+
+@push('css')
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/admin-ui.css') }}?v={{ filemtime(public_path('dashboard/css/pages/admin-ui.css')) }}">
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/payment-verification.css') }}?v={{ filemtime(public_path('dashboard/css/pages/payment-verification.css')) }}">
+@endpush
 @section('content')
 
 <!-- Start Content-->
 <div class="main-body">
-    <div class="page-wrapper">
+    <div class="page-wrapper pv-page">
         <!-- [ breadcrumb ] start -->
         <div class="page-header">
             <div class="page-block">
@@ -73,13 +78,13 @@
                                     $applicant = $row->applicant ?? optional($row->fee ?? null)->applicant;
                                     $isApplicantOnly = $payment_type === 'fee' && empty($row->student) && !empty($applicant);
                                 @endphp
-                                <h6 class="mb-3">
+                                <h6 class="pv-section-title">
                                     <strong>{{ $isApplicantOnly ? __('Applicant Information') : __('student_information') }}</strong>
                                     @if($isApplicantOnly)
                                         <span class="badge badge-warning ml-2">{{ __('Not yet enrolled') }}</span>
                                     @endif
                                 </h6>
-                                <table class="table table-borderless">
+                                <table class="table table-borderless pv-details">
                                     <tr>
                                         <td width="40%"><strong>{{ __('field_name') }}:</strong></td>
                                         <td>
@@ -138,8 +143,8 @@
                                     </tr>
                                 </table>
 
-                                <h6 class="mb-3 mt-4"><strong>{{ __('fee_information') }}</strong></h6>
-                                <table class="table table-borderless">
+                                <h6 class="pv-section-title"><strong>{{ __('fee_information') }}</strong></h6>
+                                <table class="table table-borderless pv-details">
                                     @if($payment_type == 'installment')
                                     <tr>
                                         <td width="40%"><strong>{{ __('field_payment_plan') }}:</strong></td>
@@ -311,7 +316,7 @@
                                 @endphp
 
                                 @if($approvedReceipts->count() > 0)
-                                <h6 class="mb-3 mt-3"><strong>{{ __('field_payment_history') }}</strong></h6>
+                                <h6 class="pv-section-title"><strong>{{ __('field_payment_history') }}</strong></h6>
                                 <div class="table-responsive">
                                     <table class="table table-sm table-bordered">
                                         <thead class="thead-light">
@@ -360,8 +365,8 @@
 
                             <!-- Receipt and Payment Information -->
                             <div class="col-md-6">
-                                <h6 class="mb-3"><strong>{{ __('payment_information') }}</strong></h6>
-                                <table class="table table-borderless">
+                                <h6 class="pv-section-title"><strong>{{ __('payment_information') }}</strong></h6>
+                                <table class="table table-borderless pv-details">
                                     <tr>
                                         <td width="40%"><strong>{{ __('field_payment_reference') }}:</strong></td>
                                         <td>{{ $row->payment_reference ?? '-' }}</td>
@@ -429,18 +434,20 @@
                                     @endif
                                 </table>
 
-                                <h6 class="mb-3 mt-3"><strong>{{ __('receipt_file') }}</strong></h6>
+                                <h6 class="pv-section-title"><strong>{{ __('receipt_file') }}</strong></h6>
                                 {{-- Shown here rather than only linked: verifying a
                                      payment means reading the receipt against the
                                      figures on this page. --}}
-                                @include('common.inc.receipt_preview', [
-                                    'file' => $row->receipt_file,
-                                    'dir' => $path,
-                                ])
+                                <div class="pv-receipt">
+                                    @include('common.inc.receipt_preview', [
+                                        'file' => $row->receipt_file,
+                                        'dir' => $path,
+                                    ])
+                                </div>
 
                                 @if($row->verification_note)
-                                <div class="mt-4">
-                                    <h6><strong>{{ __('field_verification_note') }}:</strong></h6>
+                                <div>
+                                    <h6 class="pv-section-title"><strong>{{ __('field_verification_note') }}</strong></h6>
                                     <div class="alert alert-{{ $row->verification_status == 'approved' ? 'success' : 'danger' }}">
                                         {{ $row->verification_note }}
                                     </div>
@@ -450,7 +457,7 @@
                         </div>
 
                         <!-- Action Buttons -->
-                        <div class="border-top pt-4 mt-4">
+                        <div class="pv-action-bar">
                             <a href="{{ route($route.'.index') }}" class="btn btn-secondary">
                                 <i class="fas fa-arrow-left"></i> {{ __('btn_back') }}
                             </a>
@@ -459,12 +466,14 @@
                                 $status = $payment_type == 'fee' ? $row->verification_status : $row->status;
                             @endphp
                             @if($status == 'pending')
-                                <button type="button" class="btn btn-success" data-toggle="modal" data-target="#approveModal">
-                                    <i class="fas fa-check"></i> {{ __('btn_approve') }}
-                                </button>
-                                <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#rejectModal">
-                                    <i class="fas fa-times"></i> {{ __('btn_reject') }}
-                                </button>
+                                <div class="pv-decision">
+                                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#rejectModal">
+                                        <i class="fas fa-times"></i> {{ __('btn_reject') }}
+                                    </button>
+                                    <button type="button" class="btn btn-success" data-toggle="modal" data-target="#approveModal">
+                                        <i class="fas fa-check"></i> {{ __('btn_approve') }}
+                                    </button>
+                                </div>
                             @endif
                         </div>
                     </div>
@@ -477,7 +486,7 @@
 <!-- End Content-->
 
 <!-- Approve Modal -->
-<div class="modal fade" id="approveModal" tabindex="-1" role="dialog" aria-labelledby="approveModalLabel" aria-hidden="true">
+<div class="modal fade pv-modal" id="approveModal" tabindex="-1" role="dialog" aria-labelledby="approveModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <form method="POST" action="{{ route($route.'.approve', [$payment_type, $row->id]) }}" id="approveForm">
@@ -569,7 +578,7 @@
 </div>
 
 <!-- Reject Modal -->
-<div class="modal fade" id="rejectModal" tabindex="-1" role="dialog" aria-labelledby="rejectModalLabel" aria-hidden="true">
+<div class="modal fade pv-modal" id="rejectModal" tabindex="-1" role="dialog" aria-labelledby="rejectModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <form method="POST" action="{{ route($route.'.reject', [$payment_type, $row->id]) }}" id="rejectForm">

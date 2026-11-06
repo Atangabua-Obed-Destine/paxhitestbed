@@ -3,36 +3,25 @@
 
 @section('page_css')
 <style>
-.report-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 30px;
-    border-radius: 15px;
-    margin-bottom: 25px;
-}
-
 .stat-card {
     background: white;
-    border-radius: 15px;
-    padding: 25px;
+    border-radius: 12px;
+    padding: 20px 16px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.08);
     transition: all 0.3s ease;
     text-align: center;
     height: 100%;
 }
 
-.stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-}
-
 .stat-number {
-    font-size: 2.5rem;
+    font-size: 2.2rem;
     font-weight: 700;
-    margin-bottom: 5px;
+    line-height: 1.2;
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
 }
 
-.stat-number.primary { color: #667eea; }
+.stat-number.primary { color: #04a9f5; }
 .stat-number.success { color: #28a745; }
 .stat-number.info { color: #17a2b8; }
 .stat-number.warning { color: #ffc107; }
@@ -45,31 +34,66 @@
 
 .report-card {
     background: white;
-    border-radius: 15px;
-    padding: 25px;
+    border-radius: 12px;
+    padding: 24px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
 .report-card h5 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     color: #333;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #f0f0f0;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eef0f3;
 }
 
 .report-card h5 i {
-    color: #667eea;
-    margin-right: 10px;
+    color: #04a9f5;
 }
 
 .filter-section {
     background: white;
-    padding: 20px;
-    border-radius: 15px;
+    padding: 16px 24px 24px;
+    border-radius: 12px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-    margin-bottom: 25px;
+    margin-bottom: 24px;
 }
+
+.filter-section .ch-filter-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 -24px 16px;
+    padding: 0 24px 16px;
+    border-bottom: 1px solid #eef0f3;
+}
+.filter-section .ch-filter-head h5 { margin: 0; }
+.filter-section .form-group { margin-bottom: 0; }
+.filter-section label { margin-bottom: 8px; }
+.filter-section .ch-filter-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #eef0f3;
+}
+.filter-section .btn,
+.report-card .btn { margin: 0; }
+.ch-page .btn i { margin-right: 4px; }
+.ch-page .stats-row > [class*="col-"] { margin-bottom: 24px; }
+.ch-page .report-card table td,
+.ch-page .report-card table th { vertical-align: middle; }
+.ch-page .ch-nowrap { white-space: nowrap; }
+.filter-section select.form-control,
+.filter-section input.form-control { width: 100%; }
+.filter-section .ch-filter-head small { font-size: 13px; }
+/* The shared Year field brings its own col-md-3 wrapper; here it already sits in a column. */
+.filter-section .form-group.col-md-3 { flex: 0 0 100%; width: 100%; max-width: 100%; padding: 0; }
 
 .engagement-item {
     padding: 15px;
@@ -84,11 +108,13 @@
 }
 
 .engagement-badge {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 5px 12px;
-    border-radius: 15px;
+    background: #e4f4fe;
+    color: #0b8fd0;
+    padding: 4px 12px;
+    border-radius: 999px;
     font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .chart-container {
@@ -100,28 +126,36 @@
 
 @section('content')
 <div class="main-body">
-    <div class="page-wrapper">
-        <!-- Header -->
-        <div class="report-header">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h2><i class="fas fa-chart-line mr-3"></i>{{ $title }}</h2>
-                    <p class="mb-0 opacity-75">Monitor student engagement in live class sessions</p>
-                </div>
-                <div class="col-md-4 text-right">
-                    <a href="{{ route('admin.class-hub-reports.export') }}?date_from={{ request('date_from', now()->subMonth()->format('Y-m-d')) }}&date_to={{ request('date_to', now()->format('Y-m-d')) }}" 
-                       class="btn btn-light">
-                        <i class="fas fa-download mr-1"></i> Export Report
-                    </a>
+    <div class="page-wrapper ch-page">
+        <!-- [ breadcrumb ] start -->
+        <div class="page-header">
+            <div class="page-block">
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <div class="page-header-title">
+                            <h5>{{ $title }}</h5>
+                        </div>
+                        <ul class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{{ route('admin.dashboard.index') }}"><i class="feather icon-home"></i></a></li>
+                            <li class="breadcrumb-item"><a href="#!">{{ $title }}</a></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
+        <!-- [ breadcrumb ] end -->
 
         <!-- Filters -->
         <div class="filter-section">
+            <div class="ch-filter-head">
+                <h5>Filter <small class="text-muted fw-normal ms-2">Monitor student engagement in live class sessions</small></h5>
+                <a href="{{ route('admin.class-hub-reports.export') }}?date_from={{ request('date_from', now()->subMonth()->format('Y-m-d')) }}&date_to={{ request('date_to', now()->format('Y-m-d')) }}" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-download"></i> Export Report
+                </a>
+            </div>
             <form method="GET" action="{{ route('admin.class-hub-reports.index') }}">
-                <div class="row">
-                    <div class="col-md-2">
+                <div class="row g-3 align-items-end">
+                    <div class="col-xl-2 col-md-4">
                         <div class="form-group">
                             <label>Session</label>
                             <select name="session_id" class="form-control">
@@ -134,8 +168,10 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-xl-2 col-md-4">
                         @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
+                    </div>
+                    <div class="col-xl-2 col-md-4">
                         <div class="form-group">
                             <label>Semester</label>
                             <select name="semester_id" class="form-control sy-semester">
@@ -148,7 +184,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-xl-2 col-md-4">
                         <div class="form-group">
                             <label>Program</label>
                             <select name="program_id" class="form-control">
@@ -161,63 +197,63 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-xl-2 col-md-6">
                         <div class="form-group">
                             <label>Date From</label>
                             <input type="date" name="date_from" class="form-control" value="{{ request('date_from') }}">
                         </div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-xl-2 col-md-6">
                         <div class="form-group">
                             <label>Date To</label>
                             <input type="date" name="date_to" class="form-control" value="{{ request('date_to') }}">
                         </div>
                     </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>&nbsp;</label>
-                            <button type="submit" class="btn btn-primary btn-block">
-                                <i class="fas fa-filter mr-1"></i> Apply
-                            </button>
-                        </div>
-                    </div>
+                </div>
+                <div class="ch-filter-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter"></i> Apply
+                    </button>
+                    <a href="{{ route('admin.class-hub-reports.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> Reset
+                    </a>
                 </div>
             </form>
         </div>
 
         <!-- Statistics Cards -->
-        <div class="row mb-4">
-            <div class="col-md-2">
+        <div class="row stats-row">
+            <div class="col-xl-2 col-md-4 col-6">
                 <div class="stat-card">
                     <div class="stat-number primary">{{ number_format($totalSessions) }}</div>
                     <div class="stat-label">Total Sessions</div>
                 </div>
             </div>
-            <div class="col-md-2">
+            <div class="col-xl-2 col-md-4 col-6">
                 <div class="stat-card">
                     <div class="stat-number success">{{ number_format($completedSessions) }}</div>
                     <div class="stat-label">Completed</div>
                 </div>
             </div>
-            <div class="col-md-2">
+            <div class="col-xl-2 col-md-4 col-6">
                 <div class="stat-card">
                     <div class="stat-number info">{{ number_format($totalMessages) }}</div>
                     <div class="stat-label">Chat Messages</div>
                 </div>
             </div>
-            <div class="col-md-2">
+            <div class="col-xl-2 col-md-4 col-6">
                 <div class="stat-card">
                     <div class="stat-number warning">{{ number_format($totalAlerts) }}</div>
                     <div class="stat-label">Alerts Posted</div>
                 </div>
             </div>
-            <div class="col-md-2">
+            <div class="col-xl-2 col-md-4 col-6">
                 <div class="stat-card">
                     <div class="stat-number danger">{{ number_format($totalNotes) }}</div>
                     <div class="stat-label">Notes Taken</div>
                 </div>
             </div>
-            <div class="col-md-2">
+            <div class="col-xl-2 col-md-4 col-6">
                 <div class="stat-card">
                     <div class="stat-number primary">{{ number_format($activeChatSessions) }}</div>
                     <div class="stat-label">Active Chat Sessions</div>
@@ -246,7 +282,7 @@
                             <tbody>
                                 @forelse($topSessions as $session)
                                 <tr>
-                                    <td>{{ $session->date ? $session->date->format('M d, Y') : 'N/A' }}</td>
+                                    <td class="ch-nowrap">{{ $session->date ? $session->date->format('d M Y') : 'N/A' }}</td>
                                     <td>
                                         <strong>{{ $session->subject->code ?? 'N/A' }}</strong>
                                         <br><small class="text-muted">{{ $session->subject->title ?? '' }}</small>
@@ -263,8 +299,8 @@
                                     </td>
                                     <td>
                                         <a href="{{ route('admin.class-hub-reports.session', $session->id) }}" 
-                                           class="btn btn-outline-primary btn-sm">
-                                            <i class="fas fa-eye"></i>
+                                           class="btn btn-outline-primary btn-sm ch-nowrap">
+                                            <i class="fas fa-eye"></i> View
                                         </a>
                                     </td>
                                 </tr>
@@ -337,7 +373,7 @@
                             <td>
                                 <strong>{{ $session->subject->code ?? 'N/A' }}</strong> - {{ $session->subject->title ?? '' }}
                             </td>
-                            <td>{{ $session->date ? $session->date->format('M d, Y') : 'N/A' }}</td>
+                            <td class="ch-nowrap">{{ $session->date ? $session->date->format('d M Y') : 'N/A' }}</td>
                             <td>{{ $session->updated_at ? $session->updated_at->diffForHumans() : 'N/A' }}</td>
                             <td class="text-center">
                                 <span class="badge badge-primary">{{ $session->messages_count ?? 0 }}</span>

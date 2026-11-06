@@ -1,5 +1,10 @@
 @extends('admin.layouts.master')
 @section('title', __('Security Logs'))
+
+@push('css')
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/admin-ui.css') }}?v={{ filemtime(public_path('dashboard/css/pages/admin-ui.css')) }}">
+@endpush
+
 @section('content')
 
 <!-- Main content -->
@@ -25,6 +30,55 @@
                 </div>
             </div>
         </div>
+
+        <!-- Statistics Row -->
+        @if($logs->total() > 0)
+        {{-- These figures are worked out from the rows on the current page
+             only, so the caption says so rather than passing them off as
+             totals for every log. --}}
+        <div class="row stat-cards">
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-warning text-white">
+                    <div class="card-body">
+                        <i class="fas fa-exclamation-triangle stat-card-icon"></i>
+                        <h6 class="text-white">{{ __('Total Attempts') }}</h6>
+                        <h2 class="text-white">{{ number_format($logs->sum('attempts')) }}</h2>
+                        <p>{{ __('On this page') }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-danger text-white">
+                    <div class="card-body">
+                        <i class="fas fa-lock stat-card-icon"></i>
+                        <h6 class="text-white">{{ __('Blocked Entries') }}</h6>
+                        <h2 class="text-white">{{ number_format($logs->filter(fn($l) => $l->isBlocked())->count()) }}</h2>
+                        <p>{{ __('On this page') }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-info text-white">
+                    <div class="card-body">
+                        <i class="fas fa-envelope stat-card-icon"></i>
+                        <h6 class="text-white">{{ __('Unique Emails') }}</h6>
+                        <h2 class="text-white">{{ number_format($logs->unique('email')->count()) }}</h2>
+                        <p>{{ __('On this page') }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card stat-card bg-secondary text-white">
+                    <div class="card-body">
+                        <i class="fas fa-network-wired stat-card-icon"></i>
+                        <h6 class="text-white">{{ __('Unique IPs') }}</h6>
+                        <h2 class="text-white">{{ number_format($logs->unique('ip_address')->count()) }}</h2>
+                        <p>{{ __('On this page') }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
 
         <!-- Filters Card -->
         <div class="row mb-3">
@@ -125,7 +179,7 @@
                         </div>
                     </div>
                     <div class="card-body table-responsive p-0">
-                        <table class="table table-hover table-striped">
+                        <table class="table table-hover table-striped mb-0">
                             <thead>
                                 <tr>
                                     <th>{{ __('ID') }}</th>
@@ -193,54 +247,18 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="card-footer clearfix">
+                    @if($logs->total() > 0)
+                    <div class="card-footer ui-pagination-footer">
+                        <small class="text-muted">
+                            {{ __('Showing') }} {{ number_format($logs->firstItem()) }}–{{ number_format($logs->lastItem()) }} {{ __('of') }} {{ number_format($logs->total()) }}
+                        </small>
                         {{ $logs->appends(request()->query())->links() }}
                     </div>
+                    @endif
                 </div>
             </div>
         </div>
 
-        <!-- Statistics Row -->
-        @if($logs->total() > 0)
-        <div class="row">
-            <div class="col-md-3">
-                <div class="info-box bg-warning">
-                    <span class="info-box-icon"><i class="fas fa-exclamation-triangle"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">{{ __('Total Attempts') }}</span>
-                        <span class="info-box-number">{{ $logs->sum('attempts') }}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="info-box bg-danger">
-                    <span class="info-box-icon"><i class="fas fa-lock"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">{{ __('Blocked Entries') }}</span>
-                        <span class="info-box-number">{{ $logs->filter(fn($l) => $l->isBlocked())->count() }}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="info-box bg-info">
-                    <span class="info-box-icon"><i class="fas fa-envelope"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">{{ __('Unique Emails') }}</span>
-                        <span class="info-box-number">{{ $logs->unique('email')->count() }}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="info-box bg-secondary">
-                    <span class="info-box-icon"><i class="fas fa-network-wired"></i></span>
-                    <div class="info-box-content">
-                        <span class="info-box-text">{{ __('Unique IPs') }}</span>
-                        <span class="info-box-number">{{ $logs->unique('ip_address')->count() }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        @endif
 
     </div>
 </section>

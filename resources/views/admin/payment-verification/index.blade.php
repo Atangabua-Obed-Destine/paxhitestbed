@@ -1,10 +1,16 @@
 @extends('admin.layouts.master')
 @section('title', $title)
+
+@push('css')
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/admin-ui.css') }}?v={{ filemtime(public_path('dashboard/css/pages/admin-ui.css')) }}">
+<link rel="stylesheet" href="{{ asset('dashboard/css/pages/payment-verification.css') }}?v={{ filemtime(public_path('dashboard/css/pages/payment-verification.css')) }}">
+@endpush
+
 @section('content')
 
 <!-- Start Content-->
 <div class="main-body">
-    <div class="page-wrapper">
+    <div class="page-wrapper pv-page">
         <!-- [ breadcrumb ] start -->
         <div class="page-header">
             <div class="page-block">
@@ -24,74 +30,83 @@
         <!-- [ breadcrumb ] end -->
 
         <!-- [ Main Content ] start -->
-        <div class="row">
+        <div class="row stat-cards">
             <!-- Statistics Cards -->
-            <div class="col-md-2 col-sm-6">
-                <div class="card bg-warning text-white">
+            <div class="col-lg-4 col-sm-6">
+                <div class="card stat-card bg-warning text-white">
                     <div class="card-body">
+                        <i class="fas fa-clock stat-card-icon"></i>
                         <h6 class="text-white">{{ __('pending_receipts') }}</h6>
                         <h2 class="text-white">{{ $stats['pending'] }}</h2>
                         <p class="mb-0">{{ __('awaiting_verification') }}</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-2 col-sm-6">
-                <div class="card bg-success text-white">
+            <div class="col-lg-4 col-sm-6">
+                <div class="card stat-card bg-success text-white">
                     <div class="card-body">
+                        <i class="fas fa-check-circle stat-card-icon"></i>
                         <h6 class="text-white">{{ __('approved_receipts') }}</h6>
                         <h2 class="text-white">{{ $stats['approved'] }}</h2>
                         <p class="mb-0">{{ __('verified_approved') }}</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-2 col-sm-6">
-                <div class="card bg-danger text-white">
+            <div class="col-lg-4 col-sm-6">
+                <div class="card stat-card bg-danger text-white">
                     <div class="card-body">
+                        <i class="fas fa-times-circle stat-card-icon"></i>
                         <h6 class="text-white">{{ __('rejected_receipts') }}</h6>
                         <h2 class="text-white">{{ $stats['rejected'] }}</h2>
                         <p class="mb-0">{{ __('verification_rejected') }}</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-2 col-sm-6">
-                <div class="card bg-primary text-white">
+            <div class="col-lg-4 col-sm-6">
+                <div class="card stat-card bg-primary text-white">
                     <div class="card-body">
+                        <i class="fas fa-file-invoice-dollar stat-card-icon"></i>
                         <h6 class="text-white">{{ __('pending_fees') }}</h6>
                         <h2 class="text-white">{{ $stats['pending_fee'] ?? 0 }}</h2>
                         <p class="mb-0">{{ __('fee_payments') }}</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-2 col-sm-6">
-                <div class="card bg-secondary text-white">
+            <div class="col-lg-4 col-sm-6">
+                <div class="card stat-card bg-secondary text-white">
                     <div class="card-body">
+                        <i class="fas fa-calendar-alt stat-card-icon"></i>
                         <h6 class="text-white">{{ __('pending_installments') }}</h6>
                         <h2 class="text-white">{{ $stats['pending_installment'] ?? 0 }}</h2>
                         <p class="mb-0">{{ __('installment_payments') }}</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-2 col-sm-6">
-                <div class="card bg-info text-white">
+            <div class="col-lg-4 col-sm-6">
+                <div class="card stat-card bg-info text-white">
                     <div class="card-body">
+                        <i class="fas fa-layer-group stat-card-icon"></i>
                         <h6 class="text-white">{{ __('total_receipts') }}</h6>
                         <h2 class="text-white">{{ $stats['total'] }}</h2>
                         <p class="mb-0">{{ __('all_submissions') }}</p>
                     </div>
                 </div>
             </div>
+        </div>
 
+        <div class="row">
             <!-- Payment Receipts Table -->
             <div class="col-sm-12">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header ui-card-header">
                         <h5>{{ __('payment_receipts_list') }}</h5>
+                        <span class="text-muted small">{{ $rows->total() }} {{ __('results') }}</span>
                     </div>
 
                     <!-- Filter Form -->
-                    <div class="card-body border-bottom">
+                    <div class="card-body border-bottom pv-filters">
                         <form method="GET" action="{{ route($route.'.index') }}">
-                            <div class="row">
+                            <div class="row g-3 align-items-end">
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label for="payment_type">{{ __('field_payment_type') }}</label>
@@ -131,7 +146,7 @@
                                         <input type="text" name="search" id="search" class="form-control" placeholder="{{ __('search_student_or_reference') }}" value="{{ request('search') }}">
                                     </div>
                                 </div>
-                                <div class="col-md-12">
+                                <div class="col-md-12 pv-filter-actions">
                                     <button type="submit" class="btn btn-primary">
                                         <i class="fas fa-search"></i> {{ __('btn_filter') }}
                                     </button>
@@ -145,7 +160,7 @@
 
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-striped table-hover">
+                            <table class="table table-striped table-hover pv-table">
                                 <thead>
                                     <tr>
                                         <th>#</th>
@@ -153,12 +168,12 @@
                                         <th>{{ __('field_student') }}</th>
                                         <th>{{ __('field_fees_type') }}</th>
                                         <th>{{ __('field_session') }}</th>
-                                        <th>{{ __('field_amount') }}</th>
+                                        <th class="pv-amount">{{ __('field_amount') }}</th>
                                         <th>{{ __('field_payment_reference') }}</th>
                                         <th>{{ __('field_payment_date') }}</th>
                                         <th>{{ __('field_submitted_date') }}</th>
                                         <th>{{ __('field_status') }}</th>
-                                        <th>{{ __('field_action') }}</th>
+                                        <th class="text-end">{{ __('field_action') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -206,23 +221,23 @@
                                                 {{ $row->installment->paymentPlan->fee->studentEnroll->session->title ?? '' }}
                                             @endif
                                         </td>
-                                        <td>
+                                        <td class="pv-amount">
                                             @if(isset($setting->decimal_place))
-                                            {{ number_format((float)$row->amount, $setting->decimal_place, '.', '') }} 
+                                            {{ number_format((float)$row->amount, $setting->decimal_place, '.', '') }}
                                             @else
-                                            {{ number_format((float)$row->amount, 2, '.', '') }} 
-                                            @endif 
+                                            {{ number_format((float)$row->amount, 2, '.', '') }}
+                                            @endif
                                             {!! $setting->currency_symbol !!}
                                         </td>
                                         <td>{{ $row->payment_reference ?? '-' }}</td>
-                                        <td>
+                                        <td class="pv-nowrap">
                                             @if(isset($setting->date_format))
                                             {{ date($setting->date_format, strtotime($row->payment_date)) }}
                                             @else
                                             {{ date("Y-m-d", strtotime($row->payment_date)) }}
                                             @endif
                                         </td>
-                                        <td>
+                                        <td class="pv-nowrap">
                                             @if(isset($setting->date_format))
                                             {{ date($setting->date_format, strtotime($row->created_at)) }}
                                             @else
@@ -244,26 +259,32 @@
                                             @endif
                                         </td>
                                         <td>
-                                            <a href="{{ route($route.'.show', [$row->payment_type, $row->id]) }}" class="btn btn-sm btn-info">
-                                                <i class="fas fa-eye"></i> {{ __('btn_view') }}
-                                            </a>
+                                            <div class="pv-actions">
+                                                <a href="{{ route($route.'.show', [$row->payment_type, $row->id]) }}" class="btn btn-sm btn-info">
+                                                    <i class="fas fa-eye"></i> {{ __('btn_view') }}
+                                                </a>
 
-                                            {{-- Undoing a payment moves money in the fee, the payment
-                                                 account and the ledger, and can pull an application back
-                                                 out of the admissions queue — so it asks for a reason and
-                                                 says what it will do before doing it. --}}
-                                            @if($status == 'approved')
-                                                <button type="button" class="btn btn-sm btn-outline-danger"
-                                                        data-bs-toggle="modal" data-bs-target="#reverseModal{{ $row->id }}">
-                                                    <i class="fas fa-rotate-left"></i> {{ __('Reverse') }}
-                                                </button>
-                                            @endif
+                                                {{-- Undoing a payment moves money in the fee, the payment
+                                                     account and the ledger, and can pull an application back
+                                                     out of the admissions queue — so it asks for a reason and
+                                                     says what it will do before doing it. Only fee receipts
+                                                     can be reversed, and only they get a dialog below. --}}
+                                                @if($row->payment_type == 'fee' && $status == 'approved')
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            data-bs-toggle="modal" data-bs-target="#reverseModal{{ $row->id }}">
+                                                        <i class="fas fa-undo"></i> {{ __('Reverse') }}
+                                                    </button>
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
 
                                   @empty
                                     <tr>
-                                        <td colspan="11" class="text-center">{{ __('no_payment_receipts_found') }}</td>
+                                        <td colspan="11" class="text-center pv-empty">
+                                            <i class="fas fa-inbox"></i>
+                                            {{ __('no_payment_receipts_found') }}
+                                        </td>
                                     </tr>
                                   @endforelse
                                 </tbody>
@@ -271,9 +292,11 @@
                         </div>
 
                         <!-- Pagination -->
-                        <div class="mt-3">
+                        @if($rows->hasPages())
+                        <div class="pv-pagination">
                             {{ $rows->links() }}
                         </div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -288,8 +311,8 @@
      with display:none keeps a Bootstrap modal hidden however it is
      opened — the backdrop appeared and the dialog never did. --}}
 @foreach($rows as $row)
-    @if(($row->verification_status ?? null) === 'approved')
-                    <div class="modal fade" id="reverseModal{{ $row->id }}" tabindex="-1" aria-hidden="true">
+    @if($row->payment_type == 'fee' && ($row->verification_status ?? null) === 'approved')
+                    <div class="modal fade pv-modal" id="reverseModal{{ $row->id }}" tabindex="-1" aria-hidden="true">
                         <div class="modal-dialog">
                             <form action="{{ route($route.'.reverse', [$row->payment_type, $row->id]) }}" method="post">
                                 @csrf

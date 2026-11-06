@@ -1,0 +1,61 @@
+/*
+ * Payment verification screens (admin) — presentation touches only.
+ * Shared pieces (stat cards, card headers) live in admin-ui.css; this file
+ * holds what is particular to these screens. Spacing scale: 8 · 16 · 24 px.
+ */
+
+/* ---------- Filters ---------- */
+
+.pv-page .pv-filters { padding: 16px 24px 24px; }
+.pv-page .pv-filters .form-group { margin-bottom: 0; }
+.pv-page .pv-filters label { margin-bottom: 8px; }
+.pv-page .pv-filter-actions { display: flex; gap: 8px; }
+.pv-page .pv-filter-actions .btn { margin: 0; }
+
+/* ---------- Tables ---------- */
+
+.pv-page .pv-table th { vertical-align: middle; }
+.pv-page .pv-table td { vertical-align: middle; }
+.pv-page .pv-table .pv-nowrap { white-space: nowrap; }
+.pv-page .pv-table .pv-amount { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pv-page .pv-table small.text-muted { display: inline-block; margin-top: 2px; }
+.pv-page .pv-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.pv-page .pv-actions .btn { margin: 0; white-space: nowrap; }
+.pv-page .pv-empty { padding: 24px 16px !important; color: #6c757d; }
+.pv-page .pv-empty i { display: block; margin-bottom: 8px; font-size: 24px; opacity: .6; }
+.pv-page .pv-pagination { margin-top: 16px; }
+.pv-page .pv-pagination .pagination { margin-bottom: 0; }
+
+/* ---------- Detail page ---------- */
+
+.pv-page .alert { margin-bottom: 24px; }
+.pv-page .alert h5 { margin-bottom: 8px; }
+.pv-page .pv-section-title {
+    margin: 24px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+.pv-page .pv-section-title:first-child { margin-top: 0; }
+.pv-page .pv-details { margin-bottom: 0; }
+.pv-page .pv-details td { padding: 8px 0; vertical-align: top; }
+.pv-page .pv-details td:first-child { padding-right: 16px; }
+.pv-page .pv-details td:first-child strong { font-weight: 600; color: #6c757d; }
+.pv-page .pv-details td + td { color: #343a40; }
+.pv-page .pv-details hr { margin: 8px 0; }
+.pv-page .pv-receipt .text-center.mt-2 { margin-top: 16px !important; }
+.pv-page .pv-receipt .text-center.mt-2 .btn { margin: 0 4px; }
+.pv-page .pv-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid #e9ecef;
+}
+.pv-page .pv-action-bar .btn { margin: 0; }
+.pv-page .pv-action-bar .pv-decision { display: flex; gap: 8px; margin-left: auto; }
+
+/* Modals opened from these pages */
+.pv-modal .modal-footer { gap: 8px; }
+.pv-modal .modal-footer > * { margin: 0; }
