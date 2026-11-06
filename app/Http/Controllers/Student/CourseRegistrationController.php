@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\CourseRegistrationDeadline;
 use App\Models\Grade;
 use App\Models\ProgramSessionMaxCredit;
 use App\Models\Student;
@@ -146,6 +147,13 @@ class CourseRegistrationController extends Controller
         $currentEnroll->load('semester');
         if ($currentEnroll->semester && $currentEnroll->semester->is_resit) {
             Flasher::addError(__('Course registration is not allowed during resit semesters.'), __('msg_error'));
+            return redirect()->route($this->route . '.index');
+        }
+
+        // Checked here and not only on the page: a form opened before the
+        // deadline can be submitted after it.
+        if (!CourseRegistrationDeadline::allowsRegistration($currentEnroll)) {
+            Flasher::addError(CourseRegistrationDeadline::forEnrollment($currentEnroll)->noteFor(), __('msg_error'));
             return redirect()->route($this->route . '.index');
         }
 
@@ -293,6 +301,13 @@ class CourseRegistrationController extends Controller
         $currentEnroll->load('semester');
         if ($currentEnroll->semester && $currentEnroll->semester->is_resit) {
             Flasher::addError(__('Course changes are not allowed during resit semesters.'), __('msg_error'));
+            return redirect()->route($this->route . '.index');
+        }
+
+        // Frozen with registration: once class and exam lists are drawn up, a
+        // student thinning their list on the portal would leave them wrong.
+        if (!CourseRegistrationDeadline::allowsRegistration($currentEnroll)) {
+            Flasher::addError(CourseRegistrationDeadline::forEnrollment($currentEnroll)->noteFor(), __('msg_error'));
             return redirect()->route($this->route . '.index');
         }
 

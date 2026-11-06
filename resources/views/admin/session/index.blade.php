@@ -100,6 +100,7 @@
                                         <th>{{ __('field_status') }}</th>
                                         <th>{{ __('Applications') }}</th>
                                         <th>{{ __('Progression') }}</th>
+                                        <th>{{ __('Course registration') }}</th>
                                         <th>{{ __('field_action') }}</th>
                                     </tr>
                                 </thead>
@@ -213,6 +214,113 @@
                                                 <span class="badge badge-pill badge-warning">{{ __('Paused') }}</span>
                                                 @endif
                                             @endcan
+                                        </td>
+                                        {{-- By when students of each semester type must have registered
+                                             their courses. One chip per type; its colour is the urgency
+                                             and the small figure is how many have registered nothing. --}}
+                                        <td>
+                                            @foreach([1, 2] as $semesterType)
+                                                @php
+                                                    $deadline = $deadlines[$row->id . ':' . $semesterType] ?? null;
+                                                    $counts = $registrationCounts[$row->id . ':' . $semesterType] ?? ['total' => 0, 'unregistered' => 0];
+                                                    $typeLabel = \App\Models\CourseRegistrationDeadline::typeLabel($semesterType);
+                                                    $modalId = 'registrationDeadline' . $row->id . 'T' . $semesterType;
+                                                @endphp
+                                                <div class="mb-1 text-nowrap">
+                                                    <small class="text-muted d-inline-block" style="width: 48px;">{{ $semesterType === 1 ? __('First') : __('Second') }}</small>
+                                                    @if($deadline)
+                                                        @can($access.'-edit')
+                                                        <button type="button" class="btn btn-{{ $deadline->colour() }} btn-sm py-0" data-bs-toggle="modal" data-bs-target="#{{ $modalId }}"
+                                                                title="{{ $typeLabel }}: {{ $deadline->urgency() === 'closed' ? __('closed') : __('closes') }} {{ $deadline->closesAtLabel() }}">
+                                                        @else
+                                                        <span class="badge badge-pill badge-{{ $deadline->colour() }}">
+                                                        @endcan
+                                                            @if($deadline->urgency() === 'closed')
+                                                                <i class="fas fa-lock"></i> {{ __('Closed') }} {{ $deadline->closesAtLabel() }}
+                                                            @elseif($deadline->urgency() === 'imminent')
+                                                                <i class="fas fa-exclamation-circle"></i> {{ $deadline->closesAtLabel() }} &middot; {{ $deadline->countdown() }}
+                                                            @elseif($deadline->urgency() === 'soon')
+                                                                <i class="fas fa-hourglass-half"></i> {{ $deadline->closesAtLabel() }} &middot; {{ $deadline->countdown() }}
+                                                            @else
+                                                                <i class="fas fa-calendar-check"></i> {{ $deadline->closesAtLabel() }} &middot; {{ $deadline->countdown() }}
+                                                            @endif
+                                                        @can($access.'-edit')
+                                                        </button>
+                                                        @else
+                                                        </span>
+                                                        @endcan
+                                                    @else
+                                                        @can($access.'-edit')
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0" data-bs-toggle="modal" data-bs-target="#{{ $modalId }}" title="{{ __('Set a deadline for :type', ['type' => $typeLabel]) }}">
+                                                            <i class="far fa-calendar-plus"></i> {{ __('No deadline') }}
+                                                        </button>
+                                                        @else
+                                                        <span class="badge badge-pill badge-secondary">{{ __('No deadline') }}</span>
+                                                        @endcan
+                                                    @endif
+                                                    @if($counts['total'] > 0)
+                                                        <small class="{{ $counts['unregistered'] > 0 ? ($deadline && $deadline->isPast() ? 'text-danger font-weight-bold' : 'text-muted') : 'text-success' }}"
+                                                               title="{{ __(':n of :total students of this semester type have registered nothing', ['n' => $counts['unregistered'], 'total' => $counts['total']]) }}">
+                                                            &nbsp;{{ $counts['unregistered'] }}/{{ $counts['total'] }} {{ __('unregistered') }}
+                                                        </small>
+                                                    @endif
+                                                </div>
+
+                                                @can($access.'-edit')
+                                                <div class="modal fade" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
+                                                    <div class="modal-dialog modal-dialog-centered">
+                                                        <div class="modal-content">
+                                                            <form action="{{ route($route.'.registration-deadline', $row->id) }}" method="post" class="needs-validation" novalidate>
+                                                                @csrf
+                                                                <input type="hidden" name="semester_type" value="{{ $semesterType }}">
+                                                                <div class="modal-header">
+                                                                    <h5 class="modal-title">{{ __('Course registration deadline') }} &mdash; {{ $typeLabel }}, {{ $row->title }}</h5>
+                                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                </div>
+                                                                <div class="modal-body text-wrap">
+                                                                    <p class="text-muted small">
+                                                                        {{ __('Applies to every student enrolled in a :type of :session, whatever their year of study (:total students today). After this moment they can neither register nor drop courses on their portal. The Assign Subjects screen is not affected, so the department can still fix a late case.', ['type' => $typeLabel, 'session' => $row->title, 'total' => $counts['total']]) }}
+                                                                    </p>
+                                                                    <div class="form-group">
+                                                                        <label for="closes_at{{ $modalId }}" class="form-label">{{ __('Registration closes at') }} <span>*</span></label>
+                                                                        <input type="datetime-local" class="form-control" name="closes_at" id="closes_at{{ $modalId }}"
+                                                                               value="{{ $deadline ? $deadline->closes_at->format('Y-m-d\TH:i') : '' }}" required>
+                                                                        <div class="invalid-feedback">{{ __('required_field') }} {{ __('Registration closes at') }}</div>
+                                                                        @if($deadline)
+                                                                        <small class="form-text text-muted">{{ __('Set a later date and time to extend the deadline.') }}</small>
+                                                                        @endif
+                                                                    </div>
+                                                                    <div class="form-group mb-0">
+                                                                        <label for="note{{ $modalId }}" class="form-label">{{ __('What students are told once it has passed') }}</label>
+                                                                        <textarea class="form-control" name="note" id="note{{ $modalId }}" rows="3" maxlength="191"
+                                                                                  placeholder="{{ __('e.g. Registration is closed. See the Registrar before 30 November to have a course added.') }}">{{ $deadline->note ?? '' }}</textarea>
+                                                                        <small class="form-text text-muted">
+                                                                            {{ __('Leave empty and students see:') }}
+                                                                            "{{ __('Course registration for this semester closed on :when. If you still need a course added or removed, speak to your department.', ['when' => $deadline ? $deadline->closesAtLong() : '...']) }}"
+                                                                        </small>
+                                                                    </div>
+                                                                    @if($deadline && $deadline->setter)
+                                                                        <p class="text-muted small mb-0 mt-2">
+                                                                            {{ __('Last set by :who on :when', ['who' => $deadline->setter->name, 'when' => $deadline->updated_at->format('d/m/Y H:i')]) }}
+                                                                        </p>
+                                                                    @endif
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    @if($deadline)
+                                                                    <button type="submit" class="btn btn-outline-danger me-auto" name="remove" value="1" formnovalidate
+                                                                            onclick="return confirm('{{ __('Remove this deadline? Registration for :type will stay open with no deadline.', ['type' => $typeLabel]) }}');">
+                                                                        <i class="fas fa-times"></i> {{ __('Remove deadline') }}
+                                                                    </button>
+                                                                    @endif
+                                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('btn_close') }}</button>
+                                                                    <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> {{ __('btn_save') }}</button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                @endcan
+                                            @endforeach
                                         </td>
                                         <td>
                                             @if( $row->current == 1 )

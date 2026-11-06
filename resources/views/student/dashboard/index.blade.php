@@ -438,17 +438,56 @@
         @php
             $needsRegistration = isset($registrationStatus)
                 && in_array($registrationStatus['state'], ['open', 'partly_done'], true);
+            $registrationDeadline = $registrationStatus['deadline'] ?? null;
+            $missedDeadline = isset($registrationStatus)
+                && $registrationStatus['state'] === 'closed'
+                && $registrationStatus['registered'] === 0;
         @endphp
 
-        @if($needsRegistration)
-        <div class="alert alert-warning shadow-sm mb-4" role="alert" style="border-left: 5px solid #ffc107;">
+        {{-- Both banners below carry the deadline themselves; tell the layout
+             not to add its strip on top. Every other state keeps the strip. --}}
+        @if(($needsRegistration && $registrationDeadline) || $missedDeadline)
+            @section('registration_deadline_shown', '1')
+        @endif
+
+        {{-- The deadline passed with nothing registered. Not a reminder any
+             more: the student is on no class list and the portal cannot fix
+             it, so it stays red until the department does. --}}
+        @if($missedDeadline)
+        <div class="alert alert-danger shadow-sm mb-4" role="alert" style="border-left: 5px solid #dc3545;">
             <div class="d-flex align-items-center flex-wrap">
                 <div class="mr-3 mb-2 mb-md-0">
-                    <i class="fas fa-clipboard-list fa-2x text-warning"></i>
+                    <i class="fas fa-lock fa-2x text-danger"></i>
                 </div>
                 <div class="flex-grow-1 mb-2 mb-md-0">
                     <h6 class="mb-1 font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
                     <p class="mb-0 small">{{ $registrationStatus['detail'] }}</p>
+                    @if($registrationDeadline && trim((string) $registrationDeadline->note) !== '')
+                        <p class="mb-0 small mt-1"><i class="fas fa-info-circle"></i> {{ $registrationDeadline->note }}</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+        @endif
+
+        @if($needsRegistration)
+        <div class="alert alert-{{ $registrationDeadline ? $registrationDeadline->colour() : 'warning' }} shadow-sm mb-4" role="alert"
+             style="border-left: 5px solid {{ $registrationDeadline && $registrationDeadline->urgency() === 'imminent' ? '#dc3545' : '#ffc107' }};">
+            <div class="d-flex align-items-center flex-wrap">
+                <div class="mr-3 mb-2 mb-md-0">
+                    <i class="fas fa-clipboard-list fa-2x {{ $registrationDeadline && $registrationDeadline->urgency() === 'imminent' ? 'text-danger' : 'text-warning' }}"></i>
+                </div>
+                <div class="flex-grow-1 mb-2 mb-md-0">
+                    <h6 class="mb-1 font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
+                    <p class="mb-0 small">{{ $registrationStatus['detail'] }}</p>
+                    @if($registrationDeadline)
+                        {{-- The countdown, in the colour of how little time is left. --}}
+                        <p class="mb-0 small mt-1 font-weight-bold">
+                            <i class="fas fa-hourglass-half"></i>
+                            {{ __('Register before :when', ['when' => $registrationDeadline->closesAtLong()]) }}
+                            <span class="badge badge-pill badge-{{ $registrationDeadline->colour() }}">{{ $registrationDeadline->countdown() }}</span>
+                        </p>
+                    @endif
                 </div>
                 <a href="{{ route('student.course-registration.index') }}" class="btn btn-warning">
                     <i class="fas fa-arrow-right"></i> {{ __('Register my courses') }}
@@ -468,6 +507,16 @@
                     <div class="modal-body">
                         <h6 class="font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
                         <p>{{ $registrationStatus['detail'] }}</p>
+
+                        @if($registrationDeadline)
+                        <div class="alert alert-{{ $registrationDeadline->colour() }} py-2 mb-2">
+                            <i class="fas fa-hourglass-half"></i>
+                            <strong>{{ __('Deadline') }}:</strong>
+                            {{ $registrationDeadline->closesAtLong() }}
+                            &mdash; <strong>{{ $registrationDeadline->countdown() }}</strong>.
+                            {{ __('After that, you will not be able to register on the portal.') }}
+                        </div>
+                        @endif
 
                         @if($registrationStatus['enrollment'] && $registrationStatus['enrollment']->semester)
                         <p class="mb-2 text-muted small">

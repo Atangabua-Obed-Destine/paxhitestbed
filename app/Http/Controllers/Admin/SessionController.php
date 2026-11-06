@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Http\Request;
+use App\Models\CourseRegistrationDeadline;
 use App\Models\Session;
 use App\Models\Program;
+use App\Models\StudentEnroll;
+use Illuminate\Support\Facades\Auth;
 
 class SessionController extends Controller
 {
@@ -29,7 +32,7 @@ class SessionController extends Controller
 
         $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-create|'.$this->access.'-edit|'.$this->access.'-delete', ['only' => ['index','show']]);
         $this->middleware('permission:'.$this->access.'-create', ['only' => ['create','store','current']]);
-        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['edit','update','current','toggleApplications']]);
+        $this->middleware('permission:'.$this->access.'-edit', ['only' => ['edit','update','current','toggleApplications','toggleProgression','progressionNote','registrationDeadline']]);
         $this->middleware('permission:'.$this->access.'-delete', ['only' => ['destroy']]);
     }
 
@@ -50,6 +53,13 @@ class SessionController extends Controller
         $data['programs'] = Program::where('status', '1')
                             ->orderBy('title', 'asc')->get();
         $data['rows'] = Session::orderBy('id', 'desc')->get();
+
+        // Course registration deadlines, one chip per session and semester
+        // type, with how many students of that type have registered nothing -
+        // the number that tells the admin who a closed deadline has caught.
+        $data['deadlines'] = CourseRegistrationDeadline::all()
+            ->keyBy(fn ($d) => $d->session_id . ':' . $d->semester_type);
+        $data['registrationCounts'] = $this->registrationCounts($data['rows']);
 
         return view($this->view.'.index', $data);
     }
@@ -251,6 +261,90 @@ class SessionController extends Controller
         );
 
         return redirect()->back();
+    }
+
+    /**
+     * Set, move or remove the course registration deadline for one semester
+     * type of this academic year.
+     *
+     * Moving the date later is how an extension is granted; removing the row
+     * puts registration back to the way it was before any deadline existed.
+     */
+    public function registrationDeadline(Request $request, $id)
+    {
+        $session = Session::findOrFail($id);
+
+        $data = $request->validate([
+            'semester_type' => 'required|in:1,2',
+            'remove' => 'nullable|boolean',
+            'closes_at' => 'required_unless:remove,1|nullable|date',
+            'note' => 'nullable|string|max:191',
+        ]);
+
+        $type = (int) $data['semester_type'];
+        $label = CourseRegistrationDeadline::typeLabel($type);
+
+        if ($request->boolean('remove')) {
+            CourseRegistrationDeadline::where('session_id', $session->id)
+                ->where('semester_type', $type)
+                ->delete();
+
+            Flasher::addSuccess(__('The :type course registration deadline for :session has been removed. Registration is open with no deadline.', [
+                'type' => $label, 'session' => $session->title,
+            ]), __('msg_success'));
+
+            return redirect()->back();
+        }
+
+        $deadline = CourseRegistrationDeadline::firstOrNew([
+            'session_id' => $session->id,
+            'semester_type' => $type,
+        ]);
+
+        $deadline->closes_at = \Carbon\Carbon::parse($data['closes_at']);
+        $deadline->note = $request->filled('note') ? trim($data['note']) : null;
+        $deadline->set_by = Auth::id();
+        $deadline->save();
+
+        Flasher::addSuccess(
+            $deadline->isPast()
+                ? __(':type course registration for :session is closed as of :when.', [
+                    'type' => $label, 'session' => $session->title, 'when' => $deadline->closesAtLabel(),
+                ])
+                : __(':type students in :session must register by :when (:left).', [
+                    'type' => $label, 'session' => $session->title, 'when' => $deadline->closesAtLabel(), 'left' => $deadline->countdown(),
+                ]),
+            __('msg_success')
+        );
+
+        return redirect()->back();
+    }
+
+    /**
+     * For each session and semester type: how many students are enrolled and
+     * how many of them have registered nothing yet.
+     *
+     * @return array<string, array{total: int, unregistered: int}>
+     */
+    protected function registrationCounts($sessions): array
+    {
+        $counts = [];
+
+        foreach ($sessions as $session) {
+            foreach ([CourseRegistrationDeadline::TYPE_FIRST, CourseRegistrationDeadline::TYPE_SECOND] as $type) {
+                $reach = StudentEnroll::where('session_id', $session->id)
+                    ->whereNotNull('student_id')
+                    ->where('status', 1)
+                    ->whereHas('semester', fn ($q) => $q->where('semester_type', $type)->where('is_resit', 0));
+
+                $counts[$session->id . ':' . $type] = [
+                    'total' => (clone $reach)->count(),
+                    'unregistered' => (clone $reach)->doesntHave('subjects')->count(),
+                ];
+            }
+        }
+
+        return $counts;
     }
 
     /**

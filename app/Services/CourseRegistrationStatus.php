@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CourseRegistrationDeadline;
 use App\Models\EnrollSubject;
 use App\Models\ProgramSessionMaxCredit;
 use App\Models\Semester;
@@ -33,6 +34,7 @@ class CourseRegistrationStatus
     public const NOTHING_OFFERED = 'nothing_offered';
     public const BLOCKED_BY_FEE = 'blocked_by_fee';
     public const NOT_ENROLLED = 'not_enrolled';
+    public const CLOSED = 'closed';
 
     protected PlatformFeeAccess $access;
 
@@ -76,7 +78,7 @@ class CourseRegistrationStatus
     /**
      * Everything the two screens need to say the same thing.
      *
-     * @return array{state: string, registered: int, available: int, assignable: Collection, max_credit: ?float, is_resit: bool, enrollment: ?StudentEnroll, headline: string, detail: string, action: ?string}
+     * @return array{state: string, registered: int, available: int, assignable: Collection, max_credit: ?float, is_resit: bool, enrollment: ?StudentEnroll, deadline: ?CourseRegistrationDeadline, headline: string, detail: string, action: ?string}
      */
     public function for(Student $student, ?StudentEnroll $enroll = null): array
     {
@@ -90,6 +92,7 @@ class CourseRegistrationStatus
             'max_credit' => null,
             'is_resit' => false,
             'enrollment' => $enroll,
+            'deadline' => null,
             'headline' => __('You are not enrolled in a semester yet.'),
             'detail' => __('Course registration opens once the school has enrolled you for the semester.'),
             'action' => null,
@@ -124,6 +127,24 @@ class CourseRegistrationStatus
         $answer['assignable'] = $this->assignableSubjects($student, $enroll);
         $answer['available'] = $answer['assignable']->count();
         $answer['max_credit'] = $this->maxCredit($enroll);
+
+        // The school's deadline for this semester type, carried in every
+        // remaining state so the screens can show the countdown while it is
+        // still open - and shutting the door once it has passed, whatever
+        // courses would otherwise be on offer.
+        $answer['deadline'] = CourseRegistrationDeadline::forEnrollment($enroll);
+
+        if ($answer['deadline'] && $answer['deadline']->isPast()) {
+            return array_merge($answer, [
+                'state' => self::CLOSED,
+                'assignable' => collect(),
+                'available' => 0,
+                'headline' => __('Course registration closed on :when.', ['when' => $answer['deadline']->closesAtLong()]),
+                'detail' => $answer['registered'] > 0
+                    ? __('You are registered for :count course(s). Any change now goes through your department.', ['count' => $answer['registered']])
+                    : __('You did not register any courses before the deadline. Speak to your department as soon as possible: until a course is registered for you, you are on no class list and no exam list.'),
+            ]);
+        }
 
         if ($answer['available'] > 0) {
             $partly = $answer['registered'] > 0;
@@ -161,6 +182,15 @@ class CourseRegistrationStatus
     public function needsAttention(array $status): bool
     {
         return in_array($status['state'], [self::OPEN, self::PARTLY_DONE], true);
+    }
+
+    /**
+     * Did the deadline pass with nothing registered? The one closed case that
+     * is a problem for the student rather than merely a fact.
+     */
+    public function missedDeadline(array $status): bool
+    {
+        return $status['state'] === self::CLOSED && $status['registered'] === 0;
     }
 
     /**

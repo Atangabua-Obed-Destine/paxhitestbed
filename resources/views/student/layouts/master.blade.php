@@ -649,7 +649,13 @@
                     <!-- Include page breadcrumb -->
                     @include('student.layouts.inc.breadcrumb')
                     <!-- end page title -->
-                    
+
+                    {{-- The course registration countdown, on every page; a
+                         page that already shows it (the dashboard banner)
+                         declares the section so it is not said twice. --}}
+                    @unless(View::hasSection('registration_deadline_shown'))
+                        @include('student.layouts.inc.registration-deadline')
+                    @endunless
 
                     <!-- Start Content-->
                     @yield('content')

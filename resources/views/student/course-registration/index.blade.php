@@ -33,11 +33,26 @@
                                 {{ __('Registering tells the school which classes you are taking this semester. Until you do it, you will not appear on the class list or the exam list for those courses, and no marks can be recorded for you.') }}
                             </p>
 
+                            @php
+                                $registrationDeadline = $registrationStatus['deadline'] ?? null;
+                                $registrationClosed = isset($registrationStatus) && $registrationStatus['state'] === 'closed';
+                            @endphp
+
                             @if(isset($registrationStatus) && in_array($registrationStatus['state'], ['open', 'partly_done'], true))
                                 <p class="mb-2">
                                     <strong>{{ $registrationStatus['headline'] }}</strong>
                                     {{ $registrationStatus['detail'] }}
                                 </p>
+                            @endif
+
+                            @if($registrationDeadline && !$registrationClosed)
+                                {{-- The deadline, in the colour of how little time is left. --}}
+                                <div class="alert alert-{{ $registrationDeadline->colour() }} mb-2">
+                                    <i class="fas fa-hourglass-half"></i>
+                                    <strong>{{ __('Register before :when', ['when' => $registrationDeadline->closesAtLong()]) }}</strong>
+                                    <span class="badge badge-pill badge-{{ $registrationDeadline->colour() }}">{{ $registrationDeadline->countdown() }}</span>
+                                    <br><small>{{ __('After that moment you can neither register nor drop courses here. Only your department can change your list.') }}</small>
+                                </div>
                             @endif
 
                             <ol class="mb-2">
@@ -73,7 +88,7 @@
                             <p class="mb-1"><strong>{{ __('If something looks wrong') }}</strong></p>
                             <ul class="mb-0">
                                 <li>{{ __('Nothing in the list to choose from? Either you are already registered for everything open to you, or the school has not set the courses for your semester yet. Speak to your department.') }}</li>
-                                <li>{{ __('Registered the wrong course? Use the Drop button beside it in My Courses, as long as no marks have been recorded yet.') }}</li>
+                                <li>{{ __('Registered the wrong course? Use the Drop button beside it in My Courses, as long as no marks have been recorded yet and the registration deadline has not passed.') }}</li>
                                 @if(!is_null($maxCreditLimit))
                                 <li>{{ __('You may register up to :limit credits this semester. Picking more than that will be refused.', ['limit' => $maxCreditLimit]) }}</li>
                                 @endif
@@ -92,7 +107,7 @@
                                 <div class="col-md-6">
                                     <fieldset class="row gx-2 scheduler-border">
                                         <legend>{{ __('tab_basic_info') }}</legend>
-                                        <p><mark class="text-primary">{{ __('field_matricule') }}:</mark> 
+                                        <p><mark class="text-primary">{{ __('field_matricule') }}:</mark>
                                             <strong style="font-size: 15px; color: #667eea;">#{{ $currentEnroll->matricule ?? $student->student_id }}</strong>
                                             @if($currentEnroll && $currentEnroll->program)
                                                 <span class="badge" style="background: {{ $currentEnroll->program->academic_level == 'M' ? '#f5576c' : ($currentEnroll->program->academic_level == 'D' ? '#00f2fe' : '#38f9d7') }}; color: white; font-size: 10px;">
@@ -116,7 +131,7 @@
                                         </p>
                                         <hr/>
 
-                                        <p><mark class="text-primary">{{ __('field_total_credit_hour') }}:</mark> 
+                                        <p><mark class="text-primary">{{ __('field_total_credit_hour') }}:</mark>
                                             {{ isset($performanceSummary) ? number_format($performanceSummary['total_credits_attempted'], 2) : '0.00' }}
                                         </p>
                                         <hr/>
@@ -166,7 +181,7 @@
                                     <div class="card bg-light border-0">
                                         <div class="card-body text-center">
                                             <h6 class="text-muted mb-2">{{ __('field_cumulative_gpa') }}</h6>
-                                            <h2 class="mb-2 
+                                            <h2 class="mb-2
                                                 @if($performanceSummary['performance_status'] == 'excellent') text-success
                                                 @elseif($performanceSummary['performance_status'] == 'very_good') text-info
                                                 @elseif($performanceSummary['performance_status'] == 'good') text-primary
@@ -175,7 +190,7 @@
                                                 @endif">
                                                 {{ number_format($performanceSummary['cgpa'], 2) }}
                                             </h2>
-                                            <span class="badge 
+                                            <span class="badge
                                                 @if($performanceSummary['performance_status'] == 'excellent') bg-success
                                                 @elseif($performanceSummary['performance_status'] == 'very_good') bg-info
                                                 @elseif($performanceSummary['performance_status'] == 'good') bg-primary
@@ -282,7 +297,7 @@
                             <!-- Performance Feedback -->
                             <div class="row">
                                 <div class="col-md-12">
-                                    <div class="alert 
+                                    <div class="alert
                                         @if($performanceSummary['performance_status'] == 'excellent' || $performanceSummary['performance_status'] == 'very_good') alert-success
                                         @elseif($performanceSummary['performance_status'] == 'good') alert-primary
                                         @elseif($performanceSummary['performance_status'] == 'satisfactory') alert-warning
@@ -301,7 +316,7 @@
                                             @else
                                                 <li>{{ __('Your performance needs improvement. Please seek academic advising and support to enhance your grades.') }}</li>
                                             @endif
-                                            
+
                                             @if($performanceSummary['failed_courses'] > 0)
                                                 <li class="text-danger">
                                                     <strong>{{ __('Important:') }}</strong> {{ __('You have') }} {{ $performanceSummary['failed_courses'] }} {{ __('unvalidated course(s) (below 50%). These courses must be retaken and validated for graduation.') }}
@@ -494,9 +509,9 @@
                                                                     $publishTime = date('H:i:s', strtotime($mark->publish_time));
                                                                     $currentDate = date('Y-m-d');
                                                                     $currentTime = date('H:i:s');
-                                                                    $isPublished = $mark->is_visible_to_student && 
+                                                                    $isPublished = $mark->is_visible_to_student &&
                                                                         (($publishDate == $currentDate && $publishTime <= $currentTime) || $publishDate < $currentDate);
-                                                                    
+
                                                                     // Only set hasMarks if the mark is published
                                                                     if($isPublished) {
                                                                         $hasMarks = true;
@@ -528,6 +543,10 @@
                                                         </button>
                                                     @elseif($isResitSemester)
                                                         <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ __('Cannot drop courses during a resit semester') }}">
+                                                            <i class="fas fa-lock"></i> {{ __('Locked') }}
+                                                        </button>
+                                                    @elseif(isset($registrationStatus) && $registrationStatus['state'] === 'closed')
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="{{ __('Cannot drop: the course registration deadline has passed') }}">
                                                             <i class="fas fa-lock"></i> {{ __('Locked') }}
                                                         </button>
                                                     @elseif(($subject->subject_type == 1 || $subject->subject_type == 2) && in_array($subject->id, $currentSemesterEnrolledSubjectIds))
@@ -573,9 +592,21 @@
                         <div class="card-block">
                             @if($isResitSemester)
                                 <div class="alert alert-warning mb-0" role="alert">
-                                    <i class="fas fa-exclamation-triangle"></i> 
+                                    <i class="fas fa-exclamation-triangle"></i>
                                     <strong>{{ __('Resit Semester') }}</strong><br>
                                     {{ __('Course registration is not available during resit semesters. Students cannot register courses by themselves during this period.') }}
+                                </div>
+                            @elseif(isset($registrationStatus) && $registrationStatus['state'] === 'closed')
+                                {{-- The deadline has passed. Nothing to choose from, and the
+                                     reason stated in the school's own words where it wrote any. --}}
+                                <div class="alert alert-{{ $registrationStatus['registered'] > 0 ? 'secondary' : 'danger' }} mb-0" role="alert">
+                                    <i class="fas fa-lock"></i>
+                                    <strong>{{ $registrationStatus['headline'] }}</strong><br>
+                                    {{ $registrationStatus['detail'] }}
+                                    @if($registrationStatus['deadline'])
+                                        <hr class="my-2">
+                                        <p class="mb-0">{{ $registrationStatus['deadline']->noteFor() }}</p>
+                                    @endif
                                 </div>
                             @else
                                 @php
@@ -589,7 +620,7 @@
                                 @endif
                                 @if(!$hasAssignableSubjects)
                                     <div class="alert alert-info mb-0" role="alert">
-                                        <i class="fas fa-info-circle"></i> 
+                                        <i class="fas fa-info-circle"></i>
                                         {{ __('No subjects are currently available for registration. This may be because:') }}
                                         <ul class="mb-0 mt-2">
                                             <li>{{ __('You have already validated all available courses (marks ≥ 50%)') }}</li>
@@ -603,7 +634,7 @@
                                     </div>
                                 @else
                                     <div class="alert alert-info">
-                                        <i class="fas fa-info-circle"></i> 
+                                        <i class="fas fa-info-circle"></i>
                                         <strong>{{ __('Available Courses') }}:</strong><br>
                                         {{ __('Showing courses from your current semester and previous years of the same semester type that you have not yet validated (marks < 50%).') }}
                                     </div>

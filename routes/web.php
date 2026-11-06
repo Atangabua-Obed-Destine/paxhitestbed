@@ -473,6 +473,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('academic/session-toggle-applications/{id}', 'SessionController@toggleApplications')->name('session.toggle-applications');
     Route::get('academic/session-toggle-progression/{id}', 'SessionController@toggleProgression')->name('session.toggle-progression');
     Route::post('academic/session-progression-note/{id}', 'SessionController@progressionNote')->name('session.progression-note');
+    Route::post('academic/session-registration-deadline/{id}', 'SessionController@registrationDeadline')->name('session.registration-deadline');
     Route::resource('academic/semester', 'SemesterController');
     Route::resource('academic/section', 'SectionController');
     Route::resource('academic/room', 'ClassRoomController');
