@@ -593,14 +593,16 @@
                                                                 <button type="button" class="forecast-btn"
                                                                         data-bs-toggle="modal" data-bs-target="#forecastModal"
                                                                         onclick='budgetForecast(@json($fcPayload))'>
-                                                                    <i class="fas fa-users me-1"></i>{{ $fc ? __('Edit forecast') : __('Forecast from students') }}
+                                                                    <i class="fas fa-users me-1"></i>{{ $fc ? __('Edit forecast') : (($fcRate['kind'] ?? 'tuition') === 'registration' ? __('Forecast from applicants') : __('Forecast from students')) }}
                                                                 </button>
                                                             @endif
 
                                                             @if($fc)
                                                                 @php $stale = $fcRate && $fc->isStaleAgainst((float) $fcRate['rate']); @endphp
                                                                 <span class="forecast-basis {{ $stale ? 'forecast-stale' : '' }}">
-                                                                    {{ trans_choice(':count student|:count students', $fc->student_count, ['count' => number_format($fc->student_count)]) }}
+                                                                    {{ trans_choice(($fcRate['kind'] ?? 'tuition') === 'registration'
+                                                                        ? ':count applicant|:count applicants'
+                                                                        : ':count student|:count students', $fc->student_count, ['count' => number_format($fc->student_count)]) }}
                                                                     &times; {{ number_format($fc->rate) }}
                                                                     @if($stale)
                                                                         <br><i class="fas fa-exclamation-triangle me-1"></i>{{ __('fees have changed since — now') }} {{ number_format($fcRate['rate']) }}
@@ -767,26 +769,26 @@
 
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        {{ __('Forecast from student numbers') }}
+                        <span id="fc_title">{{ __('Forecast from student numbers') }}</span>
                         <small class="d-block text-muted" id="fc_line_label"></small>
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body">
-                    <p class="text-muted small">
+                    <p class="text-muted small" id="fc_intro">
                         {{ __('Budget this line by saying how many students you expect and what they pay, rather than by typing an amount. The rate comes from the fees configured for each programme, weighted by how many students are on each — so it is right for the mix you actually have.') }}
                     </p>
 
                     <div class="row">
                         <div class="col-md-5 mb-3">
-                            <label for="fc_students">{{ __('Expected students') }} <span class="text-danger">*</span></label>
+                            <label for="fc_students"><span id="fc_students_label">{{ __('Expected students') }}</span> <span class="text-danger">*</span></label>
                             <input type="number" min="0" step="1" class="form-control" name="student_count" id="fc_students" required>
                             <small class="text-muted" id="fc_students_note"></small>
                         </div>
 
                         <div class="col-md-7 mb-3">
-                            <label for="fc_rate">{{ __('Fee per student, per year') }} <span class="text-danger">*</span></label>
+                            <label for="fc_rate"><span id="fc_rate_label">{{ __('Fee per student, per year') }}</span> <span class="text-danger">*</span></label>
                             <input type="number" min="0" step="0.01" class="form-control" name="rate" id="fc_rate" required>
                             <small class="text-muted" id="fc_rate_note"></small>
                         </div>
@@ -798,10 +800,10 @@
                     <table class="fc-prog">
                         <thead>
                             <tr>
-                                <th>{{ __('Programme') }}</th>
+                                <th id="fc_th_programme">{{ __('Programme') }}</th>
                                 <th class="num" id="fc_th_students">{{ __('Students now') }}</th>
                                 <th class="num" id="fc_th_previous">{{ __('Last session') }}</th>
-                                <th class="num">{{ __('Fee per year') }}</th>
+                                <th class="num" id="fc_th_fee">{{ __('Fee per year') }}</th>
                             </tr>
                         </thead>
                         <tbody id="fc_programmes"></tbody>
@@ -866,9 +868,46 @@
         // is what the Bursar actually reasons from.
         var sessionTitle = info.session ? info.session.title : '{{ __('the current session') }}';
         var previousTitle = info.previous_session ? info.previous_session.title : null;
+        var registration = info.kind === 'registration';
 
-        var studentsNote = '{{ __('Enrolled in this faculty for :session:') }}'.replace(':session', sessionTitle)
-            + ' ' + fmt.format(info.students || 0);
+        // The same modal serves tuition (students on programmes) and
+        // registration (applicants who paid, by degree type); only the words
+        // change, so a Bursar reads the two the same way.
+        var words = registration ? {
+            title: '{{ __('Forecast from applicants') }}',
+            fee: '{{ __('Registration fee') }}',
+            intro: '{{ __('Budget this line by saying how many applicants you expect and what each pays to register, rather than by typing an amount. The rate is the registration fee set for each degree type, weighted by how many applicants came in on each.') }}',
+            students: '{{ __('Expected applicants') }}',
+            rate: '{{ __('Registration fee per applicant') }}',
+            programme: '{{ __('Degree type') }}',
+            note: '{{ __('Applicants who paid the registration fee for :session:') }}',
+            weightedSession: '{{ __('Weighted by the applicants who paid for :session across the degree types below.') }}',
+            weightedPrevious: '{{ __('Nobody has paid to register for :session yet, so the rate is weighted by the :previous mix.') }}',
+            average: '{{ __('No applicants to weight by, so this is a plain average of the registration fees.') }}'
+        } : {
+            title: '{{ __('Forecast from student numbers') }}',
+            fee: '{{ __('Fee per year') }}',
+            intro: '{{ __('Budget this line by saying how many students you expect and what they pay, rather than by typing an amount. The rate comes from the fees configured for each programme, weighted by how many students are on each — so it is right for the mix you actually have.') }}',
+            students: '{{ __('Expected students') }}',
+            rate: '{{ __('Fee per student, per year') }}',
+            programme: '{{ __('Programme') }}',
+            note: '{{ __('Enrolled in this faculty for :session:') }}',
+            weightedSession: '{{ __('Weighted by enrolment for :session across the programmes below.') }}',
+            weightedPrevious: '{{ __('Nobody is enrolled for :session yet, so the rate is weighted by the :previous mix.') }}',
+            average: '{{ __('No enrolment to weight by, so this is a plain average of the programme fees.') }}'
+        };
+
+        document.getElementById('fc_title').textContent = words.title;
+        document.getElementById('fc_th_fee').textContent = words.fee;
+        document.getElementById('fc_intro').textContent = words.intro;
+        document.getElementById('fc_students_label').textContent = words.students;
+        document.getElementById('fc_rate_label').textContent = words.rate;
+        document.getElementById('fc_th_programme').textContent = words.programme;
+
+        var studentsNote = words.note.replace(':session', sessionTitle) + ' ' + fmt.format(info.students || 0);
+        if (registration && (info.unpaid || 0) > 0) {
+            studentsNote += ' · {{ __('unpaid or draft:') }} ' + fmt.format(info.unpaid);
+        }
         if (previousTitle) {
             studentsNote += ' · ' + previousTitle + ': ' + fmt.format(info.previous_students || 0);
         }
@@ -876,13 +915,11 @@
 
         var rateNote;
         if (info.weighted_by === 'previous' && previousTitle) {
-            rateNote = '{{ __('Nobody is enrolled for :session yet, so the rate is weighted by the :previous mix.') }}'
-                .replace(':session', sessionTitle).replace(':previous', previousTitle);
+            rateNote = words.weightedPrevious.replace(':session', sessionTitle).replace(':previous', previousTitle);
         } else if (info.weighted_by === 'session') {
-            rateNote = '{{ __('Weighted by enrolment for :session across the programmes below.') }}'
-                .replace(':session', sessionTitle);
+            rateNote = words.weightedSession.replace(':session', sessionTitle);
         } else {
-            rateNote = '{{ __('No enrolment to weight by, so this is a plain average of the programme fees.') }}';
+            rateNote = words.average;
         }
         document.getElementById('fc_rate_note').textContent = rateNote;
 

@@ -577,16 +577,18 @@ class BudgetSheetController extends Controller
         ]);
 
         $line = BudgetLine::find($data['budget_line_id']);
+        $forecastService = app(\App\Services\TuitionForecastService::class);
 
-        // Only a faculty-tagged income line has a student basis at all. A
-        // stationery line forecast from headcount would be nonsense.
-        if (!$line || $line->is_header || !$line->faculty_id || $line->section !== BudgetLine::SECTION_INCOME) {
+        // Only a line with a headcount behind it: tuition, tied to a faculty,
+        // or registration, driven by applicants. A stationery line forecast
+        // from headcount would be nonsense.
+        if (!$forecastService->isForecastable($line)) {
             Flasher::addError(__('That line cannot be forecast from student numbers.'), __('msg_error'));
 
             return redirect()->route('admin.budget-sheet.show', $budget->id);
         }
 
-        $forecastService = app(\App\Services\TuitionForecastService::class);
+        $isRegistration = !$line->faculty_id;
         $amount = $forecastService->forecast((int) $data['student_count'], (float) $data['rate']);
 
         DB::beginTransaction();
@@ -621,7 +623,9 @@ class BudgetSheetController extends Controller
 
             DB::commit();
 
-            Flasher::addSuccess(__(':line budgeted at :amount — :students students at :rate.', [
+            Flasher::addSuccess(__($isRegistration
+                ? ':line budgeted at :amount — :students applicants at :rate.'
+                : ':line budgeted at :amount — :students students at :rate.', [
                 'line' => $line->label,
                 'amount' => number_format($amount),
                 'students' => number_format((int) $data['student_count']),

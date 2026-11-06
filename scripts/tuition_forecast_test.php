@@ -49,10 +49,18 @@ $service = app(TuitionForecastService::class);
 echo "\n== Which lines can be forecast ==\n";
 
 $lines = $service->forecastableLines();
-check('faculty-tagged income lines are offered', $lines->isNotEmpty(), $lines->count() . ' lines');
+$registrationLine = $service->registrationLine();
+$tuitionLines = $lines->filter(fn ($l) => $l->faculty_id);
+check('faculty-tagged income lines are offered', $tuitionLines->isNotEmpty(), $tuitionLines->count() . ' lines');
+check(
+    'and the registration line, found through the admission fee mapping',
+    $registrationLine !== null && $lines->contains('id', $registrationLine->id),
+    $registrationLine ? $registrationLine->code . ' ' . $registrationLine->name : 'no mapping'
+);
 check(
     'and nothing else is',
-    $lines->every(fn ($l) => $l->faculty_id && $l->section === 'income' && !$l->is_header)
+    $lines->every(fn ($l) => ($l->faculty_id || ($registrationLine && $l->id === $registrationLine->id))
+        && $l->section === 'income' && !$l->is_header)
 );
 
 // A stationery line has no student basis; offering a forecast there would be
@@ -112,7 +120,7 @@ check(
 
 $byLine = $service->ratesByLine($sheet);
 $allZero = true;
-foreach ($lines as $line) {
+foreach ($tuitionLines as $line) {
     $rate = $byLine[$line->id];
     $expected = $listCount((int) $line->faculty_id, $sheetSession?->id);
     $expectedPrevious = $listCount((int) $line->faculty_id, $previous?->id);
@@ -135,7 +143,7 @@ check('somebody is enrolled for the budget session, so the comparison meant some
 // real enrolment adds exactly one. Inside a transaction, rolled back.
 $outsider = null;
 $fixtureLine = null;
-foreach ($lines as $line) {
+foreach ($tuitionLines as $line) {
     if ($listCount((int) $line->faculty_id, $sheetSession?->id) > 0) {
         $fixtureLine = $line;
         break;
@@ -240,6 +248,126 @@ if ($fixtureLine && $sheetSession) {
     echo "  ..  no faculty with students in the budget session to build fixtures on\n";
 }
 
+echo "\n== Registration: the applicants who paid ==\n";
+
+if ($registrationLine && $sheetSession) {
+    // What the admission fees report calls paid, computed from the tables.
+    $paidApplicants = fn (?int $sessionId) => $sessionId ? (int) DB::table('applications as a')
+        ->join('fees as f', 'f.id', '=', 'a.admission_fee_id')
+        ->where('a.session_id', $sessionId)->where('f.status', 1)->count() : 0;
+    $allApplicants = fn (?int $sessionId) => $sessionId ? (int) DB::table('applications')->where('session_id', $sessionId)->count() : 0;
+
+    $reg = $byLine[$registrationLine->id];
+    check('the registration line is offered as such', ($reg['kind'] ?? '') === 'registration');
+    check(
+        'it counts the applicants who paid for ' . $sheetSession->title,
+        $reg['students'] === $paidApplicants($sheetSession->id),
+        'forecast ' . $reg['students'] . ' vs report ' . $paidApplicants($sheetSession->id)
+    );
+    check(
+        'and shows the rest of the pipeline as unpaid',
+        $reg['students'] + $reg['unpaid'] === $allApplicants($sheetSession->id),
+        $reg['students'] . ' + ' . $reg['unpaid'] . ' vs ' . $allApplicants($sheetSession->id)
+    );
+    check(
+        'with the previous session beside it',
+        $reg['previous_students'] === $paidApplicants($previous?->id)
+    );
+
+    $feeTrue = 0.0;
+    foreach ($reg['programmes'] as $type) {
+        $feeTrue += $type['students'] * $type['fee'];
+    }
+    check(
+        'the rate reproduces the registration fee degree type by degree type',
+        abs($service->forecast($reg['students'], $reg['rate']) - $feeTrue) < 1.0,
+        number_format($reg['rate']) . ' x ' . $reg['students'] . ' vs ' . number_format($feeTrue)
+    );
+    check('a degree type with a fee adds it', collect($reg['programmes'])->contains(fn ($t) => $t['fee'] > 0));
+
+    // Teeth, rolled back: a draft, a submission with no fee, an unpaid fee
+    // and an application in another session each add nothing; a paid one
+    // adds exactly one.
+    $degreeTypeId = (int) DB::table('degree_types')->value('id');
+    $admissionCategory = (int) DB::table('fees_categories')->where('is_admission', 1)->value('id');
+    $programmeId = (int) DB::table('programs')->value('id');
+    $regCount = fn () => $service->registrationRate($sheetSession, $previous)['students'];
+    $regBase = $regCount();
+
+    $application = function (array $row) use ($sheetSession, $degreeTypeId) {
+        return DB::table('applications')->insertGetId($row + [
+            'session_id' => $sheetSession->id, 'degree_type_id' => $degreeTypeId,
+            'first_name' => 'ZZ', 'last_name' => 'Fixture', 'email' => 'zz' . uniqid() . '@example.test',
+            'status' => 1, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    };
+    $admissionFee = function (int $status) use ($admissionCategory, $programmeId) {
+        $enrollId = DB::table('student_enrolls')->insertGetId([
+            'program_id' => $programmeId, 'status' => 0, 'matricule' => 'ZZ-APPLICANT',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        return DB::table('fees')->insertGetId([
+            'student_enroll_id' => $enrollId, 'category_id' => $admissionCategory,
+            'fee_amount' => 21000, 'paid_amount' => $status === 1 ? 21000 : 0,
+            'assign_date' => now()->toDateString(), 'due_date' => now()->toDateString(),
+            'status' => $status, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    };
+
+    DB::beginTransaction();
+    try {
+        $application(['status' => 0, 'stage' => 'draft']);
+        check('a draft adds nothing', $regCount() === $regBase, $regCount() . ' vs ' . $regBase);
+
+        $application(['stage' => 'submitted']);
+        check('a submission with no fee raised adds nothing', $regCount() === $regBase, $regCount() . ' vs ' . $regBase);
+
+        $application(['stage' => 'submitted', 'admission_fee_id' => $admissionFee(0)]);
+        check('a fee still owing adds nothing', $regCount() === $regBase, $regCount() . ' vs ' . $regBase);
+
+        $application(['stage' => 'submitted', 'admission_fee_id' => $admissionFee(1), 'session_id' => $previous->id ?? 0]);
+        check('a paid applicant in another session adds nothing', $regCount() === $regBase, $regCount() . ' vs ' . $regBase);
+
+        $application(['stage' => 'submitted', 'admission_fee_id' => $admissionFee(1)]);
+        check('and a paid applicant adds exactly one', $regCount() === $regBase + 1, $regCount() . ' vs ' . ($regBase + 1));
+
+        $application(['stage' => 'decision_approved', 'status' => 2, 'admission_fee_id' => $admissionFee(1)]);
+        check('whether admitted yet or not', $regCount() === $regBase + 2, $regCount() . ' vs ' . ($regBase + 2));
+    } finally {
+        DB::rollBack();
+    }
+    check('the applicant fixtures left nothing behind', DB::table('applications')->where('first_name', 'ZZ')->doesntExist());
+
+    // Saving one goes through the same door as tuition.
+    DB::beginTransaction();
+    try {
+        $request = Illuminate\Http\Request::create('/x', 'POST', [
+            'budget_line_id' => $registrationLine->id,
+            'student_count' => 40,
+            'rate' => $reg['rate'],
+            'rate_basis' => 'weighted',
+            'note' => 'ZZ test forecast',
+        ]);
+        $controller = app(App\Http\Controllers\Admin\BudgetSheetController::class);
+        $admin = User::whereHas('roles')->first() ?: User::first();
+        Auth::guard('web')->login($admin);
+        $controller->forecast($request, $sheet->id);
+
+        $savedReg = BudgetLineForecast::where('budget_id', $sheet->id)->where('budget_line_id', $registrationLine->id)->first();
+        check('a registration forecast is stored', $savedReg !== null && (int) $savedReg->student_count === 40);
+        $allocation = BudgetAllocation::where('budget_id', $sheet->id)->where('budget_line_id', $registrationLine->id)->first();
+        check(
+            'and reaches the sheet as 40 x the fee',
+            $allocation && abs((float) $allocation->allocated_amount - 40 * $reg['rate']) < 0.01,
+            $allocation ? number_format($allocation->allocated_amount) : 'none'
+        );
+    } finally {
+        DB::rollBack();
+    }
+} else {
+    echo "  ..  no registration line mapped from the admission fee category\n";
+}
+
 echo "\n== The rate is weighted, and that matters ==\n";
 
 $fees = $service->programmeFees();
@@ -290,7 +418,7 @@ check(
 // like. (The averages coincide only when every programme has the same
 // number of students, which is checked for and skipped.)
 $mixLine = null;
-foreach ($lines as $line) {
+foreach ($tuitionLines as $line) {
     $priced = array_values(array_filter($byLine[$line->id]['programmes'], fn ($p) => $p['fee'] > 0));
     $counts = array_map(fn ($p) => $p['students'], $priced);
     if (count($priced) >= 2 && max($counts) > 0 && count(array_unique($counts)) > 1) {
@@ -329,7 +457,7 @@ if ($mixLine && $sheetSession) {
 echo "\n== Incomplete fee configuration is reported ==\n";
 
 $warned = [];
-foreach ($lines as $line) {
+foreach ($tuitionLines as $line) {
     foreach ($service->facultyRate((int) $line->faculty_id)['warnings'] as $warning) {
         $warned[] = $warning;
     }
@@ -338,7 +466,7 @@ foreach ($lines as $line) {
 // A programme configured for fewer terms than its siblings is priced low, and
 // would silently halve its contribution.
 $partial = [];
-foreach ($service->forecastableLines() as $line) {
+foreach ($tuitionLines as $line) {
     foreach ($service->facultyRate((int) $line->faculty_id)['programmes'] as $programme) {
         if ($programme['incomplete']) {
             $partial[] = $programme['title'];
@@ -361,7 +489,7 @@ echo "\n== Saving a forecast ==\n";
 $budget = Budget::where('is_institutional', true)->where('status', 'draft')->orderByDesc('id')->first()
     ?: Budget::where('is_institutional', true)->orderByDesc('id')->first();
 
-$line = $lines->first();
+$line = $tuitionLines->first();
 $rate = $service->facultyRate((int) $line->faculty_id);
 
 $admin = User::whereHas('roles')->first() ?: User::first();
@@ -490,6 +618,7 @@ check('the modal is present', strpos($html, 'id="forecastModal"') !== false);
 check('the rates reach the browser', strpos($html, 'var RATES = {') !== false);
 check('it shows its working, not just a rate', strpos($html, 'fc_programmes') !== false);
 check('and names the session it counted', strpos($html, '"session":{"id":' . $sheetSession->id) !== false);
+check('the registration line offers a forecast from applicants', strpos($html, __('Forecast from applicants')) !== false);
 check('with last session beside it', strpos($html, 'fc_th_previous') !== false);
 
 echo "\n$passed passed, $failed failed\n";

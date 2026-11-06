@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Budget;
 use App\Models\BudgetLine;
+use App\Models\DegreeType;
 use App\Models\Session;
 use Illuminate\Support\Facades\DB;
 
@@ -300,10 +301,13 @@ class TuitionForecastService
         }
 
         return [
+            'kind' => 'tuition',
             'rate' => $rate,
             'simple_rate' => $simpleRate,
             'students' => $totalStudents,
             'previous_students' => $totalPrevious,
+            'unpaid' => 0,
+            'previous_unpaid' => 0,
             'expected_total' => $weightedNow,
             'weighted_by' => $weightedBy,
             'session' => $session ? ['id' => $session->id, 'title' => $session->title] : null,
@@ -313,14 +317,193 @@ class TuitionForecastService
         ];
     }
 
-    /** Income lines tied to a faculty — the ones student numbers can drive. */
+    // ------------------------------------------------------------------
+    // Registration fees, from the applicants who paid
+    // ------------------------------------------------------------------
+
+    /**
+     * The line registration (admission) fees are budgeted on.
+     *
+     * Found the way the actuals find it — the budget line the Admission Fees
+     * category is mapped to under the account mappings — rather than by its
+     * name, so the forecast and the actuals cannot disagree about which line
+     * is the registration line.
+     */
+    public function registrationLine(): ?BudgetLine
+    {
+        $lineId = DB::table('default_account_mappings as m')
+            ->join('fees_categories as fc', 'fc.id', '=', 'm.category_id')
+            ->where('m.mapping_type', 'fee_category')
+            ->where('m.status', 'active')
+            ->where('fc.is_admission', 1)
+            ->whereNotNull('m.budget_line_id')
+            ->value('m.budget_line_id');
+
+        if (!$lineId) {
+            return null;
+        }
+
+        return BudgetLine::where('id', $lineId)
+            ->where('section', BudgetLine::SECTION_INCOME)
+            ->where('is_header', false)
+            ->first();
+    }
+
+    /**
+     * Applicants per degree type in one session, split into those who paid
+     * the registration fee and those who did not.
+     *
+     * "Paid" is what the admission fees report calls paid: the application's
+     * admission fee row is settled (status 1). A draft, a submission with no
+     * fee raised, and a fee still owing are all "unpaid": they are shown so
+     * the Bursar can see the pipeline, but they are not income.
+     *
+     * @return array<int, array{paid: int, unpaid: int}> keyed by degree type
+     */
+    public function applicantsByDegreeType(?int $sessionId): array
+    {
+        if (!$sessionId) {
+            return [];
+        }
+
+        $rows = DB::table('applications as a')
+            ->leftJoin('fees as f', 'f.id', '=', 'a.admission_fee_id')
+            ->where('a.session_id', $sessionId)
+            ->selectRaw('a.degree_type_id,
+                SUM(CASE WHEN f.id IS NOT NULL AND f.status = 1 THEN 1 ELSE 0 END) as paid,
+                SUM(CASE WHEN f.id IS NOT NULL AND f.status = 1 THEN 0 ELSE 1 END) as unpaid')
+            ->groupBy('a.degree_type_id')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row->degree_type_id] = ['paid' => (int) $row->paid, 'unpaid' => (int) $row->unpaid];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The registration line's rate, and the applicants behind it.
+     *
+     * The same shape as facultyRate() so the one modal serves both: the
+     * "programmes" are degree types, the "students" are applicants who paid,
+     * and the fee is the registration fee configured for the degree type
+     * (Admission > Settings), weighted by the mix of applicants across degree
+     * types exactly as tuition is weighted across programmes.
+     */
+    public function registrationRate(?Session $session = null, ?Session $previous = null): array
+    {
+        $session = $session ?: Session::where('current', 1)->where('status', 1)->first();
+        $previous = $previous ?: $this->previousSession($session);
+
+        $now = $this->applicantsByDegreeType($session?->id);
+        $before = $this->applicantsByDegreeType($previous?->id);
+
+        $rows = [];
+        $warnings = [];
+        $totalPaid = 0;
+        $totalPrevious = 0;
+        $totalUnpaid = 0;
+        $previousUnpaid = 0;
+        $weightedNow = 0.0;
+        $weightedBefore = 0.0;
+        $simpleSum = 0.0;
+        $priced = 0;
+
+        foreach (DegreeType::with('applicationSetting')->orderBy('title')->get() as $degreeType) {
+            $settings = DegreeTypeFormConfig::settings($degreeType);
+            $fee = $settings['fee_enabled'] ? (float) $settings['fee_amount'] : 0.0;
+            $paid = $now[$degreeType->id]['paid'] ?? 0;
+            $unpaid = $now[$degreeType->id]['unpaid'] ?? 0;
+            $paidBefore = $before[$degreeType->id]['paid'] ?? 0;
+            $unpaidBefore = $before[$degreeType->id]['unpaid'] ?? 0;
+
+            $rows[] = [
+                'id' => (int) $degreeType->id,
+                'title' => $degreeType->title,
+                'students' => $paid,
+                'previous_students' => $paidBefore,
+                'unpaid' => $unpaid,
+                'previous_unpaid' => $unpaidBefore,
+                'fee' => $fee,
+                'terms' => 1,
+                'incomplete' => false,
+            ];
+
+            $totalPaid += $paid;
+            $totalPrevious += $paidBefore;
+            $totalUnpaid += $unpaid;
+            $previousUnpaid += $unpaidBefore;
+
+            if ($fee <= 0) {
+                $warnings[] = __(':type has no registration fee configured, so it adds nothing to this rate.', [
+                    'type' => $degreeType->title,
+                ]);
+                continue;
+            }
+
+            $simpleSum += $fee;
+            $priced++;
+            $weightedNow += $paid * $fee;
+            $weightedBefore += $paidBefore * $fee;
+        }
+
+        $simpleRate = $priced > 0 ? $simpleSum / $priced : 0.0;
+
+        if ($totalPaid > 0) {
+            $rate = $weightedNow / $totalPaid;
+            $weightedBy = 'session';
+        } elseif ($totalPrevious > 0) {
+            $rate = $weightedBefore / $totalPrevious;
+            $weightedBy = 'previous';
+        } else {
+            $rate = $simpleRate;
+            $weightedBy = 'average';
+        }
+
+        return [
+            'kind' => 'registration',
+            'rate' => $rate,
+            'simple_rate' => $simpleRate,
+            'students' => $totalPaid,
+            'previous_students' => $totalPrevious,
+            'unpaid' => $totalUnpaid,
+            'previous_unpaid' => $previousUnpaid,
+            'expected_total' => $weightedNow,
+            'weighted_by' => $weightedBy,
+            'session' => $session ? ['id' => $session->id, 'title' => $session->title] : null,
+            'previous_session' => $previous ? ['id' => $previous->id, 'title' => $previous->title] : null,
+            'programmes' => $rows,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * Income lines a headcount can drive: the tuition lines tied to a
+     * faculty, and the registration line, driven by applicants who paid.
+     */
     public function forecastableLines()
     {
-        return BudgetLine::whereNotNull('faculty_id')
+        $lines = BudgetLine::whereNotNull('faculty_id')
             ->where('section', BudgetLine::SECTION_INCOME)
             ->where('is_header', false)
             ->with('faculty')
             ->get();
+
+        $registration = $this->registrationLine();
+
+        if ($registration && !$lines->contains('id', $registration->id)) {
+            $lines->push($registration);
+        }
+
+        return $lines;
+    }
+
+    /** Can this line be forecast from a headcount at all? */
+    public function isForecastable(?BudgetLine $line): bool
+    {
+        return $line !== null && $this->forecastableLines()->contains('id', $line->id);
     }
 
     /**
@@ -339,9 +522,10 @@ class TuitionForecastService
         $rates = [];
 
         foreach ($this->forecastableLines() as $line) {
-            $rates[$line->id] = $this->facultyRate((int) $line->faculty_id, $session, $previous) + [
-                'faculty' => optional($line->faculty)->title,
-            ];
+            $rates[$line->id] = ($line->faculty_id
+                    ? $this->facultyRate((int) $line->faculty_id, $session, $previous)
+                    : $this->registrationRate($session, $previous)
+                ) + ['faculty' => optional($line->faculty)->title];
         }
 
         return $rates;
