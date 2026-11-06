@@ -799,7 +799,8 @@
                         <thead>
                             <tr>
                                 <th>{{ __('Programme') }}</th>
-                                <th class="num">{{ __('Students now') }}</th>
+                                <th class="num" id="fc_th_students">{{ __('Students now') }}</th>
+                                <th class="num" id="fc_th_previous">{{ __('Last session') }}</th>
                                 <th class="num">{{ __('Fee per year') }}</th>
                             </tr>
                         </thead>
@@ -859,10 +860,34 @@
         document.getElementById('fc_note').value = saved && saved.note ? saved.note : '';
         document.getElementById('fc_basis').value = saved ? saved.rate_basis : 'weighted';
 
-        document.getElementById('fc_students_note').textContent =
-            '{{ __('Currently enrolled in this faculty:') }} ' + fmt.format(info.students || 0);
-        document.getElementById('fc_rate_note').textContent =
-            '{{ __('Weighted by current enrolment across the programmes below.') }}';
+        // The count is for the session this budget funds, and says so; the
+        // previous session's count sits beside it, because a budget drawn up
+        // before intake has few on its own books and last year's headcount
+        // is what the Bursar actually reasons from.
+        var sessionTitle = info.session ? info.session.title : '{{ __('the current session') }}';
+        var previousTitle = info.previous_session ? info.previous_session.title : null;
+
+        var studentsNote = '{{ __('Enrolled in this faculty for :session:') }}'.replace(':session', sessionTitle)
+            + ' ' + fmt.format(info.students || 0);
+        if (previousTitle) {
+            studentsNote += ' · ' + previousTitle + ': ' + fmt.format(info.previous_students || 0);
+        }
+        document.getElementById('fc_students_note').textContent = studentsNote;
+
+        var rateNote;
+        if (info.weighted_by === 'previous' && previousTitle) {
+            rateNote = '{{ __('Nobody is enrolled for :session yet, so the rate is weighted by the :previous mix.') }}'
+                .replace(':session', sessionTitle).replace(':previous', previousTitle);
+        } else if (info.weighted_by === 'session') {
+            rateNote = '{{ __('Weighted by enrolment for :session across the programmes below.') }}'
+                .replace(':session', sessionTitle);
+        } else {
+            rateNote = '{{ __('No enrolment to weight by, so this is a plain average of the programme fees.') }}';
+        }
+        document.getElementById('fc_rate_note').textContent = rateNote;
+
+        document.getElementById('fc_th_students').textContent = sessionTitle;
+        document.getElementById('fc_th_previous').textContent = previousTitle || '{{ __('Last session') }}';
 
         var body = document.getElementById('fc_programmes');
         body.innerHTML = '';
@@ -871,6 +896,7 @@
             tr.innerHTML = '<td>' + p.title + (p.incomplete
                     ? ' <span class="local-flag">{{ __('part-configured') }}</span>' : '')
                 + '</td><td class="num">' + fmt.format(p.students)
+                + '</td><td class="num">' + (previousTitle ? fmt.format(p.previous_students || 0) : '—')
                 + '</td><td class="num">' + (p.fee > 0 ? fmt.format(p.fee) : '—') + '</td>';
             body.appendChild(tr);
         });

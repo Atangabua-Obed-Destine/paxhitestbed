@@ -420,7 +420,8 @@ class BudgetSheetController extends Controller
             // figure AND say whether the fees behind it have since moved.
             'forecasts' => \App\Models\BudgetLineForecast::where('budget_id', $budget->id)
                 ->get()->keyBy('budget_line_id'),
-            'forecastRates' => app(\App\Services\TuitionForecastService::class)->ratesByLine(),
+            // Counted for the session this budget is for, not for all time.
+            'forecastRates' => app(\App\Services\TuitionForecastService::class)->ratesByLine($budget),
             // Where to draw a subtotal, decided once so the screen, the PDF and
             // the workbook cannot disagree about where a group ends.
             'groupEnds' => BudgetLine::groupEnds($lines),
