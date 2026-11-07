@@ -125,11 +125,26 @@ class PeriodReportBuilder
             ? $report->getReceivablesAging($asOf)
             : $report->getPayablesAging($asOf);
 
+        /*
+         * What students owe lives in the fees table, not the ledger: fees reach
+         * the ledger only when paid, so class 41 stays empty and the ledger
+         * ageing alone reported "nothing outstanding" for a school with fees
+         * overdue. Same report the bursar sees under Student Fee Aging.
+         */
+        $fees = $kind === 'receivables' ? $report->getStudentFeeAging($asOf) : ['totals' => []];
+
+        $bucket = fn (string $key) => Money::fromNumeric(number_format(
+            (float) ($data['totals'][$key] ?? 0) + (float) ($fees['totals'][$key] ?? 0),
+            2,
+            '.',
+            ''
+        ));
+
         $buckets = [
-            '0_30' => Money::fromNumeric((string) ($data['totals']['bracket_0'] ?? 0)),
-            '31_60' => Money::fromNumeric((string) ($data['totals']['bracket_1'] ?? 0)),
-            '61_90' => Money::fromNumeric((string) ($data['totals']['bracket_2'] ?? 0)),
-            '90_plus' => Money::fromNumeric((string) ($data['totals']['bracket_3'] ?? 0)),
+            '0_30' => $bucket('bracket_0'),
+            '31_60' => $bucket('bracket_1'),
+            '61_90' => $bucket('bracket_2'),
+            '90_plus' => $bucket('bracket_3'),
         ];
 
         /*

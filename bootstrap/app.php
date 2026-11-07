@@ -11,6 +11,11 @@
 |
 */
 
+// XAMPP runs PHP inside one threaded Apache process, shared by every app it
+// serves. Loading .env with putenv() let requests here lose DB_DATABASE and fail
+// with "Unknown database 'paxhitestbed'". Same fix as edutrustshsm.
+\Illuminate\Support\Env::disablePutenv();
+
 $app = new Illuminate\Foundation\Application(
     $_ENV['APP_BASE_PATH'] ?? dirname(__DIR__)
 );

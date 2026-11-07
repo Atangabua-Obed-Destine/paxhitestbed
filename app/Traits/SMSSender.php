@@ -17,7 +17,7 @@ trait SMSSender {
     {
         $sms = SMSSetting::first();
 
-        $basic  = new \Nexmo\Client\Credentials\Basic(getenv("NEXMO_KEY", $sms->nexmo_key), getenv("NEXMO_SECRET", $sms->nexmo_secret));
+        $basic  = new \Nexmo\Client\Credentials\Basic(env("NEXMO_KEY", $sms->nexmo_key), env("NEXMO_SECRET", $sms->nexmo_secret));
 
         $client = new \Nexmo\Client($basic);
 
@@ -39,9 +39,9 @@ trait SMSSender {
     {
         $sms = SMSSetting::first();
 
-        $account_sid = getenv("TWILIO_SID", $sms->twilio_sid);
-        $auth_token = getenv("TWILIO_AUTH_TOKEN", $sms->twilio_auth_token);
-        $twilio_number = getenv("TWILIO_NUMBER", $sms->twilio_number);
+        $account_sid = env("TWILIO_SID", $sms->twilio_sid);
+        $auth_token = env("TWILIO_AUTH_TOKEN", $sms->twilio_auth_token);
+        $twilio_number = env("TWILIO_NUMBER", $sms->twilio_number);
 
         $client = new Client($account_sid, $auth_token);
 
@@ -90,9 +90,9 @@ trait SMSSender {
         // Send Message
         if($sms->status == 1){
 
-            $account_sid = getenv("TWILIO_SID", $sms->twilio_sid);
-            $auth_token = getenv("TWILIO_AUTH_TOKEN", $sms->twilio_auth_token);
-            $twilio_number = getenv("TWILIO_NUMBER", $sms->twilio_number);
+            $account_sid = env("TWILIO_SID", $sms->twilio_sid);
+            $auth_token = env("TWILIO_AUTH_TOKEN", $sms->twilio_auth_token);
+            $twilio_number = env("TWILIO_NUMBER", $sms->twilio_number);
 
             $client = new Client($account_sid, $auth_token);
 
@@ -106,7 +106,7 @@ trait SMSSender {
         }
         elseif($sms->status == 2){
 
-            $basic  = new \Nexmo\Client\Credentials\Basic(getenv("NEXMO_KEY", $sms->nexmo_key), getenv("NEXMO_SECRET", $sms->nexmo_secret));
+            $basic  = new \Nexmo\Client\Credentials\Basic(env("NEXMO_KEY", $sms->nexmo_key), env("NEXMO_SECRET", $sms->nexmo_secret));
 
             $client = new \Nexmo\Client($basic);
 

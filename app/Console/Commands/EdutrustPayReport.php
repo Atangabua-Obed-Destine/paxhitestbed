@@ -8,6 +8,7 @@ use App\Services\EdutrustPay\SettingsResolver;
 use App\Services\EdutrustPay\PeriodReportBuilder;
 use Carbon\Carbon;
 use EdutrustPay\Contract\Canonical;
+use EdutrustPay\Contract\Fingerprint;
 use EdutrustPay\Contract\Validator;
 use Illuminate\Console\Command;
 
@@ -21,8 +22,8 @@ class EdutrustPayReport extends Command
 {
     protected $signature = 'edutrustpay:report
         {period? : Calendar month YYYY-MM. Defaults to last month.}
-        {--months= : Build this many months back, oldest first}
-        {--sequence=1 : Use 2+ to restate a month already filed}
+        {--months= : The last N complete months, oldest first}
+        {--sequence= : Force a sequence. Normally worked out: unchanged months are skipped, changed ones refiled}
         {--status= : Force provisional or final instead of deciding from the accounting period}
         {--dry-run : Build and show the figures without queueing anything}
         {--send : Attempt delivery immediately rather than waiting for the flush}';
@@ -43,11 +44,20 @@ class EdutrustPayReport extends Command
 
         foreach ($periods as $period) {
             try {
-                $payload = $builder->build(
-                    $period,
-                    (int) $this->option('sequence'),
-                    $this->option('status') ?: null
-                );
+                $forced = $this->option('sequence') ? (int) $this->option('sequence') : null;
+                $latest = $forced ? null : $outbox->latestFor($period);
+                $payload = $builder->build($period, $forced ?? $latest?->sequence ?? 1, $this->option('status') ?: null);
+
+                // A month already delivered is refiled only if its books changed.
+                if ($latest?->status === EdutrustPayOutbox::DELIVERED) {
+                    if (Fingerprint::ofJson($latest->payload) === Fingerprint::of($payload)) {
+                        $rows[] = [$period, $payload['status'], implode(', ', $payload['capabilities']), $this->total($payload, 'income_by_group'), $this->total($payload, 'expenditure_by_group'), '—', 'unchanged'];
+
+                        continue;
+                    }
+
+                    $payload = $builder->build($period, $latest->sequence + 1, $this->option('status') ?: null);
+                }
             } catch (\Throwable $e) {
                 $this->error("  $period  could not be built: ".$e->getMessage());
                 $failed++;
@@ -83,7 +93,7 @@ class EdutrustPayReport extends Command
 
             if ($queued && $this->option('send')) {
                 $outbox->deliver($queued);
-                $queued->refresh();
+                $queued = $outbox->latestFor($period);
             }
 
             $rows[] = [
@@ -123,7 +133,9 @@ class EdutrustPayReport extends Command
         }
 
         $count = max(1, (int) ($this->option('months') ?: 1));
-        $cursor = Carbon::now()->startOfMonth()->subMonths($count);
+        // Ends at the last COMPLETE month. Including the current one filed a half
+        // finished month as if it were a report, then conflicted when it ended.
+        $cursor = Carbon::now()->startOfMonth()->subMonths($count + 1);
 
         return collect(range(1, $count))
             ->map(fn () => $cursor->addMonth()->format('Y-m'))
@@ -163,7 +175,7 @@ class EdutrustPayReport extends Command
         $this->line('The console will show these as "not yet reporting" rather than as zero, which is the intent.');
 
         if (in_array('budget', $missing, true)) {
-            $this->line('  budget — this system has no monthly budget; see config/edutrustpay.php for why a twelfth of the annual one is not a substitute.');
+            $this->line('  budget — this institution has budgets, but the contract cannot carry them yet: it needs a year-to-date block, because a twelfth of an annual budget is not what anyone budgeted.');
         }
 
         if (in_array('enrolment', $missing, true)) {

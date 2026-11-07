@@ -162,7 +162,7 @@
 
                 @if (in_array('budget', $notDeclared, true))
                     <small class="text-warning d-block mt-2">
-                        {{ __('Budget is not reported because this system has no monthly budget — budgets are annual and allocations quarterly at best. A twelfth of the annual figure would make every seasonal month look like a variance.') }}
+                        {{ __('Budget is not reported yet. This institution has budgets, but the reporting contract still needs a year-to-date budget block. A twelfth of the annual figure would make every seasonal month look like a variance, so nothing is sent rather than something misleading.') }}
                     </small>
                 @endif
             </div>

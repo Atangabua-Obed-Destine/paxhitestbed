@@ -91,8 +91,11 @@ class Kernel extends ConsoleKernel
          * All three are no-ops unless EDUTRUSTPAY_ENABLED is true, so leaving
          * them scheduled on an unconfigured install costs nothing.
          */
-        $schedule->command('edutrustpay:report')
-                ->monthlyOn(4, '03:00')
+        // Daily, not monthly: it files any month not yet filed and refiles any
+        // recent month whose books have since changed. Unchanged months are
+        // skipped, so running it often costs nothing.
+        $schedule->command('edutrustpay:report --months=3')
+                ->dailyAt('03:00')
                 ->withoutOverlapping();
 
         $schedule->command('edutrustpay:flush')
