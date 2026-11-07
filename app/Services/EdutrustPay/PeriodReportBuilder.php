@@ -99,7 +99,62 @@ class PeriodReportBuilder
             );
         }
 
+        if (in_array(Capability::FEES_CHARGED, $capabilities, true)) {
+            $this->addFeesCharged($builder, $ledger->endDate());
+        }
+
         return $builder->build();
+    }
+
+    /**
+     * What each programme is actually charged, so the body can compare it with
+     * the fees it has set. Amounts and head counts only: no student is named.
+     *
+     * Taken from the fees students were really billed, not from a price list,
+     * because the bill is what a family pays. The amount is before any discount,
+     * so one student's scholarship does not read as a cheaper fee.
+     *
+     * Cancelled fees are left out, judged the way Fee::getPaymentStateAttribute()
+     * judges them: the status column is not reliable on its own. Its comment says
+     * 2 is "Cancel" but the application also uses 2 for part paid, so a fee counts
+     * as cancelled only when it is status 2 or 3 and nothing was paid on it.
+     *
+     * With no session under way, or nothing billed yet, the block is omitted and
+     * the console says it cannot check. A zero would look like a fee of nothing.
+     */
+    private function addFeesCharged(PayloadBuilder $builder, string $asOf): void
+    {
+        $session = DB::table('sessions')
+            ->whereDate('start_date', '<=', $asOf)
+            ->orderByDesc('start_date')
+            ->first();
+
+        if (! $session) {
+            return;
+        }
+
+        $rows = DB::table('fees as f')
+            ->join('student_enrolls as e', 'e.id', '=', 'f.student_enroll_id')
+            ->join('programs as p', 'p.id', '=', 'e.program_id')
+            ->join('fees_categories as c', 'c.id', '=', 'f.category_id')
+            ->where('e.session_id', $session->id)
+            ->whereNotNull('e.student_id')
+            ->whereDate('f.assign_date', '<=', $asOf)
+            ->whereRaw('NOT (f.status IN (2, 3) AND f.paid_amount = 0)')
+            ->selectRaw('p.title as level, c.title as category, f.fee_amount as amount, COUNT(DISTINCT e.student_id) as students')
+            ->groupBy('p.title', 'c.title', 'f.fee_amount')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $builder->feesCharged($session->title, $rows->map(fn ($row) => [
+            'level' => $row->level,
+            'category' => $row->category,
+            'amount' => Money::of(number_format((float) $row->amount, 2, '.', '')),
+            'students' => (int) $row->students,
+        ])->all());
     }
 
     /**

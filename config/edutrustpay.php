@@ -77,6 +77,7 @@ return [
         'payables',     // Accounting\AgingReportService, class 40
         'payroll',      // Payroll.total_cost + payroll_tax_lines
         'integrity',    // ledger hash, reversals, late entries
+        'fees_charged', // amounts charged per programme and fee, no student named
 
         /*
          * NOT DECLARED: 'budget'.

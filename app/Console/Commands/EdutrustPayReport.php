@@ -48,9 +48,9 @@ class EdutrustPayReport extends Command
                 $latest = $forced ? null : $outbox->latestFor($period);
                 $payload = $builder->build($period, $forced ?? $latest?->sequence ?? 1, $this->option('status') ?: null);
 
-                // A month already delivered is refiled only if its books changed.
+                // A month already delivered is refiled only if it changed.
                 if ($latest?->status === EdutrustPayOutbox::DELIVERED) {
-                    if (Fingerprint::ofJson($latest->payload) === Fingerprint::of($payload)) {
+                    if (! Fingerprint::needsRefiling($latest->payload, $payload)) {
                         $rows[] = [$period, $payload['status'], implode(', ', $payload['capabilities']), $this->total($payload, 'income_by_group'), $this->total($payload, 'expenditure_by_group'), '—', 'unchanged'];
 
                         continue;
