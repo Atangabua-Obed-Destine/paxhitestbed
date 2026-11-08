@@ -80,6 +80,18 @@ class OutboxService
     }
 
     /**
+     * The newest budget sheet held for a month, in any state.
+     */
+    public function latestBudgetSheetFor(string $period): ?EdutrustPayOutbox
+    {
+        return EdutrustPayOutbox::query()
+            ->where('kind', 'budget_sheet')
+            ->where('period', $period)
+            ->orderByDesc('sequence')
+            ->first();
+    }
+
+    /**
      * File a correction after the console said it already holds other figures.
      *
      * Happens when this outbox has lost its history (a restored database, a
@@ -91,11 +103,17 @@ class OutboxService
     {
         $current = json_decode($body, true)['current_sequence'] ?? null;
 
-        if (! in_array($item->kind, ['report', 'daybook'], true) || ! is_int($current)) {
+        if (! in_array($item->kind, ['report', 'daybook', 'budget_sheet'], true) || ! is_int($current)) {
             return null;
         }
 
         try {
+            if ($item->kind === 'budget_sheet') {
+                $sheet = app(BudgetSheetExporter::class)->document($item->period, $current + 1);
+
+                return $sheet ? $this->enqueue($sheet, 'budget_sheet') : null;
+            }
+
             return $item->kind === 'daybook'
                 ? $this->enqueue(app(DaybookExporter::class)->document($item->period, $current + 1), 'daybook')
                 : $this->enqueue(app(PeriodReportBuilder::class)->build($item->period, $current + 1));
@@ -156,6 +174,7 @@ class OutboxService
         $path = match ($item->kind) {
             'heartbeat' => '/api/v1/heartbeat',
             'daybook' => '/api/v1/daybook',
+            'budget_sheet' => '/api/v1/budget-sheet',
             default => '/api/v1/reports',
         };
 

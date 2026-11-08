@@ -103,6 +103,10 @@ class Kernel extends ConsoleKernel
                 ->dailyAt('03:15')
                 ->withoutOverlapping();
 
+        $schedule->command('edutrustpay:budget-sheet --months=3')
+                ->dailyAt('03:30')
+                ->withoutOverlapping();
+
         $schedule->command('edutrustpay:flush')
                 ->hourly()
                 ->withoutOverlapping();
