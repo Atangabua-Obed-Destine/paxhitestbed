@@ -190,6 +190,30 @@ class LedgerSummaryService
         return $this->start;
     }
 
+    /**
+     * This school's own names for its income and spending groups, from the
+     * two-digit heading accounts in its chart ("71" => "Scolarites").
+     *
+     * The console has no names of its own to give: schools book the same money
+     * under different groups, so only the school's words describe its books.
+     * Groups with no heading account are simply left unnamed.
+     *
+     * @return array<string, string>
+     */
+    public function groupNames(): array
+    {
+        return DB::table('chart_of_accounts')
+            ->whereIn('class_number', [self::CLASS_EXPENSE, self::CLASS_REVENUE])
+            ->whereRaw('CHAR_LENGTH(account_code) = 2')
+            ->whereNotNull('account_name')
+            ->orderBy('account_code')
+            ->pluck('account_name', 'account_code')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter(fn ($name) => $name !== '')
+            ->mapWithKeys(fn ($name, $code) => [(string) $code => mb_substr($name, 0, 120)])
+            ->all();
+    }
+
     public function endDate(): string
     {
         return $this->end;

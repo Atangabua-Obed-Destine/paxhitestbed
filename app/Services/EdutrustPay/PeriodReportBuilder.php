@@ -68,6 +68,10 @@ class PeriodReportBuilder
             $ledger->control()
         );
 
+        // The school's own names for the groups above. Only groups with an
+        // amount travel; the contract drops the rest.
+        $builder->groupNames($ledger->groupNames());
+
         if (in_array(Capability::RECEIVABLES, $capabilities, true)) {
             $this->addAgeing($builder, 'receivables', $ledger->endDate());
         }
