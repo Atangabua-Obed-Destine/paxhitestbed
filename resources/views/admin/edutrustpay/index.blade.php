@@ -21,7 +21,7 @@
             <div class="card-header">
                 <h5 class="mb-0" style="font-size:0.95rem;">{{ __('Connection') }}</h5>
                 <small class="text-muted">
-                    {{ __('This institution PUSHES a signed summary of each month to the console. Nothing reaches in here: outbound only, no inbound endpoint, no access to this database from that side.') }}
+                    {{ __('This institution PUSHES a signed summary of each month, and its full daybook, to the console. The daybook includes the names of the people on each line, so students\' and suppliers\' names leave this system. Nothing reaches in here: outbound only, no inbound endpoint, no access to this database from that side.') }}
                 </small>
             </div>
 

@@ -98,6 +98,11 @@ class Kernel extends ConsoleKernel
                 ->dailyAt('03:00')
                 ->withoutOverlapping();
 
+        // Its own job, so a large daybook failing cannot hold the report back.
+        $schedule->command('edutrustpay:daybook --months=3')
+                ->dailyAt('03:15')
+                ->withoutOverlapping();
+
         $schedule->command('edutrustpay:flush')
                 ->hourly()
                 ->withoutOverlapping();
