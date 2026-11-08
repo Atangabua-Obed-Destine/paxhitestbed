@@ -172,14 +172,14 @@ class EdutrustPayReport extends Command
 
         $this->newLine();
         $this->line('<comment>Not declared:</comment> '.implode(', ', $missing));
-        $this->line('The console will show these as "not yet reporting" rather than as zero, which is the intent.');
+        $this->line('The console will show these as "doesn\'t send this" rather than as zero, which is the intent.');
 
         if (in_array('budget', $missing, true)) {
-            $this->line('  budget — this institution has budgets, but the contract cannot carry them yet: it needs a year-to-date block, because a twelfth of an annual budget is not what anyone budgeted.');
+            $this->line('  budget — not part of this report. The budget sheet is sent on its own by edutrustpay:budget-sheet.');
         }
 
         if (in_array('enrolment', $missing, true)) {
-            $this->line('  enrolment — needs fee-structure templates pushed down by the body before expected fees mean anything.');
+            $this->line('  enrolment — not wired up for this system yet. Fees actually charged are sent as fees_charged.');
         }
     }
 }

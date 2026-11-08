@@ -50,7 +50,16 @@ class EdutrustPayFlush extends Command
             $result['attempted'], $result['delivered'], $result['deferred'], $result['failed']
         ));
 
-        $stuck = EdutrustPayOutbox::where('status', EdutrustPayOutbox::FAILED)->count();
+        // A failure that a later version of the same month has since replaced
+        // needs nothing doing: the console already holds the newer one.
+        $stuckQuery = fn () => EdutrustPayOutbox::where('status', EdutrustPayOutbox::FAILED)
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('edutrustpay_outbox as later')
+                ->whereColumn('later.kind', 'edutrustpay_outbox.kind')
+                ->whereColumn('later.period', 'edutrustpay_outbox.period')
+                ->whereColumn('later.sequence', '>', 'edutrustpay_outbox.sequence')
+                ->where('later.status', EdutrustPayOutbox::DELIVERED));
+
+        $stuck = $stuckQuery()->count();
 
         if ($stuck > 0) {
             // A permanently-failed report is a month the body will never see,
@@ -58,7 +67,7 @@ class EdutrustPayFlush extends Command
             // quiet. It must not sit here unnoticed.
             $this->warn("$stuck item(s) have failed permanently and need attention:");
 
-            foreach (EdutrustPayOutbox::where('status', EdutrustPayOutbox::FAILED)->limit(5)->get() as $item) {
+            foreach ($stuckQuery()->limit(5)->get() as $item) {
                 $this->line(sprintf(
                     '  %s seq %d — HTTP %s — %s',
                     $item->period ?? $item->kind,
