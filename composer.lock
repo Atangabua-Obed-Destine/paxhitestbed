@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2b03b137c5f3c256a078cf06b0cf48f0",
+    "content-hash": "47723b04a923246424dcbecaf32634f4",
     "packages": [
         {
             "name": "africastalking/africastalking",
@@ -1299,11 +1299,11 @@
         },
         {
             "name": "edutrustpay/reporting-contract",
-            "version": "dev-main",
+            "version": "dev-edutrustpay-reporting-fixes",
             "dist": {
                 "type": "path",
-                "url": "../edutrustpay/packages/reporting-contract",
-                "reference": "b204ca2cbeb09e96fc46eec2c2896b6537b7ee2b"
+                "url": "./packages/reporting-contract",
+                "reference": "86938ba3797649f5e2e07115e43ab692a590e55e"
             },
             "require": {
                 "ext-bcmath": "*",
@@ -1330,7 +1330,7 @@
             ],
             "description": "The EdutrustPay Reporting Contract - the shared, versioned agreement by which institutions push signed monthly figures to a body.",
             "transport-options": {
-                "symlink": true,
+                "symlink": false,
                 "relative": true
             }
         },

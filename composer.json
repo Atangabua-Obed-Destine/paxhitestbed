@@ -93,9 +93,9 @@
     "repositories": [
         {
             "type": "path",
-            "url": "../edutrustpay/packages/reporting-contract",
+            "url": "./packages/reporting-contract",
             "options": {
-                "symlink": true
+                "symlink": false
             }
         }
     ]
