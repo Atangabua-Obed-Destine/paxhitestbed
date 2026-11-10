@@ -179,7 +179,9 @@ class EdutrustPayReport extends Command
         }
 
         if (in_array('enrolment', $missing, true)) {
-            $this->line('  enrolment — not wired up for this system yet. Fees actually charged are sent as fees_charged.');
+            $this->line('  enrolment — fees billed against collected, and the share paid in cash, are not sent: the');
+            $this->line('    payment-method codes here cannot yet say what was cash. Student numbers are sent as students,');
+            $this->line('    and the fees actually charged as fees_charged.');
         }
     }
 }

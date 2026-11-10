@@ -107,6 +107,24 @@ class PeriodReportBuilder
             $this->addFeesCharged($builder, $ledger->endDate());
         }
 
+        $people = new PeopleSummaryService($period);
+
+        // Students per programme, in the session the month falls in. Sent on its
+        // own, without the enrolment part: that part also needs fees billed,
+        // collected and the share paid in cash, and this system's payment-method
+        // codes cannot yet say what was cash. Before any session, nothing is sent.
+        if (in_array(Capability::STUDENTS, $capabilities, true) && ($session = $people->session())) {
+            $builder->students($session->title, collect($people->studentsByProgramme())
+                ->map(fn (int $students, string $programme) => ['level' => $programme, 'students' => $students])
+                ->values()
+                ->all());
+        }
+
+        // Number, name, department and post. Never pay.
+        if (in_array(Capability::STAFF, $capabilities, true)) {
+            $builder->staff($people->staff());
+        }
+
         return $builder->build();
     }
 

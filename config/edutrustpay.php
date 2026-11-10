@@ -71,6 +71,14 @@ return [
     |
     */
 
+    /*
+    | Staff numbers starting with one of these belong to the software
+    | supplier's support accounts, not to the institute's staff, and are left
+    | out of the staff list sent to the console.
+    */
+
+    'staff_excluded_prefixes' => array_filter(explode(',', (string) env('EDUTRUSTPAY_STAFF_EXCLUDED_PREFIXES', 'I-NNOVA'))),
+
     'capabilities' => [
         'ledger',       // income/expenditure by OHADA group, cash, control totals
         'receivables',  // Accounting\AgingReportService, class 41
@@ -78,6 +86,8 @@ return [
         'payroll',      // Payroll.total_cost + payroll_tax_lines
         'integrity',    // ledger hash, reversals, late entries
         'fees_charged', // amounts charged per programme and fee, no student named
+        'students',     // student_enrolls, each student once, per programme
+        'staff',        // users: staff number, name, department, post. Never pay.
 
         /*
          * NOT DECLARED: 'budget'.
