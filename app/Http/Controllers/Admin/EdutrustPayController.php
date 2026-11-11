@@ -214,8 +214,24 @@ class EdutrustPayController extends Controller
                 : 'Not tried yet.';
         }
 
+        // The console's own words: its message, else its list of errors,
+        // else just the error code.
         $decoded = json_decode((string) $item->last_response, true);
-        $said = is_array($decoded) ? ($decoded['message'] ?? $decoded['error'] ?? null) : null;
+        $said = null;
+
+        if (is_array($decoded)) {
+            $said = $decoded['message'] ?? null;
+
+            if (! $said && ! empty($decoded['errors'])) {
+                $said = implode(' ', array_slice(\Illuminate\Support\Arr::flatten((array) $decoded['errors']), 0, 3));
+            }
+
+            $said = $said ?: ($decoded['error'] ?? null);
+
+            if (($decoded['error'] ?? null) === 'unsupported_contract_version') {
+                $said .= ' The console is older than this system: ask whoever runs the console to update it, then send again.';
+            }
+        }
 
         if ($item->last_status_code === 401) {
             $said = 'The key id or secret is wrong, or the key was replaced on the console.';
