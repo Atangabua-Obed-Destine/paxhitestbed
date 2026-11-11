@@ -1009,6 +1009,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('edutrustpay', 'EdutrustPayController@index')->name('edutrustpay.index');
     Route::put('edutrustpay', 'EdutrustPayController@update')->name('edutrustpay.update');
     Route::post('edutrustpay/test', 'EdutrustPayController@test')->name('edutrustpay.test');
+    Route::post('edutrustpay/send-now', 'EdutrustPayController@sendNow')->name('edutrustpay.send-now');
 
     Route::get('staff/tax-report', 'StaffTaxReportController@index')->name('staff-tax-report.index');
     Route::get('staff/tax-report/pdf', 'StaffTaxReportController@exportPdf')->name('staff-tax-report.pdf');
