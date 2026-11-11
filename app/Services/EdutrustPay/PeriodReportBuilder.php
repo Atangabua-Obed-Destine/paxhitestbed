@@ -125,6 +125,13 @@ class PeriodReportBuilder
             $builder->staff($people->staff());
         }
 
+        // The fee position for the academic year, as at month end: expected,
+        // collected, owed and overpaid, by programme and fee, and how many
+        // students have paid. Before any session, nothing is sent.
+        if (in_array(Capability::FEES, $capabilities, true) && ($fees = (new FeeYearService($period))->position())) {
+            $builder->fees($fees['session'], $fees['rows'], $fees['students']);
+        }
+
         return $builder->build();
     }
 
