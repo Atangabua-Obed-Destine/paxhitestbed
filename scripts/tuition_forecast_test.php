@@ -611,8 +611,8 @@ $html = $response->getContent();
 check('the sheet renders', $response->getStatusCode() === 200, 'status ' . $response->getStatusCode());
 check(
     'a forecast button appears on each tuition line',
-    substr_count($html, 'class="forecast-btn"') === $lines->count(),
-    substr_count($html, 'class="forecast-btn"') . ' for ' . $lines->count() . ' lines'
+    substr_count($html, 'data-bs-target="#forecastModal"') === $lines->count(),
+    substr_count($html, 'data-bs-target="#forecastModal"') . ' for ' . $lines->count() . ' lines'
 );
 check('the modal is present', strpos($html, 'id="forecastModal"') !== false);
 check('the rates reach the browser', strpos($html, 'var RATES = {') !== false);

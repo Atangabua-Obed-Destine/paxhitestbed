@@ -20,6 +20,7 @@ class BudgetLineForecast extends Model
         'budget_id',
         'budget_line_id',
         'student_count',
+        'quantity',
         'rate',
         'rate_basis',
         'computed_amount',
@@ -30,9 +31,25 @@ class BudgetLineForecast extends Model
 
     protected $casts = [
         'student_count' => 'integer',
+        'quantity' => 'decimal:2',
         'rate' => 'decimal:2',
         'computed_amount' => 'decimal:2',
     ];
+
+    /** A stored basis of this kind. */
+    public const BASIS_UNIT = 'unit';
+
+    /**
+     * "Quantity × unit amount" rather than "students × fee".
+     *
+     * Both are the same shape of reasoning; this is the one that applies to a
+     * stationery or electricity line, where the number is months or items
+     * rather than people.
+     */
+    public function isUnitBasis(): bool
+    {
+        return $this->rate_basis === self::BASIS_UNIT;
+    }
 
     public function budget()
     {

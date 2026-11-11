@@ -1,0 +1,260 @@
+<?php
+/**
+ * Budgeting an ordinary line as a quantity at a unit amount.
+ *
+ * "Twelve months at 85,000" is how most of a sheet is reasoned; the sheet used
+ * to keep only the 1,020,000. This suite holds the rules that make the
+ * working trustworthy: the product is what lands in the Budget box, the two
+ * figures are kept beside it, a figure typed over the product takes its
+ * working with it, and the lines driven by student or applicant numbers are
+ * never offered this — two workings for one figure would contradict.
+ *
+ * Usage: php scripts/unit_basis_test.php
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
+$app = require __DIR__ . '/../bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+use App\Http\Controllers\Admin\BudgetSheetController;
+use App\Models\Budget;
+use App\Models\BudgetAllocation;
+use App\Models\BudgetLine;
+use App\Models\BudgetLineForecast;
+use App\Services\TuitionForecastService;
+use App\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+$passed = 0;
+$failed = 0;
+
+function check(string $label, bool $ok, string $detail = ''): void
+{
+    global $passed, $failed;
+    if ($ok) {
+        $passed++;
+        echo "  PASS  $label\n";
+    } else {
+        $failed++;
+        echo "  FAIL  $label" . ($detail !== '' ? "\n          $detail" : '') . "\n";
+    }
+}
+
+$service = app(TuitionForecastService::class);
+$controller = app(BudgetSheetController::class);
+
+$admin = User::whereHas('roles')->first() ?: User::first();
+Auth::guard('web')->login($admin);
+
+$budget = Budget::where('is_institutional', true)->where('status', 'draft')->orderByDesc('id')->first();
+if (!$budget) {
+    echo "No draft institutional sheet to test on.\n";
+    exit(1);
+}
+
+$post = function (array $data) use ($controller, $budget) {
+    return $controller->unitBasis(Request::create('/x', 'POST', $data), $budget->id);
+};
+$working = fn (int $lineId) => BudgetLineForecast::where('budget_id', $budget->id)->where('budget_line_id', $lineId)->first();
+$figure = fn (int $lineId) => (float) (BudgetAllocation::where('budget_id', $budget->id)->where('budget_line_id', $lineId)->value('allocated_amount') ?? 0);
+
+echo "\n== Ground ==\n";
+
+check('the forecasts table can hold a quantity', Schema::hasColumn('budget_line_forecasts', 'quantity'));
+
+$expense = BudgetLine::where('section', BudgetLine::SECTION_EXPENDITURE)->where('is_header', false)->orderBy('id')->first();
+$otherIncome = BudgetLine::where('section', BudgetLine::SECTION_INCOME)->where('is_header', false)
+    ->get()->first(fn ($l) => !$service->isForecastable($l));
+$header = BudgetLine::where('is_header', true)->first();
+$forecastable = $service->forecastableLines()->first();
+
+check('an expenditure line to work on', $expense !== null, $expense ? $expense->label : '');
+check('an income line that is not driven by headcount', $otherIncome !== null, $otherIncome ? $otherIncome->label : '');
+check('a header and a forecastable line to be refused on', $header !== null && $forecastable !== null);
+
+echo "\n== Quantity × amount lands on the sheet ==\n";
+
+DB::beginTransaction();
+try {
+    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000, 'note' => 'ZZ monthly bill']);
+
+    $w = $working($expense->id);
+    check('the working is kept', $w !== null);
+    check('as a unit basis', $w && $w->isUnitBasis());
+    check('with the quantity', $w && abs((float) $w->quantity - 12) < 0.001);
+    check('and the amount each', $w && abs((float) $w->rate - 85000) < 0.001);
+    check('and the product', $w && abs((float) $w->computed_amount - 1020000) < 0.001);
+    check('and the note', $w && $w->note === 'ZZ monthly bill');
+    check('the product is the budgeted figure', abs($figure($expense->id) - 1020000) < 0.001, number_format($figure($expense->id)));
+
+    // The quantity need not be whole.
+    $post(['budget_line_id' => $expense->id, 'quantity' => 2.5, 'rate' => 120000]);
+    $w = $working($expense->id);
+    check('a fractional quantity is kept as typed', $w && abs((float) $w->quantity - 2.5) < 0.001);
+    check('and multiplies correctly', abs($figure($expense->id) - 300000) < 0.001, number_format($figure($expense->id)));
+    check('saving again replaces, never duplicates', BudgetLineForecast::where('budget_id', $budget->id)->where('budget_line_id', $expense->id)->count() === 1);
+    check('a note left blank clears the old one', $w && $w->note === null);
+
+    // Income that is not tuition or registration: beds, rent, hall hire.
+    $post(['budget_line_id' => $otherIncome->id, 'quantity' => 80, 'rate' => 150000]);
+    check('an ordinary income line takes the same reasoning', abs($figure($otherIncome->id) - 12000000) < 0.001, number_format($figure($otherIncome->id)));
+
+    // The sheet's stored total follows, as it does for the figures form.
+    $budget->refresh();
+    $expenditure = (float) BudgetAllocation::where('budget_id', $budget->id)
+        ->whereIn('budget_line_id', BudgetLine::whereIn('section', [BudgetLine::SECTION_EXPENDITURE, BudgetLine::SECTION_CAPITAL])->pluck('id'))
+        ->sum('allocated_amount');
+    check('the sheet total is recomputed', abs((float) $budget->total_amount - $expenditure) < 0.01, number_format($budget->total_amount) . ' vs ' . number_format($expenditure));
+
+    // Zero removes the figure rather than budgeting nothing.
+    $post(['budget_line_id' => $expense->id, 'quantity' => 0, 'rate' => 85000]);
+    check('a zero quantity takes the figure off the sheet', $figure($expense->id) == 0.0);
+} finally {
+    DB::rollBack();
+}
+
+echo "\n== Typing over a worked-out figure ==\n";
+
+$save = function (array $amounts) use ($controller, $budget) {
+    return $controller->saveFigures(Request::create('/x', 'POST', [
+        'opening_balance' => $budget->opening_balance,
+        'amounts' => $amounts,
+    ]), $budget->id);
+};
+
+DB::beginTransaction();
+try {
+    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000]);
+
+    $save([$expense->id => 1020000]);
+    check('saving the sheet with the same figure keeps the working', $working($expense->id) !== null);
+
+    $save([$expense->id => '1020000.00']);
+    check('so does the figure as the form echoes it back', $working($expense->id) !== null);
+
+    $save([$expense->id => 999000]);
+    check('a different figure typed by hand clears the working', $working($expense->id) === null);
+    check('and is the figure that stays', abs($figure($expense->id) - 999000) < 0.001);
+
+    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000]);
+    $save([$expense->id => '']);
+    check('blanking the figure clears the working too', $working($expense->id) === null);
+} finally {
+    DB::rollBack();
+}
+
+// The same rule protects the student forecasts, which were previously able to
+// print "37 students × 255,405" under a figure somebody had typed over.
+if ($forecastable) {
+    DB::beginTransaction();
+    try {
+        $controller->forecast(Request::create('/x', 'POST', [
+            'budget_line_id' => $forecastable->id, 'student_count' => 10, 'rate' => 100000,
+        ]), $budget->id);
+        check('a student forecast is on record', $working($forecastable->id) !== null);
+        $save([$forecastable->id => 1000000]);
+        check('it survives a save that keeps its figure', $working($forecastable->id) !== null);
+        $save([$forecastable->id => 1500000]);
+        check('and goes when its figure is typed over', $working($forecastable->id) === null);
+    } finally {
+        DB::rollBack();
+    }
+}
+
+echo "\n== What must be refused ==\n";
+
+DB::beginTransaction();
+try {
+    $before = BudgetLineForecast::count();
+
+    $post(['budget_line_id' => $header->id, 'quantity' => 5, 'rate' => 1000]);
+    check('a header is refused', BudgetLineForecast::count() === $before && $figure($header->id) == 0.0);
+
+    $post(['budget_line_id' => $forecastable->id, 'quantity' => 5, 'rate' => 1000]);
+    check('a line forecast from students or applicants is refused', BudgetLineForecast::count() === $before, $forecastable->label);
+
+    $refused = false;
+    try {
+        $post(['budget_line_id' => $expense->id, 'quantity' => -1, 'rate' => 1000]);
+    } catch (Illuminate\Validation\ValidationException $e) {
+        $refused = true;
+    }
+    check('a negative quantity is refused', $refused && BudgetLineForecast::count() === $before);
+
+    $refused = false;
+    try {
+        $post(['budget_line_id' => $expense->id, 'quantity' => 'twelve', 'rate' => 1000]);
+    } catch (Illuminate\Validation\ValidationException $e) {
+        $refused = true;
+    }
+    check('a quantity that is not a number is refused', $refused);
+} finally {
+    DB::rollBack();
+}
+
+$locked = Budget::where('is_institutional', true)->where('status', '!=', 'draft')->first();
+if ($locked) {
+    DB::beginTransaction();
+    try {
+        $before = BudgetAllocation::where('budget_id', $locked->id)->sum('allocated_amount');
+        $controller->unitBasis(Request::create('/x', 'POST', [
+            'budget_line_id' => $expense->id, 'quantity' => 3, 'rate' => 1000,
+        ]), $locked->id);
+        $after = BudgetAllocation::where('budget_id', $locked->id)->sum('allocated_amount');
+        check('a sheet that is no longer a draft cannot be changed this way', (float) $before === (float) $after);
+    } finally {
+        DB::rollBack();
+    }
+} else {
+    echo "  ..  no non-draft sheet to test the lock against\n";
+}
+
+echo "\n== The screen ==\n";
+
+$kernel = app(Illuminate\Contracts\Http\Kernel::class);
+$render = function () use ($kernel, $budget) {
+    $request = Request::create('/admin/budget-sheet/' . $budget->id, 'GET');
+    $request->setLaravelSession(app('session.store'));
+    return $kernel->handle($request)->getContent();
+};
+
+DB::beginTransaction();
+try {
+    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000, 'note' => 'ZZ monthly bill']);
+    $html = $render();
+
+    $ordinary = BudgetLine::sheet()->filter(fn ($l) => !$l->is_header && !$service->isForecastable($l))->count();
+    $driven = $service->forecastableLines()->count();
+
+    check('the sheet renders', strpos($html, 'id="unitModal"') !== false);
+    check(
+        'every ordinary line offers Quantity × amount',
+        substr_count($html, 'data-bs-target="#unitModal"') === $ordinary,
+        substr_count($html, 'data-bs-target="#unitModal"') . ' for ' . $ordinary . ' lines'
+    );
+    check(
+        'and the headcount lines keep their own forecast instead',
+        substr_count($html, 'data-bs-target="#forecastModal"') === $driven,
+        substr_count($html, 'data-bs-target="#forecastModal"') . ' for ' . $driven . ' lines'
+    );
+    check('the working is printed under the figure', preg_match('/12\s*&times;\s*85,000/', $html) === 1);
+    check('with its note', strpos($html, 'ZZ monthly bill') !== false);
+    check('the budget box carries the product', strpos($html, 'name="amounts[' . $expense->id . ']"' . "\n" . str_repeat(' ', 71) . 'value="1020000') !== false
+        || preg_match('/amounts\[' . $expense->id . '\]"\s+value="1020000(\.00)?"/', $html) === 1);
+    check('the line now says Edit working', strpos($html, __('Edit working')) !== false);
+    check('the saved figures reach the browser', strpos($html, 'var SAVED_UNITS = {') !== false);
+    check('a unit working is never described in students', preg_match('/0 students\s*&times;/', $html) === 0);
+} finally {
+    DB::rollBack();
+}
+
+echo "\n== Nothing left behind ==\n";
+
+check('no test working survived', BudgetLineForecast::where('note', 'ZZ monthly bill')->doesntExist());
+check('no transaction left open', DB::transactionLevel() === 0);
+
+echo "\n$passed passed, $failed failed\n";
+exit($failed === 0 ? 0 : 1);

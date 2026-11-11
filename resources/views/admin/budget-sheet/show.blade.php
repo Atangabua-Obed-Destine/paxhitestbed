@@ -595,9 +595,26 @@
                                                                         onclick='budgetForecast(@json($fcPayload))'>
                                                                     <i class="fas fa-users me-1"></i>{{ $fc ? __('Edit forecast') : (($fcRate['kind'] ?? 'tuition') === 'registration' ? __('Forecast from applicants') : __('Forecast from students')) }}
                                                                 </button>
+                                                            @elseif($editable)
+                                                                {{-- Any other line: a quantity at a unit amount — twelve
+                                                                     months of electricity, forty desks. Same reasoning
+                                                                     as tuition, without the headcount behind it. --}}
+                                                                <button type="button" class="forecast-btn"
+                                                                        data-bs-toggle="modal" data-bs-target="#unitModal"
+                                                                        onclick='budgetUnit(@json($fcPayload))'>
+                                                                    <i class="fas fa-calculator me-1"></i>{{ $fc && $fc->isUnitBasis() ? __('Edit working') : __('Quantity × amount') }}
+                                                                </button>
                                                             @endif
 
-                                                            @if($fc)
+                                                            @if($fc && $fc->isUnitBasis())
+                                                                <span class="forecast-basis">
+                                                                    {{ rtrim(rtrim(number_format((float) $fc->quantity, 2), '0'), '.') }}
+                                                                    &times; {{ number_format($fc->rate) }}
+                                                                    @if($fc->note)
+                                                                        <br><span class="text-muted">{{ $fc->note }}</span>
+                                                                    @endif
+                                                                </span>
+                                                            @elseif($fc)
                                                                 @php $stale = $fcRate && $fc->isStaleAgainst((float) $fcRate['rate']); @endphp
                                                                 <span class="forecast-basis {{ $stale ? 'forecast-stale' : '' }}">
                                                                     {{ trans_choice(($fcRate['kind'] ?? 'tuition') === 'registration'
@@ -964,6 +981,106 @@
                 document.getElementById('fc_basis').value = 'manual';
             });
         }
+    });
+})();
+</script>
+@endpush
+@endif
+
+{{-- Budgeting an ordinary line as a quantity at a unit amount. --}}
+@if($editable)
+@php
+    $savedUnits = $forecasts->filter(fn ($f) => $f->isUnitBasis())->map(fn ($f) => [
+        'quantity' => (float) $f->quantity,
+        'rate' => (float) $f->rate,
+        'note' => $f->note,
+    ]);
+@endphp
+<div class="modal fade" id="unitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ route('admin.budget-sheet.unit-basis', $budget->id) }}">
+                @csrf
+                <input type="hidden" name="budget_line_id" id="un_line_id">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        {{ __('Quantity × amount') }}
+                        <small class="d-block text-muted" id="un_line_label"></small>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        {{ __('Budget this line by saying how many and at what price — twelve months at 85,000, forty desks at 25,000 — rather than by typing the total. The sheet keeps both figures so the working can be read later.') }}
+                    </p>
+
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label for="un_quantity">{{ __('Quantity') }} <span class="text-danger">*</span></label>
+                            <input type="number" min="0" step="0.01" class="form-control" name="quantity" id="un_quantity" required>
+                            <small class="text-muted">{{ __('Months, items, people, hours…') }}</small>
+                        </div>
+
+                        <div class="col-md-7 mb-3">
+                            <label for="un_rate">{{ __('Amount each') }} <span class="text-danger">*</span></label>
+                            <input type="number" min="0" step="0.01" class="form-control" name="rate" id="un_rate" required>
+                        </div>
+                    </div>
+
+                    <div class="fc-result">
+                        <div class="text-muted small">{{ __('This line would be budgeted at') }}</div>
+                        <div class="value" id="un_amount">0</div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label for="un_note">{{ __('Note') }}</label>
+                        <input type="text" class="form-control" name="note" id="un_note" maxlength="500"
+                               placeholder="{{ __('What the quantity is — monthly bill, desks for the new block') }}">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
+                    <button type="submit" class="btn btn-primary">{{ __('Use this figure') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+(function () {
+    'use strict';
+
+    var SAVED_UNITS = @json($savedUnits);
+    var fmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+
+    function recalc() {
+        var quantity = parseFloat(document.getElementById('un_quantity').value) || 0;
+        var rate = parseFloat(document.getElementById('un_rate').value) || 0;
+        document.getElementById('un_amount').textContent = fmt.format(Math.round(quantity * rate * 100) / 100);
+    }
+
+    window.budgetUnit = function (line) {
+        var saved = SAVED_UNITS[line.line_id] || null;
+
+        document.getElementById('un_line_id').value = line.line_id;
+        document.getElementById('un_line_label').textContent = line.code + ' — ' + line.name;
+        document.getElementById('un_quantity').value = saved ? saved.quantity : '';
+        document.getElementById('un_rate').value = saved ? saved.rate : '';
+        document.getElementById('un_note').value = saved && saved.note ? saved.note : '';
+
+        recalc();
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        ['un_quantity', 'un_rate'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) { el.addEventListener('input', recalc); }
+        });
     });
 })();
 </script>

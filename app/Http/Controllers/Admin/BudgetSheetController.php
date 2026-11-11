@@ -42,7 +42,7 @@ class BudgetSheetController extends Controller
         $this->letterhead = $letterhead;
 
         $this->middleware('permission:budget-view', ['only' => ['index', 'show', 'exportPdf', 'exportExcel']]);
-        $this->middleware('permission:budget-edit', ['only' => ['store', 'saveFigures', 'forecast', 'updatePeriod', 'submit']]);
+        $this->middleware('permission:budget-edit', ['only' => ['store', 'saveFigures', 'forecast', 'unitBasis', 'updatePeriod', 'submit']]);
         $this->middleware('permission:budget-approve', ['only' => ['approve']]);
         $this->middleware('permission:budget-activate', ['only' => ['activate']]);
         $this->middleware('permission:budget-close', ['only' => ['close']]);
@@ -500,6 +500,12 @@ class BudgetSheetController extends Controller
         // double counted. Ignore them rather than reject the whole save.
         $headerIds = BudgetLine::where('is_header', true)->pluck('id')->flip();
 
+        // The working behind each worked-out figure, so a figure typed over
+        // one can take its working with it. A sheet must never print
+        // "12 × 85,000" under a number that is not 1,020,000.
+        $workings = \App\Models\BudgetLineForecast::where('budget_id', $budget->id)
+            ->get()->keyBy('budget_line_id');
+
         DB::beginTransaction();
         try {
             $budget->opening_balance = $request->input('opening_balance', 0) ?: 0;
@@ -510,6 +516,11 @@ class BudgetSheetController extends Controller
                 }
 
                 $amount = $amount === null || $amount === '' ? null : (float) $amount;
+
+                $working = $workings[(int) $lineId] ?? null;
+                if ($working && abs((float) $working->computed_amount - (float) $amount) > 0.5) {
+                    $working->delete();
+                }
 
                 if ($amount === null || $amount == 0.0) {
                     BudgetAllocation::where('budget_id', $budget->id)
@@ -635,6 +646,106 @@ class BudgetSheetController extends Controller
             DB::rollBack();
             report($e);
             Flasher::addError(__('Could not save the forecast.'), __('msg_error'));
+        }
+
+        return redirect()->route('admin.budget-sheet.show', $budget->id);
+    }
+
+    /**
+     * Budget any ordinary line as a quantity at a unit amount.
+     *
+     * "Twelve months at 85,000" or "forty desks at 25,000" is how most of the
+     * sheet is actually reasoned. Keeping the two figures means a reader can
+     * see which lines were worked out, and argue with the quantity or the
+     * price rather than with a bare product.
+     *
+     * The lines driven by student or applicant numbers are not offered this:
+     * they have their own forecast, and two workings for one figure would
+     * contradict each other.
+     */
+    public function unitBasis(Request $request, $id)
+    {
+        $budget = Budget::where('is_institutional', true)->findOrFail($id);
+
+        if (!static::isEditable($budget)) {
+            Flasher::addError(
+                __('This sheet is :status, so its figures can no longer be changed. Use a revision instead.',
+                    ['status' => str_replace('_', ' ', $budget->status)]),
+                __('msg_error')
+            );
+
+            return redirect()->route('admin.budget-sheet.show', $budget->id);
+        }
+
+        $data = $request->validate([
+            'budget_line_id' => ['required', 'exists:budget_lines,id'],
+            'quantity' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+            'rate' => ['required', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $line = BudgetLine::find($data['budget_line_id']);
+        $forecastService = app(\App\Services\TuitionForecastService::class);
+
+        if (!$line || $line->is_header || $forecastService->isForecastable($line)) {
+            Flasher::addError(__('That line cannot be budgeted as a quantity at an amount.'), __('msg_error'));
+
+            return redirect()->route('admin.budget-sheet.show', $budget->id);
+        }
+
+        $quantity = round((float) $data['quantity'], 2);
+        $rate = round((float) $data['rate'], 2);
+        $amount = round($quantity * $rate, 2);
+
+        DB::beginTransaction();
+        try {
+            \App\Models\BudgetLineForecast::updateOrCreate(
+                ['budget_id' => $budget->id, 'budget_line_id' => $line->id],
+                [
+                    'student_count' => 0,
+                    'quantity' => $quantity,
+                    'rate' => $rate,
+                    'rate_basis' => \App\Models\BudgetLineForecast::BASIS_UNIT,
+                    'computed_amount' => $amount,
+                    'note' => $data['note'] ?? null,
+                    'updated_by' => Auth::id(),
+                    'created_by' => Auth::id(),
+                ]
+            );
+
+            if ($amount > 0) {
+                BudgetAllocation::updateOrCreate(
+                    ['budget_id' => $budget->id, 'budget_line_id' => $line->id],
+                    [
+                        'allocated_amount' => $amount,
+                        'title' => $line->name,
+                        'is_active' => true,
+                        'updated_by' => Auth::id(),
+                    ]
+                );
+            } else {
+                BudgetAllocation::where('budget_id', $budget->id)
+                    ->where('budget_line_id', $line->id)->delete();
+            }
+
+            // Same rule as the figures form: the stored total is what is
+            // being spent, not what is hoped to come in.
+            $budget->total_amount = $this->sectionTotal($budget, BudgetLine::SECTION_EXPENDITURE)
+                + $this->sectionTotal($budget, BudgetLine::SECTION_CAPITAL);
+            $budget->save();
+
+            DB::commit();
+
+            Flasher::addSuccess(__(':line budgeted at :amount — :quantity × :rate.', [
+                'line' => $line->label,
+                'amount' => number_format($amount),
+                'quantity' => rtrim(rtrim(number_format($quantity, 2), '0'), '.'),
+                'rate' => number_format($rate),
+            ]), __('msg_success'));
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+            Flasher::addError(__('Could not save the figure.'), __('msg_error'));
         }
 
         return redirect()->route('admin.budget-sheet.show', $budget->id);
