@@ -88,6 +88,7 @@ return [
         'fees_charged', // amounts charged per programme and fee, no student named
         'students',     // student_enrolls, each student once, per programme
         'staff',        // users: staff number, name, department, post. Never pay.
+        'fees',         // the year's fees: expected, collected, owed, by programme and fee
 
         /*
          * NOT DECLARED: 'budget'.

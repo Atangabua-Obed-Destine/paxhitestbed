@@ -45,13 +45,28 @@ class PeopleSummaryService
      */
     public function studentsByProgramme(): array
     {
+        return collect($this->studentProgrammes())
+            ->countBy()
+            ->sortKeys(SORT_NATURAL)
+            ->all();
+    }
+
+    /**
+     * The students on the roll for the session, each once, with the programme
+     * of their latest enrolment in it. The fee part uses the same list to find
+     * students who were never charged.
+     *
+     * @return array<int, string>  student id => programme title
+     */
+    public function studentProgrammes(): array
+    {
         $session = $this->session();
 
         if (! $session) {
             return [];
         }
 
-        $rows = DB::table('student_enrolls as e')
+        return DB::table('student_enrolls as e')
             ->join('students as s', 's.id', '=', 'e.student_id')
             ->leftJoin('programs as p', 'p.id', '=', 'e.program_id')
             ->where('e.session_id', $session->id)
@@ -59,11 +74,9 @@ class PeopleSummaryService
             ->whereIn('e.status', [1, 2])
             ->where('s.status', '!=', 3)
             ->orderBy('e.id')
-            ->get(['e.student_id', 'p.title as programme']);
-
-        return $rows->keyBy('student_id')
-            ->countBy(fn ($row) => $row->programme ?: 'No programme')
-            ->sortKeys(SORT_NATURAL)
+            ->get(['e.student_id', 'p.title as programme'])
+            ->keyBy('student_id')
+            ->map(fn ($row) => $row->programme ?: 'No programme')
             ->all();
     }
 

@@ -182,10 +182,16 @@ class EdutrustPayController extends Controller
             ->get()
             ->mapWithKeys(fn ($row) => [$row->kind . '|' . $row->period => (int) $row->seq]);
 
+        // A check-in has no versions: a failed one is replaced only by a check-in
+        // delivered after it, not by an older one that went through.
+        $lastCheckIn = EdutrustPayOutbox::where('kind', 'heartbeat')->where('status', EdutrustPayOutbox::DELIVERED)->max('delivered_at');
+
         return EdutrustPayOutbox::where('status', EdutrustPayOutbox::FAILED)
             ->orderBy('id')
             ->get(self::LIST_COLUMNS)
-            ->filter(fn ($row) => ($deliveredUpTo[$row->kind . '|' . $row->period] ?? 0) < $row->sequence)
+            ->filter(fn ($row) => $row->kind === 'heartbeat'
+                ? ! $lastCheckIn || \Carbon\Carbon::parse($lastCheckIn)->lt($row->updated_at)
+                : ($deliveredUpTo[$row->kind . '|' . $row->period] ?? 0) < $row->sequence)
             ->values();
     }
 
@@ -214,11 +220,37 @@ class EdutrustPayController extends Controller
                 : 'Not tried yet.';
         }
 
+        // The console's own words: its message, else its list of errors,
+        // else just the error code.
         $decoded = json_decode((string) $item->last_response, true);
-        $said = is_array($decoded) ? ($decoded['message'] ?? $decoded['error'] ?? null) : null;
+        $said = null;
+
+        if (is_array($decoded)) {
+            $said = $decoded['message'] ?? null;
+
+            if (! $said && ! empty($decoded['errors'])) {
+                $said = implode(' ', array_slice(\Illuminate\Support\Arr::flatten((array) $decoded['errors']), 0, 3));
+            }
+
+            $said = $said ?: ($decoded['error'] ?? null);
+
+            if (($decoded['error'] ?? null) === 'unsupported_contract_version') {
+                $said .= ' The console is older than this system: ask whoever runs the console to update it, then send again.';
+            }
+        }
 
         if ($item->last_status_code === 401) {
             $said = 'The key id or secret is wrong, or the key was replaced on the console.';
+        }
+
+        // The console always answers in JSON. A web page means something else
+        // answered: the address is wrong, or points at another website.
+        if (! is_array($decoded) && str_contains(substr(ltrim((string) $item->last_response), 0, 200), '<')) {
+            $address = app(SettingsResolver::class)->resolve()['endpoint'] ?? 'the console address';
+
+            return 'HTTP ' . $item->last_status_code . ': ' . (in_array((int) $item->last_status_code, [404, 405], true)
+                ? 'Nothing at ' . $address . ' answers as the EdutrustPay console: another website replied. Check the Console address below. It must be the console\'s own address, such as https://edutrustpay.innovakickstarter.com, with nothing after it, and the key must have been issued on that same console.'
+                : $address . ' answered with a web page instead of the EdutrustPay console. Check the Console address below.');
         }
 
         return 'HTTP ' . $item->last_status_code . ': ' . mb_substr((string) ($said ?: $item->last_response), 0, 300);
@@ -243,8 +275,23 @@ class EdutrustPayController extends Controller
 
     private function phpPath(bool $windows): string
     {
-        if (PHP_BINARY && preg_match('/php(\.exe)?$/i', PHP_BINARY)) {
-            return PHP_BINARY;
+        $binary = (string) PHP_BINARY;
+        $name = strtolower(basename($binary));
+
+        if ($name === 'php' || $name === 'php.exe') {
+            return $binary;
+        }
+
+        // On LiteSpeed (lsphp, as on Hostinger) or CGI hosting, PHP_BINARY is
+        // the web server's PHP. Cron needs the command-line php, which those
+        // hosts install beside it; open_basedir often hides it from is_file(),
+        // so for lsphp it is named without looking.
+        if ($binary !== '' && preg_match('/^(lsphp|php-cgi)/', $name)) {
+            $sibling = dirname($binary).DIRECTORY_SEPARATOR.($windows ? 'php.exe' : 'php');
+
+            if (str_starts_with($name, 'lsphp') || @is_file($sibling)) {
+                return $sibling;
+            }
         }
 
         // Under Apache or PHP-FPM, PHP_BINARY is the web server, not php.

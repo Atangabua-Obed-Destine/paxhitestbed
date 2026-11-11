@@ -111,7 +111,7 @@
                             @if ($schedulerSetup['windows'])
                                 <p class="mb-1">{{ __('Open “Command Prompt” as Administrator (right-click, Run as administrator), paste this line and press Enter:') }}</p>
                             @else
-                                <p class="mb-1">{{ __('On the server, run “sudo crontab -u www-data -e”, add this line at the bottom and save:') }}</p>
+                                <p class="mb-1">{{ __('Add this as a cron job that runs every minute. On your own server: run “sudo crontab -u www-data -e”, paste the whole line at the bottom and save. On shared hosting (Hostinger, cPanel): open Cron Jobs in the hosting panel, choose every minute, and paste the command, which is everything after the five stars.') }}</p>
                             @endif
                             <pre class="p-2 bg-light border mb-1" style="font-size:0.78rem; white-space:pre-wrap; user-select:all;">{{ $schedulerSetup['command'] }}</pre>
                             <p class="text-muted mb-0">{{ __('It starts the scheduler every minute, and the scheduler decides what is due: reports at 03:00, delivery every hour, a check-in at 05:30. Come back here a minute later: this page should say “Running”.') }}</p>
