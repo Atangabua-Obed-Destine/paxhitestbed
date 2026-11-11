@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\EdutrustPayOutbox;
 use App\Models\EdutrustPaySetting;
+use App\Services\EdutrustPay\SchedulerPulse;
 use App\Services\EdutrustPay\SettingsResolver;
 use EdutrustPay\Contract\Capability;
 use EdutrustPay\Contract\ContractVersion;
 use EdutrustPay\Contract\Signer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -45,7 +48,7 @@ class EdutrustPayController extends Controller
         // error, and from the console this institution simply goes quiet.
         $this->middleware('permission:edutrustpay-view', ['only' => ['index']]);
         $this->middleware('permission:edutrustpay-update', ['only' => ['update']]);
-        $this->middleware('permission:edutrustpay-test', ['only' => ['test']]);
+        $this->middleware('permission:edutrustpay-test', ['only' => ['test', 'sendNow']]);
     }
 
     public function index(SettingsResolver $resolver)
@@ -64,7 +67,195 @@ class EdutrustPayController extends Controller
         $data['notDeclared'] = array_diff(Capability::all(), $data['capabilities']);
         $data['contractVersion'] = ContractVersion::CURRENT;
 
+        // Is it sending? The scheduler, the queue and what the console answered.
+        $data['reporting'] = $resolver->isReporting();
+        $data['scheduler'] = SchedulerPulse::state();
+        $data['schedulerSeen'] = SchedulerPulse::lastSeen();
+        $data['schedulerSetup'] = $this->schedulerSetup();
+        $data['lastDelivered'] = EdutrustPayOutbox::where('status', EdutrustPayOutbox::DELIVERED)->max('delivered_at');
+        $data['waiting'] = EdutrustPayOutbox::where('status', EdutrustPayOutbox::PENDING)->count();
+        $data['problems'] = $this->problems();
+        $data['recent'] = EdutrustPayOutbox::orderByDesc('updated_at')->orderByDesc('id')->limit(8)->get(self::LIST_COLUMNS);
+
         return view($this->view . '.index', $data);
+    }
+
+    /** Everything but the payload, which can be large. */
+    private const LIST_COLUMNS = [
+        'id', 'kind', 'period', 'sequence', 'status', 'attempts', 'next_attempt_at',
+        'delivered_at', 'last_status_code', 'last_response', 'created_at', 'updated_at',
+    ];
+
+    /**
+     * Send everything now: the same jobs the scheduler runs each night, run on
+     * request, with what each one said.
+     *
+     * For checking that reporting works without waiting for 03:00, and for
+     * pushing a month out at once after a correction. It does not replace the
+     * scheduler: nothing goes out again until someone presses this again, or
+     * the scheduler is set up.
+     */
+    public function sendNow(SettingsResolver $resolver)
+    {
+        if (! $resolver->isReporting()) {
+            return back()->with('error', 'Nothing was sent: reporting is switched off or the connection details are incomplete. Fill them in, tick "Send reports for this institution" and save.');
+        }
+
+        @set_time_limit(600);
+        $started = now();
+
+        // Someone pressing this wants everything tried now, not after the
+        // back-off wait. Items the console refused are tried once more too,
+        // unless a later version of the same month has already gone through.
+        EdutrustPayOutbox::where('status', EdutrustPayOutbox::PENDING)->update(['next_attempt_at' => null]);
+        EdutrustPayOutbox::whereIn('id', $this->problems()->pluck('id'))
+            ->update(['status' => EdutrustPayOutbox::PENDING, 'attempts' => 0, 'next_attempt_at' => null]);
+
+        $steps = [
+            ['Monthly reports, last 3 months', 'edutrustpay:report', ['--months' => 3]],
+            ['Daybooks, last 3 months', 'edutrustpay:daybook', ['--months' => 3]],
+            ['Budget sheets, last 3 months', 'edutrustpay:budget-sheet', ['--months' => 3]],
+            ['Check-in', 'edutrustpay:heartbeat', []],
+            ['Delivery to the console', 'edutrustpay:flush', []],
+        ];
+
+        $results = [];
+
+        foreach ($steps as [$label, $command, $arguments]) {
+            try {
+                $code = Artisan::call($command, $arguments);
+                $output = Artisan::output();
+            } catch (\Throwable $e) {
+                $code = 1;
+                $output = $e->getMessage();
+            }
+
+            $results[] = [
+                'label' => $label,
+                'ok' => $code === 0,
+                'output' => mb_substr(trim(preg_replace('/\e\[[\d;]*m/', '', (string) $output)), -4000),
+            ];
+        }
+
+        $delivered = EdutrustPayOutbox::where('status', EdutrustPayOutbox::DELIVERED)->where('delivered_at', '>=', $started)->get(['kind', 'period']);
+        $waiting = EdutrustPayOutbox::where('status', EdutrustPayOutbox::PENDING)->orderBy('id')->get(self::LIST_COLUMNS);
+        $problems = $this->problems();
+
+        // The delivery job itself succeeds when it merely defers; say plainly
+        // that nothing got through.
+        if ($waiting->isNotEmpty() || $problems->isNotEmpty()) {
+            $results[array_key_last($results)]['ok'] = false;
+        }
+
+        $stepFailed = collect($results)->contains('ok', false);
+
+        if ($waiting->isNotEmpty()) {
+            $message = 'The console could not be reached: ' . $waiting->count() . ' item(s) are waiting here. ' . self::explain($waiting->first());
+        } elseif ($problems->isNotEmpty()) {
+            $message = 'The console refused ' . $problems->count() . ' item(s): ' . self::explain($problems->first());
+        } elseif ($stepFailed) {
+            $message = 'Something went wrong while preparing the reports. See the steps below.';
+        } else {
+            $sent = $delivered->groupBy('kind')->map->count()
+                ->map(fn ($n, $kind) => $n . ' ' . strtolower(self::kindLabel($kind)) . ($n > 1 ? 's' : ''))
+                ->implode(', ');
+
+            $message = 'Done. Delivered to the console: ' . ($sent ?: 'nothing new') . '. Months that had not changed since they were last sent were not sent again; the console already has them.';
+        }
+
+        $ok = $waiting->isEmpty() && $problems->isEmpty() && ! $stepFailed;
+
+        return back()
+            ->with($ok ? 'success' : 'error', $message)
+            ->with('etp_run', ['ok' => $ok, 'message' => $message, 'at' => $started->toDateTimeString(), 'steps' => $results]);
+    }
+
+    /**
+     * Items the console refused that still matter: those not since replaced by
+     * a later version of the same month that did go through.
+     */
+    private function problems()
+    {
+        $deliveredUpTo = EdutrustPayOutbox::where('status', EdutrustPayOutbox::DELIVERED)
+            ->selectRaw('kind, period, MAX(sequence) as seq')
+            ->groupBy('kind', 'period')
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->kind . '|' . $row->period => (int) $row->seq]);
+
+        return EdutrustPayOutbox::where('status', EdutrustPayOutbox::FAILED)
+            ->orderBy('id')
+            ->get(self::LIST_COLUMNS)
+            ->filter(fn ($row) => ($deliveredUpTo[$row->kind . '|' . $row->period] ?? 0) < $row->sequence)
+            ->values();
+    }
+
+    public static function kindLabel(?string $kind): string
+    {
+        return [
+            'report' => 'Monthly report',
+            'daybook' => 'Daybook',
+            'budget_sheet' => 'Budget sheet',
+            'heartbeat' => 'Check-in',
+        ][$kind] ?? ucfirst(str_replace('_', ' ', (string) $kind));
+    }
+
+    /**
+     * What the console said about an item, in a sentence.
+     */
+    public static function explain($item): string
+    {
+        if ($item->status === EdutrustPayOutbox::DELIVERED) {
+            return 'Received by the console.';
+        }
+
+        if ($item->last_status_code === null) {
+            return $item->attempts > 0
+                ? 'No answer from the console (no internet, or the console address is wrong). It stays here and is tried again on the next delivery, so nothing is lost.'
+                : 'Not tried yet.';
+        }
+
+        $decoded = json_decode((string) $item->last_response, true);
+        $said = is_array($decoded) ? ($decoded['message'] ?? $decoded['error'] ?? null) : null;
+
+        if ($item->last_status_code === 401) {
+            $said = 'The key id or secret is wrong, or the key was replaced on the console.';
+        }
+
+        return 'HTTP ' . $item->last_status_code . ': ' . mb_substr((string) ($said ?: $item->last_response), 0, 300);
+    }
+
+    /**
+     * How to start the scheduler on this computer, with its real paths.
+     */
+    private function schedulerSetup(): array
+    {
+        $windows = PHP_OS_FAMILY === 'Windows';
+        $php = $this->phpPath($windows);
+        $base = base_path();
+
+        return [
+            'windows' => $windows,
+            'command' => $windows
+                ? 'schtasks /Create /SC MINUTE /MO 1 /RU SYSTEM /TN "EdutrustPay scheduler (' . basename($base) . ')" /TR "\"' . $php . '\" \"' . $base . '\\artisan\" schedule:run"'
+                : '* * * * * cd ' . $base . ' && ' . $php . ' artisan schedule:run >> /dev/null 2>&1',
+        ];
+    }
+
+    private function phpPath(bool $windows): string
+    {
+        if (PHP_BINARY && preg_match('/php(\.exe)?$/i', PHP_BINARY)) {
+            return PHP_BINARY;
+        }
+
+        // Under Apache or PHP-FPM, PHP_BINARY is the web server, not php.
+        $ini = php_ini_loaded_file();
+        $candidate = $ini ? dirname($ini) . DIRECTORY_SEPARATOR . ($windows ? 'php.exe' : 'php') : null;
+
+        if ($candidate && is_file($candidate)) {
+            return $candidate;
+        }
+
+        return $windows ? 'php.exe' : 'php';
     }
 
     public function update(Request $request)

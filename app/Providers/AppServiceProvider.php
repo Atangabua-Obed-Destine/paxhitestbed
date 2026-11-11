@@ -58,6 +58,15 @@ class AppServiceProvider extends ServiceProvider
         // spent resit stops reading as one still to come.
         \App\Models\SubjectMarking::observe(\App\Observers\SubjectMarkingObserver::class);
 
+        // Every scheduler run leaves a timestamp, so the EdutrustPay screen can
+        // say whether reports go out on their own or the scheduler was never
+        // set up on this computer. See App\Services\EdutrustPay\SchedulerPulse.
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Console\Events\CommandStarting::class, function ($event) {
+            if ($event->command === 'schedule:run') {
+                \App\Services\EdutrustPay\SchedulerPulse::beat();
+            }
+        });
+
         // Share view for Common Data
         if (\Schema::hasTable('languages')) {
             $user_languages = Language::where('status', '1')->get();
