@@ -3,11 +3,13 @@
  * Budgeting an ordinary line as a quantity at a unit amount.
  *
  * "Twelve months at 85,000" is how most of a sheet is reasoned; the sheet used
- * to keep only the 1,020,000. This suite holds the rules that make the
- * working trustworthy: the product is what lands in the Budget box, the two
- * figures are kept beside it, a figure typed over the product takes its
- * working with it, and the lines driven by student or applicant numbers are
- * never offered this — two workings for one figure would contradict.
+ * to keep only the 1,020,000. The modal writes the product into the Budget
+ * box on the page and the two figures into hidden inputs beside it; the
+ * sheet's own Save button stores both. This suite holds the rules that make
+ * the working trustworthy: the product is what is budgeted, the working is
+ * kept only while it still explains the figure in the box, and the lines
+ * driven by student or applicant numbers are never given one — two workings
+ * for one figure would contradict.
  *
  * Usage: php scripts/unit_basis_test.php
  */
@@ -55,9 +57,16 @@ if (!$budget) {
     exit(1);
 }
 
-$post = function (array $data) use ($controller, $budget) {
-    return $controller->unitBasis(Request::create('/x', 'POST', $data), $budget->id);
+// What the page posts: the figures, and for each ordinary line the working
+// the modal wrote into its hidden inputs (blank when the box was typed).
+$save = function (array $amounts, array $workings = []) use ($controller, $budget) {
+    return $controller->saveFigures(Request::create('/x', 'POST', [
+        'opening_balance' => $budget->opening_balance,
+        'amounts' => $amounts,
+        'workings' => $workings,
+    ]), $budget->id);
 };
+$unit = fn ($q, $r, $note = '') => ['quantity' => (string) $q, 'rate' => (string) $r, 'note' => $note];
 $working = fn (int $lineId) => BudgetLineForecast::where('budget_id', $budget->id)->where('budget_line_id', $lineId)->first();
 $figure = fn (int $lineId) => (float) (BudgetAllocation::where('budget_id', $budget->id)->where('budget_line_id', $lineId)->value('allocated_amount') ?? 0);
 
@@ -79,7 +88,7 @@ echo "\n== Quantity × amount lands on the sheet ==\n";
 
 DB::beginTransaction();
 try {
-    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000, 'note' => 'ZZ monthly bill']);
+    $save([$expense->id => 1020000], [$expense->id => $unit(12, 85000, 'ZZ monthly bill')]);
 
     $w = $working($expense->id);
     check('the working is kept', $w !== null);
@@ -91,57 +100,55 @@ try {
     check('the product is the budgeted figure', abs($figure($expense->id) - 1020000) < 0.001, number_format($figure($expense->id)));
 
     // The quantity need not be whole.
-    $post(['budget_line_id' => $expense->id, 'quantity' => 2.5, 'rate' => 120000]);
+    $save([$expense->id => 300000], [$expense->id => $unit(2.5, 120000)]);
     $w = $working($expense->id);
     check('a fractional quantity is kept as typed', $w && abs((float) $w->quantity - 2.5) < 0.001);
-    check('and multiplies correctly', abs($figure($expense->id) - 300000) < 0.001, number_format($figure($expense->id)));
+    check('and its product is the figure', abs($figure($expense->id) - 300000) < 0.001, number_format($figure($expense->id)));
     check('saving again replaces, never duplicates', BudgetLineForecast::where('budget_id', $budget->id)->where('budget_line_id', $expense->id)->count() === 1);
     check('a note left blank clears the old one', $w && $w->note === null);
 
+    // The browser rounds the product to the franc's hundredth; the form
+    // echoes it back as a string.
+    $save([$expense->id => '1020000.00'], [$expense->id => $unit('12', '85000')]);
+    check('the figure as the form echoes it still matches its working', $working($expense->id) !== null);
+
     // Income that is not tuition or registration: beds, rent, hall hire.
-    $post(['budget_line_id' => $otherIncome->id, 'quantity' => 80, 'rate' => 150000]);
-    check('an ordinary income line takes the same reasoning', abs($figure($otherIncome->id) - 12000000) < 0.001, number_format($figure($otherIncome->id)));
+    $save([$expense->id => 1020000, $otherIncome->id => 12000000], [
+        $expense->id => $unit(12, 85000),
+        $otherIncome->id => $unit(80, 150000, 'ZZ beds'),
+    ]);
+    check('an ordinary income line takes the same reasoning', $working($otherIncome->id) !== null && abs($figure($otherIncome->id) - 12000000) < 0.001);
+    check('the other line keeps its working', $working($expense->id) !== null);
 
-    // The sheet's stored total follows, as it does for the figures form.
-    $budget->refresh();
-    $expenditure = (float) BudgetAllocation::where('budget_id', $budget->id)
-        ->whereIn('budget_line_id', BudgetLine::whereIn('section', [BudgetLine::SECTION_EXPENDITURE, BudgetLine::SECTION_CAPITAL])->pluck('id'))
-        ->sum('allocated_amount');
-    check('the sheet total is recomputed', abs((float) $budget->total_amount - $expenditure) < 0.01, number_format($budget->total_amount) . ' vs ' . number_format($expenditure));
-
-    // Zero removes the figure rather than budgeting nothing.
-    $post(['budget_line_id' => $expense->id, 'quantity' => 0, 'rate' => 85000]);
-    check('a zero quantity takes the figure off the sheet', $figure($expense->id) == 0.0);
+    // Blank boxes on lines never touched write nothing.
+    check('lines with empty boxes get no working', BudgetLineForecast::where('budget_id', $budget->id)->where('rate_basis', 'unit')->count() === 2);
 } finally {
     DB::rollBack();
 }
 
 echo "\n== Typing over a worked-out figure ==\n";
 
-$save = function (array $amounts) use ($controller, $budget) {
-    return $controller->saveFigures(Request::create('/x', 'POST', [
-        'opening_balance' => $budget->opening_balance,
-        'amounts' => $amounts,
-    ]), $budget->id);
-};
-
 DB::beginTransaction();
 try {
-    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000]);
+    $save([$expense->id => 1020000], [$expense->id => $unit(12, 85000)]);
 
-    $save([$expense->id => 1020000]);
-    check('saving the sheet with the same figure keeps the working', $working($expense->id) !== null);
-
-    $save([$expense->id => '1020000.00']);
-    check('so does the figure as the form echoes it back', $working($expense->id) !== null);
-
-    $save([$expense->id => 999000]);
+    // The hidden inputs still say 12 × 85,000, but the box now says
+    // something else: the figure typed by hand wins, and the working goes.
+    $save([$expense->id => 999000], [$expense->id => $unit(12, 85000)]);
     check('a different figure typed by hand clears the working', $working($expense->id) === null);
     check('and is the figure that stays', abs($figure($expense->id) - 999000) < 0.001);
 
-    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000]);
-    $save([$expense->id => '']);
+    $save([$expense->id => 1020000], [$expense->id => $unit(12, 85000)]);
+    $save([$expense->id => ''], [$expense->id => $unit(12, 85000)]);
     check('blanking the figure clears the working too', $working($expense->id) === null);
+    check('and takes the figure off the sheet', $figure($expense->id) == 0.0);
+
+    $save([$expense->id => 1020000], [$expense->id => $unit(12, 85000)]);
+    $save([$expense->id => 1020000], [$expense->id => $unit('', '')]);
+    check('a saved working survives a save whose boxes are empty, as long as the figure still matches', $working($expense->id) !== null);
+
+    $save([$expense->id => 1020000]);
+    check('and a save that carries no workings at all', $working($expense->id) !== null);
 } finally {
     DB::rollBack();
 }
@@ -170,15 +177,16 @@ DB::beginTransaction();
 try {
     $before = BudgetLineForecast::count();
 
-    $post(['budget_line_id' => $header->id, 'quantity' => 5, 'rate' => 1000]);
-    check('a header is refused', BudgetLineForecast::count() === $before && $figure($header->id) == 0.0);
+    $save([$header->id => 5000], [$header->id => $unit(5, 1000)]);
+    check('a header gets neither a figure nor a working', BudgetLineForecast::count() === $before && $figure($header->id) == 0.0);
 
-    $post(['budget_line_id' => $forecastable->id, 'quantity' => 5, 'rate' => 1000]);
-    check('a line forecast from students or applicants is refused', BudgetLineForecast::count() === $before, $forecastable->label);
+    $save([$forecastable->id => 5000], [$forecastable->id => $unit(5, 1000)]);
+    check('a line forecast from students or applicants is never given a unit working', BudgetLineForecast::count() === $before, $forecastable->label);
+    check('though its figure is still saved', abs($figure($forecastable->id) - 5000) < 0.001);
 
     $refused = false;
     try {
-        $post(['budget_line_id' => $expense->id, 'quantity' => -1, 'rate' => 1000]);
+        $save([$expense->id => 1000], [$expense->id => $unit(-1, 1000)]);
     } catch (Illuminate\Validation\ValidationException $e) {
         $refused = true;
     }
@@ -186,30 +194,13 @@ try {
 
     $refused = false;
     try {
-        $post(['budget_line_id' => $expense->id, 'quantity' => 'twelve', 'rate' => 1000]);
+        $save([$expense->id => 1000], [$expense->id => $unit('twelve', 1000)]);
     } catch (Illuminate\Validation\ValidationException $e) {
         $refused = true;
     }
     check('a quantity that is not a number is refused', $refused);
 } finally {
     DB::rollBack();
-}
-
-$locked = Budget::where('is_institutional', true)->where('status', '!=', 'draft')->first();
-if ($locked) {
-    DB::beginTransaction();
-    try {
-        $before = BudgetAllocation::where('budget_id', $locked->id)->sum('allocated_amount');
-        $controller->unitBasis(Request::create('/x', 'POST', [
-            'budget_line_id' => $expense->id, 'quantity' => 3, 'rate' => 1000,
-        ]), $locked->id);
-        $after = BudgetAllocation::where('budget_id', $locked->id)->sum('allocated_amount');
-        check('a sheet that is no longer a draft cannot be changed this way', (float) $before === (float) $after);
-    } finally {
-        DB::rollBack();
-    }
-} else {
-    echo "  ..  no non-draft sheet to test the lock against\n";
 }
 
 echo "\n== The screen ==\n";
@@ -223,7 +214,7 @@ $render = function () use ($kernel, $budget) {
 
 DB::beginTransaction();
 try {
-    $post(['budget_line_id' => $expense->id, 'quantity' => 12, 'rate' => 85000, 'note' => 'ZZ monthly bill']);
+    $save([$expense->id => 1020000], [$expense->id => $unit(12, 85000, 'ZZ monthly bill')]);
     $html = $render();
 
     $ordinary = BudgetLine::sheet()->filter(fn ($l) => !$l->is_header && !$service->isForecastable($l))->count();
@@ -240,12 +231,19 @@ try {
         substr_count($html, 'data-bs-target="#forecastModal"') === $driven,
         substr_count($html, 'data-bs-target="#forecastModal"') . ' for ' . $driven . ' lines'
     );
+    check(
+        'each ordinary line carries its working inside the figures form',
+        substr_count($html, 'name="workings[') === $ordinary * 3
+    );
+    check('a saved working is in its hidden inputs', preg_match('/id="un_q_' . $expense->id . '"\s+value="12"/', $html) === 1
+        && preg_match('/id="un_r_' . $expense->id . '"\s+value="85000"/', $html) === 1
+        && preg_match('/id="un_n_' . $expense->id . '"\s+value="ZZ monthly bill"/', $html) === 1);
     check('the working is printed under the figure', preg_match('/12\s*&times;\s*85,000/', $html) === 1);
-    check('with its note', strpos($html, 'ZZ monthly bill') !== false);
-    check('the budget box carries the product', strpos($html, 'name="amounts[' . $expense->id . ']"' . "\n" . str_repeat(' ', 71) . 'value="1020000') !== false
-        || preg_match('/amounts\[' . $expense->id . '\]"\s+value="1020000(\.00)?"/', $html) === 1);
+    check('the budget box carries the product', preg_match('/amounts\[' . $expense->id . '\]"\s+value="1020000(\.00)?"/', $html) === 1);
     check('the line now says Edit working', strpos($html, __('Edit working')) !== false);
-    check('the saved figures reach the browser', strpos($html, 'var SAVED_UNITS = {') !== false);
+    check('the modal does not post anywhere', strpos($html, 'id="unitForm" onsubmit="return false;"') !== false);
+    check('Use this figure writes into the sheet', strpos($html, "figure.value = amount > 0 ? amount : ''") !== false);
+    check('and says the sheet still needs saving', strpos($html, __('not saved yet — click Save figures')) !== false);
     check('a unit working is never described in students', preg_match('/0 students\s*&times;/', $html) === 0);
 } finally {
     DB::rollBack();
@@ -253,7 +251,7 @@ try {
 
 echo "\n== Nothing left behind ==\n";
 
-check('no test working survived', BudgetLineForecast::where('note', 'ZZ monthly bill')->doesntExist());
+check('no test working survived', BudgetLineForecast::where('note', 'like', 'ZZ %')->doesntExist());
 check('no transaction left open', DB::transactionLevel() === 0);
 
 echo "\n$passed passed, $failed failed\n";

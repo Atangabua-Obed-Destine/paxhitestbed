@@ -114,6 +114,7 @@
         color: #1c5cab; margin-top: .15rem;
     }
     .forecast-stale { color: #b9770e; }
+    .un-pending { color: #b9770e; font-style: italic; }
     .forecast-btn {
         background: transparent; border: 0; padding: 0; margin-top: .15rem;
         font-size: .68rem; color: #1c5cab; cursor: pointer;
@@ -598,16 +599,25 @@
                                                             @elseif($editable)
                                                                 {{-- Any other line: a quantity at a unit amount — twelve
                                                                      months of electricity, forty desks. Same reasoning
-                                                                     as tuition, without the headcount behind it. --}}
-                                                                <button type="button" class="forecast-btn"
+                                                                     as tuition, without the headcount behind it. The
+                                                                     working travels with the figures form, so it is
+                                                                     saved by the same Save button as the figure. --}}
+                                                                @php $unit = $fc && $fc->isUnitBasis() ? $fc : null; @endphp
+                                                                <input type="hidden" name="workings[{{ $line->id }}][quantity]" id="un_q_{{ $line->id }}"
+                                                                       value="{{ $unit ? rtrim(rtrim(number_format((float) $unit->quantity, 2, '.', ''), '0'), '.') : '' }}">
+                                                                <input type="hidden" name="workings[{{ $line->id }}][rate]" id="un_r_{{ $line->id }}"
+                                                                       value="{{ $unit ? rtrim(rtrim(number_format((float) $unit->rate, 2, '.', ''), '0'), '.') : '' }}">
+                                                                <input type="hidden" name="workings[{{ $line->id }}][note]" id="un_n_{{ $line->id }}"
+                                                                       value="{{ $unit ? $unit->note : '' }}">
+                                                                <button type="button" class="forecast-btn" id="un_btn_{{ $line->id }}"
                                                                         data-bs-toggle="modal" data-bs-target="#unitModal"
                                                                         onclick='budgetUnit(@json($fcPayload))'>
-                                                                    <i class="fas fa-calculator me-1"></i>{{ $fc && $fc->isUnitBasis() ? __('Edit working') : __('Quantity × amount') }}
+                                                                    <i class="fas fa-calculator me-1"></i>{{ $unit ? __('Edit working') : __('Quantity × amount') }}
                                                                 </button>
                                                             @endif
 
                                                             @if($fc && $fc->isUnitBasis())
-                                                                <span class="forecast-basis">
+                                                                <span class="forecast-basis" id="un_basis_{{ $line->id }}">
                                                                     {{ rtrim(rtrim(number_format((float) $fc->quantity, 2), '0'), '.') }}
                                                                     &times; {{ number_format($fc->rate) }}
                                                                     @if($fc->note)
@@ -989,19 +999,11 @@
 
 {{-- Budgeting an ordinary line as a quantity at a unit amount. --}}
 @if($editable)
-@php
-    $savedUnits = $forecasts->filter(fn ($f) => $f->isUnitBasis())->map(fn ($f) => [
-        'quantity' => (float) $f->quantity,
-        'rate' => (float) $f->rate,
-        'note' => $f->note,
-    ]);
-@endphp
 <div class="modal fade" id="unitModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="post" action="{{ route('admin.budget-sheet.unit-basis', $budget->id) }}">
-                @csrf
-                <input type="hidden" name="budget_line_id" id="un_line_id">
+            <form id="unitForm" onsubmit="return false;">
+                <input type="hidden" id="un_line_id">
 
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -1013,19 +1015,19 @@
 
                 <div class="modal-body">
                     <p class="text-muted small">
-                        {{ __('Budget this line by saying how many and at what price — twelve months at 85,000, forty desks at 25,000 — rather than by typing the total. The sheet keeps both figures so the working can be read later.') }}
+                        {{ __('Budget this line by saying how many and at what price — twelve months at 85,000, forty desks at 25,000 — rather than by typing the total. The product goes into the Budget box; both figures are kept when you save the sheet, so the working can be read later.') }}
                     </p>
 
                     <div class="row">
                         <div class="col-md-5 mb-3">
                             <label for="un_quantity">{{ __('Quantity') }} <span class="text-danger">*</span></label>
-                            <input type="number" min="0" step="0.01" class="form-control" name="quantity" id="un_quantity" required>
+                            <input type="number" min="0" step="0.01" class="form-control" id="un_quantity" required>
                             <small class="text-muted">{{ __('Months, items, people, hours…') }}</small>
                         </div>
 
                         <div class="col-md-7 mb-3">
                             <label for="un_rate">{{ __('Amount each') }} <span class="text-danger">*</span></label>
-                            <input type="number" min="0" step="0.01" class="form-control" name="rate" id="un_rate" required>
+                            <input type="number" min="0" step="0.01" class="form-control" id="un_rate" required>
                         </div>
                     </div>
 
@@ -1036,14 +1038,14 @@
 
                     <div class="mt-3">
                         <label for="un_note">{{ __('Note') }}</label>
-                        <input type="text" class="form-control" name="note" id="un_note" maxlength="500"
+                        <input type="text" class="form-control" id="un_note" maxlength="500"
                                placeholder="{{ __('What the quantity is — monthly bill, desks for the new block') }}">
                     </div>
                 </div>
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ __('Cancel') }}</button>
-                    <button type="submit" class="btn btn-primary">{{ __('Use this figure') }}</button>
+                    <button type="button" class="btn btn-primary" id="un_use">{{ __('Use this figure') }}</button>
                 </div>
             </form>
         </div>
@@ -1055,32 +1057,93 @@
 (function () {
     'use strict';
 
-    var SAVED_UNITS = @json($savedUnits);
     var fmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+    var el = function (id) { return document.getElementById(id); };
 
-    function recalc() {
-        var quantity = parseFloat(document.getElementById('un_quantity').value) || 0;
-        var rate = parseFloat(document.getElementById('un_rate').value) || 0;
-        document.getElementById('un_amount').textContent = fmt.format(Math.round(quantity * rate * 100) / 100);
+    function product() {
+        var quantity = parseFloat(el('un_quantity').value) || 0;
+        var rate = parseFloat(el('un_rate').value) || 0;
+        return Math.round(quantity * rate * 100) / 100;
     }
 
+    function recalc() {
+        el('un_amount').textContent = fmt.format(product());
+    }
+
+    // Seeded from the row's own hidden inputs, so reopening the modal shows
+    // what is on the sheet right now — saved or not yet.
     window.budgetUnit = function (line) {
-        var saved = SAVED_UNITS[line.line_id] || null;
-
-        document.getElementById('un_line_id').value = line.line_id;
-        document.getElementById('un_line_label').textContent = line.code + ' — ' + line.name;
-        document.getElementById('un_quantity').value = saved ? saved.quantity : '';
-        document.getElementById('un_rate').value = saved ? saved.rate : '';
-        document.getElementById('un_note').value = saved && saved.note ? saved.note : '';
-
+        el('un_line_id').value = line.line_id;
+        el('un_line_label').textContent = line.code + ' — ' + line.name;
+        el('un_quantity').value = el('un_q_' + line.line_id).value;
+        el('un_rate').value = el('un_r_' + line.line_id).value;
+        el('un_note').value = el('un_n_' + line.line_id).value;
         recalc();
     };
 
+    // Writes the product into the Budget box and the working into the row,
+    // without leaving the page. The sheet's Save button stores both.
+    function useFigure() {
+        var id = el('un_line_id').value;
+        if (!id) { return; }
+
+        var quantity = el('un_quantity').value;
+        var rate = el('un_rate').value;
+        if (quantity === '' || rate === '' || parseFloat(quantity) < 0 || parseFloat(rate) < 0) {
+            el('unitForm').reportValidity();
+            return;
+        }
+
+        var amount = product();
+        var figure = document.querySelector('input[name="amounts[' + id + ']"]');
+        if (figure) {
+            figure.value = amount > 0 ? amount : '';
+            figure.dispatchEvent(new Event('input', { bubbles: true }));
+            figure.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        el('un_q_' + id).value = quantity;
+        el('un_r_' + id).value = rate;
+        el('un_n_' + id).value = el('un_note').value;
+
+        var basis = el('un_basis_' + id);
+        if (!basis) {
+            basis = document.createElement('span');
+            basis.className = 'forecast-basis';
+            basis.id = 'un_basis_' + id;
+            el('un_btn_' + id).insertAdjacentElement('afterend', basis);
+        }
+        basis.textContent = fmt.format(parseFloat(quantity)) + ' \u00d7 ' + fmt.format(parseFloat(rate));
+        if (el('un_note').value) {
+            basis.appendChild(document.createElement('br'));
+            var note = document.createElement('span');
+            note.className = 'text-muted';
+            note.textContent = el('un_note').value;
+            basis.appendChild(note);
+        }
+        basis.appendChild(document.createElement('br'));
+        var pending = document.createElement('span');
+        pending.className = 'un-pending';
+        pending.textContent = '{{ __('not saved yet — click Save figures') }}';
+        basis.appendChild(pending);
+
+        el('un_btn_' + id).innerHTML = '<i class="fas fa-calculator me-1"></i>{{ __('Edit working') }}';
+
+        var modal = el('unitModal');
+        var instance = window.bootstrap && bootstrap.Modal ? bootstrap.Modal.getInstance(modal) : null;
+        if (instance) { instance.hide(); } else if (window.jQuery) { jQuery(modal).modal('hide'); }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         ['un_quantity', 'un_rate'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) { el.addEventListener('input', recalc); }
+            if (el(id)) { el(id).addEventListener('input', recalc); }
         });
+        if (el('un_use')) { el('un_use').addEventListener('click', useFigure); }
+        if (el('unitForm')) {
+            el('unitForm').addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); useFigure(); }
+            });
+        }
     });
 })();
 </script>
