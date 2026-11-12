@@ -126,6 +126,60 @@ try {
     DB::rollBack();
 }
 
+echo "\n== Use this figure saves at once, without a reload ==\n";
+
+$useFigure = function (array $data, ?int $budgetId = null) use ($controller, $budget) {
+    $request = Request::create('/x', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'], json_encode($data));
+    return $controller->unitBasis($request, $budgetId ?? $budget->id);
+};
+
+DB::beginTransaction();
+try {
+    $response = $useFigure(['budget_line_id' => $expense->id, 'quantity' => '12', 'rate' => '85000', 'note' => 'ZZ monthly bill']);
+    $body = json_decode($response->getContent(), true);
+
+    check('the modal\'s save answers JSON, not a redirect', $response->getStatusCode() === 200 && ($body['ok'] ?? false) === true, $response->getContent());
+    check('with the product the row should show', ($body['amount'] ?? null) == 1020000);
+    check('and the figures as stored', ($body['quantity'] ?? null) == 12 && ($body['rate'] ?? null) == 85000 && ($body['note'] ?? null) === 'ZZ monthly bill');
+    check('the figure is on the sheet already', abs($figure($expense->id) - 1020000) < 0.001);
+    $w = $working($expense->id);
+    check('and so is the working', $w && $w->isUnitBasis() && abs((float) $w->computed_amount - 1020000) < 0.001);
+    $budget->refresh();
+    check('the sheet total is recomputed', (float) $budget->total_amount >= 1020000);
+
+    $response = $useFigure(['budget_line_id' => $expense->id, 'quantity' => '0', 'rate' => '85000']);
+    check('a zero quantity takes the figure off the sheet', $figure($expense->id) == 0.0 && json_decode($response->getContent(), true)['amount'] == 0);
+
+    $response = $useFigure(['budget_line_id' => $header->id, 'quantity' => '5', 'rate' => '1000']);
+    check('a header is refused with a message', $response->getStatusCode() === 422 && !empty(json_decode($response->getContent(), true)['message']));
+
+    $response = $useFigure(['budget_line_id' => $forecastable->id, 'quantity' => '5', 'rate' => '1000']);
+    check('a headcount-driven line is refused', $response->getStatusCode() === 422 && $working($forecastable->id) === null);
+
+    $response = $useFigure(['budget_line_id' => $expense->id, 'quantity' => '-1', 'rate' => '1000']);
+    check('a negative quantity is refused with the reason', $response->getStatusCode() === 422 && !empty(json_decode($response->getContent(), true)['errors']));
+
+    $response = $useFigure(['budget_line_id' => $expense->id, 'quantity' => 'twelve', 'rate' => '1000']);
+    check('and so is a quantity that is not a number', $response->getStatusCode() === 422);
+} finally {
+    DB::rollBack();
+}
+
+$locked = Budget::where('is_institutional', true)->where('status', '!=', 'draft')->first();
+if ($locked) {
+    DB::beginTransaction();
+    try {
+        $before = BudgetAllocation::where('budget_id', $locked->id)->sum('allocated_amount');
+        $response = $useFigure(['budget_line_id' => $expense->id, 'quantity' => '3', 'rate' => '1000'], $locked->id);
+        $after = BudgetAllocation::where('budget_id', $locked->id)->sum('allocated_amount');
+        check('a sheet that is no longer a draft refuses the modal\'s save', $response->getStatusCode() === 422 && (float) $before === (float) $after);
+    } finally {
+        DB::rollBack();
+    }
+} else {
+    echo "  ..  no non-draft sheet to test the lock against\n";
+}
+
 echo "\n== Typing over a worked-out figure ==\n";
 
 DB::beginTransaction();
@@ -241,9 +295,11 @@ try {
     check('the working is printed under the figure', preg_match('/12\s*&times;\s*85,000/', $html) === 1);
     check('the budget box carries the product', preg_match('/amounts\[' . $expense->id . '\]"\s+value="1020000(\.00)?"/', $html) === 1);
     check('the line now says Edit working', strpos($html, __('Edit working')) !== false);
-    check('the modal does not post anywhere', strpos($html, 'id="unitForm" onsubmit="return false;"') !== false);
-    check('Use this figure writes into the sheet', strpos($html, "figure.value = amount > 0 ? amount : ''") !== false);
-    check('and says the sheet still needs saving', strpos($html, __('not saved yet — click Save figures')) !== false);
+    check('the modal does not post as a form', strpos($html, 'id="unitForm" onsubmit="return false;"') !== false);
+    check('Use this figure saves in the background', strpos($html, "fetch('" . route('admin.budget-sheet.unit-basis', $budget->id) . "'") !== false);
+    check('with the CSRF token', strpos($html, "'X-CSRF-TOKEN': '" . csrf_token() . "'") !== false);
+    check('and only updates the row from what the server confirmed', strpos($html, 'applyWorking(id, result.data)') !== false);
+    check('with a place to show a refusal', strpos($html, 'id="un_error"') !== false);
     check('a unit working is never described in students', preg_match('/0 students\s*&times;/', $html) === 0);
 } finally {
     DB::rollBack();

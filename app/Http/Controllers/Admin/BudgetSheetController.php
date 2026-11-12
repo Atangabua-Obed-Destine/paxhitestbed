@@ -42,7 +42,7 @@ class BudgetSheetController extends Controller
         $this->letterhead = $letterhead;
 
         $this->middleware('permission:budget-view', ['only' => ['index', 'show', 'exportPdf', 'exportExcel']]);
-        $this->middleware('permission:budget-edit', ['only' => ['store', 'saveFigures', 'forecast', 'updatePeriod', 'submit']]);
+        $this->middleware('permission:budget-edit', ['only' => ['store', 'saveFigures', 'forecast', 'unitBasis', 'updatePeriod', 'submit']]);
         $this->middleware('permission:budget-approve', ['only' => ['approve']]);
         $this->middleware('permission:budget-activate', ['only' => ['activate']]);
         $this->middleware('permission:budget-close', ['only' => ['close']]);
@@ -681,6 +681,97 @@ class BudgetSheetController extends Controller
         }
 
         return redirect()->route('admin.budget-sheet.show', $budget->id);
+    }
+
+    /**
+     * Save one line as a quantity at a unit amount, from the modal, without
+     * leaving the page.
+     *
+     * Answers JSON: the row updates itself from what was actually stored, so
+     * the screen never shows a working the server refused. The figures form
+     * still carries the same working in hidden inputs, so a later Save
+     * figures keeps it, or drops it if the box was typed over.
+     */
+    public function unitBasis(Request $request, $id)
+    {
+        $budget = Budget::where('is_institutional', true)->findOrFail($id);
+
+        if (!static::isEditable($budget)) {
+            return response()->json(['ok' => false, 'message' => __('This sheet is :status, so its figures can no longer be changed. Use a revision instead.',
+                ['status' => str_replace('_', ' ', $budget->status)])], 422);
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'budget_line_id' => ['required', 'exists:budget_lines,id'],
+            'quantity' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+            'rate' => ['required', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['ok' => false, 'errors' => $validator->errors()->all()], 422);
+        }
+        $data = $validator->validated();
+
+        $line = BudgetLine::find($data['budget_line_id']);
+        if (!$line || $line->is_header || app(\App\Services\TuitionForecastService::class)->isForecastable($line)) {
+            return response()->json(['ok' => false, 'message' => __('That line cannot be budgeted as a quantity at an amount.')], 422);
+        }
+
+        $unit = $this->unitWorking($data);
+
+        DB::beginTransaction();
+        try {
+            \App\Models\BudgetLineForecast::updateOrCreate(
+                ['budget_id' => $budget->id, 'budget_line_id' => $line->id],
+                [
+                    'student_count' => 0,
+                    'quantity' => $unit['quantity'],
+                    'rate' => $unit['rate'],
+                    'rate_basis' => \App\Models\BudgetLineForecast::BASIS_UNIT,
+                    'computed_amount' => $unit['amount'],
+                    'note' => $unit['note'],
+                    'updated_by' => Auth::id(),
+                    'created_by' => Auth::id(),
+                ]
+            );
+
+            if ($unit['amount'] > 0) {
+                BudgetAllocation::updateOrCreate(
+                    ['budget_id' => $budget->id, 'budget_line_id' => $line->id],
+                    [
+                        'allocated_amount' => $unit['amount'],
+                        'title' => $line->name,
+                        'is_active' => true,
+                        'updated_by' => Auth::id(),
+                    ]
+                );
+            } else {
+                BudgetAllocation::where('budget_id', $budget->id)
+                    ->where('budget_line_id', $line->id)->delete();
+            }
+
+            // Same rule as the figures form: the stored total is what is
+            // being spent, not what is hoped to come in.
+            $budget->total_amount = $this->sectionTotal($budget, BudgetLine::SECTION_EXPENDITURE)
+                + $this->sectionTotal($budget, BudgetLine::SECTION_CAPITAL);
+            $budget->save();
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+
+            return response()->json(['ok' => false, 'message' => __('Could not save the figure.')], 500);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'line_id' => $line->id,
+            'quantity' => $unit['quantity'],
+            'rate' => $unit['rate'],
+            'amount' => $unit['amount'],
+            'note' => $unit['note'],
+        ]);
     }
 
     /**

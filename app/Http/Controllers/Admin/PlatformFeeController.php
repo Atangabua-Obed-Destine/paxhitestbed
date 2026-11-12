@@ -403,17 +403,20 @@ class PlatformFeeController extends Controller
      */
     public function exemptions()
     {
-        $exemptions = PlatformFeeExemption::with(['studentEnroll.student', 'session', 'creator'])
+        $exemptions = PlatformFeeExemption::with(['student', 'session', 'creator'])
             ->orderBy('created_at', 'desc')
             ->paginate(20);
         
         $sessions = Session::where('status', 1)->orderBy('title', 'desc')->get();
-        $studentEnrollments = StudentEnroll::with('student', 'session')
-            ->whereHas('student')
-            ->whereHas('session')
-            ->get();
-        
-        return view('admin.platform-fee.exemptions', compact('exemptions', 'sessions', 'studentEnrollments'));
+
+        // One line per student, whatever they are enrolled on. The exemption is
+        // for a session the Bursar picks, so a student can be excused for a
+        // year they have not been enrolled in yet.
+        $students = \App\Models\Student::where('status', 1)
+            ->orderBy('first_name')->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name', 'student_id']);
+
+        return view('admin.platform-fee.exemptions', compact('exemptions', 'sessions', 'students'));
     }
 
     /**
@@ -423,18 +426,32 @@ class PlatformFeeController extends Controller
     {
         $request->validate([
             'exemption_type' => 'required|in:student,session',
-            'student_enroll_id' => 'required_if:exemption_type,student',
-            'session_id' => 'required_if:exemption_type,session',
+            'student_id' => 'required_if:exemption_type,student|nullable|exists:students,id',
+            // Both kinds name the session: the one everybody is excused for,
+            // or the one this student is excused for.
+            'session_id' => 'required|exists:sessions,id',
             'reason' => 'nullable|string',
         ]);
 
+        $isStudent = $request->exemption_type === 'student';
+
+        $duplicate = PlatformFeeExemption::where('exemption_type', $request->exemption_type)
+            ->where('session_id', $request->session_id)
+            ->when($isStudent, fn ($q) => $q->where('student_id', $request->student_id))
+            ->first();
+        if ($duplicate) {
+            return redirect()->back()->with('error', $duplicate->status
+                ? __('That exemption already exists.')
+                : __('That exemption already exists but is switched off. Delete it and create it again.'));
+        }
+
         PlatformFeeExemption::create([
             'exemption_type' => $request->exemption_type,
-            'student_enroll_id' => $request->exemption_type == 'student' ? $request->student_enroll_id : null,
-            'session_id' => $request->exemption_type == 'session' ? $request->session_id : null,
+            'student_id' => $isStudent ? $request->student_id : null,
+            'session_id' => $request->session_id,
             'reason' => $request->reason,
             'created_by' => Auth::id(),
-            'status' => 1,
+            'status' => $request->boolean('status', true),
         ]);
 
         return redirect()->back()->with('success', 'Exemption created successfully!');

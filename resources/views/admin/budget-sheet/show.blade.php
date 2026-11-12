@@ -114,7 +114,7 @@
         color: #1c5cab; margin-top: .15rem;
     }
     .forecast-stale { color: #b9770e; }
-    .un-pending { color: #b9770e; font-style: italic; }
+    .un-saved { color: #1e7e34; font-style: italic; }
     .forecast-btn {
         background: transparent; border: 0; padding: 0; margin-top: .15rem;
         font-size: .68rem; color: #1c5cab; cursor: pointer;
@@ -720,6 +720,9 @@
 
                             @if($editable)
                                 <div class="card-footer text-right">
+                                    <small class="text-muted me-3 d-none" id="un_totals_hint">
+                                        {{ __('Figures saved from the calculator are on record; the totals refresh when the page reloads.') }}
+                                    </small>
                                     <button type="submit" class="btn btn-primary">
                                         <i class="fas fa-save"></i> {{ __('Save figures') }}
                                     </button>
@@ -1015,7 +1018,7 @@
 
                 <div class="modal-body">
                     <p class="text-muted small">
-                        {{ __('Budget this line by saying how many and at what price — twelve months at 85,000, forty desks at 25,000 — rather than by typing the total. The product goes into the Budget box; both figures are kept when you save the sheet, so the working can be read later.') }}
+                        {{ __('Budget this line by saying how many and at what price — twelve months at 85,000, forty desks at 25,000 — rather than by typing the total. The product goes into the Budget box and both figures are saved at once, so the working can be read later.') }}
                     </p>
 
                     <div class="row">
@@ -1035,6 +1038,8 @@
                         <div class="text-muted small">{{ __('This line would be budgeted at') }}</div>
                         <div class="value" id="un_amount">0</div>
                     </div>
+
+                    <div class="fc-warn d-none" id="un_error"></div>
 
                     <div class="mt-3">
                         <label for="un_note">{{ __('Note') }}</label>
@@ -1094,17 +1099,55 @@
             return;
         }
 
-        var amount = product();
+        var note = el('un_note').value;
+        var button = el('un_use');
+        button.disabled = true;
+        el('un_error').classList.add('d-none');
+
+        // Saved straight away, in the background. The row is only updated
+        // once the server has confirmed, so what the sheet shows is always
+        // what is on record.
+        fetch('{{ route('admin.budget-sheet.unit-basis', $budget->id) }}', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ budget_line_id: id, quantity: quantity, rate: rate, note: note })
+        }).then(function (response) {
+            return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+        }).then(function (result) {
+            if (!result.ok || !result.data.ok) {
+                throw new Error(result.data.message || (result.data.errors ? Object.values(result.data.errors).join(' ') : ''));
+            }
+            applyWorking(id, result.data);
+            var modal = el('unitModal');
+            var instance = window.bootstrap && bootstrap.Modal ? bootstrap.Modal.getInstance(modal) : null;
+            if (instance) { instance.hide(); } else if (window.jQuery) { jQuery(modal).modal('hide'); }
+        }).catch(function (e) {
+            var box = el('un_error');
+            box.textContent = e.message || '{{ __('Could not save the figure. Check your connection and try again.') }}';
+            box.classList.remove('d-none');
+        }).finally(function () {
+            button.disabled = false;
+        });
+    }
+
+    // What the server saved, written into the row.
+    function applyWorking(id, saved) {
         var figure = document.querySelector('input[name="amounts[' + id + ']"]');
         if (figure) {
-            figure.value = amount > 0 ? amount : '';
+            figure.value = saved.amount > 0 ? saved.amount : '';
             figure.dispatchEvent(new Event('input', { bubbles: true }));
             figure.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
-        el('un_q_' + id).value = quantity;
-        el('un_r_' + id).value = rate;
-        el('un_n_' + id).value = el('un_note').value;
+        el('un_q_' + id).value = saved.quantity;
+        el('un_r_' + id).value = saved.rate;
+        el('un_n_' + id).value = saved.note || '';
 
         var basis = el('un_basis_' + id);
         if (!basis) {
@@ -1113,25 +1156,27 @@
             basis.id = 'un_basis_' + id;
             el('un_btn_' + id).insertAdjacentElement('afterend', basis);
         }
-        basis.textContent = fmt.format(parseFloat(quantity)) + ' \u00d7 ' + fmt.format(parseFloat(rate));
-        if (el('un_note').value) {
+        basis.textContent = fmt.format(saved.quantity) + ' \u00d7 ' + fmt.format(saved.rate);
+        if (saved.note) {
             basis.appendChild(document.createElement('br'));
             var note = document.createElement('span');
             note.className = 'text-muted';
-            note.textContent = el('un_note').value;
+            note.textContent = saved.note;
             basis.appendChild(note);
         }
         basis.appendChild(document.createElement('br'));
-        var pending = document.createElement('span');
-        pending.className = 'un-pending';
-        pending.textContent = '{{ __('not saved yet — click Save figures') }}';
-        basis.appendChild(pending);
+        var done = document.createElement('span');
+        done.className = 'un-saved';
+        done.textContent = '{{ __('saved') }}';
+        basis.appendChild(done);
 
         el('un_btn_' + id).innerHTML = '<i class="fas fa-calculator me-1"></i>{{ __('Edit working') }}';
 
-        var modal = el('unitModal');
-        var instance = window.bootstrap && bootstrap.Modal ? bootstrap.Modal.getInstance(modal) : null;
-        if (instance) { instance.hide(); } else if (window.jQuery) { jQuery(modal).modal('hide'); }
+        // The totals on screen were computed on the server; the next load
+        // shows them. Flagged rather than recomputed here, so a half-updated
+        // total is never shown as if it were the sheet's.
+        var hint = el('un_totals_hint');
+        if (hint) { hint.classList.remove('d-none'); }
     }
 
     document.addEventListener('DOMContentLoaded', function () {

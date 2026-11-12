@@ -97,23 +97,17 @@ class PlatformFeeAccess
     /**
      * Is this student excused for this session?
      *
-     * A session exemption excuses everybody in it. A student exemption is
-     * recorded against one enrolment but means the student: it would otherwise
-     * lapse the moment they progressed, which is not what granting it says.
+     * A session exemption excuses everybody in it. A student exemption names
+     * the student and the session, so it holds across every enrolment they
+     * take that year — and can be granted before they are enrolled at all.
      */
     public function isExempt(Student $student, StudentEnroll $enrollment): bool
     {
-        if ($enrollment->session_id && PlatformFeeExemption::where('status', 1)
-            ->where('exemption_type', 'session')
-            ->where('session_id', $enrollment->session_id)
-            ->exists()) {
-            return true;
+        if (!$enrollment->session_id) {
+            return false;
         }
 
-        return PlatformFeeExemption::where('status', 1)
-            ->where('exemption_type', 'student')
-            ->whereIn('student_enroll_id', $this->enrollmentsInSameSession($student, $enrollment))
-            ->exists();
+        return PlatformFeeExemption::covering($student->id, (int) $enrollment->session_id)->exists();
     }
 
     /** May this student reach the portal without paying anything further? */

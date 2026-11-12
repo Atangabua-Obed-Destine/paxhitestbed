@@ -153,6 +153,13 @@
         </div>
         @endif
 
+        @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        @endif
+
         @if($errors->any())
         <div class="alert alert-danger">
             <ul class="mb-0">
@@ -192,10 +199,11 @@
 
                         <div class="exemption-title">
                             @if($exemption->exemption_type == 'student')
-                                <i class="fas fa-user-graduate text-primary"></i> 
-                                {{ $exemption->studentEnroll->student->first_name ?? '' }} 
-                                {{ $exemption->studentEnroll->student->last_name ?? 'N/A' }}
-                                <span class="exemption-subtitle">({{ $exemption->studentEnroll->student->student_id ?? 'N/A' }})</span>
+                                <i class="fas fa-user-graduate text-primary"></i>
+                                {{ $exemption->student->first_name ?? '' }}
+                                {{ $exemption->student->last_name ?? 'N/A' }}
+                                <span class="exemption-subtitle">({{ $exemption->student->student_id ?? 'N/A' }})</span>
+                                <span class="exemption-subtitle">&middot; {{ $exemption->session->title ?? __('session not recorded') }}</span>
                             @else
                                 <i class="fas fa-calendar text-success"></i> {{ $exemption->session->title ?? 'N/A' }}
                                 <span class="exemption-subtitle">(All students in this session)</span>
@@ -261,29 +269,27 @@
                     <!-- Student Selection (Hidden initially) -->
                     <div class="form-group mb-3" id="student_field" style="display:none;">
                         <label class="form-label">Select Student <span class="text-danger">*</span></label>
-                        <select class="form-select" name="student_enroll_id" id="student_enroll_id">
+                        <select class="form-select" name="student_id" id="student_id" data-placeholder="Choose Student">
                             <option value="">Choose Student</option>
-                            @foreach($studentEnrollments as $enrollment)
-                                @if($enrollment->student && $enrollment->session)
-                                <option value="{{ $enrollment->id }}">
-                                    {{ $enrollment->student->first_name }} {{ $enrollment->student->last_name }} 
-                                    ({{ $enrollment->student->student_id }}) - 
-                                    {{ $enrollment->session->title }}
+                            @foreach($students as $student)
+                                <option value="{{ $student->id }}">
+                                    {{ $student->first_name }} {{ $student->last_name }} ({{ $student->student_id }})
                                 </option>
-                                @endif
                             @endforeach
                         </select>
+                        <small class="text-muted">Any student, whether or not they are enrolled for the session yet.</small>
                     </div>
 
                     <!-- Session Selection (Hidden initially) -->
                     <div class="form-group mb-3" id="session_field" style="display:none;">
-                        <label class="form-label">Select Session <span class="text-danger">*</span></label>
+                        <label class="form-label"><span id="session_label">Select Session</span> <span class="text-danger">*</span></label>
                         <select class="form-select" name="session_id" id="session_id">
                             <option value="">Choose Session</option>
                             @foreach($sessions as $session)
                                 <option value="{{ $session->id }}">{{ $session->title }}</option>
                             @endforeach
                         </select>
+                        <small class="text-muted" id="session_hint"></small>
                     </div>
 
                     <!-- Reason -->
@@ -316,23 +322,39 @@
 @push('scripts')
 <script>
 $(document).ready(function() {
-    // Toggle fields based on exemption type
+
+    // A searchable student list, when the plugin is on the page.
+    if ($.fn.select2) {
+        $('#student_id').select2({
+            dropdownParent: $('#createExemptionModal'),
+            width: '100%',
+            placeholder: 'Choose Student'
+        });
+    }
+
+    // Both kinds name a session. A student exemption is for the student in
+    // that session; a session exemption is for everybody in it.
     $('#exemption_type').change(function() {
         var type = $(this).val();
-        
+
         if(type == 'student') {
             $('#student_field').show();
-            $('#student_enroll_id').attr('required', true);
-            $('#session_field').hide();
-            $('#session_id').attr('required', false).val('');
+            $('#student_id').attr('required', true);
+            $('#session_field').show();
+            $('#session_id').attr('required', true);
+            $('#session_label').text('Exempt for session');
+            $('#session_hint').text('The student is excused for this academic session only.');
         } else if(type == 'session') {
             $('#session_field').show();
             $('#session_id').attr('required', true);
+            $('#session_label').text('Select Session');
+            $('#session_hint').text('Every student in this session is excused.');
             $('#student_field').hide();
-            $('#student_enroll_id').attr('required', false).val('');
+            $('#student_id').attr('required', false).val('').trigger('change');
         } else {
             $('#student_field, #session_field').hide();
-            $('#student_enroll_id, #session_id').attr('required', false).val('');
+            $('#session_id').attr('required', false).val('');
+            $('#student_id').attr('required', false).val('').trigger('change');
         }
     });
 });
