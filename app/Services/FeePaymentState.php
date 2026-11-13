@@ -89,8 +89,7 @@ class FeePaymentState
             $reasons[] = __('A split payment against it is still pending.');
         }
 
-        if ($fee->payment_plan_id && $fee->paymentPlan
-            && $fee->paymentPlan->status === 'active') {
+        if ($fee->hasPaymentPlanHold()) {
             $reasons[] = __('It is on an active payment plan.');
         }
 

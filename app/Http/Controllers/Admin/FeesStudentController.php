@@ -278,7 +278,13 @@ class FeesStudentController extends Controller
             return redirect()->back();
         }
 
-        // Check if fee has an active payment plan
+        // A fee held by a payment plan agreement is paid through its plan —
+        // and while the agreement awaits approval, not at all.
+        if ($fee->hasPendingPaymentPlan()) {
+            Flasher::addError(__('This fee is on a payment plan agreement that is awaiting the Vice Chancellor\'s approval. No payment can be taken on it until it is approved or rejected.'));
+            return redirect()->back();
+        }
+
         if ($fee->hasActivePaymentPlan()) {
             Flasher::addError('This fee is currently under an active payment plan. Direct payment is not allowed. Please use the payment plan to make installment payments.');
             return redirect()->back();
@@ -600,6 +606,12 @@ class FeesStudentController extends Controller
             $data['rows'] = $rows;
             $data['resitMarkings'] = $this->resitMarkingsFor($rows);
 
+            // A fee on an active plan is paid from here through the plan's own
+            // modal, which shows the schedule. Loaded once for the page rather
+            // than once per row.
+            $rows->loadMissing('paymentPlan.installments.payments');
+            $data['payment_accounts'] = \App\Models\PaymentAccount::where('status', 1)->orderBy('title')->get();
+
             // The band's figures, from the rows on the page. Shared with both
             // exports (App\Services\FeeReport), so the headline on a printed
             // copy is the same computation as the band on the screen rather
@@ -771,6 +783,53 @@ class FeesStudentController extends Controller
             app(\App\Services\FeeReceipt::class)->for($fee),
             ['title' => trans_choice('module_fees_report', 1), 'route' => $this->route, 'view' => $this->view]
         ));
+    }
+
+    /**
+     * Publicly verify a handover: a payment that settled several lines, or
+     * money paid through a payment plan.
+     *
+     * Reached from the QR on such a receipt. The handover is rebuilt from the
+     * row named in the address, so the code only matches if every line, the
+     * total and the date are what the school recorded.
+     */
+    public function publicVerifyHandover(Request $request, string $kind, int $id)
+    {
+        $service = app(\App\Services\FeeReceipt::class);
+
+        if ($kind === 'plan') {
+            $payment = \App\Models\PaymentPlanPayment::active()->findOrFail($id);
+            $handover = $service->handoverFromPlanPayment($payment);
+            $fee = optional(optional($payment->installment)->paymentPlan)->fee;
+        } else {
+            $receipt = \App\Models\PaymentReceipt::where('verification_status', 'approved')->findOrFail($id);
+            $handover = $service->handoverFromReceipt($receipt);
+            $fee = $receipt->fee;
+        }
+
+        abort_unless($fee && $fee->studentEnroll, 404);
+
+        $supplied = strtoupper(trim((string) $request->query('code', '')));
+
+        // The page reads a receipt; a handover is given the same shape, with
+        // the whole handover's total and its first line's purpose.
+        $summary = (object) [
+            'payment_reference' => $handover['reference'],
+            'fee' => $fee,
+            'amount' => $handover['total'],
+            'payment_date' => $handover['date'],
+        ];
+
+        return view('admin.fees-student.verify', [
+            'receipt' => $summary,
+            'legs' => $handover['legs'],
+            'student' => $fee->studentEnroll->student,
+            'setting' => \App\Models\Setting::first(),
+            'currency' => $service->currency(),
+            'verificationCode' => $handover['code'],
+            'codeProvided' => $supplied !== '',
+            'isValid' => $supplied !== '' && hash_equals($handover['code'], $supplied),
+        ]);
     }
 
     /**

@@ -81,7 +81,9 @@ try {
     check('carrying the whole balance', $inst && abs((float) $inst->amount - $balance) < 0.01);
     check('due on the agreed date', $inst && $inst->due_date->toDateString() === $due);
     check('and the fee is now on the plan', (int) $fee->fresh()->payment_plan_id === (int) ($plan->id ?? 0));
-    check('the plan is active', $plan && $plan->status === 'active');
+    // A plan is prepared, not put into force: it waits for the Vice
+    // Chancellor to approve its agreement before it takes any money.
+    check('the plan awaits approval', $plan && $plan->status === 'pending' && optional($plan->agreement)->status === 'pending');
 } finally {
     DB::rollBack();
 }
@@ -146,11 +148,12 @@ $kernel = app(Illuminate\Contracts\Http\Kernel::class);
 $request = Request::create('/admin/payment-plan/create', 'GET');
 $request->setLaravelSession(app('session.store'));
 $html = $kernel->handle($request)->getContent();
-check('the create page renders', strpos($html, 'id="installments_count"') !== false);
-check('the box accepts one', preg_match('/id="installments_count"[^>]*min="1" max="12"/', $html) === 1);
-check('the browser check accepts one', strpos($html, 'installmentsCount >= 1 && installmentsCount <= 12') !== false);
-check('and says so', strpos($html, 'between 1 and 12') !== false && strpos($html, 'between 2 and 12') === false);
-check('and explains what one instalment means', strpos($html, __('One instalment moves the whole balance to a later date.')) !== false);
+// The create form is now one card per fee, each with its own count.
+check('the create page renders', strpos($html, 'id="agreement-form"') !== false);
+check('each fee\'s count box accepts one', preg_match('/class="form-control form-control-sm fee-count"[^>]*min="1" max="12"/', $html) === 1);
+check('the browser keeps the count between one and twelve', strpos($html, 'Math.max(1, Math.min(12,') !== false);
+check('and the old two-instalment floor is gone', strpos($html, 'between 2 and 12') === false && strpos($html, 'min="2"') === false);
+check('and explains what one instalment means', strpos($html, e(__('One instalment moves the whole balance to a later date.'))) !== false);
 
 echo "\n== Nothing left behind ==\n";
 check('no suite plan survived', PaymentPlan::where('notes', 'ZZ single')->doesntExist());

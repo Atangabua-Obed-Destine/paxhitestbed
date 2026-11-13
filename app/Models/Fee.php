@@ -100,9 +100,37 @@ class Fee extends Model
     /**
      * Check if fee has an active payment plan.
      */
+    /**
+     * A fee held by a payment plan agreement that changes what it charges
+     * sends that agreement back for approval, saying what changed.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (Fee $fee) {
+            app(\App\Services\PaymentPlanAgreements::class)->feeChanged($fee);
+        });
+    }
+
     public function hasActivePaymentPlan()
     {
         return $this->payment_plan_id && $this->paymentPlan && $this->paymentPlan->status === 'active';
+    }
+
+    /**
+     * Is this fee held by a payment plan — approved and running, or prepared
+     * and waiting for the Vice Chancellor? Either way it takes no direct
+     * payment: an active plan is paid through its instalments, a pending one
+     * is not paid at all until it is approved.
+     */
+    public function hasPaymentPlanHold(): bool
+    {
+        return $this->payment_plan_id && $this->paymentPlan && $this->paymentPlan->holdsFee();
+    }
+
+    /** Held by a plan whose agreement has not been approved yet. */
+    public function hasPendingPaymentPlan(): bool
+    {
+        return $this->payment_plan_id && $this->paymentPlan && $this->paymentPlan->isPending();
     }
 
     /**
@@ -383,7 +411,7 @@ class Fee extends Model
     public function getPaymentStateAttribute(): string
     {
         // A plan comes first: it describes the arrangement, not the balance.
-        if ($this->hasActivePaymentPlan()) {
+        if ($this->hasPaymentPlanHold()) {
             return 'plan';
         }
 

@@ -16,6 +16,7 @@ class PaymentPlan extends Model
      * @var array
      */
     protected $fillable = [
+        'agreement_id',
         'fee_id',
         'student_id',
         'total_amount',
@@ -108,12 +109,38 @@ class PaymentPlan extends Model
         return round(($this->total_paid / $this->total_amount) * 100, 2);
     }
 
+    /** The agreement this plan is part of: what was signed and approved. */
+    public function agreement()
+    {
+        return $this->belongsTo(PaymentPlanAgreement::class, 'agreement_id');
+    }
+
     /**
      * Check if payment plan is active.
      */
     public function isActive()
     {
         return $this->status === 'active';
+    }
+
+    /** Prepared, waiting for its agreement to be approved. Takes no money. */
+    public function isPending()
+    {
+        return $this->status === 'pending';
+    }
+
+    public function isRejected()
+    {
+        return $this->status === 'rejected';
+    }
+
+    /**
+     * Does this plan hold its fee? While it does, the fee is paid through the
+     * plan or not at all — and while the agreement awaits approval, not at all.
+     */
+    public function holdsFee(): bool
+    {
+        return in_array($this->status, ['pending', 'active'], true);
     }
 
     /**
@@ -212,6 +239,8 @@ class PaymentPlan extends Model
     public function getStatusBadgeAttribute()
     {
         $badges = [
+            'pending' => '<span class="badge badge-warning">' . e(__('Awaiting approval')) . '</span>',
+            'rejected' => '<span class="badge badge-danger">' . e(__('Rejected')) . '</span>',
             'active' => '<span class="badge badge-success">Active</span>',
             'completed' => '<span class="badge badge-primary">Completed</span>',
             'cancelled' => '<span class="badge badge-danger">Cancelled</span>',

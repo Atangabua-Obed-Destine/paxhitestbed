@@ -40,7 +40,7 @@ class PaymentPlanController extends Controller
         $this->middleware('permission:'.$this->access.'.edit', ['only' => ['edit']]);
         $this->middleware('permission:'.$this->access.'.update', ['only' => ['update']]);
         $this->middleware('permission:'.$this->access.'.destroy', ['only' => ['destroy']]);
-        $this->middleware('permission:'.$this->access.'.pay', ['only' => ['processPayment']]);
+        $this->middleware('permission:'.$this->access.'.pay', ['only' => ['processPayment', 'splitPreview']]);
         $this->middleware('permission:'.$this->access.'.cancel', ['only' => ['cancel']]);
         $this->middleware('permission:'.$this->access.'.reverse', ['only' => ['reverse']]);
     }
@@ -70,7 +70,7 @@ class PaymentPlanController extends Controller
         $data['search_student'] = $search;
 
         // Build query
-        $query = PaymentPlan::with(['student', 'fee.category', 'fee.studentEnroll.program', 'creator', 'installments']);
+        $query = PaymentPlan::with(['agreement.plans', 'student', 'fee.category', 'fee.studentEnroll.program', 'creator', 'installments']);
 
         if ($status && $status !== 'all') {
             $query->where('status', $status);
@@ -125,101 +125,72 @@ class PaymentPlanController extends Controller
      */
     public function store(Request $request)
     {
-        // Validate request
         $request->validate([
             'student_id' => 'required|exists:students,id',
-            'fee_id' => 'required|exists:fees,id',
-            'total_amount' => 'required|numeric|min:0',
-            // One instalment is a plan too: a student who has paid part of a
-            // fee and will clear the balance on an agreed later date.
-            'installments_count' => 'required|integer|min:1|max:12',
-            'late_fee_percentage' => 'nullable|numeric|min:0|max:100',
             'grace_period_days' => 'nullable|integer|min:0|max:30',
             'notes' => 'nullable|string',
-            'installments.*.amount' => 'required|numeric|min:0',
-            'installments.*.due_date' => 'required|date',
+            // The older one-fee form sent a count; it is still honoured.
+            'installments_count' => 'sometimes|integer|min:1|max:12',
+            'installments.*.amount' => 'sometimes|required|numeric|min:0',
+            'installments.*.due_date' => 'sometimes|required|date',
         ]);
 
-        $fee = Fee::findOrFail($request->fee_id);
+        $student = Student::findOrFail($request->student_id);
 
-        // The create form only offers fees with no plan, but that list was drawn
-        // before this form was filled in. Without checking again, a second plan
-        // silently takes the fee over and leaves the first one orphaned, still
-        // holding its payments.
-        if ($fee->payment_plan_id && $fee->paymentPlan) {
-            Flasher::addError('This fee is already on payment plan #' . $fee->payment_plan_id
-                . ' (' . $fee->paymentPlan->status . '). Cancel that plan first.');
-            return redirect()->back()->withInput();
-        }
-
-        // A plan whose instalments do not add up to its total can never settle
-        // the fee, and nothing downstream would notice.
-        $instalmentTotal = round(array_sum(array_column($request->installments ?? [], 'amount')), 2);
-
-        if (abs($instalmentTotal - round((float) $request->total_amount, 2)) >= 0.01) {
-            Flasher::addError('The instalments add up to ' . number_format($instalmentTotal, 2)
-                . ', but the plan total is ' . number_format((float) $request->total_amount, 2) . '.');
-            return redirect()->back()->withInput();
-        }
-
-        DB::beginTransaction();
+        // An agreement is prepared, not put into force: it holds its fees and
+        // takes no money until the Vice Chancellor approves it.
         try {
-            // Create payment plan
-            $plan = PaymentPlan::create([
-                'student_id' => $request->student_id,
-                'fee_id' => $request->fee_id,
-                'total_amount' => $request->total_amount,
-                'installments_count' => $request->installments_count,
-                // With late fees switched off a plan is created carrying none,
-                // whatever arrives in the request — the form disables the field,
-                // and a form is not a lock.
-                'late_fee_percentage' => config('payment_plan.late_fees_enabled', false)
-                    ? ($request->late_fee_percentage ?? 0)
-                    : 0,
-                'grace_period_days' => $request->grace_period_days ?? 7,
-                'created_by' => Auth::user()->id,
-                'approved_by' => Auth::user()->id,
-                'approved_at' => now(),
-                'status' => 'active',
-                'notes' => $request->notes,
-            ]);
+            $agreement = app(\App\Services\PaymentPlanAgreements::class)->create(
+                $student,
+                $this->scheduleFrom($request),
+                $request->notes,
+                Auth::id(),
+                (int) ($request->grace_period_days ?? 7)
+            );
+        } catch (\DomainException $e) {
+            Flasher::addError($e->getMessage());
+            return redirect()->back()->withInput();
+        }
 
-            // Create installments from the installments array
-            $installments = $request->installments;
-            $installmentNumber = 1;
+        Flasher::addSuccess(__('Agreement :ref prepared. Print it, sign it with the student, and take it to the Vice Chancellor for approval.', [
+            'ref' => $agreement->reference,
+        ]));
 
-            foreach ($installments as $installmentData) {
-                $dueDate = Carbon::parse($installmentData['due_date']);
-                $gracePeriodEnds = $dueDate->copy()->addDays($plan->grace_period_days);
+        // Straight to the document: it is what happens next.
+        return redirect()->route('admin.payment-plan.agreement.print', $agreement->id);
+    }
 
-                PaymentPlanInstallment::create([
-                    'payment_plan_id' => $plan->id,
-                    'installment_number' => $installmentNumber,
-                    'amount' => $installmentData['amount'],
-                    'due_date' => $dueDate,
-                    'grace_period_ends' => $gracePeriodEnds,
-                    'status' => 'pending',
-                ]);
+    /**
+     * The schedule as submitted: plans[fee_id][include, installments[...]],
+     * or the older form's single fee_id with installments[...].
+     */
+    protected function scheduleFrom(Request $request): array
+    {
+        $spec = [];
 
-                $installmentNumber++;
+        if ($request->has('plans')) {
+            foreach ((array) $request->input('plans') as $feeId => $plan) {
+                if (empty($plan['include'])) {
+                    continue;
+                }
+
+                $spec[] = [
+                    'fee_id' => (int) $feeId,
+                    'installments' => array_values((array) ($plan['installments'] ?? [])),
+                ];
             }
 
-            // Update fee to link it to this payment plan
-            // This prevents direct payment on this fee while payment plan is active
-            $plan->fee->update([
-                'payment_plan_id' => $plan->id,
-            ]);
-
-            DB::commit();
-
-            Flasher::addSuccess('Payment plan created successfully!');
-            return redirect()->route($this->route.'.show', $plan->id);
-
-        } catch (\Exception $e) {
-            DB::rollback();
-            Flasher::addError('Failed to create payment plan: ' . $e->getMessage());
-            return redirect()->back()->withInput();
+            return $spec;
         }
+
+        if ($request->filled('fee_id')) {
+            $spec[] = [
+                'fee_id' => (int) $request->fee_id,
+                'installments' => array_values((array) $request->input('installments', [])),
+            ];
+        }
+
+        return $spec;
     }
 
     /**
@@ -238,7 +209,7 @@ class PaymentPlanController extends Controller
         // Add setting for currency symbol
         $data['setting'] = PrintSetting::where('slug', 'fees-receipt')->first();
 
-        $data['row'] = PaymentPlan::with([
+        $data['row'] = PaymentPlan::with(['agreement', 
             'student.currentEnroll',
             'fee',
             'creator',
@@ -406,14 +377,39 @@ class PaymentPlanController extends Controller
             'receipt' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
         ]);
 
+        // Where the money goes.
+        //
+        // More than the instalment needs is the ordinary case, not a mistake:
+        // a student pays toward what they owe. The rest is carried onto the
+        // plan's later instalments and then the student's other instalment
+        // fees, exactly as a payment on an ordinary fee is carried — and what
+        // the bursar was shown is checked again here, never trusted.
+        $distributor = app(\App\Services\PlanPaymentDistribution::class);
+        $amount = round((float) $request->amount, 2);
+
+        if ($request->filled('allocation')) {
+            $legs = collect($request->input('allocation'))
+                ->map(fn ($leg) => [
+                    'type' => (string) ($leg['type'] ?? ''),
+                    'id' => (int) ($leg['id'] ?? 0),
+                    'applied' => round((float) ($leg['applied'] ?? 0), 2),
+                ])
+                ->filter(fn ($leg) => $leg['applied'] > 0.005)
+                ->values()
+                ->all();
+        } else {
+            $legs = $distributor->propose($installment, $amount)['legs'];
+        }
+
         DB::beginTransaction();
         try {
-            // Read the instalment again under a lock, inside the transaction:
-            // the balance shown on the form may have been settled by another
-            // admin, or by a receipt approved, while this one was being filled
-            // in. recordPayment does the deciding; this makes sure it decides on
-            // what is true now.
-            $installment = PaymentPlanInstallment::whereKey($installment->id)->lockForUpdate()->firstOrFail();
+            $refusals = $distributor->blockers($installment, $legs, $amount);
+
+            if ($refusals !== []) {
+                DB::rollBack();
+                Flasher::addError(implode(' ', $refusals));
+                return redirect()->back()->withInput();
+            }
 
             // Handle receipt upload
             $receiptPath = null;
@@ -424,24 +420,42 @@ class PaymentPlanController extends Controller
                 $receiptPath = 'payment-plan/' . $receiptName;
             }
 
-            // Record payment. The instalment sees to everything the money
-            // touches — the instalment, the fee, the ledger, the payment
-            // account and the student's statement — so both this form and the
-            // receipt-approval screen have identical effects.
-            $installment->recordPayment($request->amount, [
+            // Each leg is recorded as it would be on its own screen: an
+            // instalment sees to everything its money touches — the
+            // instalment, the fee, the ledger, the payment account and the
+            // student's statement — and an ordinary fee is written by the same
+            // recorder the fee screen uses.
+            $applied = $distributor->record($installment, $legs, [
                 'payment_method' => $request->payment_method,
                 'payment_date' => $request->payment_date,
                 'payment_account_id' => $request->payment_account_id,
                 'reference_no' => $request->reference_no,
                 'receipt_path' => $receiptPath,
-                'paid_by_type' => 'App\User',
-                'paid_by_id' => Auth::guard('web')->id(),
                 'note' => $request->note,
             ]);
 
             DB::commit();
 
+            if (count($applied) > 1) {
+                Flasher::addSuccess(__('Payment split across :count lines: :detail', [
+                    'count' => count($applied),
+                    'detail' => implode(', ', array_map(
+                        fn ($leg) => $leg['label'] . ' ' . number_format($leg['applied'], 2),
+                        $applied
+                    )),
+                ]));
+            }
+
             Flasher::addSuccess('Payment recorded successfully!');
+
+            // Paid from the fees report: straight to the fee's receipt, the
+            // way a payment on an ordinary fee ends. Its Back link runs off
+            // the previous URL, which is the filtered report, so the bursar's
+            // place is kept.
+            if ($request->input('return_to') === 'report' && $plan->fee_id) {
+                return redirect()->route('admin.fees-student.print', ['id' => $plan->fee_id]);
+            }
+
             return redirect()->route($this->route.'.show', $id);
 
         } catch (\DomainException $e) {
@@ -497,6 +511,15 @@ class PaymentPlanController extends Controller
     {
         $plan = PaymentPlan::findOrFail($id);
 
+        // A plan that is part of an agreement ends through the agreement —
+        // rejected or cancelled — so the signed document's history stays whole.
+        if ($plan->agreement_id) {
+            Flasher::addWarning(__('This plan is part of agreement :ref. Reject or cancel the agreement instead.', [
+                'ref' => optional($plan->agreement)->reference,
+            ]));
+            return redirect()->back();
+        }
+
         // Only allow deletion of cancelled or draft plans with no payments
         if ($plan->total_paid > 0) {
             Flasher::addWarning('Cannot delete payment plan with recorded payments');
@@ -525,40 +548,59 @@ class PaymentPlanController extends Controller
     }
 
     /**
+     * How an amount handed over on an instalment would be spread.
+     *
+     * Answered by the server rather than worked out in the browser, so the
+     * figures the bursar is shown are the figures the money will actually move
+     * against. Nothing is written.
+     */
+    public function splitPreview(Request $request, $id)
+    {
+        $installment = PaymentPlanInstallment::with('paymentPlan.fee.category')->findOrFail($id);
+        $amount = round((float) $request->input('amount', 0), 2);
+        $proposal = app(\App\Services\PlanPaymentDistribution::class)->propose($installment, $amount);
+
+        return response()->json([
+            'installment_id' => $installment->id,
+            'amount' => $amount,
+            'legs' => $proposal['legs'],
+            'leftover' => $proposal['leftover'],
+            // Everything the student could put money on from this screen, so
+            // the modal can say how much is too much.
+            'owed' => $proposal['owed'],
+            'outstanding' => round((float) $installment->remaining_balance, 2),
+        ]);
+    }
+
+    /**
      * Get student fees for AJAX call.
      *
      * @return \Illuminate\Http\Response
      */
     public function getStudentFees(Request $request)
     {
-        $studentId = $request->student_id;
-        
+        $studentId = (int) $request->student_id;
+
         if (!$studentId) {
             return response()->json(['fees' => []]);
         }
 
-        // Get student's unpaid or partially paid fees that don't have an active payment plan
-        $fees = Fee::with(['category', 'studentEnroll.program', 'studentEnroll.session', 'studentEnroll.semester'])
-            ->whereHas('studentEnroll', function($query) use ($studentId) {
-                $query->where('student_id', $studentId);
-            })
-            ->whereIn('status', [0, 2]) // Unpaid (0) or Partially Paid (2)
-            ->whereNull('payment_plan_id') // Exclude fees already linked to a payment plan
-            ->get()
-            ->map(function($fee) {
-                return [
-                    'id' => $fee->id,
-                    'category_title' => $fee->category->title ?? '',
-                    'fee_amount' => $fee->fee_amount,
-                    'discount_amount' => $fee->discount_amount ?? 0,
-                    'fine_amount' => $fee->fine_amount ?? 0,
-                    'paid_amount' => $fee->paid_amount ?? 0,
-                    'total_amount' => $fee->total_amount,
-                    'remaining_balance' => $fee->remaining_balance,
-                    'status' => $fee->status,
-                    'status_label' => $fee->isPartiallyPaid() ? 'Partially Paid' : 'Unpaid',
-                ];
-            });
+        $agreements = app(\App\Services\PaymentPlanAgreements::class);
+
+        $fees = $agreements->eligibleFees($studentId)->map(fn ($fee) => [
+            'id' => $fee->id,
+            'category_title' => $fee->category->title ?? '',
+            'session' => optional(optional($fee->studentEnroll)->session)->title,
+            'due_date' => $fee->due_date ? \Carbon\Carbon::parse($fee->due_date)->format('Y-m-d') : null,
+            'fee_amount' => (float) $fee->fee_amount,
+            'discount_amount' => (float) ($fee->discount_amount ?? 0),
+            'fine_amount' => (float) ($fee->fine_amount ?? 0),
+            'paid_amount' => (float) ($fee->paid_amount ?? 0),
+            'total_amount' => (float) $fee->total_amount,
+            'remaining_balance' => $agreements->balance($fee),
+            'status' => $fee->status,
+            'status_label' => $fee->isPartiallyPaid() ? 'Partially Paid' : 'Unpaid',
+        ])->values();
 
         return response()->json(['fees' => $fees]);
     }

@@ -9,24 +9,45 @@
     The same view serves the bursar's screen and the student's own portal, so
     what the office prints and what the student downloads are the same sheet.
 
-    Expects: fee, receipt, legs, instalments, credits, setting, currency,
-             verificationCode, status  (see App\Services\FeeReceipt)
+    Compact by design: everything fits in half an A4 page, so a receipt prints
+    on A5 or two to a sheet. Nothing a reader needs was dropped to get there —
+    what went was repetition. The amount was printed three times, "This fee"
+    restated the instalment row beneath it, and the purpose repeated the title.
+
+    Expects: fee, handover, legs, plan, instalments, credits, setting, currency,
+             verificationCode, verificationUrl, status  (see App\Services\FeeReceipt)
 --}}
 @php
     $service = app(\App\Services\FeeReceipt::class);
     $student = optional($fee->studentEnroll)->student;
     $programme = optional($fee->studentEnroll)->program;
     $enrolment = $fee->studentEnroll;
+    $handover = $handover ?? null;
+    $plan = $plan ?? null;
+    $verificationUrl = $verificationUrl ?? null;
 
-    $received = $receipt ? (float) $receipt->amount : (float) ($fee->paid_amount ?? 0);
+    // What the student handed over, and when. A fee with no recorded payment
+    // row at all — older data — falls back to what the fee itself says.
+    $received = $handover ? (float) $handover['total'] : (float) ($fee->paid_amount ?? 0);
+    $paidOn = $handover ? $handover['date'] : $fee->pay_date;
+    $method = $handover['method'] ?? \App\Support\FeesPaymentMethod::label($fee->payment_method);
+    $reference = $handover['reference'] ?? null;
+    $cashier = $handover['cashier'] ?? null;
+    $recordedAt = $handover['recorded_at'] ?? null;
+    $lines = $handover ? $handover['legs'] : collect();
+
     $charged = (float) $fee->total_amount;
     $paid = (float) ($fee->paid_amount ?? 0);
     $outstanding = max(0, $charged - $paid);
     $overpaid = max(0, $paid - $charged);
 
-    $verificationUrl = ($verificationCode && $receipt)
-        ? route('verify-fee', $receipt->id) . '?code=' . $verificationCode
-        : null;
+    // Shown inside the instalments table when this fee is one of them;
+    // otherwise this fee gets a line of its own.
+    $inInstalments = $instalments->count() > 1 && $instalments->contains('id', $fee->id);
+    $planInTable = $plan && $inInstalments;
+
+    $money = fn ($value) => number_format((float) $value, 2);
+    $day = fn ($date) => $date ? \Carbon\Carbon::parse($date)->format('d M Y') : '—';
 @endphp
 <!doctype html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -37,105 +58,101 @@
     <style>
         *{box-sizing:border-box}
         html,body{margin:0;padding:0;background:#e9edf1;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#1f2a44}
-        .toolbar{max-width:900px;margin:16px auto;text-align:right;padding:0 8px}
-        .toolbar button,.toolbar a{border:0;background:#224abe;color:#fff;padding:8px 14px;border-radius:4px;text-decoration:none;font-size:.85rem;cursor:pointer;margin-left:6px}
+        .toolbar{max-width:820px;margin:14px auto;text-align:right;padding:0 8px}
+        .toolbar button,.toolbar a{border:0;background:#224abe;color:#fff;padding:7px 13px;border-radius:4px;text-decoration:none;font-size:13px;cursor:pointer;margin-left:6px}
         .toolbar a.secondary{background:#6c757d}
 
-        .sheet{max-width:900px;margin:0 auto 32px;background:#fff;padding:28px 40px 26px;box-shadow:0 6px 24px rgba(0,0,0,.08);position:relative;overflow:hidden}
-        .sheet > *{position:relative;z-index:1}
+        .sheet{max-width:820px;margin:0 auto 28px;background:#fff;padding:16px 24px 12px;box-shadow:0 6px 24px rgba(0,0,0,.08);font-size:11px;line-height:1.3}
 
-        .r-title{text-align:center;background:#f1f5f9;color:#1e293b;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:6px;border-radius:2px;margin-bottom:14px;font-size:.95rem;border:1px solid #cbd5e1}
-        .r-title small{display:block;font-weight:500;letter-spacing:.05em;text-transform:none;color:#64748b;font-size:.7rem;margin-top:2px}
+        /* The configured letterhead, exactly as authored, at receipt scale.
+           Its blank spacer lines are dropped (see the script at the end);
+           nothing it says is changed. */
+        .masthead{zoom:.7;font-size:16px;line-height:normal;margin-bottom:2px}
+        .masthead .doc-masthead{margin:0}
+        /* The configured letterhead lays its contacts, crest and address out in
+           three columns of 47%, 17% and 35%, so the crest sat right of the
+           school name above it. On the receipt the two side columns are made
+           equal, which puts the crest under the name. Only a three-column row
+           is touched; what the letterhead says is not. */
+        .masthead .letterhead table{table-layout:fixed}
+        .masthead .letterhead td:first-child:nth-last-child(3),
+        .masthead .letterhead td:last-child:nth-child(3){width:41.5% !important}
+        .masthead .letterhead td:nth-child(2):nth-last-child(2){width:17% !important}
 
-        .r-meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;font-size:.8rem}
-        .r-meta .cell{background:#f8fafc;border-left:3px solid #224abe;padding:8px 10px}
-        .r-meta .cell .k{color:#64748b;text-transform:uppercase;font-size:.65rem;letter-spacing:.08em}
-        .r-meta .cell .v{font-weight:600;color:#0f172a;margin-top:2px;word-break:break-all}
+        .r-title{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:2px solid #1e293b;border-bottom:1px solid #cbd5e1;padding:4px 0;margin-bottom:6px}
+        .r-title .name{font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:13px;color:#0f172a}
+        .r-title .name small{font-weight:500;letter-spacing:.02em;text-transform:none;color:#475569;font-size:12px;margin-left:6px}
+        .tag{display:inline-block;border:1px solid #94a3b8;border-radius:10px;padding:1px 8px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#334155;margin-left:4px;white-space:nowrap}
+        .tag.plan{border-color:#1d4ed8;color:#1d4ed8}
 
-        .field{display:flex;align-items:baseline;margin-bottom:10px}
-        .field .label{width:220px;flex:0 0 220px;font-weight:600;text-transform:uppercase;font-size:.8rem;letter-spacing:.05em;color:#1e293b}
-        .field .value{flex:1;border-bottom:1px solid #94a3b8;padding:2px 4px 3px;min-height:21px;font-size:.95rem;color:#0f172a}
-        .field-row{display:flex;gap:20px}
-        .field-row .field{flex:1}
-        .field-row .field .label{width:150px;flex:0 0 150px}
+        .r-meta{display:flex;flex-wrap:wrap;gap:2px 16px;font-size:11px;color:#475569;margin-bottom:4px}
+        .r-meta b{color:#0f172a;font-weight:600}
 
-        .amount-box{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#f8fafc;padding:12px 18px;border-radius:4px;margin:14px 0}
-        .amount-box .k{text-transform:uppercase;letter-spacing:.1em;font-size:.75rem;opacity:.8}
-        .amount-box .v{font-size:1.4rem;font-weight:700;letter-spacing:.02em}
-        .amount-box .status{background:#16a34a;color:#fff;padding:4px 10px;border-radius:12px;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;margin-left:12px}
+        .who{display:grid;grid-template-columns:1.45fr 1fr 1fr;gap:3px 14px;margin-bottom:6px}
+        .who > div{display:flex;gap:6px;align-items:baseline;border-bottom:1px solid #e2e8f0;padding-bottom:1px;min-width:0}
+        .who .k{flex:0 0 auto;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+        .who .v{font-weight:600;color:#0f172a;min-width:0}
+
+        .amount-box{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#0f172a;color:#f8fafc;padding:4px 12px;border-radius:4px;margin:0 0 6px}
+        .amount-box .figure{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+        .amount-box .k{text-transform:uppercase;letter-spacing:.1em;font-size:10px;opacity:.8}
+        .amount-box .v{font-size:17px;font-weight:700;letter-spacing:.02em;line-height:1.15}
+        .amount-box .words{font-size:11px;opacity:.9}
+        .amount-box .status{background:#16a34a;color:#fff;padding:3px 9px;border-radius:12px;font-size:10px;text-transform:uppercase;letter-spacing:.1em;white-space:nowrap}
         .amount-box .status.partial{background:#f59e0b}
         .amount-box .status.unpaid{background:#dc2626}
 
-        table.block{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:.85rem}
-        table.block caption{text-align:left;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:.72rem;color:#64748b;padding-bottom:6px}
-        table.block th,table.block td{border-bottom:1px solid #e2e8f0;padding:5px 8px;text-align:left}
-        table.block th{background:#f8fafc;color:#475569;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}
+        table.block{width:100%;border-collapse:collapse;margin:0 0 6px;font-size:10.5px}
+        table.block caption{text-align:left;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:10px;color:#64748b;padding-bottom:2px}
+        table.block th,table.block td{border-bottom:1px solid #e2e8f0;padding:1px 6px;text-align:left}
+        table.block th{background:#f8fafc;color:#475569;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
         table.block td.num,table.block th.num{text-align:right;white-space:nowrap}
-        table.block tr.total td{font-weight:700;border-top:2px solid #0f172a;border-bottom:0}
+        table.block tr.total td{font-weight:700;border-top:1.5px solid #0f172a;border-bottom:0}
         table.block tr.settled td{color:#15803d}
         table.block tr.owing td{color:#b45309}
+        table.block tr.sub td{color:#475569;font-size:10.5px;border-bottom-style:dotted}
+        table.block tr.sub td:first-child{padding-left:18px}
+        table.block tr.here td{font-weight:700}
+        .note{font-size:10.5px;color:#475569;margin:-3px 0 6px}
+        .settled-line{font-size:10.5px;margin:0 0 6px;color:#0f172a}
+        .settled-line .cap{font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:10px;color:#64748b;margin-right:4px}
+        .settled-line .leg{white-space:nowrap}
+        .settled-line .leg + .leg::before{content:" · ";color:#94a3b8;white-space:normal}
 
-        .sig{display:flex;justify-content:space-between;margin-top:24px;gap:40px}
+        .bottom{display:flex;gap:16px;align-items:flex-end;margin-top:8px}
+        .sig{flex:1;display:flex;gap:16px}
         .sig .box{flex:1}
-        .sig .box .label{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:20px}
-        .sig .box .line{border-top:1px solid #475569;padding-top:4px;font-size:.85rem}
+        .sig .box .label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin-bottom:12px}
+        .sig .box .line{border-top:1px solid #475569;padding-top:2px;font-size:11px}
+        .sig .box small{color:#64748b;font-size:10px}
 
-        .verify{margin-top:16px;padding:10px 12px;border:1px dashed #94a3b8;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;gap:18px;font-size:.75rem}
-        .verify .code{font-family:'Courier New',monospace;font-size:1rem;color:#0f172a;letter-spacing:.15em;font-weight:700}
-        .verify .qr{flex:0 0 90px;text-align:right}
-        .verify .qr img{width:90px;height:90px;background:#fff;border:1px solid #cbd5e1}
+        .verify{flex:0 0 auto;display:flex;align-items:center;gap:8px;border:1px dashed #94a3b8;padding:4px 6px;font-size:10px;max-width:46%}
+        .verify .code{font-family:'Courier New',monospace;font-size:12px;color:#0f172a;letter-spacing:.12em;font-weight:700}
+        .verify .url{color:#475569;word-break:break-all;font-size:10px}
+        .verify img{width:54px;height:54px;flex:0 0 54px}
 
-        .footer{margin-top:14px;text-align:center;font-size:.7rem;color:#64748b;line-height:1.5}
-        .digital-badge{position:absolute;top:22px;right:22px;background:#16a34a;color:#fff;padding:4px 10px;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;border-radius:2px;z-index:2}
+        .footer{margin-top:6px;text-align:center;font-size:10px;color:#64748b}
 
         @media print{
             /* The page itself supplies the margin, so the sheet does not have
                to, and nothing is paid for twice. */
-            @page{size:A4;margin:12mm}
-            body{background:#fff}
+            @page{size:A4;margin:10mm}
+            html,body{background:#fff}
             .toolbar{display:none}
             .sheet{box-shadow:none;margin:0;padding:0;max-width:100%}
 
-            /* ---- legible on paper ----------------------------------------
-               Browsers do not print background colours by default, and the
+            /* Browsers do not print background colours by default, and the
                setting is off in most print dialogs. Anything that relied on a
-               background for its contrast therefore printed its own text on
-               white: the Amount Received is near-white on near-black, so the
-               single most important figure on the receipt came out blank. The
-               status pill and the digital badge did the same.
+               background for its contrast therefore inverts for paper rather
+               than printing its own text on white. */
+            .amount-box{background:#fff !important;color:#0f172a !important;border:1.5px solid #0f172a}
+            .amount-box .k,.amount-box .words{opacity:1;color:#475569 !important}
+            .amount-box .status{background:#fff !important;color:#0f172a !important;border:1px solid #0f172a}
+            table.block th{background:#fff !important}
 
-               These invert for paper rather than asking for the background to
-               be printed, because a receipt has to be readable however it is
-               sent to the printer. It also costs a great deal less toner. */
-            .amount-box{background:#fff !important;color:#0f172a !important;
-                        border:2px solid #0f172a;padding:9px 14px;margin:10px 0}
-            .amount-box .k{opacity:1;color:#475569 !important}
-            .amount-box .v{font-size:1.25rem}
-            .amount-box .status,
-            .digital-badge{background:#fff !important;color:#0f172a !important;
-                           border:1px solid #0f172a}
-
-            /* ---- density -------------------------------------------------
-               Every field, table and block is kept; what shrinks is the space
-               between them. Nothing drops below about 8pt, which is the floor
-               for a document somebody may have to read in a dispute. */
-            .r-title{margin-bottom:10px;padding:5px;font-size:.84rem}
-            .r-meta{gap:8px;margin-bottom:12px;font-size:.7rem}
-            .r-meta .cell{padding:5px 7px}
-            .field{margin-bottom:6px}
-            .field .label{font-size:.7rem}
-            .field .value{min-height:15px;padding:1px 3px 2px;font-size:.82rem}
-            table.block{margin-bottom:10px;font-size:.74rem}
-            table.block caption{padding-bottom:3px}
-            table.block th,table.block td{padding:3px 6px}
-            .sig{margin-top:16px;gap:30px}
-            .sig .box .label{margin-bottom:16px;font-size:.66rem}
-            .verify{margin-top:10px;padding:7px 10px;font-size:.66rem}
-            .footer{margin-top:7px;font-size:.62rem;line-height:1.35}
-
-            /* A table, the signatures or the verification block split across
-               a page break is worse than a slightly longer document. */
-            table.block,.sig,.verify,.amount-box{page-break-inside:avoid}
+            /* A table, the signatures or the verification split across a page
+               break is worse than a slightly longer document. */
+            table.block,.bottom,.amount-box{page-break-inside:avoid}
         }
     </style>
 </head>
@@ -147,182 +164,90 @@
 </div>
 
 <div class="sheet">
-    <div class="digital-badge">{{ __('Digital Receipt') }}</div>
-
-    {{-- The configured letterhead, exactly as authored, so this receipt agrees
-         with every other document the same office issues. --}}
-    @include('partials.document-header', ['forPdf' => $forPdf ?? false, 'rule' => false])
+    <div class="masthead">
+        @include('partials.document-header', ['forPdf' => $forPdf ?? false, 'rule' => false])
+    </div>
 
     <div class="r-title">
-        {{ __('Receipt for Payment') }}
-        <small>{{ optional($fee->category)->title ?? __('Student Fee') }}</small>
+        <div class="name">
+            {{ __('Receipt for Payment') }}
+            <small>{{ optional($fee->category)->title ?? __('Student Fee') }}
+                @if($fee->resitRequest && $fee->resitRequest->subject)
+                    &middot; {{ __('Resit') }}: {{ $fee->resitRequest->subject->code }} {{ $fee->resitRequest->subject->title }}
+                @endif
+            </small>
+        </div>
+        <div>
+            @if($plan)
+                {{-- The fee is being paid, or was paid, through a payment
+                     plan. Stays on the receipt after the plan is paid off. --}}
+                <span class="tag plan">{{ optional($plan->agreement)->reference ?? __('Payment plan') }} &middot; {{ $plan->isPending() ? __('Awaiting approval') : __('status_' . $plan->status) }}</span>
+            @endif
+            <span class="tag">{{ __('Digital Receipt') }}</span>
+        </div>
     </div>
 
     <div class="r-meta">
-        <div class="cell">
-            <div class="k">{{ __('Receipt No.') }}</div>
-            <div class="v">{{ str_pad($fee->id, 6, '0', STR_PAD_LEFT) }}</div>
-        </div>
-        <div class="cell">
-            <div class="k">{{ __('Transaction Ref.') }}</div>
-            <div class="v">{{ optional($receipt)->payment_reference ?: '—' }}</div>
-        </div>
-        <div class="cell">
-            <div class="k">{{ __('Issued') }}</div>
-            <div class="v">{{ optional(optional($receipt)->verified_at ?? optional($receipt)->created_at ?? $fee->pay_date)->format('Y-m-d H:i') ?? '—' }}</div>
-        </div>
+        <span>{{ __('Receipt No.') }} <b>{{ str_pad($fee->id, 6, '0', STR_PAD_LEFT) }}</b></span>
+        <span>{{ __('Ref.') }} <b>{{ $reference ?: '—' }}</b></span>
+        <span>{{ __('Paid on') }} <b>{{ $paidOn ? \Carbon\Carbon::parse($paidOn)->format('Y-m-d') : '—' }}</b></span>
+        <span>{{ __('Payment Method') }} <b>{{ $method ?: '—' }}</b></span>
     </div>
 
-    <div class="field-row">
-        <div class="field">
-            <div class="label">{{ __('Name') }}:</div>
-            <div class="value">{{ trim(optional($student)->first_name . ' ' . optional($student)->last_name) ?: '—' }}</div>
+    <div class="who">
+        <div>
+            <div class="k">{{ __('Name') }}</div>
+            <div class="v">{{ trim(optional($student)->first_name . ' ' . optional($student)->last_name) ?: '—' }}</div>
         </div>
-        <div class="field">
-            <div class="label">{{ __('field_matricule') }}:</div>
-            <div class="value">{{ optional($enrolment)->matricule ?? optional($student)->student_id ?? '—' }}</div>
+        <div>
+            <div class="k">{{ __('field_matricule') }}</div>
+            <div class="v">{{ optional($enrolment)->matricule ?? optional($student)->student_id ?? '—' }}</div>
         </div>
-    </div>
-
-    <div class="field">
-        <div class="label">{{ __('Amount in Figures') }}:</div>
-        <div class="value">{{ $currency }} {{ number_format($received, 2) }}</div>
-    </div>
-
-    <div class="field">
-        <div class="label">{{ __('Amount in Words') }}:</div>
-        <div class="value">{{ $service->inWords($received) }} {{ $currency }} {{ __('only') }}</div>
-    </div>
-
-    <div class="field">
-        <div class="label">{{ __('Purpose for Deposit') }}:</div>
-        <div class="value">
-            {{ optional($fee->category)->title ?? __('Student Fee') }}
-            @if($fee->resitRequest && $fee->resitRequest->subject)
-                &middot; {{ __('Resit') }}: {{ $fee->resitRequest->subject->code }} {{ $fee->resitRequest->subject->title }}
-            @endif
+        <div>
+            <div class="k">{{ __('Academic Year') }}</div>
+            <div class="v">{{ optional(optional($enrolment)->session)->title ?? '—' }}</div>
         </div>
-    </div>
-
-    <div class="field-row">
-        <div class="field">
-            <div class="label">{{ __('School / Faculty of') }}:</div>
-            <div class="value">{{ optional($programme)->title ?? '—' }}</div>
+        <div>
+            <div class="k">{{ __('field_program') }}</div>
+            <div class="v">{{ optional($programme)->title ?? '—' }}</div>
         </div>
-        <div class="field">
-            <div class="label">{{ __('Level') }}:</div>
-            <div class="value">{{ optional(optional($programme)->degreeType)->title ?? '—' }}</div>
+        <div>
+            <div class="k">{{ __('Level') }}</div>
+            <div class="v">{{ optional(optional($programme)->degreeType)->title ?? '—' }}</div>
         </div>
-    </div>
-
-    <div class="field-row">
-        <div class="field">
-            <div class="label">{{ __('Date') }}:</div>
-            <div class="value">{{ optional(optional($receipt)->payment_date ?? $fee->pay_date)->format('Y-m-d') ?? '—' }}</div>
-        </div>
-        <div class="field">
-            <div class="label">{{ __('Academic Year') }}:</div>
-            <div class="value">{{ optional(optional($enrolment)->session)->title ?? '—' }}</div>
-        </div>
-    </div>
-
-    <div class="field-row">
-        <div class="field">
-            <div class="label">{{ __('field_semester') }}:</div>
-            <div class="value">{{ optional(optional($enrolment)->semester)->title ?? '—' }}</div>
-        </div>
-        <div class="field">
-            <div class="label">{{ __('Payment Method') }}:</div>
-            <div class="value">{{ optional($receipt)->payment_method_name ?? ($fee->payment_method ?? '—') }}</div>
+        <div>
+            <div class="k">{{ __('field_semester') }}</div>
+            <div class="v">{{ optional(optional($enrolment)->semester)->title ?? '—' }}</div>
         </div>
     </div>
 
     <div class="amount-box">
         <div>
             <div class="k">{{ __('Amount Received') }}</div>
-            <div class="v">{{ $currency }} {{ number_format($received, 2) }}</div>
+            <div class="figure">
+                <span class="v">{{ $currency }} {{ $money($received) }}</span>
+                <span class="words">{{ $service->inWords($received) }} {{ $currency }} {{ __('only') }}</span>
+            </div>
         </div>
         <div><span class="status {{ $status['class'] }}">{{ $status['label'] }}</span></div>
     </div>
 
-    @if($legs->count() > 1)
-    {{-- One handover settled more than one instalment. Without this the student
-         is handed a receipt for 150,000 having given 350,000. --}}
-    <table class="block">
-        <caption>{{ __('This payment settled') }}</caption>
-        <thead>
-            <tr>
-                <th>{{ __('field_fees_type') }}</th>
-                <th class="num">{{ __('field_amount') }}</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($legs as $leg)
-            <tr>
-                <td>{{ optional(optional($leg->fee)->category)->title ?? __('field_fees') }}</td>
-                <td class="num">{{ $currency }} {{ number_format((float) $leg->amount, 2) }}</td>
-            </tr>
-            @endforeach
-            <tr class="total">
-                <td>{{ __('field_total') }}</td>
-                <td class="num">{{ $currency }} {{ number_format((float) $legs->sum('amount'), 2) }}</td>
-            </tr>
-        </tbody>
-    </table>
+    @if($lines->count() > 1)
+    {{-- One handover settled more than one line. Without this the student
+         is handed a receipt for one instalment having paid for several. The
+         lines add up to the amount received above. --}}
+    <div class="settled-line">
+        <span class="cap">{{ __('This payment settled') }}:</span>
+        @foreach($lines as $line)
+            <span class="leg">{{ $line['label'] }} <b>{{ $currency }} {{ $money($line['amount']) }}</b></span>
+        @endforeach
+    </div>
     @endif
 
-    {{-- This fee in full: what was charged, what has been paid against it, and
-         what is left. The old receipt clamped these, so an overpayment simply
-         vanished from the sheet. --}}
-    <table class="block">
-        <caption>{{ __('This fee') }}</caption>
-        <tbody>
-            <tr>
-                <td>{{ __('field_fee') }}</td>
-                <td class="num">{{ $currency }} {{ number_format((float) $fee->fee_amount, 2) }}</td>
-            </tr>
-            @if((float) $fee->discount_amount > 0)
-            <tr>
-                <td>{{ __('field_discount') }}</td>
-                <td class="num">&minus; {{ $currency }} {{ number_format((float) $fee->discount_amount, 2) }}</td>
-            </tr>
-            @endif
-            @if((float) $fee->fine_amount > 0)
-            <tr>
-                <td>{{ __('field_fine_amount') }}</td>
-                <td class="num">+ {{ $currency }} {{ number_format((float) $fee->fine_amount, 2) }}</td>
-            </tr>
-            @endif
-            <tr>
-                <td>{{ __('field_net_amount') }}</td>
-                <td class="num">{{ $currency }} {{ number_format($charged, 2) }}</td>
-            </tr>
-            <tr>
-                <td>{{ __('field_amount_paid') }}</td>
-                <td class="num">{{ $currency }} {{ number_format($paid, 2) }}</td>
-            </tr>
-            @if($overpaid > 0.005)
-            <tr class="settled">
-                <td>{{ __('overpayment_amount') }}</td>
-                <td class="num">{{ $currency }} {{ number_format($overpaid, 2) }}</td>
-            </tr>
-            @endif
-            @foreach($credits as $credit)
-            <tr class="settled">
-                <td>{{ __('overpayment_credit_generated') }}</td>
-                <td class="num">{{ $currency }} {{ number_format((float) $credit->original_amount, 2) }}</td>
-            </tr>
-            @endforeach
-            <tr class="total {{ $outstanding > 0.005 ? 'owing' : 'settled' }}">
-                <td>{{ __('field_remaining_balance') }}</td>
-                <td class="num">{{ $currency }} {{ number_format($outstanding, 2) }}</td>
-            </tr>
-        </tbody>
-    </table>
-
-    @if($instalments->count() > 1)
+    @if($inInstalments)
     {{-- Where the student stands overall, so one sheet answers the question
-         rather than needing a receipt per instalment. --}}
+         rather than needing a receipt per instalment. This fee is the bold
+         row; its payment plan, if it has one, is laid out beneath it. --}}
     <table class="block">
         <caption>{{ __('Your instalments') }}</caption>
         <thead>
@@ -343,80 +268,128 @@
                     $left = max(0, $due - $done);
                     $owedTotal += $left;
                 @endphp
-                <tr class="{{ $left > 0.005 ? 'owing' : 'settled' }}">
+                <tr class="{{ $left > 0.005 ? 'owing' : 'settled' }} {{ $instalment->id === $fee->id ? 'here' : '' }}">
                     <td>{{ optional($instalment->category)->title }}</td>
-                    <td>{{ $instalment->due_date ? \Carbon\Carbon::parse($instalment->due_date)->format('d M Y') : '—' }}</td>
-                    <td class="num">{{ number_format($due, 2) }}</td>
-                    <td class="num">{{ number_format($done, 2) }}</td>
-                    <td class="num">{{ number_format($left, 2) }}</td>
+                    <td>{{ $day($instalment->due_date) }}</td>
+                    <td class="num">{{ $money($due) }}</td>
+                    <td class="num">{{ $money($done) }}</td>
+                    <td class="num">{{ $money($left) }}</td>
                 </tr>
+                @if($planInTable && $instalment->id === $fee->id)
+                    @foreach($plan->installments->sortBy('installment_number') as $step)
+                    <tr class="sub">
+                        <td>{{ __('Plan instalment :number of :count', ['number' => $step->installment_number, 'count' => $plan->installments->count()]) }} &middot; {{ ucfirst((string) $step->status) }}</td>
+                        <td>{{ $day($step->due_date) }}</td>
+                        <td class="num">{{ $money((float) $step->amount + (float) ($step->late_fee ?? 0)) }}</td>
+                        <td class="num">{{ $money($step->paid_amount) }}</td>
+                        <td class="num">{{ $money($step->remaining_balance) }}</td>
+                    </tr>
+                    @endforeach
+                @endif
             @endforeach
             <tr class="total {{ $owedTotal > 0.005 ? 'owing' : 'settled' }}">
                 <td colspan="4">{{ __('Total still outstanding') }}</td>
-                <td class="num">{{ $currency }} {{ number_format($owedTotal, 2) }}</td>
+                <td class="num">{{ $currency }} {{ $money($owedTotal) }}</td>
             </tr>
         </tbody>
     </table>
-    @endif
-
-    @if($fee->paymentPlan && $fee->paymentPlan->installments->count())
+    @else
+    {{-- Not one of the student's instalments (an admission or resit fee, or
+         a student with a single instalment): this fee on one line. --}}
     <table class="block">
-        <caption>{{ __('payment_plan') }}</caption>
+        <caption>{{ __('This fee') }}</caption>
         <thead>
             <tr>
-                <th>#</th>
-                <th>{{ __('field_due_date') }}</th>
-                <th class="num">{{ __('field_amount') }}</th>
+                <th>{{ __('field_fees_type') }}</th>
+                <th class="num">{{ __('field_net_amount') }}</th>
                 <th class="num">{{ __('field_amount_paid') }}</th>
-                <th>{{ __('field_status') }}</th>
+                <th class="num">{{ __('field_remaining_balance') }}</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($fee->paymentPlan->installments as $index => $instalment)
-            <tr>
-                <td>{{ $index + 1 }}</td>
-                <td>{{ $instalment->due_date ? \Carbon\Carbon::parse($instalment->due_date)->format('d M Y') : '—' }}</td>
-                <td class="num">{{ number_format((float) $instalment->amount, 2) }}</td>
-                <td class="num">{{ number_format((float) $instalment->paid_amount, 2) }}</td>
-                <td>{{ ucfirst((string) $instalment->status) }}</td>
+            <tr class="here {{ $outstanding > 0.005 ? 'owing' : 'settled' }}">
+                <td>{{ optional($fee->category)->title ?? __('Student Fee') }}</td>
+                <td class="num">{{ $money($charged) }}</td>
+                <td class="num">{{ $money($paid) }}</td>
+                <td class="num">{{ $money($outstanding) }}</td>
             </tr>
-            @endforeach
+            @if($plan)
+                @foreach($plan->installments->sortBy('installment_number') as $step)
+                <tr class="sub">
+                    <td>{{ __('Plan instalment :number of :count', ['number' => $step->installment_number, 'count' => $plan->installments->count()]) }} &middot; {{ $day($step->due_date) }} &middot; {{ ucfirst((string) $step->status) }}</td>
+                    <td class="num">{{ $money((float) $step->amount + (float) ($step->late_fee ?? 0)) }}</td>
+                    <td class="num">{{ $money($step->paid_amount) }}</td>
+                    <td class="num">{{ $money($step->remaining_balance) }}</td>
+                </tr>
+                @endforeach
+            @endif
         </tbody>
     </table>
     @endif
 
-    <div class="sig">
-        <div class="box">
-            <div class="label">{{ __('Signature of Depositor') }}</div>
-            <div class="line">{{ trim(optional($student)->first_name . ' ' . optional($student)->last_name) ?: '—' }}</div>
-        </div>
-        <div class="box">
-            <div class="label">{{ __('Signature of Cashier') }}</div>
-            <div class="line">
-                {{ optional(optional($receipt)->verifier)->name ?? __('System (auto-verified)') }}
-                <br><small style="color:#64748b">{{ optional(optional($receipt)->verified_at)->format('Y-m-d H:i') }}</small>
-            </div>
-        </div>
-    </div>
-
-    @if($verificationUrl)
-    <div class="verify">
-        <div>
-            <div style="text-transform:uppercase;letter-spacing:.1em;color:#64748b">{{ __('Verification Code') }}</div>
-            <div class="code">{{ $verificationCode }}</div>
-            <div style="margin-top:4px;color:#475569">{{ __('Scan or verify at') }}: {{ $verificationUrl }}</div>
-        </div>
-        <div class="qr">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ urlencode($verificationUrl) }}" alt="QR">
-        </div>
-    </div>
+    {{-- What changed this fee's figure, said once and only when it applies.
+         The old receipt clamped an overpayment away entirely. --}}
+    @php
+        $notes = [];
+        if ((float) $fee->discount_amount > 0) {
+            $notes[] = __('Discount') . ' ' . $currency . ' ' . $money($fee->discount_amount);
+        }
+        if ((float) $fee->fine_amount > 0) {
+            $notes[] = __('Late fee') . ' ' . $currency . ' ' . $money($fee->fine_amount);
+        }
+        if ($overpaid > 0.005) {
+            $notes[] = __('overpayment_amount') . ' ' . $currency . ' ' . $money($overpaid);
+        }
+        foreach ($credits as $credit) {
+            $notes[] = __('overpayment_credit_generated') . ' ' . $currency . ' ' . $money($credit->original_amount);
+        }
+    @endphp
+    @if($notes)
+        <div class="note">{{ optional($fee->category)->title }}: {{ implode(' · ', $notes) }}</div>
     @endif
 
+    <div class="bottom">
+        <div class="sig">
+            <div class="box">
+                <div class="label">{{ __('Signature of Depositor') }}</div>
+                <div class="line">{{ trim(optional($student)->first_name . ' ' . optional($student)->last_name) ?: '—' }}</div>
+            </div>
+            <div class="box">
+                <div class="label">{{ __('Signature of Cashier') }}</div>
+                <div class="line">
+                    {{ $cashier ?? __('System (auto-verified)') }}
+                    @if($recordedAt)<br><small>{{ \Carbon\Carbon::parse($recordedAt)->format('Y-m-d H:i') }}</small>@endif
+                </div>
+            </div>
+        </div>
+
+        @if($verificationUrl)
+        <div class="verify">
+            <div>
+                <div style="text-transform:uppercase;letter-spacing:.08em;color:#64748b">{{ __('Verification Code') }}</div>
+                <div class="code">{{ $verificationCode }}</div>
+                <div class="url">{{ $verificationUrl }}</div>
+            </div>
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={{ urlencode($verificationUrl) }}" alt="QR">
+        </div>
+        @endif
+    </div>
+
     <div class="footer">
-        {{ __('This is a digitally generated receipt and is valid without a physical signature.') }}<br>
-        {{ __('Generated on') }} {{ now()->format('Y-m-d H:i:s') }}
+        {{ __('This is a digitally generated receipt and is valid without a physical signature.') }}
+        {{ __('Generated on') }} {{ now()->format('Y-m-d H:i') }}
     </div>
 </div>
 
+<script>
+// The letterhead's blank spacer lines are an editor's way of adding air on a
+// full page. At receipt scale they are just empty height, so they go — from
+// this sheet only, never from the configured letterhead.
+document.querySelectorAll('.masthead .letterhead p').forEach(function (p) {
+    if (!p.querySelector('img') && p.textContent.replace(/ /g, ' ').trim() === '') {
+        p.remove();
+    }
+});
+</script>
 </body>
 </html>

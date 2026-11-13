@@ -548,7 +548,7 @@ class FeeAssignmentsHistoryController extends Controller
         if ($fee->resitRequest) {
             $reasons[] = __('cannot_delete_resit_fee_directly');
         }
-        if ($fee->payment_plan_id && $fee->paymentPlan && $fee->paymentPlan->status === 'active') {
+        if ($fee->hasPaymentPlanHold()) {
             $reasons[] = __('cannot_delete_fee_with_active_plan');
         }
 

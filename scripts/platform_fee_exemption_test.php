@@ -107,7 +107,8 @@ check('and every active student', substr_count($html, 'name="student_id"') === 1
     && substr_count($m[0][0], '<option value="') - 1 === $activeStudents, 'listed vs ' . $activeStudents);
 check('the session list offers ' . $nextYear->title, preg_match('/<option value="' . $nextYear->id . '">' . preg_quote($nextYear->title, '/') . '/', $html) === 1);
 check('the student is no longer tied to an enrolment', strpos($html, 'student_enroll_id') === false);
-check('a student exemption asks for its session', strpos($html, "\$('#session_field').show();\n            \$('#session_id').attr('required', true);\n            \$('#session_label').text('Exempt for session');") !== false);
+// Line endings are whatever the checkout wrote; the script is what matters.
+check('a student exemption asks for its session', strpos(str_replace("\r\n", "\n", $html), "\$('#session_field').show();\n            \$('#session_id').attr('required', true);\n            \$('#session_label').text('Exempt for session');") !== false);
 
 echo "\n== Excused for next year before being enrolled for it ==\n";
 

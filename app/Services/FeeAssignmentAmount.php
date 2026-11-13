@@ -80,10 +80,15 @@ class FeeAssignmentAmount
             }
         }
 
-        if ($fee->hasActivePaymentPlan()) {
+        if ($fee->hasPaymentPlanHold() && !optional($fee->paymentPlan)->agreement_id) {
             // A plan's total is a snapshot taken when it was agreed, and it is
             // what the student was given in writing. Changing the fee under it
             // would leave the plan completing while money is still owed.
+            //
+            // A plan that is part of an agreement is different: the change is
+            // allowed, and the agreement goes back to the Vice Chancellor with
+            // the change written down. It takes no money, and cannot be
+            // approved again, until its schedule is revised to match.
             $reasons[] = __('This fee is on active payment plan #:plan. Cancel or re-issue the plan first.', [
                 'plan' => $fee->payment_plan_id,
             ]);

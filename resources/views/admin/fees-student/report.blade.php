@@ -150,7 +150,9 @@
                                 @if($row->payment_plan_id && $row->paymentPlan)
                                 <div class="mt-1"><span class="fees-tag">
                                     <i class="fas fa-calendar-alt"></i> {{ __('payment_plan') }}
-                                    @if($row->paymentPlan->status == 'active') ({{ __('status_active') }})
+                                    @if($row->paymentPlan->status == 'pending') ({{ __('Awaiting approval') }})
+                                    @elseif($row->paymentPlan->status == 'rejected') ({{ __('Rejected') }})
+                                    @elseif($row->paymentPlan->status == 'active') ({{ __('status_active') }})
                                     @elseif($row->paymentPlan->status == 'completed') ({{ __('status_completed') }})
                                     @elseif($row->paymentPlan->status == 'cancelled') ({{ __('status_cancelled') }})
                                     @endif
@@ -170,8 +172,31 @@
                             <td class="fees-meta">{!! $row->note !!}</td>
                             <td class="fees-acts">
                                 @if($row->payment_plan_id && $row->paymentPlan && $row->paymentPlan->status == 'active')
+                                {{-- A fee on a plan is paid through the plan, and
+                                     from here: the plan's own modal, aimed at the
+                                     earliest instalment that still has a balance.
+                                     The fee is handed to the plan so the modal
+                                     does not load it again for every row. --}}
+                                @php
+                                    $row->paymentPlan->setRelation('fee', $row);
+                                    $planNext = app(\App\Services\PlanPaymentDistribution::class)->nextInstallment($row->paymentPlan);
+                                @endphp
+                                @if($planNext)
+                                @can('payment-plan.pay')
+                                <button type="button" class="btn btn-icon btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#planPayModal-{{ $planNext->id }}" title="{{ __('Pay instalment :number', ['number' => $planNext->installment_number]) }}">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                @include('admin.payment-plan.pay', ['plan' => $row->paymentPlan, 'installment' => $planNext, 'returnTo' => 'report'])
+                                @endcan
+                                @endif
                                 <a href="{{ route('admin.payment-plan.show', $row->payment_plan_id) }}" class="btn btn-icon btn-light btn-sm" title="{{ __('view_payment_plan') }}">
                                     <i class="fas fa-eye"></i>
+                                </a>
+                                @elseif($row->payment_plan_id && $row->paymentPlan && $row->paymentPlan->isPending())
+                                {{-- No money until the Vice Chancellor approves it. --}}
+                                <a href="{{ $row->paymentPlan->agreement_id ? route('admin.payment-plan.agreement.show', $row->paymentPlan->agreement_id) : route('admin.payment-plan.show', $row->payment_plan_id) }}"
+                                   class="btn btn-icon btn-light btn-sm" title="{{ __('Awaiting approval') }}">
+                                    <i class="fas fa-hourglass-half"></i>
                                 </a>
                                 @elseif($row->hasPendingMultiPayment())
                                 <button type="button" class="btn btn-icon btn-light btn-sm" disabled title="This fee has a pending multi-payment">

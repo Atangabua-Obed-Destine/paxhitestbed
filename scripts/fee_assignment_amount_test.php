@@ -204,15 +204,39 @@ $onPlan = Fee::with('paymentPlan')->get()->first(fn ($f) => $f->hasActivePayment
 if (!$onPlan) {
     skip('no fee is on an active payment plan');
 } else {
-    $reasons = $service->blockers($onPlan, (float) $onPlan->fee_amount + 1000);
+    // A plan with no agreement behind it keeps the old rule: its total is a
+    // snapshot, and the fee would outgrow what the student agreed to.
+    DB::beginTransaction();
 
-    check('a fee on an active payment plan is refused',
-        (bool) preg_grep('/payment plan/i', $reasons),
-        'the plan total is a snapshot; the fee would outgrow what the student agreed to');
+    try {
+        \App\Models\PaymentPlan::whereKey($onPlan->payment_plan_id)->update(['agreement_id' => null]);
+        $legacy = Fee::with('paymentPlan')->find($onPlan->id);
+        $reasons = $service->blockers($legacy, (float) $legacy->fee_amount + 1000);
 
-    check('and the plan is named in the refusal',
-        (bool) preg_grep('/#' . $onPlan->payment_plan_id . '/', $reasons),
-        implode(' ', $reasons));
+        check('a fee on a plan with no agreement is refused',
+            (bool) preg_grep('/payment plan/i', $reasons),
+            'the plan total is a snapshot; the fee would outgrow what the student agreed to');
+
+        check('and the plan is named in the refusal',
+            (bool) preg_grep('/#' . $onPlan->payment_plan_id . '/', $reasons),
+            implode(' ', $reasons));
+    } finally {
+        DB::rollBack();
+    }
+
+    // A plan that is part of an agreement may change: the agreement goes back
+    // to the Vice Chancellor saying what changed, and takes no money until its
+    // schedule is revised and approved again.
+    $agreed = Fee::with('paymentPlan')->find($onPlan->id);
+
+    if ($agreed->paymentPlan->agreement_id) {
+        $reasons = $service->blockers($agreed, (float) $agreed->fee_amount + 1000);
+
+        check('a fee on an agreement may change: the agreement goes back for approval instead',
+            !preg_grep('/payment plan/i', $reasons), implode(' ', $reasons));
+    } else {
+        skip('the fee on a plan has no agreement to check the new rule on');
+    }
 }
 
 $resitFee = Fee::with('resitRequest')->get()->first(fn ($f) => $f->resitRequest !== null);
@@ -353,6 +377,8 @@ if (!$admin) {
         DB::beginTransaction();
 
         try {
+            // Without an agreement, the plan refuses the change on both routes.
+            \App\Models\PaymentPlan::whereKey($onPlan->payment_plan_id)->update(['agreement_id' => null]);
             $before = (float) Fee::find($onPlan->id)->fee_amount;
 
             $post('/admin/fee-assignments-history/' . $onPlan->id . '/amount', [
@@ -374,6 +400,33 @@ if (!$admin) {
                     . ' — one rule reached two ways must give one answer');
         } finally {
             DB::rollBack();
+        }
+
+        // With an agreement, both routes allow it, and both send the agreement back.
+        foreach (['row' => fn ($amount) => $post('/admin/fee-assignments-history/' . $onPlan->id . '/amount', [
+                        'fee_amount' => $amount, 'reason' => 'agreement goes back for approval']),
+                  'cohort' => fn ($amount) => $post('/admin/fee-assignments-correct', [
+                        'fees' => [$onPlan->id], 'fee_amount' => $amount, 'reason' => 'agreement goes back for approval'])] as $route => $change) {
+            DB::beginTransaction();
+
+            try {
+                $plan = \App\Models\PaymentPlan::with('agreement')->find($onPlan->payment_plan_id);
+
+                if (!$plan->agreement || $plan->agreement->status !== 'approved') {
+                    skip('the fee\'s plan is not on an approved agreement');
+                    break;
+                }
+
+                $before = (float) Fee::find($onPlan->id)->fee_amount;
+                $change($before + 1000);
+
+                check('through the ' . $route . ' screen, a fee on an agreement takes the change',
+                    abs((float) Fee::find($onPlan->id)->fee_amount - $before - 1000) < 0.005);
+                check('and its agreement goes back to the Vice Chancellor',
+                    $plan->agreement->fresh()->status === 'pending' && $plan->fresh()->status === 'pending');
+            } finally {
+                DB::rollBack();
+            }
         }
     }
 }

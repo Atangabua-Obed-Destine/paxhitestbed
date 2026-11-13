@@ -137,7 +137,8 @@ class FeeReportFilter
             '3' => fn ($q) => $q->where('status', 3),
             // On an active payment plan
             '4' => fn ($q) => $q->whereNotNull('payment_plan_id')
-                ->whereHas('paymentPlan', fn ($plan) => $plan->where('status', 'active')),
+                // Held by a plan: running, or waiting for the Vice Chancellor.
+                ->whereHas('paymentPlan', fn ($plan) => $plan->whereIn('status', ['active', 'pending'])),
             // Overpaid: still holding an excess that has not been applied to
             // another fee.
             '5' => fn ($q) => $q->whereRaw("{$netPaid} > {$netDue}"),

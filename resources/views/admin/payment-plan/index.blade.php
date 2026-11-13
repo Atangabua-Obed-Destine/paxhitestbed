@@ -20,10 +20,12 @@
                                     <label for="status">{{ __('field_status') }}</label>
                                     <select class="form-control" name="status" id="status">
                                         <option value="">{{ __('all') }}</option>
+                                        <option value="pending" {{ $selected_status == 'pending' ? 'selected' : '' }}>{{ __('Awaiting approval') }}</option>
                                         <option value="active" {{ $selected_status == 'active' ? 'selected' : '' }}>Active</option>
                                         <option value="completed" {{ $selected_status == 'completed' ? 'selected' : '' }}>Completed</option>
                                         <option value="cancelled" {{ $selected_status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
                                         <option value="defaulted" {{ $selected_status == 'defaulted' ? 'selected' : '' }}>Defaulted</option>
+                                        <option value="rejected" {{ $selected_status == 'rejected' ? 'selected' : '' }}>{{ __('Rejected') }}</option>
                                     </select>
                                 </div>
 
@@ -58,6 +60,7 @@
                                 <thead>
                                     <tr>
                                         <th>#</th>
+                                        <th>{{ __('Agreement') }}</th>
                                         <th>{{ __('field_student') }}</th>
                                         <th>{{ __('field_fee') }}</th>
                                         <th>{{ __('field_total_amount') }}</th>
@@ -73,6 +76,14 @@
                                     @forelse($rows as $key => $row)
                                     <tr>
                                         <td>{{ $key + 1 }}</td>
+                                        <td>
+                                            @if($row->agreement)
+                                                <a href="{{ route('admin.payment-plan.agreement.show', $row->agreement_id) }}"><strong>{{ $row->agreement->reference }}</strong></a><br>
+                                                <span class="badge badge-{{ $row->agreement->status_class }} bg-{{ $row->agreement->status_class }}">{{ $row->agreement->status_label }}</span>
+                                            @else
+                                                <span class="text-muted">—</span>
+                                            @endif
+                                        </td>
                                         <td>
                                             <strong>#{{ $row->student->student_id }}</strong><br>
                                             {{ $row->student->first_name }} {{ $row->student->last_name }}
@@ -105,6 +116,12 @@
                                                 <i class="fas fa-eye"></i>
                                             </a>
                                             @endcan
+
+                                            @if($row->agreement_id)
+                                            <a href="{{ route('admin.payment-plan.agreement.print', $row->agreement_id) }}" class="btn btn-sm btn-primary" title="{{ __('Print agreement') }}">
+                                                <i class="fas fa-print"></i>
+                                            </a>
+                                            @endif
 
                                             @if($row->isActive())
                                                 @can($access.'.edit')

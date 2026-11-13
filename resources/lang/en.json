@@ -3011,5 +3011,10 @@
     "exam_unsaved_warning": "Marks have been entered but not saved.",
     "field_assign_date": "Assign Date",
     "field_fees_category": "Fees Category",
-    "field_student_name": "Student Name"
+    "field_student_name": "Student Name",
+    "pay_installment": "Pay Instalment",
+    "btn_process_payment": "Process Payment",
+    "field_reference_number": "Reference Number",
+    "allowed_formats": "Allowed formats",
+    "status_defaulted": "Defaulted"
 }

@@ -166,13 +166,13 @@ window.addEventListener('load', function () {
     function note(k, v) { out.push(k + '=' + v); }
 
     var id      = '__ID__';
-    var review  = document.getElementById('plan-review-' + id);
-    var confirm = document.getElementById('plan-confirm-btn-' + id);
-    var back    = document.getElementById('plan-back-' + id);
-    var step    = document.getElementById('plan-confirm-' + id);
-    var tick    = document.getElementById('plan-confirm-check-' + id);
-    var amount  = document.getElementById('amount-' + id);
-    var method  = document.getElementById('payment_method-' + id);
+    var review  = document.getElementById('pp-review-' + id);
+    var confirm = document.getElementById('pp-confirm-btn-' + id);
+    var back    = document.getElementById('pp-back-' + id);
+    var step    = document.getElementById('pp-confirm-' + id);
+    var tick    = document.getElementById('pp-confirm-check-' + id);
+    var amount  = document.getElementById('pp-amount-' + id);
+    var method  = document.getElementById('pp-method-' + id);
 
     if (!review || !confirm || !step || !tick) { document.title = 'PROBE missing=1'; return; }
 
@@ -244,6 +244,175 @@ HTML;
         check('ticking arms it', $is('enabledAfterTick'));
         check('going back returns to the form and un-ticks',
             $is('backReturns') && $is('tickResetOnReturn'));
+    }
+}
+
+// ===========================================================================
+section('Payment plan: more than the instalment, carried forward');
+// ===========================================================================
+//
+// The split is worked out by the server and drawn by the browser. The markup
+// existing proves nothing about whether typing a larger amount shows where the
+// money goes, or whether money beyond everything owed is stopped before the
+// confirmation — so the modal is driven here, with fetch answered by the
+// server's own proposals (computed in this process, not invented).
+$distributor = app(App\Services\PlanPaymentDistribution::class);
+$carryFrom = null;
+$carryOver = 5000;
+
+foreach (App\Models\PaymentPlan::where('status', 'active')->with('installments', 'fee')->get() as $candidatePlan) {
+    $next = $distributor->nextInstallment($candidatePlan);
+    if (!$next) {
+        continue;
+    }
+    $probe = $distributor->propose($next, (float) $next->remaining_balance + $carryOver);
+    if (count($probe['legs']) === 2 && $probe['leftover'] == 0.0 && $probe['legs'][1]['outstanding'] > $carryOver) {
+        $carryFrom = $next;
+        break;
+    }
+}
+
+if (!$carryFrom) {
+    skip('no active plan with a second unpaid instalment to carry money onto');
+} else {
+    $balance = round((float) $carryFrom->remaining_balance, 2);
+    $spill = round($balance + $carryOver, 2);
+    $owed = $distributor->propose($carryFrom, 0.01)['owed'];
+    $beyond = round($owed + 50000, 2);
+
+    $answers = [];
+    foreach ([$spill, $beyond] as $amount) {
+        $proposal = $distributor->propose($carryFrom, $amount);
+        $answers[(string) $amount] = [
+            'legs' => $proposal['legs'], 'leftover' => $proposal['leftover'],
+            'owed' => $proposal['owed'], 'outstanding' => $balance,
+        ];
+    }
+
+    $harness = <<<'HTML'
+<script>
+window.addEventListener('load', function () {
+  var ANSWERS = __ANSWERS__;
+  var asked = [];
+  // The server's own answers, keyed by the amount asked about.
+  window.fetch = function (url) {
+    var amount = String(parseFloat((/amount=([0-9.]+)/.exec(url) || [])[1]));
+    asked.push(amount);
+    var answer = ANSWERS[amount];
+    return Promise.resolve({ ok: !!answer, json: function () { return Promise.resolve(answer); } });
+  };
+
+  setTimeout(function () {
+    var out = [];
+    function note(k, v) { out.push(k + '=' + v); }
+    function get(name) { return document.getElementById('pp-' + name + '-__ID__'); }
+    function type(value) { amount.value = value; amount.dispatchEvent(new Event('input', { bubbles: true })); }
+    function hidden(node) { return node.classList.contains('d-none'); }
+    function finish() {
+      document.title = 'PROBE ' + out.join('|');
+      document.body.insertAdjacentHTML('afterbegin', '<div>' + document.title + '</div>');
+    }
+
+    var amount = get('amount'), method = get('method'), review = get('review'), back = get('back');
+    var step = get('confirm'), over = get('over'), table = get('split-table'), rows = get('split-rows');
+    var leftover = get('leftover'), total = get('split-total');
+
+    if (!amount || !review || !over || !rows) { document.title = 'PROBE missing=1'; return; }
+
+    var form = review.closest('form');
+    method.value = '1';
+
+    note('startsQuiet', hidden(over) && rows.children.length === 0);
+    note('noMaxOnAmount', !amount.hasAttribute('max'));
+
+    // 1. More than this instalment: the rest is shown on the next line.
+    type('__SPILL__');
+    setTimeout(function () {
+      note('askedServer', asked.indexOf(String(parseFloat('__SPILL__'))) !== -1);
+      note('overShown', !hidden(over));
+      note('tableShown', !hidden(table));
+      note('twoLines', rows.children.length);
+      note('firstIsThisOne', /this instalment/i.test(rows.children[0] ? rows.children[0].textContent : ''));
+      note('totalMatches', total.textContent.replace(/,/g, '') === parseFloat('__SPILL__').toFixed(2));
+      note('noLeftover', hidden(leftover));
+      note('sendsTypes', form.querySelectorAll('input[name^="allocation"][name$="[type]"]').length);
+      note('sendsAmounts', form.querySelectorAll('input[name^="allocation"][name$="[applied]"]').length);
+
+      review.click();
+      setTimeout(function () {
+        var text = step.textContent.replace(/\s+/g, ' ');
+        note('confirmShown', !hidden(step));
+        note('confirmListsSplit', /This payment settles/i.test(text) && /Instalment #/i.test(text));
+        back.click();
+
+        // 2. The bursar takes money off the second line: it is now on no line.
+        setTimeout(function () {
+          var second = rows.querySelectorAll('.pp-split-amount')[1];
+          second.value = '1000';
+          second.dispatchEvent(new Event('input', { bubbles: true }));
+          note('unplacedShown', !hidden(leftover) && /not on any line/i.test(leftover.textContent));
+          review.click();
+          setTimeout(function () {
+            note('unplacedStopsConfirm', hidden(step));
+
+            // 3. More than everything the student owes.
+            type('__BEYOND__');
+            setTimeout(function () {
+              note('beyondShown', !hidden(leftover) && /more than this student owes/i.test(leftover.textContent));
+              review.click();
+              setTimeout(function () {
+                note('beyondStopsConfirm', hidden(step));
+
+                // 4. Back within the instalment: nothing to spread, nothing sent.
+                type('__WITHIN__');
+                setTimeout(function () {
+                  note('quietAgain', hidden(over) && rows.children.length === 0);
+                  note('sendsNoAllocation', form.querySelectorAll('input[name^="allocation"]').length === 0);
+                  review.click();
+                  setTimeout(function () {
+                    note('withinReachesConfirm', !hidden(step));
+                    finish();
+                  }, 300);
+                }, 700);
+              }, 300);
+            }, 700);
+          }, 300);
+        }, 300);
+      }, 300);
+    }, 700);
+  }, 1500);
+});
+</script>
+HTML;
+
+    $harness = str_replace(
+        ['__ID__', '__ANSWERS__', '__SPILL__', '__BEYOND__', '__WITHIN__'],
+        [$carryFrom->id, json_encode($answers), (string) $spill, (string) $beyond, (string) max(1, $balance - 1000)],
+        $harness
+    );
+
+    $result = drive('/admin/payment-plan/' . $carryFrom->payment_plan_id, $harness, 'plancarry');
+
+    if ($result === null) {
+        check('the payment plan page reports back', false, 'the modal\'s script did not run to the end');
+    } else {
+        $is = fn (string $k, string $v = 'true') => ($result[$k] ?? null) === $v;
+
+        check('the modal opens with nothing to spread', $is('startsQuiet'));
+        check('the amount box no longer stops at the instalment', $is('noMaxOnAmount'));
+        check('typing more than the instalment asks the server', $is('askedServer'));
+        check('and shows where the extra goes', $is('overShown') && $is('tableShown'));
+        check('on two lines, this instalment first', $is('twoLines', '2') && $is('firstIsThisOne'),
+            'lines ' . ($result['twoLines'] ?? '?'));
+        check('adding up to what was typed', $is('totalMatches') && $is('noLeftover'));
+        check('and sends each line\'s kind and amount with the form', $is('sendsTypes', '2') && $is('sendsAmounts', '2'));
+        check('the confirmation lists what the payment settles', $is('confirmShown') && $is('confirmListsSplit'));
+        check('money taken off a line is flagged as on no line', $is('unplacedShown'));
+        check('and cannot reach the confirmation', $is('unplacedStopsConfirm'));
+        check('more than everything owed is flagged', $is('beyondShown'));
+        check('and cannot reach the confirmation either', $is('beyondStopsConfirm'));
+        check('back within the instalment, the split is put away', $is('quietAgain') && $is('sendsNoAllocation'));
+        check('and the payment goes on as an ordinary one', $is('withinReachesConfirm'));
     }
 }
 

@@ -188,6 +188,11 @@ Route::middleware(['XSS'])->group(function () {
     Route::get('verify-staff/{staff_identifier}', 'Admin\StaffIdCardController@verify')->name('verify-staff');
     Route::get('verify-form-a3/{code}', 'Admin\StudentFormA3Controller@verify')->name('verify-form-a3');
     Route::get('verify-fee/{receipt}', 'Admin\FeesStudentController@publicVerify')->name('verify-fee');
+    Route::get('verify-plan-agreement/{id}', 'Admin\PaymentPlanAgreementController@publicVerify')
+        ->where('id', '[0-9]+')->name('verify-plan-agreement');
+    // A handover: several lines, or money paid through a payment plan.
+    Route::get('verify-payment/{kind}/{id}', 'Admin\FeesStudentController@publicVerifyHandover')
+        ->where(['kind' => 'receipt|plan', 'id' => '[0-9]+'])->name('verify-payment');
     Route::get('verify-admission-fee/{receipt}', 'Admin\AdmissionFeesReportController@publicVerify')->name('verify-admission-fee');
     Route::get('verify-transcript/{code}', 'Admin\MarksheetController@verify')->name('verify-transcript');
 });
@@ -688,6 +693,15 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     // Payment Plan Routes (specific routes must come BEFORE resource routes)
     Route::get('payment-plan/get-student-fees', 'PaymentPlanController@getStudentFees')->name('payment-plan.get-student-fees');
     Route::post('payment-plan/process-payment', 'PaymentPlanController@processPayment')->name('payment-plan.process-payment');
+    Route::get('payment-plan/installment/{id}/split', 'PaymentPlanController@splitPreview')->name('payment-plan.split');
+    // The agreement: what the bursar prepares, the student signs and the VC approves.
+    Route::get('payment-plan/agreement/{id}', 'PaymentPlanAgreementController@show')->name('payment-plan.agreement.show');
+    Route::get('payment-plan/agreement/{id}/print', 'PaymentPlanAgreementController@print')->name('payment-plan.agreement.print');
+    Route::post('payment-plan/agreement/{id}/approve', 'PaymentPlanAgreementController@approve')->name('payment-plan.agreement.approve');
+    Route::post('payment-plan/agreement/{id}/reject', 'PaymentPlanAgreementController@reject')->name('payment-plan.agreement.reject');
+    Route::post('payment-plan/agreement/{id}/cancel', 'PaymentPlanAgreementController@cancel')->name('payment-plan.agreement.cancel');
+    Route::get('payment-plan/agreement/{id}/revise', 'PaymentPlanAgreementController@revise')->name('payment-plan.agreement.revise');
+    Route::post('payment-plan/agreement/{id}/revise', 'PaymentPlanAgreementController@reviseStore')->name('payment-plan.agreement.revise.store');
     Route::post('payment-plan/{id}/cancel', 'PaymentPlanController@cancel')->name('payment-plan.cancel');
     Route::post('payment-plan/{id}/payment/{payment}/reverse', 'PaymentPlanController@reverse')->name('payment-plan.reverse');
     Route::resource('payment-plan', 'PaymentPlanController');

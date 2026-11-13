@@ -375,40 +375,44 @@ class PaymentPlanInstallment extends Model
      */
     public function applyLateFee()
     {
-        // Late fees are switched off (config/payment_plan.php). This is the one
-        // place money is charged for paying late, so refusing here means no
-        // route to it exists — not the command, not a stored percentage on an
-        // older plan, not a future caller.
-        if (!config('payment_plan.late_fees_enabled', false)) {
-            return false;
-        }
-
-        if ($this->status === 'paid' || $this->late_fee > 0) {
-            return false;
-        }
-
-        $plan = $this->paymentPlan;
-        if (!$plan || $plan->late_fee_percentage <= 0) {
-            return false;
-        }
-
-        // Calculate late fee
-        $lateFee = round(((float) $this->amount * (float) $plan->late_fee_percentage) / 100, 2);
-
-        if ($lateFee <= 0) {
-            return false;
-        }
-
-        $this->late_fee = $lateFee;
-        $this->save();
-
-        if ($plan->fee) {
-            $plan->fee->update([
-                'fine_amount' => round((float) ($plan->fee->fine_amount ?? 0) + $lateFee, 2),
-            ]);
-        }
-
-        return true;
+        // The plan charging its own fee is not the fee changing under the
+        // plan: it must not send the agreement back for approval.
+        return \App\Services\PaymentPlanAgreements::quietly(function () {
+            // Late fees are switched off (config/payment_plan.php). This is the one
+            // place money is charged for paying late, so refusing here means no
+            // route to it exists — not the command, not a stored percentage on an
+            // older plan, not a future caller.
+            if (!config('payment_plan.late_fees_enabled', false)) {
+                return false;
+            }
+    
+            if ($this->status === 'paid' || $this->late_fee > 0) {
+                return false;
+            }
+    
+            $plan = $this->paymentPlan;
+            if (!$plan || $plan->late_fee_percentage <= 0) {
+                return false;
+            }
+    
+            // Calculate late fee
+            $lateFee = round(((float) $this->amount * (float) $plan->late_fee_percentage) / 100, 2);
+    
+            if ($lateFee <= 0) {
+                return false;
+            }
+    
+            $this->late_fee = $lateFee;
+            $this->save();
+    
+            if ($plan->fee) {
+                $plan->fee->update([
+                    'fine_amount' => round((float) ($plan->fee->fine_amount ?? 0) + $lateFee, 2),
+                ]);
+            }
+    
+            return true;
+        });
     }
 
     /**
@@ -416,24 +420,28 @@ class PaymentPlanInstallment extends Model
      */
     public function removeLateFee()
     {
-        $lateFee = (float) ($this->late_fee ?? 0);
-
-        if ($lateFee <= 0) {
-            return false;
-        }
-
-        $this->late_fee = 0;
-        $this->save();
-
-        $plan = $this->paymentPlan;
-
-        if ($plan && $plan->fee) {
-            $plan->fee->update([
-                'fine_amount' => max(0, round((float) ($plan->fee->fine_amount ?? 0) - $lateFee, 2)),
-            ]);
-        }
-
-        return true;
+        // The plan charging its own fee is not the fee changing under the
+        // plan: it must not send the agreement back for approval.
+        return \App\Services\PaymentPlanAgreements::quietly(function () {
+            $lateFee = (float) ($this->late_fee ?? 0);
+    
+            if ($lateFee <= 0) {
+                return false;
+            }
+    
+            $this->late_fee = 0;
+            $this->save();
+    
+            $plan = $this->paymentPlan;
+    
+            if ($plan && $plan->fee) {
+                $plan->fee->update([
+                    'fine_amount' => max(0, round((float) ($plan->fee->fine_amount ?? 0) - $lateFee, 2)),
+                ]);
+            }
+    
+            return true;
+        });
     }
 
     /**

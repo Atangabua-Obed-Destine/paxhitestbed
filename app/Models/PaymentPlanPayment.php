@@ -20,6 +20,9 @@ class PaymentPlanPayment extends Model
         'payment_method',
         'payment_date',
         'reference_no',
+        // Shared with every other row one handover wrote — other instalments
+        // and any fee the money was carried onto — so the receipt can show it all.
+        'payment_group',
         'receipt_path',
         'paid_by_type',
         'paid_by_id',

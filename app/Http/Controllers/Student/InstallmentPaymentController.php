@@ -55,6 +55,14 @@ class InstallmentPaymentController extends Controller
             })
             ->findOrFail($id);
 
+        // An instalment is paid only on an approved plan.
+        if (!optional($data['installment']->paymentPlan)->isActive()) {
+            Flasher::addError(optional($data['installment']->paymentPlan)->isPending()
+                ? __('This payment plan is awaiting the Vice Chancellor\'s approval. Instalments can be paid once it is approved.')
+                : __('This payment plan is not active, so its instalments cannot be paid.'));
+            return redirect()->route('student.payment-plan.show', $data['installment']->payment_plan_id);
+        }
+
         // Check if installment has pending multi-payment
         if ($data['installment']->hasPendingMultiPayment()) {
             Flasher::addWarning('This installment has a pending multi-payment verification. Please wait for approval.');
@@ -95,6 +103,14 @@ class InstallmentPaymentController extends Controller
                 $query->where('student_id', $user->id);
             })
             ->findOrFail($id);
+
+        // An instalment is paid only on an approved plan.
+        if (!optional($installment->paymentPlan)->isActive()) {
+            Flasher::addError(optional($installment->paymentPlan)->isPending()
+                ? __('This payment plan is awaiting the Vice Chancellor\'s approval. Instalments can be paid once it is approved.')
+                : __('This payment plan is not active, so its instalments cannot be paid.'));
+            return redirect()->route('student.payment-plan.show', $installment->payment_plan_id);
+        }
 
         // Check if installment has pending multi-payment
         if ($installment->hasPendingMultiPayment()) {

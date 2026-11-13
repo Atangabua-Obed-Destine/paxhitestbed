@@ -409,6 +409,7 @@ if (!$payable) {
     // Follow it, as a browser would.
     $receipt = $visit(Request::create(parse_url($landsOn, PHP_URL_PATH), 'GET'));
     $html = $receipt->getContent();
+    $renderedReceipt = $html;
 
     check('the receipt renders', 200, $receipt->getStatusCode());
     ok('and it is the receipt for that fee', str_contains($html, (string) $payable->id));
@@ -460,7 +461,7 @@ $printCss = $printBlock[1] ?? '';
 ok('the receipt has print rules', $printCss !== '');
 
 // Anything whose contrast came from a background must invert for paper.
-foreach (['.amount-box', '.digital-badge'] as $onColour) {
+foreach (['.amount-box', '.amount-box .status'] as $onColour) {
     ok($onColour . ' is readable without a printed background',
         (bool) preg_match('~' . preg_quote($onColour, '~') . '[^{]*\{[^}]*background:\s*#fff~s', $printCss));
     ok($onColour . ' takes dark text on paper',
@@ -477,24 +478,36 @@ ok('the page size and margin are stated', (bool) preg_match('~@page\{size:A4;mar
 ok('and the sheet drops its own padding for print',
     (bool) preg_match('~\.sheet\{[^}]*padding:0~', $printCss));
 
-// Nothing a reader needs is dropped — the compaction is spacing only.
-[$receiptHtml, ] = [file_get_contents('C:/Users/KENTOJ~1/AppData/Local/Temp/receipt.html'), null];
+// Nothing a reader needs is dropped. The compact receipt lost repetition —
+// the amount printed three times, a "This fee" box restating the instalment
+// row — not information. Checked on the receipt section 10 actually rendered;
+// this used to read a file from a temp folder that no longer exists, and the
+// whole suite stopped here.
+$receiptHtml = $renderedReceipt ?? '';
 
-foreach (['r-title', 'r-meta', 'amount-box', 'sig', 'verify', 'footer'] as $part) {
+ok('a rendered receipt to check', $receiptHtml !== '');
+
+foreach (['r-title', 'r-meta', 'who', 'amount-box', 'sig', 'verify', 'footer'] as $part) {
     ok('the ' . $part . ' block is still there', str_contains($receiptHtml, 'class="' . $part));
 }
 
-ok('every field is still there', substr_count($receiptHtml, 'class="field"') >= 11);
+foreach (['Name', 'field_matricule', 'Academic Year', 'field_program', 'Level', 'field_semester',
+          'Receipt No.', 'Paid on', 'Payment Method', 'Amount Received', 'Signature of Cashier'] as $label) {
+    ok('it still says ' . __($label), str_contains($receiptHtml, e(__($label))));
+}
 
-// Nothing shrinks below about 8pt: this is a document somebody may have to
-// read in a dispute.
-preg_match_all('~font-size:\s*\.(\d+)rem~', $printCss, $sizes);
+ok('the amount is spelled out as well as written', str_contains($receiptHtml, 'class="words"'));
 
-foreach ($sizes[1] as $hundredths) {
-    $rem = (float) ('0.' . $hundredths);
+ok('the amount box is not printed three times over', substr_count($receiptHtml, __('Amount in Figures')) === 0);
 
-    ok(sprintf('%.2frem is still readable (%.1fpt)', $rem, $rem * 12),
-        $rem >= 0.60);
+// Nothing shrinks below about 7.5pt (10px): this is a document somebody may
+// have to read in a dispute.
+preg_match_all('~font-size:\s*([0-9.]+)px~', $receiptSource, $sizes);
+
+ok('the receipt states its sizes in px', count($sizes[1]) > 5);
+
+foreach (array_unique($sizes[1]) as $px) {
+    ok(sprintf('%spx is still readable (%.1fpt)', $px, $px * 0.75), (float) $px >= 10);
 }
 
 // A table or the signatures split over a page break is worse than a longer

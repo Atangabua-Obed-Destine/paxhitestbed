@@ -57,6 +57,13 @@
             <tr><th>{{ __('field_matricule') }}</th><td>{{ optional($student)->student_id ?? '—' }}</td></tr>
             <tr><th>{{ __('Purpose for Deposit') }}</th><td>{{ optional(optional($receipt->fee)->category)->title ?? '—' }}</td></tr>
             <tr><th>{{ __('Amount Received') }}</th><td>{{ $currency }} {{ number_format((float) $receipt->amount, 2) }}</td></tr>
+            @if(isset($legs) && $legs->count() > 1)
+                {{-- One handover, several lines: each is shown, so the sheet
+                     can be checked line by line, not just by its total. --}}
+                @foreach($legs as $leg)
+                <tr><th>&nbsp;&nbsp;{{ $leg['label'] }}</th><td>{{ $currency }} {{ number_format((float) $leg['amount'], 2) }}</td></tr>
+                @endforeach
+            @endif
             <tr><th>{{ __('Date') }}</th><td>{{ optional($receipt->payment_date)->format('Y-m-d') ?? '—' }}</td></tr>
             <tr><th>{{ __('Verification Code') }}</th><td class="code">{{ $verificationCode }}</td></tr>
         </table>

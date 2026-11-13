@@ -177,7 +177,7 @@ class ProgrammeChange
                 ]);
             }
 
-            if ($fee->payment_plan_id && $fee->paymentPlan && $fee->paymentPlan->status === 'active') {
+            if ($fee->hasPaymentPlanHold()) {
                 $reasons[] = __('Fee #:id is on an active payment plan. Cancel or re-issue the plan first.', [
                     'id' => $fee->id,
                 ]);

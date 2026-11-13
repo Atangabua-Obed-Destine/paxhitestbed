@@ -65,7 +65,7 @@ class FeePaymentDistribution
                 // A plan carries its own instalment dates and its own screen.
                 // Direct payment to a plan-backed fee is refused everywhere
                 // else here, and this is not the place to start allowing it.
-                if ($candidate->hasActivePaymentPlan()) {
+                if ($candidate->hasPaymentPlanHold()) {
                     return true;
                 }
 

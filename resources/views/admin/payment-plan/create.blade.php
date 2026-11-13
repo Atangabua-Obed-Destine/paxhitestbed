@@ -2,24 +2,37 @@
 @section('title', $title)
 @section('content')
 
-<!-- Start Content-->
+{{--
+    Preparing a payment plan agreement.
+
+    A student usually arranges both instalments at once, so the bursar ticks
+    every fee the agreement covers and gives each its own schedule — each fee
+    has its own due date and balance. Saving prepares the agreement: it is
+    printed for the bursar's and the student's signatures and taken to the Vice
+    Chancellor, and it takes no money until it is approved.
+--}}
+@php $currency = $setting->currency_symbol ?? ''; @endphp
+
 <div class="main-body">
     <div class="page-wrapper">
-        <!-- [ Main Content ] start -->
         <div class="row">
             <div class="col-sm-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5>{{ __('btn_create_payment_plan') }}</h5>
+                        <h5>{{ __('Prepare a payment plan agreement') }}</h5>
                         <a href="{{ route($route.'.index') }}" class="btn btn-secondary btn-sm float-end">
                             <i class="fas fa-arrow-left"></i> {{ __('btn_back') }}
                         </a>
                     </div>
                     <div class="card-block">
-                        <form class="needs-validation" novalidate action="{{ route($route.'.store') }}" method="post">
+                        <div class="alert alert-info small mb-3">
+                            <i class="fas fa-info-circle"></i>
+                            {{ __('Saving prepares the agreement and opens it for printing. The bursar and the student sign it, then the Vice Chancellor signs and approves it. Until it is approved, no payment can be taken on the fees it covers.') }}
+                        </div>
+
+                        <form class="needs-validation" novalidate action="{{ route($route.'.store') }}" method="post" id="agreement-form">
                             @csrf
 
-                            <!-- Student Selection -->
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
@@ -32,380 +45,238 @@
                                             </option>
                                             @endforeach
                                         </select>
-
-                                        <div class="invalid-feedback">
-                                            {{ __('required_field') }} {{ __('field_student') }}
-                                        </div>
+                                        <div class="invalid-feedback">{{ __('required_field') }} {{ __('field_student') }}</div>
                                     </div>
                                 </div>
-
-                                <div class="col-md-6">
+                                <div class="col-md-3">
                                     <div class="form-group">
-                                        <label for="fee_id" class="form-label">{{ __('field_fee') }} <span>*</span></label>
-                                        <select class="form-control select2" name="fee_id" id="fee_id" required>
-                                            <option value="">{{ __('select_student_first') }}</option>
-                                        </select>
-
-                                        <div class="invalid-feedback">
-                                            {{ __('required_field') }} {{ __('field_fee') }}
-                                        </div>
+                                        <label for="grace_period_days" class="form-label">{{ __('field_grace_period_days') }}</label>
+                                        <input type="number" class="form-control" name="grace_period_days" id="grace_period_days" value="{{ old('grace_period_days', 7) }}" min="0" max="30">
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Fee Details (Hidden initially, shown when fee is selected) -->
-                            <div id="fee-details" style="display: none;">
-                                <!-- Hidden fields for fee data -->
-                                <input type="hidden" name="total_amount" id="total_amount" value="0">
-                                <input type="hidden" name="fee_amount" id="fee_amount" value="0">
-                                <input type="hidden" name="discount_amount" id="discount_amount" value="0">
-                                <input type="hidden" name="fine_amount" id="fine_amount" value="0">
-                                
-                                <div class="alert alert-info">
-                                    <h5>{{ __('fee_details') }}</h5>
-                                    <div class="row">
-                                        <div class="col-md-3">
-                                            <p><strong>{{ __('field_fee_amount') }}:</strong> <span id="fee-amount-display">0</span> {!! $setting->currency_symbol !!}</p>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <p><strong>{{ __('field_discount') }}:</strong> <span id="discount-display">0</span> {!! $setting->currency_symbol !!}</p>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <p><strong>{{ __('field_fine_amount') }}:</strong> <span id="fine-display">0</span> {!! $setting->currency_symbol !!}</p>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <p><strong>{{ __('field_total_amount') }}:</strong> <span id="total-display">0</span> {!! $setting->currency_symbol !!}</p>
-                                        </div>
+                            <h6 class="mt-2">{{ __('Fees on this agreement') }}</h6>
+                            <p class="text-muted small mb-2">{{ __('Tick each fee the student is arranging to pay, then set its instalments. A fee already on an agreement, fully paid, or with a payment waiting to be verified is not offered.') }}</p>
+
+                            <div id="fees-empty" class="text-muted small">{{ __('select_student_first') }}</div>
+                            <div id="fees-list"></div>
+
+                            <div class="card bg-light d-none" id="agreement-summary">
+                                <div class="card-body py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <div>
+                                        <strong>{{ __('Agreement total') }}:</strong>
+                                        <span id="agreement-total">0.00</span> {!! $currency !!}
+                                        <span class="text-muted small ms-2" id="agreement-count"></span>
                                     </div>
-                                </div>
-
-                                <!-- Payment Plan Configuration -->
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label for="installments_count" class="form-label">{{ __('field_number_of_installments') }} <span>*</span></label>
-                                            <input type="number" class="form-control" name="installments_count" id="installments_count" value="{{ old('installments_count', 3) }}" min="1" max="12" required>
-                                            <small class="text-muted">{{ __('One instalment moves the whole balance to a later date.') }}</small>
-
-                                            <div class="invalid-feedback">
-                                                {{ __('required_field') }} {{ __('field_number_of_installments') }}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label for="late_fee_percentage" class="form-label">{{ __('field_late_fee_percentage') }} (%)</label>
-                                            {{-- Late fees are switched off, so the field is shown at nothing and
-                                                 cannot be set. It used to come up pre-filled at 5%, giving every
-                                                 plan a fine nobody had asked for. --}}
-                                            @if(config('payment_plan.late_fees_enabled', false))
-                                                <input type="number" class="form-control" name="late_fee_percentage" id="late_fee_percentage" value="{{ old('late_fee_percentage', 0) }}" min="0" max="100" step="0.01" placeholder="0">
-                                                <small class="form-text text-muted">{{ __('Leave at 0 for no late fee. Anything above 0 is charged after the grace period, and only when someone runs the late-fee step.') }}</small>
-                                            @else
-                                                <input type="number" class="form-control" id="late_fee_percentage" value="0" disabled>
-                                                <small class="form-text text-muted">{{ __('Late fees are switched off — paying an instalment late is never charged for.') }}</small>
-                                            @endif
-                                        </div>
-                                    </div>
-
-                                    <div class="col-md-4">
-                                        <div class="form-group">
-                                            <label for="grace_period_days" class="form-label">{{ __('field_grace_period_days') }}</label>
-                                            <input type="number" class="form-control" name="grace_period_days" id="grace_period_days" value="{{ old('grace_period_days', 7) }}" min="0" max="30">
-                                            <small class="form-text text-muted">{{ __('days_after_due_date') }}</small>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Installment Schedule -->
-                                <div class="row mt-3">
-                                    <div class="col-md-12">
-                                        <h5>{{ __('installment_schedule') }}</h5>
-                                        <button type="button" class="btn btn-sm btn-primary mb-3" id="generate-schedule">
-                                            <i class="fas fa-calendar-alt"></i> {{ __('btn_generate_schedule') }}
-                                        </button>
-
-                                        <div id="installment-schedule-container" style="display: none;">
-                                            <div class="table-responsive">
-                                                <table class="table table-bordered" id="installments-table">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>{{ __('field_installment_number') }}</th>
-                                                            <th>{{ __('field_amount') }} ({!! $setting->currency_symbol !!})</th>
-                                                            <th>{{ __('field_due_date') }}</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody id="installments-body">
-                                                        <!-- Installments will be generated here -->
-                                                    </tbody>
-                                                    <tfoot>
-                                                        <tr>
-                                                            <th>{{ __('total') }}</th>
-                                                            <th>
-                                                                <span id="installments-total">0</span> {!! $setting->currency_symbol !!}
-                                                                <div id="balance-warning" style="display: none; margin-top: 5px;">
-                                                                    <small class="text-danger font-weight-bold">
-                                                                        <i class="fas fa-exclamation-triangle"></i> 
-                                                                        <span id="balance-message"></span>
-                                                                    </small>
-                                                                </div>
-                                                                <div id="balance-success" style="display: none; margin-top: 5px;">
-                                                                    <small class="text-success font-weight-bold">
-                                                                        <i class="fas fa-check-circle"></i> 
-                                                                        Total matches fee amount
-                                                                    </small>
-                                                                </div>
-                                                            </th>
-                                                            <th></th>
-                                                        </tr>
-                                                    </tfoot>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Notes -->
-                                <div class="row mt-3">
-                                    <div class="col-md-12">
-                                        <div class="form-group">
-                                            <label for="notes" class="form-label">{{ __('field_notes') }}</label>
-                                            <textarea class="form-control" name="notes" id="notes" rows="3">{{ old('notes') }}</textarea>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Submit Button -->
-                                <div class="row mt-3">
-                                    <div class="col-md-12">
-                                        <button type="submit" class="btn btn-success" id="submit-btn" disabled>
-                                            <i class="fas fa-save"></i> {{ __('btn_create_payment_plan') }}
-                                        </button>
-                                        <a href="{{ route($route.'.index') }}" class="btn btn-secondary">
-                                            <i class="fas fa-times"></i> {{ __('btn_cancel') }}
-                                        </a>
-                                    </div>
+                                    <div class="small" id="agreement-state"></div>
                                 </div>
                             </div>
 
+                            <div class="form-group mt-3">
+                                <label for="notes" class="form-label">{{ __('field_notes') }}</label>
+                                <textarea class="form-control" name="notes" id="notes" rows="2" placeholder="{{ __('Why the student needs the plan, what was agreed') }}">{{ old('notes') }}</textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-success" id="submit-btn" disabled>
+                                <i class="fas fa-file-signature"></i> {{ __('Prepare agreement') }}
+                            </button>
+                            <a href="{{ route($route.'.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> {{ __('btn_cancel') }}
+                            </a>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- [ Main Content ] end -->
     </div>
 </div>
-<!-- End Content-->
+
+<template id="fee-card-template">
+    <div class="card mb-3 fee-card">
+        <div class="card-header py-2 d-flex align-items-center gap-3 flex-wrap">
+            <div class="form-check mb-0">
+                <input class="form-check-input fee-include" type="checkbox" value="1">
+                <label class="form-check-label fw-bold fee-title"></label>
+            </div>
+            <span class="text-muted small fee-meta"></span>
+            <span class="ms-auto">{{ __('To plan') }}: <strong class="fee-balance"></strong> {!! $currency !!}</span>
+        </div>
+        <div class="card-body py-2 d-none fee-body">
+            <div class="d-flex align-items-end gap-2 flex-wrap mb-2">
+                <div>
+                    <label class="form-label small mb-0">{{ __('field_number_of_installments') }}</label>
+                    <input type="number" class="form-control form-control-sm fee-count" value="2" min="1" max="12" style="width:90px">
+                </div>
+                <div>
+                    <label class="form-label small mb-0">{{ __('First due date') }}</label>
+                    <input type="date" class="form-control form-control-sm fee-start">
+                </div>
+                <button type="button" class="btn btn-sm btn-primary fee-generate">
+                    <i class="fas fa-calendar-alt"></i> {{ __('btn_generate_schedule') }}
+                </button>
+                <small class="text-muted">{{ __('Then a month apart. Every amount and date can be changed.') }} {{ __('One instalment moves the whole balance to a later date.') }}</small>
+            </div>
+            <table class="table table-sm table-bordered mb-1">
+                <thead>
+                    <tr>
+                        <th style="width:60px">#</th>
+                        <th>{{ __('field_amount') }} ({!! $currency !!})</th>
+                        <th>{{ __('field_due_date') }}</th>
+                    </tr>
+                </thead>
+                <tbody class="fee-rows"></tbody>
+                <tfoot>
+                    <tr>
+                        <th>{{ __('total') }}</th>
+                        <th><span class="fee-sum">0.00</span> <span class="small fee-check"></span></th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</template>
 
 @endsection
 
 @section('page_js')
 <script>
-$(document).ready(function() {
-    // Wrap in try-catch to prevent other script errors from breaking this
-    try {
-        let feeData = null;
+$(function () {
+    'use strict';
 
-        // When student is selected, load their fees (use select2:select event)
-        $('#student_id').on('select2:select change', function(e) {
-            const studentId = $(this).val();
-            console.log('Student selected:', studentId); // Debug log
-            
-            $('#fee_id').html('<option value="">{{ __("loading") }}...</option>');
-            $('#fee-details').hide();
-            $('#installment-schedule-container').hide();
-            $('#submit-btn').prop('disabled', true);
+    var FEES_URL = @json(route('admin.payment-plan.get-student-fees'));
+    var T = {
+        none: @json(__('This student has no fee that can go on an agreement.')),
+        loading: @json(__('loading')),
+        ok: @json(__('matches')),
+        short: @json(__('short by')),
+        over: @json(__('over by')),
+        pick: @json(__('Tick at least one fee.')),
+        fix: @json(__('Every ticked fee must add up to its balance.')),
+        ready: @json(__('Ready to prepare.')),
+        fees: @json(__('fees')),
+        instalments: @json(__('instalments')),
+        partly: @json(__('already paid'))
+    };
+    var fmt = function (v) { return (parseFloat(v) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+    var round = function (v) { return Math.round((parseFloat(v) || 0) * 100) / 100; };
+    var iso = function (d) { return d.toISOString().split('T')[0]; };
 
-            if (studentId) {
-                $.ajax({
-                    url: '{{ route("admin.payment-plan.get-student-fees") }}',
-                    method: 'GET',
-                    data: { student_id: studentId },
-                    success: function(response) {
-                        console.log('Fees loaded:', response); // Debug log
-                        
-                        let options = '<option value="">{{ __("select") }}</option>';
-                        
-                        if (response.fees && response.fees.length > 0) {
-                            response.fees.forEach(function(fee) {
-                                const displayAmount = fee.paid_amount > 0 ? fee.remaining_balance : fee.total_amount;
-                                const statusInfo = fee.paid_amount > 0 ? ` (Paid: ${fee.paid_amount}, Remaining: ${fee.remaining_balance})` : '';
-                                options += `<option value="${fee.id}" data-fee='${JSON.stringify(fee)}'>
-                                    ${fee.category_title} - ${displayAmount} {!! $setting->currency_symbol !!}${statusInfo}
-                                </option>`;
-                            });
-                        } else {
-                            options = '<option value="">{{ __("no_fees_available") }}</option>';
-                        }
-                        
-                        $('#fee_id').html(options);
-                        // Reinitialize select2 for fee dropdown
-                        if ($('#fee_id').hasClass("select2-hidden-accessible")) {
-                            $('#fee_id').select2('destroy');
-                        }
-                        $('#fee_id').select2();
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error loading fees:', error, xhr.responseText); // Debug log
-                        $('#fee_id').html('<option value="">{{ __("error_loading_fees") }}</option>');
-                        // Reinitialize select2 for fee dropdown
-                        if ($('#fee_id').hasClass("select2-hidden-accessible")) {
-                            $('#fee_id').select2('destroy');
-                        }
-                        $('#fee_id').select2();
-                    }
-                });
-            } else {
-                $('#fee_id').html('<option value="">{{ __("select_student_first") }}</option>');
-                // Reinitialize select2 for fee dropdown
-                if ($('#fee_id').hasClass("select2-hidden-accessible")) {
-                    $('#fee_id').select2('destroy');
-                }
-                $('#fee_id').select2();
-            }
-        });
-    } catch (error) {
-        console.error('Error in payment plan script:', error);
+    function addMonths(dateStr, months) {
+        var d = new Date(dateStr + 'T00:00:00');
+        var day = d.getDate();
+        d.setMonth(d.getMonth() + months);
+        if (d.getDate() !== day) { d.setDate(0); }
+        return iso(d);
     }
 
-    // When fee is selected, show details
-    $('#fee_id').on('change', function() {
-        const selectedOption = $(this).find('option:selected');
-        if (selectedOption.val()) {
-            feeData = JSON.parse(selectedOption.attr('data-fee'));
-            
-            // Use remaining_balance if fee is partially paid, otherwise use total_amount
-            const amountToPlan = parseFloat(feeData.remaining_balance || feeData.total_amount);
-            const paidAmount = parseFloat(feeData.paid_amount || 0);
-            
-            // Update display values
-            $('#fee-amount-display').text(parseFloat(feeData.fee_amount).toFixed(2));
-            $('#discount-display').text(parseFloat(feeData.discount_amount).toFixed(2));
-            $('#fine-display').text(parseFloat(feeData.fine_amount).toFixed(2));
-            $('#total-display').text(amountToPlan.toFixed(2));
-            
-            // Show paid amount if exists
-            if (paidAmount > 0) {
-                $('#total-display').html(`${amountToPlan.toFixed(2)} <small class="text-muted">(Already paid: ${paidAmount.toFixed(2)})</small>`);
-            }
-            
-            // Update hidden input fields with remaining balance
-            $('#total_amount').val(amountToPlan);
-            $('#fee_amount').val(feeData.fee_amount);
-            $('#discount_amount').val(feeData.discount_amount);
-            $('#fine_amount').val(feeData.fine_amount);
-            
-            $('#fee-details').show();
-        } else {
-            $('#fee-details').hide();
-            feeData = null;
-        }
-    });
+    function renderFees(fees) {
+        var list = $('#fees-list').empty();
+        $('#fees-empty').toggle(fees.length === 0).text(fees.length ? '' : T.none);
 
-    // Generate installment schedule
-    $('#generate-schedule').on('click', function() {
-        if (!feeData) {
-            alert('{{ __("please_select_fee_first") }}');
-            return;
-        }
+        var today = iso(new Date());
 
-        const installmentsCount = parseInt($('#installments_count').val());
-        if (!(installmentsCount >= 1 && installmentsCount <= 12)) {
-            alert('{{ __("installments_must_be_between_1_and_12") }}');
-            return;
-        }
+        fees.forEach(function (fee) {
+            var card = $($('#fee-card-template').html());
+            var name = 'plans[' + fee.id + ']';
 
-        // Use remaining_balance for planning, not total_amount
-        const totalAmount = parseFloat(feeData.remaining_balance || feeData.total_amount);
-        const installmentAmount = (totalAmount / installmentsCount).toFixed(2);
-        let remainingAmount = totalAmount;
-
-        const tbody = $('#installments-body');
-        tbody.empty();
-
-        const today = new Date();
-        let installmentsTotal = 0;
-
-        for (let i = 1; i <= installmentsCount; i++) {
-            // Calculate amount (last installment gets any remainder)
-            let amount = i === installmentsCount ? remainingAmount.toFixed(2) : installmentAmount;
-            remainingAmount -= parseFloat(amount);
-            installmentsTotal += parseFloat(amount);
-
-            // Calculate due date (30 days apart)
-            const dueDate = new Date(today);
-            dueDate.setDate(dueDate.getDate() + (i * 30));
-            const dueDateStr = dueDate.toISOString().split('T')[0];
-
-            tbody.append(`
-                <tr>
-                    <td>${i}</td>
-                    <td>
-                        <input type="number" class="form-control installment-amount" name="installments[${i}][amount]" 
-                               value="${amount}" step="0.01" min="0.01" required>
-                    </td>
-                    <td>
-                        <input type="date" class="form-control" name="installments[${i}][due_date]" 
-                               value="${dueDateStr}" required>
-                    </td>
-                </tr>
-            `);
-        }
-
-        $('#installments-total').text(installmentsTotal.toFixed(2));
-        $('#installment-schedule-container').show();
-        
-        // Check if totals match
-        checkInstallmentBalance();
-
-        // Recalculate total when amounts change
-        $(document).on('input', '.installment-amount', function() {
-            let total = 0;
-            $('.installment-amount').each(function() {
-                total += parseFloat($(this).val()) || 0;
-            });
-            $('#installments-total').text(total.toFixed(2));
-            
-            // Check balance after each change
-            checkInstallmentBalance();
+            card.attr('data-fee', fee.id).attr('data-balance', fee.remaining_balance);
+            card.find('.fee-include').attr('name', name + '[include]').attr('id', 'include-' + fee.id);
+            card.find('.fee-title').attr('for', 'include-' + fee.id).text(fee.category_title);
+            card.find('.fee-meta').text([
+                fee.session || '',
+                fee.due_date ? ('due ' + fee.due_date) : '',
+                fee.paid_amount > 0 ? (T.partly + ' ' + fmt(fee.paid_amount)) : ''
+            ].filter(Boolean).join(' · '));
+            card.find('.fee-balance').text(fmt(fee.remaining_balance));
+            card.find('.fee-start').val(fee.due_date && fee.due_date > today ? fee.due_date : addMonths(today, 1));
+            list.append(card);
         });
-    });
-    
-    // Function to check if installment total matches fee amount
-    function checkInstallmentBalance() {
-        if (!feeData) return;
-        
-        const feeAmount = parseFloat(feeData.remaining_balance || feeData.total_amount);
-        let installmentsTotal = 0;
-        
-        $('.installment-amount').each(function() {
-            installmentsTotal += parseFloat($(this).val()) || 0;
-        });
-        
-        const difference = Math.abs(installmentsTotal - feeAmount);
-        
-        // Allow for small floating point differences (0.01)
-        if (difference < 0.01) {
-            // Totals match
-            $('#balance-warning').hide();
-            $('#balance-success').show();
-            $('#submit-btn').prop('disabled', false);
-        } else {
-            // Totals don't match
-            $('#balance-success').hide();
-            $('#balance-warning').show();
-            
-            if (installmentsTotal > feeAmount) {
-                $('#balance-message').text(`Total exceeds fee amount by ${difference.toFixed(2)} {!! $setting->currency_symbol !!}`);
-            } else {
-                $('#balance-message').text(`Total is short by ${difference.toFixed(2)} {!! $setting->currency_symbol !!}. Please adjust installments.`);
-            }
-            
-            $('#submit-btn').prop('disabled', true);
-        }
+
+        refresh();
     }
+
+    function generate(card) {
+        var count = Math.max(1, Math.min(12, parseInt(card.find('.fee-count').val(), 10) || 1));
+        var balance = round(card.data('balance'));
+        var each = Math.floor(balance / count * 100) / 100;
+        var start = card.find('.fee-start').val() || iso(new Date());
+        var name = 'plans[' + card.data('fee') + '][installments]';
+        var rows = card.find('.fee-rows').empty();
+        var left = balance;
+
+        for (var i = 0; i < count; i++) {
+            var amount = i === count - 1 ? round(left) : each;
+            left = round(left - amount);
+            rows.append('<tr><td>' + (i + 1) + '</td>'
+                + '<td><input type="number" step="0.01" min="0.01" class="form-control form-control-sm row-amount" name="' + name + '[' + i + '][amount]" value="' + amount.toFixed(2) + '" required></td>'
+                + '<td><input type="date" class="form-control form-control-sm" name="' + name + '[' + i + '][due_date]" value="' + addMonths(start, i) + '" required></td></tr>');
+        }
+
+        refresh();
+    }
+
+    function refresh() {
+        var total = 0, included = 0, balanced = true, count = 0;
+
+        $('#fees-list .fee-card').each(function () {
+            var card = $(this);
+            var on = card.find('.fee-include').is(':checked');
+            card.find('.fee-body').toggleClass('d-none', !on);
+            // Inputs of an unticked fee are not sent.
+            card.find('.fee-rows input').prop('disabled', !on);
+
+            if (!on) { return; }
+            included++;
+
+            if (!card.find('.fee-rows tr').length) { generate(card); return; }
+
+            var sum = 0;
+            card.find('.row-amount').each(function () { sum += parseFloat(this.value) || 0; count++; });
+            sum = round(sum);
+            var diff = round(sum - round(card.data('balance')));
+            card.find('.fee-sum').text(fmt(sum));
+            card.find('.fee-check')
+                .toggleClass('text-success', Math.abs(diff) < 0.01)
+                .toggleClass('text-danger', Math.abs(diff) >= 0.01)
+                .text(Math.abs(diff) < 0.01 ? '✓ ' + T.ok : (diff < 0 ? T.short + ' ' + fmt(-diff) : T.over + ' ' + fmt(diff)));
+
+            if (Math.abs(diff) >= 0.01) { balanced = false; }
+            total += sum;
+        });
+
+        $('#agreement-summary').toggleClass('d-none', included === 0);
+        $('#agreement-total').text(fmt(total));
+        $('#agreement-count').text(included + ' ' + T.fees + ' · ' + count + ' ' + T.instalments);
+
+        var ready = included > 0 && balanced;
+        $('#agreement-state')
+            .toggleClass('text-success', ready).toggleClass('text-danger', !ready)
+            .text(included === 0 ? T.pick : (balanced ? T.ready : T.fix));
+        $('#submit-btn').prop('disabled', !ready);
+    }
+
+    $('#student_id').on('select2:select change', function () {
+        var id = $(this).val();
+        $('#fees-list').empty();
+        $('#agreement-summary').addClass('d-none');
+        $('#submit-btn').prop('disabled', true);
+
+        if (!id) { $('#fees-empty').show(); return; }
+        $('#fees-empty').show().text(T.loading + '...');
+
+        $.get(FEES_URL, { student_id: id }).done(function (response) {
+            renderFees(response.fees || []);
+        });
+    });
+
+    $('#fees-list')
+        .on('change', '.fee-include', refresh)
+        .on('click', '.fee-generate', function () { generate($(this).closest('.fee-card')); })
+        .on('input', '.row-amount', refresh);
+
+    if ($('#student_id').val()) { $('#student_id').trigger('change'); }
 });
 </script>
 @endsection

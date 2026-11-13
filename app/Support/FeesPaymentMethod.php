@@ -100,6 +100,30 @@ class FeesPaymentMethod
         return $out;
     }
 
+    /**
+     * A payment plan's method, in the numbering fees use.
+     *
+     * Plans were numbered on their own (PaymentPlanPayment): 1 cash, 2 cheque,
+     * 3 bank, 4 online, 5 card, 6 mobile money, 7 other. When one handover on
+     * a plan also settles an ordinary fee, that fee's row has to carry the
+     * fee's number for the same thing — matched by the lang key each side
+     * prints, so the two screens name the method identically.
+     */
+    public static function fromPlan($planMethod): ?int
+    {
+        $map = [
+            1 => 2, // cash
+            2 => 3, // cheque
+            3 => 4, // bank
+            4 => 7, // online, which this install reads as Orange Money
+            5 => 1, // card
+            6 => 6, // mobile money
+            7 => 8, // other
+        ];
+
+        return $map[(int) $planMethod] ?? null;
+    }
+
     /** The stored values, for a validation rule or a test. */
     public static function values(): array
     {

@@ -343,6 +343,14 @@ class PaymentVerificationController extends Controller
             return redirect()->back();
         }
 
+        // Approving it would pay a fee whose agreement the Vice Chancellor has
+        // not approved yet. It stays pending; it can be approved once the
+        // agreement is decided.
+        if ($receipt->fee && $receipt->fee->hasPendingPaymentPlan()) {
+            Flasher::addError(__('This fee is on a payment plan agreement that is awaiting the Vice Chancellor\'s approval. No payment can be taken on it until it is approved or rejected.'));
+            return redirect()->back();
+        }
+
         try {
             DB::beginTransaction();
             
@@ -555,6 +563,13 @@ class PaymentVerificationController extends Controller
             return redirect()->back();
         }
 
+        if (!optional(optional($receipt->installment)->paymentPlan)->isActive()) {
+            Flasher::addError(optional(optional($receipt->installment)->paymentPlan)->isPending()
+                ? __('This fee is on a payment plan agreement that is awaiting the Vice Chancellor\'s approval. No payment can be taken on it until it is approved or rejected.')
+                : __('This payment plan is not active, so its instalments cannot take a payment.'));
+            return redirect()->back();
+        }
+
         try {
             \DB::beginTransaction();
 
@@ -656,6 +671,18 @@ class PaymentVerificationController extends Controller
         if ($multiPayment->status !== 'pending') {
             Flasher::addWarning('This multi-payment has already been processed.');
             return redirect()->back();
+        }
+
+        // None of it is applied while any part would land on a plan whose
+        // agreement is still waiting for the Vice Chancellor.
+        foreach ($multiPayment->distributions as $distribution) {
+            $plan = optional($distribution->installment)->paymentPlan;
+
+            if ((float) $distribution->amount_applied > 0
+                && (($plan && !$plan->isActive()) || optional($distribution->fee)->hasPendingPaymentPlan())) {
+                Flasher::addError(__('This fee is on a payment plan agreement that is awaiting the Vice Chancellor\'s approval. No payment can be taken on it until it is approved or rejected.'));
+                return redirect()->back();
+            }
         }
 
         try {

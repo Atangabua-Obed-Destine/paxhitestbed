@@ -18,10 +18,13 @@
                     </div>
                     <div class="card-block">
                         <!-- Status Banner -->
-                        <div class="alert alert-{{ $row->status == 'active' ? 'success' : ($row->status == 'completed' ? 'primary' : 'danger') }}">
+                        <div class="alert alert-{{ $row->status == 'active' ? 'success' : ($row->status == 'completed' ? 'primary' : ($row->status == 'pending' ? 'warning' : 'danger')) }}">
                             <h4>{!! $row->status_badge !!}</h4>
-                            @if($row->status == 'cancelled')
+                            @if(in_array($row->status, ['cancelled', 'rejected'], true) && $row->cancellation_reason)
                             <p><strong>{{ __('cancellation_reason') }}:</strong> {{ $row->cancellation_reason }}</p>
+                            @endif
+                            @if($row->status == 'pending')
+                            <p class="mb-0">{{ __("Your payment plan agreement is waiting for the Vice Chancellor's approval. You can pay its instalments once it is approved.") }}</p>
                             @endif
                         </div>
 
@@ -216,7 +219,7 @@
                                                             <button type="button" class="btn btn-sm btn-secondary" disabled title="This installment has a pending multi-payment">
                                                                 <i class="fas fa-clock"></i> Multi-Pay Pending
                                                             </button>
-                                                            @elseif($installment->status == 'pending' || $installment->status == 'partial' || $installment->status == 'overdue')
+                                                            @elseif($row->status == 'active' && ($installment->status == 'pending' || $installment->status == 'partial' || $installment->status == 'overdue'))
                                                             <!-- Can pay -->
                                                             <a href="{{ route('student.installment-payment.create', $installment->id) }}" class="btn btn-sm btn-success">
                                                                 <i class="fas fa-upload"></i> {{ __('btn_pay_now') }}

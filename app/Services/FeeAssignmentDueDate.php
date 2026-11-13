@@ -82,7 +82,7 @@ class FeeAssignmentDueDate
             $reasons[] = __('This fee is settled. Its deadline is part of what was already paid.');
         }
 
-        if ($fee->hasActivePaymentPlan()) {
+        if ($fee->hasPaymentPlanHold()) {
             // The plan's instalments carry the dates the student was given in
             // writing. Moving the parent fee's deadline leaves the two
             // disagreeing about when money is owed.

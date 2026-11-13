@@ -58,6 +58,14 @@ class MultiPaymentController extends Controller
                 throw new \Exception('No valid fees found');
             }
 
+            // Nothing is paid on a fee whose payment plan agreement is still
+            // waiting for the Vice Chancellor.
+            foreach ($fees as $fee) {
+                if ($fee->hasPendingPaymentPlan()) {
+                    throw new \Exception(__('This fee is on a payment plan agreement that is awaiting the Vice Chancellor\'s approval. No payment can be taken on it until it is approved or rejected.'));
+                }
+            }
+
             // Calculate total balance and validate
             $totalBalance = 0;
             $feeBalances = [];

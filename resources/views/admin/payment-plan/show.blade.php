@@ -18,10 +18,21 @@
                     </div>
                     <div class="card-block">
                         <!-- Status Banner -->
-                        <div class="alert alert-{{ $row->status == 'active' ? 'success' : ($row->status == 'completed' ? 'primary' : 'danger') }}">
+                        <div class="alert alert-{{ $row->status == 'active' ? 'success' : ($row->status == 'completed' ? 'primary' : ($row->status == 'pending' ? 'warning' : 'danger')) }}">
                             <h4>{!! $row->status_badge !!}</h4>
-                            @if($row->status == 'cancelled')
+                            @if(in_array($row->status, ['cancelled', 'rejected'], true) && $row->cancellation_reason)
                             <p><strong>{{ __('cancellation_reason') }}:</strong> {{ $row->cancellation_reason }}</p>
+                            @endif
+                            @if($row->status == 'pending')
+                            <p class="mb-1">{{ __("This plan is part of an agreement awaiting the Vice Chancellor's approval. No payment can be taken on it until then.") }}</p>
+                            @endif
+                            @if($row->agreement)
+                            <p class="mb-0">
+                                {{ __('Agreement') }}
+                                <a href="{{ route('admin.payment-plan.agreement.show', $row->agreement_id) }}"><strong>{{ $row->agreement->reference }}</strong></a>
+                                &middot; {{ $row->agreement->status_label }}
+                                &middot; <a href="{{ route('admin.payment-plan.agreement.print', $row->agreement_id) }}"><i class="fas fa-print"></i> {{ __('Print agreement') }}</a>
+                            </p>
                             @endif
                         </div>
 
@@ -234,10 +245,10 @@
                                                                 @endcan
                                                             @elseif(!$installment->isPaid() && $row->isActive())
                                                                 @can($access.'.pay')
-                                                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#payModal-{{ $installment->id }}">
+                                                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#planPayModal-{{ $installment->id }}">
                                                                     <i class="fas fa-money-bill"></i> {{ __('btn_pay') }}
                                                                 </button>
-                                                                @include('admin.payment-plan.pay', ['installment' => $installment])
+                                                                @include('admin.payment-plan.pay', ['plan' => $row, 'installment' => $installment, 'returnTo' => 'plan'])
                                                                 @endcan
                                                             @endif
 

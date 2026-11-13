@@ -146,6 +146,19 @@ class ManualPaymentController extends Controller
         ->whereIn('status', [0, 2]) // Allow unpaid (0) or partially paid (2)
         ->firstOrFail();
 
+        // A fee held by a payment plan is paid through the plan's
+        // instalments; one awaiting approval takes nothing at all. The screen
+        // already hides the upload for these — this is the lock behind it.
+        if ($fee->hasPendingPaymentPlan()) {
+            Flasher::addError(__('This fee is on a payment plan agreement that is awaiting the Vice Chancellor\'s approval. No payment can be taken on it until it is approved or rejected.'));
+            return redirect()->route($this->route . '.index');
+        }
+
+        if ($fee->hasActivePaymentPlan()) {
+            Flasher::addError(__('msg_pay_via_payment_plan'));
+            return redirect()->route($this->route . '.index');
+        }
+
         // Check if there's a pending multi-payment for this fee
         if ($fee->hasPendingMultiPayment()) {
             Flasher::addError('This fee has a pending multi-payment verification. Cannot submit another payment.');
