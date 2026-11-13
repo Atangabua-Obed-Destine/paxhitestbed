@@ -84,7 +84,8 @@
                                     <div class="col-md-4">
                                         <div class="form-group">
                                             <label for="installments_count" class="form-label">{{ __('field_number_of_installments') }} <span>*</span></label>
-                                            <input type="number" class="form-control" name="installments_count" id="installments_count" value="{{ old('installments_count', 3) }}" min="2" max="12" required>
+                                            <input type="number" class="form-control" name="installments_count" id="installments_count" value="{{ old('installments_count', 3) }}" min="1" max="12" required>
+                                            <small class="text-muted">{{ __('One instalment moves the whole balance to a later date.') }}</small>
 
                                             <div class="invalid-feedback">
                                                 {{ __('required_field') }} {{ __('field_number_of_installments') }}
@@ -311,8 +312,8 @@ $(document).ready(function() {
         }
 
         const installmentsCount = parseInt($('#installments_count').val());
-        if (installmentsCount < 2 || installmentsCount > 12) {
-            alert('{{ __("installments_must_be_between_2_and_12") }}');
+        if (!(installmentsCount >= 1 && installmentsCount <= 12)) {
+            alert('{{ __("installments_must_be_between_1_and_12") }}');
             return;
         }
 

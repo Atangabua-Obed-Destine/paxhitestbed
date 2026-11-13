@@ -1117,7 +1117,7 @@
     "income_statement": "Income Statement",
     "income_summary_account": "Income Summary Account",
     "installments": "Installments",
-    "installments_must_be_between_2_and_12": "Number of installments must be between 2 and 12",
+    "installments_must_be_between_1_and_12": "Number of installments must be between 1 and 12",
     "installments_paid": "Installments Paid",
     "installment_details": "Installment Details",
     "installment_payment": "Installment Payment",

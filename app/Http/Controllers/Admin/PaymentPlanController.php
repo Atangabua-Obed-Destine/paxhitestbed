@@ -130,7 +130,9 @@ class PaymentPlanController extends Controller
             'student_id' => 'required|exists:students,id',
             'fee_id' => 'required|exists:fees,id',
             'total_amount' => 'required|numeric|min:0',
-            'installments_count' => 'required|integer|min:2|max:12',
+            // One instalment is a plan too: a student who has paid part of a
+            // fee and will clear the balance on an agreed later date.
+            'installments_count' => 'required|integer|min:1|max:12',
             'late_fee_percentage' => 'nullable|numeric|min:0|max:100',
             'grace_period_days' => 'nullable|integer|min:0|max:30',
             'notes' => 'nullable|string',
