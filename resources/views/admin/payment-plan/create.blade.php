@@ -27,7 +27,7 @@
                     <div class="card-block">
                         <div class="alert alert-info small mb-3">
                             <i class="fas fa-info-circle"></i>
-                            {{ __('Saving prepares the agreement and opens it for printing. The bursar and the student sign it, then the Vice Chancellor signs and approves it. Until it is approved, no payment can be taken on the fees it covers.') }}
+                            {{ __('Saving prepares the agreement and opens it for printing. The Finance Director and the student sign it, then the Vice Chancellor signs and approves it. Until it is approved, no payment can be taken on the fees it covers.') }}
                         </div>
 
                         <form class="needs-validation" novalidate action="{{ route($route.'.store') }}" method="post" id="agreement-form">

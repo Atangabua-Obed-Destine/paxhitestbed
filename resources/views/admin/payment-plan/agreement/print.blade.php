@@ -1,7 +1,7 @@
 {{--
     The payment plan agreement, as signed.
 
-    Printed straight after the bursar prepares it. The bursar signs as the one
+    Printed straight after the Finance Director prepares it, who signs as the one
     who prepared it, the student signs the undertaking, and the Vice Chancellor
     signs to approve. Until the approval is recorded the sheet is stamped
     "Awaiting approval"; reprinted afterwards, it carries the approver's name.
@@ -204,8 +204,8 @@
     </div>
 
     <div class="sigs">
-        <div class="sig" id="sig-bursar">
-            <div class="role">{{ __('Prepared by the Bursar') }}</div>
+        <div class="sig" id="sig-finance-director">
+            <div class="role">{{ __('Prepared by the Finance Director') }}</div>
             <div class="space"></div>
             <div class="who-signs">{{ optional($agreement->creator)->name ?? '' }}</div>
             <div class="when">{{ __('Date') }}: {{ optional($agreement->created_at)->format('d M Y') }}</div>

@@ -208,7 +208,8 @@ try {
     check('both fees are on it', str_contains($doc, e($first->category->title)) && str_contains($doc, e($second->category->title)));
     check('one schedule of four payments, in date order', preg_match_all('/<tr>\s*<td>\d+<\/td>\s*<td>\d{2} \w{3} \d{4}<\/td>/', $doc) === 4);
     check('with the student\'s undertaking in their name', (bool) preg_match('/id="undertaking">\s*' . preg_quote(e(__('I, :name, agree to pay the amounts above on or before the dates shown. If I miss a payment, the full balance becomes due.', ['name' => $name])), '/') . '/', $doc));
-    check('the bursar signs as the one who prepared it', (bool) preg_match('/id="sig-bursar">.*?' . preg_quote(e($bursar->name), '/') . '/s', $doc));
+    check('the Finance Director signs as the one who prepared it', (bool) preg_match('/id="sig-finance-director">.*?Prepared by the Finance Director.*?' . preg_quote(e($bursar->name), '/') . '/s', $doc));
+    check('and the document does not say Bursar', stripos($doc, 'bursar') === false);
     check('the student signs', (bool) preg_match('/id="sig-student">.*?' . preg_quote(e($name), '/') . '/s', $doc));
     check('and the Vice Chancellor\'s place is left blank to sign', (bool) preg_match('/id="sig-vc">.*?<div class="who-signs"><\/div>/s', $doc));
     preg_match('/verify-plan-agreement\/' . $agreement->id . '\?code=(\w+)/', $doc, $code);
