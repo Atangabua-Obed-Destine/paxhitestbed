@@ -397,6 +397,7 @@
                 text-align: center;
                 color: #001F5B;
             }
+            @include('admin.id-card.partials.validity-style', ['card' => '.zip-id-card'])
         `;
         container.appendChild(style);
         
@@ -410,7 +411,6 @@
                 
                 const cardHtml = `
                     <div class="zip-id-card" id="card-${student.id}">
-                        <div class="validity">VALIDITY: ${student.validity}</div>
                         <div class="photo"><img src="${student.photo}" crossorigin="anonymous"></div>
                         <div class="name">${student.name}</div>
                         <div class="dob">${student.dob}</div>
@@ -418,6 +418,7 @@
                         <div class="matricule">${student.prefix}${student.matricule}</div>
                         <div class="faculty">${student.faculty}</div>
                         <div class="date-issued">${new Date().toLocaleDateString('en-GB')}</div>
+                        @include('admin.id-card.partials.validity', ['period' => '${student.validity}', 'print' => $print ?? null])
                         <div class="qr-code"><img src="${qrCode}" crossorigin="anonymous"></div>
                         ${student.barcode}
                     </div>

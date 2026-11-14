@@ -216,6 +216,8 @@
             padding: 5px 10px;
             font-family: 'Anton';
         }
+
+        @include('admin.id-card.partials.validity-style', ['card' => '.id-card'])
         
         .loading-overlay {
             display: none;
@@ -283,8 +285,6 @@
         
         <div class="id-card-wrapper">
             <div class="id-card" id="id-card-{{ $enrollment->id }}" data-matricule="{{ $displayMatricule }}">
-                <div class="validity">VALIDITY: {{ $validityPeriod }}</div>
-                
                 <div class="photo">
                     @if($student->photo && file_exists(public_path('uploads/student/'.$student->photo)))
                         <img src="{{ asset('uploads/student/'.$student->photo) }}" alt="Photo" crossorigin="anonymous">
@@ -307,6 +307,8 @@
                 <div class="matricule">{{ $print->prefix ?? '' }}{{ $displayMatricule }}</div>
                 <div class="faculty">{{ $enrollment->program->faculty->shortcode ?? $enrollment->program->faculty->title ?? '' }}</div>
                 <div class="date-issued">{{ date('d/m/Y') }}</div>
+                {{-- Validity: top right, or under Date Issued (ID Card Setting) --}}
+                @include('admin.id-card.partials.validity', ['period' => $validityPeriod, 'print' => $print])
                 
                 <div class="qr-code">
                     @php

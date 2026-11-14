@@ -47,6 +47,19 @@
                             </div>
                         </div>
 
+                        {{-- Where the card prints "VALIDITY". The top right is how the
+                             card has always looked; under Date Issued it becomes one
+                             more black row in the details column. --}}
+                        <div class="form-group col-md-6">
+                            <label for="validity_position">{{ __('Validity position') }}</label>
+                            @php $validityPosition = $row->validity_position ?? \App\Models\IdCardSetting::VALIDITY_TOP; @endphp
+                            <select class="form-control" name="validity_position" id="validity_position">
+                                @foreach(\App\Models\IdCardSetting::validityPositions() as $value => $label)
+                                    <option value="{{ $value }}" @selected($validityPosition === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
                         <div class="form-group col-md-6">
                             <label for="address">{{ __('field_address') }} <span>*</span></label>
                             <input type="text" class="form-control" name="address" id="address" value="{{ isset($row->address)?$row->address:'' }}" required>

@@ -162,6 +162,8 @@
     font-family: 'Anton';
 }
 
+@include('admin.id-card.partials.validity-style', ['card' => '.id-card'])
+
     </style>
 </head>
 <body>
@@ -185,9 +187,6 @@
         $validityPeriod = $currentYear . '-' . $expiryYear;
     @endphp
     <div class="id-card">
-        <!-- Validity Period -->
-        <div class="validity">VALIDITY: {{ $validityPeriod }}</div>
-
         <!-- Student Photo -->
         <div class="photo">
             @if($student->photo && file_exists(public_path('uploads/student/'.$student->photo)))
@@ -222,6 +221,9 @@
 
         <!-- Date Issued -->
         <div class="date-issued">{{ date('d/m/Y') }}</div>
+
+        <!-- Validity Period: top right, or under Date Issued (ID Card Setting) -->
+        @include('admin.id-card.partials.validity', ['period' => $validityPeriod, 'print' => $print])
 
         <!-- QR Code for Verification -->
         <div class="qr-code">

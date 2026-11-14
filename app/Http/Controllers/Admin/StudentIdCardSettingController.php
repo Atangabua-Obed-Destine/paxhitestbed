@@ -66,7 +66,11 @@ class StudentIdCardSettingController extends Controller
             'logo' => 'nullable|image',
             'background' => 'nullable|image',
             'validity' => 'required|numeric',
+            'validity_position' => 'nullable|in:' . implode(',', array_keys(IdCardSetting::validityPositions())),
         ]);
+
+        // Where the card prints its validity. Not sent means as it always was.
+        $validityPosition = $request->validity_position ?: IdCardSetting::VALIDITY_TOP;
 
 
         // Student Photo
@@ -103,6 +107,7 @@ class StudentIdCardSettingController extends Controller
             $setting->subtitle = $request->subtitle;
             $setting->website_url = $request->website_url;
             $setting->validity = $request->validity;
+            $setting->validity_position = $validityPosition;
             $setting->address = $request->address;
             $setting->prefix = $request->prefix;
             $setting->student_photo = $student_photo;
@@ -119,6 +124,7 @@ class StudentIdCardSettingController extends Controller
             $setting->subtitle = $request->subtitle;
             $setting->website_url = $request->website_url;
             $setting->validity = $request->validity;
+            $setting->validity_position = $validityPosition;
             $setting->address = $request->address;
             $setting->prefix = $request->prefix;
             $setting->student_photo = $student_photo;
