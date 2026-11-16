@@ -615,3 +615,38 @@
         });
     </script>
 
+    {{-- Desktop workspace (public/dashboard/js/workspace.js): its words, translated here. --}}
+    <script>
+        window.WS_TEXT = {!! json_encode([
+            'school' => $setting->title ?? null,
+            'dashboard' => trans_choice('module_dashboard', 1),
+            'menu_students' => __('Students'),
+            'menu_academic' => __('Academic'),
+            'menu_routines' => trans_choice('module_routine', 2),
+            'menu_exams' => trans_choice('module_examination', 2),
+            'menu_library' => trans_choice('module_library', 2),
+            'menu_finance' => __('Finance'),
+            'menu_people' => __('People'),
+            'menu_campus' => __('Campus'),
+            'menu_reports' => __('Reports'),
+            'menu_website' => __('Website'),
+            'menu_settings' => __('Settings'),
+            'menu_more' => __('More'),
+            'back' => __('Back'),
+            'forward' => __('Forward'),
+            'refresh' => __('Refresh'),
+            'print' => __('Print'),
+            'goto' => __('Go to…'),
+            'goto_hint' => __('Go to any screen'),
+            'goto_placeholder' => __('Go to a screen…'),
+            'nothing' => __('Nothing matches.'),
+            'open_screens' => __('Open screens'),
+            'close_tab' => __('Close this tab'),
+            'connected' => __('Connected'),
+            'offline' => __('No network'),
+            'layout_classic' => __('Classic layout'),
+            'layout_desktop' => __('Desktop layout'),
+            'layout_hint' => __('Switch between the desktop workspace and the classic layout'),
+        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) !!};
+    </script>
+    <script src="{{ asset('dashboard/js/workspace.js') }}?v={{ @filemtime(public_path('dashboard/js/workspace.js')) }}"></script>

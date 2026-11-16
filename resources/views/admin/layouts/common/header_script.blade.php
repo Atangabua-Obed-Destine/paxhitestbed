@@ -46,6 +46,9 @@
         <!-- Admin Header Responsive CSS -->
         <link rel="stylesheet" href="{{ asset('dashboard/css/admin-header-responsive.css') }}?v={{ time() }}" type="text/css" media="screen, print">
 
+        <!-- Desktop workspace: title bar with menus, tabs, icon rail, status bar (wide screens) -->
+        <link rel="stylesheet" href="{{ asset('dashboard/css/workspace.css') }}?v={{ @filemtime(public_path('dashboard/css/workspace.css')) }}" type="text/css" media="screen, print">
+
         <!-- Page specific styles -->
         @stack('styles')
 
