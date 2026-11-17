@@ -371,6 +371,27 @@
     });
     pal.addEventListener('click', function (e) { if (e.target === pal) closePalette(); });
 
+    // Pop-up windows. On the desktop layout the screen's content sits in a
+    // fixed panel, and a fixed panel is its own layer: a pop-up inside it can
+    // never rise above the dark backdrop Bootstrap puts on <body>, so it opened
+    // dimmed and unclickable. So a pop-up is lifted out to <body> as it opens,
+    // beside its backdrop. Its scripts hold it by id and keep working.
+    // A pop-up that lives inside a <form> (a confirm step whose button is the
+    // form's own submit) must stay inside it; for those the backdrop is moved
+    // in next to the pop-up instead, into the same layer.
+    var contentPanel = function (el) { return el.closest('.pcoded-main-container'); };
+    document.addEventListener('show.bs.modal', function (e) {
+        var modal = e.target;
+        if (!isDesk() || !modal.classList || !modal.classList.contains('modal') || !contentPanel(modal)) return;
+        if (!modal.closest('form')) { document.body.appendChild(modal); return; }
+        // Bootstrap adds the backdrop straight after this event.
+        setTimeout(function () {
+            var backdrops = document.body.querySelectorAll(':scope > .modal-backdrop');
+            var backdrop = backdrops[backdrops.length - 1];
+            if (backdrop && modal.parentNode) modal.parentNode.insertBefore(backdrop, modal);
+        }, 0);
+    });
+
     document.addEventListener('keydown', function (e) {
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
         if (!isDesk()) return;
