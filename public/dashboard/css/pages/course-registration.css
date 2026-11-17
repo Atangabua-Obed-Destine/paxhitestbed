@@ -396,19 +396,16 @@
 .cr-pick-search .form-control { padding-left: 36px; }
 .cr-pick-count { color: var(--cr-muted); font-size: 13px; }
 
-/* A long list scrolls inside its own box, so the summary bar stays close. */
+/* No inner scroll box: a nested scroller swallowed the wheel and the
+   finger, so the page could not be scrolled back up from over the list.
+   The page scrolls; the summary bar below stays in view. */
 .cr-pick {
-    max-height: 460px;
-    overflow-y: auto;
     border: 1px solid var(--cr-rule);
     border-radius: 8px;
-    overscroll-behavior: contain;
+    overflow: hidden;
 }
 .cr-pick-group + .cr-pick-group { border-top: 1px solid var(--cr-rule); }
 .cr-pick-group-head {
-    position: sticky;
-    top: 0;
-    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -520,7 +517,6 @@
 @media (max-width: 991px) {
     /* Clear the phone's bottom tab bar. */
     .cr-pick-bar { bottom: calc(var(--app-nav-total, 0px) + 8px); }
-    .cr-pick { max-height: 60vh; }
 }
 @media (max-width: 575px) {
     .cr-page .cr-table-foot { margin: 0 -16px; padding: 12px 16px; }
@@ -544,4 +540,29 @@
     .cr-terms > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .cr-stat-value { font-size: 24px; }
     .cr-facts { padding: 8px 16px; }
+}
+
+/* ---- confirm dialog: a centred card, not the phone bottom sheet ---------- */
+
+.cr-confirm-modal .modal-dialog { max-width: 520px; }
+
+@media (max-width: 991px) {
+    /* The portal turns every dialog into a full-width sheet on phones
+       (app_shell). This one stays a card with room around it. */
+    body .modal.cr-confirm-modal .modal-dialog {
+        position: relative;
+        left: auto; right: auto; bottom: auto;
+        width: calc(100% - 48px);
+        max-width: 400px;
+        min-height: calc(100% - 48px);
+        margin: 24px auto;
+        transform: none;
+        transition: none;
+    }
+    body .modal.cr-confirm-modal .modal-content {
+        border-radius: 12px;
+        max-height: none;
+        padding-bottom: 0;
+    }
+    body .modal.cr-confirm-modal .modal-content::before { display: none; }
 }
