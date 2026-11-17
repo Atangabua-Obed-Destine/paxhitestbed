@@ -4,6 +4,9 @@
                 <div class="modal-body text-center">
                     <h5 class="modal-title" id="CourseRegistrationConfirmModalLabel">{{ __('Register these courses?') }}</h5>
                     <p class="mt-2">{{ __('The courses you picked will be added to your semester. You can drop a course later, as long as no marks have been recorded for it yet.') }}</p>
+                    {{-- Filled in by the page: the exact courses about to be saved. --}}
+                    <ul class="cr-confirm-list" id="cr-confirm-list"></ul>
+                    <p class="cr-confirm-total" id="cr-confirm-total"></p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> {{ __('btn_close') }}</button>
