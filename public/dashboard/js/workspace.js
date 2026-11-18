@@ -5,7 +5,11 @@
  * screens opened as tabs, the sidebar as an icon rail, a status bar, and a
  * "Go to…" box (Ctrl+K). The menus and the box are built from the sidebar,
  * so they offer exactly what the sidebar offers, permissions included.
- * "Classic layout" in the status bar puts the template back as it was.
+ * Tabs stay alive: each screen opens in a frame of its own, so switching
+ * back to one shows it as it was left. Inside such a frame this script only
+ * hands keys and Dashboard links back to the window (html.ws-framed).
+ * Every wide screen gets this layout; there is no switch back to the
+ * template's own (phones and narrow windows keep it, as they must).
  */
 (function () {
     'use strict';
@@ -17,12 +21,41 @@
         set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
     };
     var wide = window.matchMedia('(min-width: 992px)');
-    var isDesk = function () { return wide.matches && !html.classList.contains('ws-classic'); };
+    var isDesk = function () { return wide.matches; };
+    // ── A screen shown inside a workspace tab ──
+    var shell = null;
+    try { if (window.parent !== window && window.parent.WS_SHELL) shell = window.parent.WS_SHELL; } catch (e) { /* not ours */ }
+    if (shell) {
+        html.classList.add('ws-framed');
+        document.addEventListener('keydown', function (e) {
+            var k = (e.key || '').toLowerCase();
+            var ctl = e.ctrlKey || e.metaKey;
+            if (ctl && !e.shiftKey && k === 'k') { e.preventDefault(); shell.palette(); }
+            else if (e.altKey && !ctl && /^[1-9]$/.test(e.key)) { e.preventDefault(); shell.tab(Number(e.key)); }
+            else if (e.altKey && !ctl && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); shell.step(e.key === 'ArrowLeft' ? -1 : 1); }
+            // Refresh and print this tab's screen, not the whole window.
+            else if ((e.key === 'F5' && !ctl && !e.shiftKey) || (ctl && !e.shiftKey && k === 'r')) { e.preventDefault(); location.reload(); }
+            else if (ctl && !e.shiftKey && k === 'p') { e.preventDefault(); window.print(); }
+        });
+        // On the Dashboard a link opens a tab of its own.
+        document.addEventListener('click', function (e) {
+            if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+            var a = e.target.closest && e.target.closest('a[href]');
+            if (a && shell.link(window, a)) {
+                e.preventDefault();
+                // The page's loading screen came up for a page change that is not happening here.
+                if (window.appLoading) window.appLoading.hide();
+            }
+        });
+        return;
+    }
+
     var nav = document.querySelector('.pcoded-navbar .pcoded-inner-navbar');
     if (!nav) return;
 
     html.classList.add('ws');
-    if (store.get('ws.layout') === 'classic') html.classList.add('ws-classic');
+    // An older version offered a "Classic layout" switch; forget that choice.
+    try { localStorage.removeItem('ws.layout'); } catch (e) { /* private mode */ }
 
     var textOf = function (el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; };
     // A link's name without its counter or its screen-reader explanation;
@@ -123,7 +156,8 @@
     brand.appendChild(make('span', null, T.school || textOf(document.querySelector('.topbar-title')) || 'Admin'));
     var menubar = make('nav'); menubar.id = 'ws-menubar'; menubar.setAttribute('role', 'menubar');
     var pageTitle = (document.title.split('|')[0] || '').trim();
-    bar.append(brand, menubar, make('span', 'ws-page', pageTitle));
+    var pageName = make('span', 'ws-page', pageTitle);
+    bar.append(brand, menubar, pageName);
     document.body.insertBefore(bar, document.body.firstChild);
 
     var openItem = null;
@@ -211,10 +245,10 @@
     document.addEventListener('click', function (e) {
         var b = e.target.closest && e.target.closest('[data-ws]'); if (!b) return;
         var act = b.dataset.ws;
-        if (act === 'back') history.back();
-        else if (act === 'forward') history.forward();
-        else if (act === 'reload') location.reload();
-        else if (act === 'print') window.print();
+        if (act === 'back') step(-1);
+        else if (act === 'forward') step(1);
+        else if (act === 'reload') reloadTab();
+        else if (act === 'print') printTab();
         else if (act === 'palette') openPalette();
     });
 
@@ -228,66 +262,359 @@
         });
     });
 
-    // ── Tabs: the screens opened in this window ──
+    // ── Tabs: the screens open in this window, kept alive ──
+    // The page this window loaded is the first screen. Every other screen
+    // opens in a frame of its own laid over it, so going back to a tab shows
+    // the screen exactly as it was left: no reload, scroll and typing kept.
+    // Besides the pinned Dashboard, two screens stay open at a time; opening
+    // a third asks first, naming the one that will close.
     var tabs = make('nav'); tabs.id = 'ws-tabs'; tabs.setAttribute('aria-label', T.open_screens || 'Open screens');
     var main = document.querySelector('.pcoded-main-container');
     if (main) main.parentNode.insertBefore(tabs, main);
-    var TABS = 'ws.tabs';
-    var keyOf = function (href) { return new URL(href, location.href).pathname.replace(/\/+$/, ''); };
-    var readTabs = function () { try { var t = JSON.parse(store.get(TABS) || '[]'); return Array.isArray(t) ? t : []; } catch (e) { return []; } };
-    var writeTabs = function (t) { store.set(TABS, JSON.stringify(t)); };
-    var homeKey = keyOf(dashboardUrl);
+    var MAX_TABS = 2;
+    var live = isDesk() && !!main;
+    var homeKey = new URL(dashboardUrl, location.href).pathname.replace(/\/+$/, '');
+    // The dashboard also answers at /admin/dashboard; that is the same pinned tab.
+    var keyOf = function (href) {
+        var k = new URL(href, location.href).pathname.replace(/\/+$/, '');
+        return k === homeKey + '/dashboard' ? homeKey : k;
+    };
+    var titleOf = function (doc) { return ((doc.title || '').split('|')[0] || '').trim(); };
+    var fill = function (s, v) { return String(s).replace(/:(\w+)/g, function (m, k) { return v[k] != null ? v[k] : m; }); };
+    var titleSuffix = document.title.indexOf('|') >= 0 ? ' ' + document.title.slice(document.title.indexOf('|')) : '';
 
+    // Tabs belong to this browser window: kept for a refresh, not shared.
+    try { localStorage.removeItem('ws.tabs'); } catch (e) { /* private mode */ }
+    var LIVE = 'ws.live';
+    var saved = (function () { try { return JSON.parse(sessionStorage.getItem(LIVE) || 'null') || {}; } catch (e) { return {}; } })();
+    var seq = saved.seq || 1;
+    var home = { id: 'home', url: dashboardUrl, title: T.dashboard || 'Dashboard', pinned: true, stack: [], pos: -1 };
+    var open = (Array.isArray(saved.tabs) ? saved.tabs : []).filter(function (t) {
+        return t && t.id && t.url && keyOf(t.url) !== homeKey;
+    }).slice(-MAX_TABS).map(function (t) { return { id: t.id, url: t.url, title: t.title || '', used: t.used || 0, stack: [], pos: -1 }; });
+    var all = function () { return [home].concat(open); };
+    var save = function () {
+        try {
+            sessionStorage.setItem(LIVE, JSON.stringify({ seq: seq, active: active ? active.id : null, at: location.href, tabs: open.map(function (t) {
+                return { id: t.id, url: t.url, title: t.title, used: t.used };
+            }) }));
+        } catch (e) { /* private mode */ }
+    };
+    var notice = function (text) {
+        var n = make('div', 'ws-notice', text); n.setAttribute('role', 'status');
+        document.body.appendChild(n);
+        setTimeout(function () { n.remove(); }, 7000);
+    };
+    // The tab to close when a third is wanted: the one used longest ago,
+    // never the one on screen.
+    var leastUsed = function () {
+        return open.filter(function (t) { return t !== active; }).sort(function (a, b) { return (a.used || 0) - (b.used || 0); })[0] || null;
+    };
+
+    // This page's own content is the screen of one tab.
+    var nativeKey = keyOf(location.href);
+    var native;
+    if (nativeKey === homeKey) native = home;
+    else {
+        native = open.filter(function (t) { return keyOf(t.url) === nativeKey; })[0];
+        if (!native) {
+            native = { id: 't' + (seq++), url: location.href, title: pageTitle, used: Date.now(), stack: [], pos: -1 };
+            if (open.length >= MAX_TABS) {
+                var dropped = open.slice().sort(function (a, b) { return (a.used || 0) - (b.used || 0); })[0];
+                open.splice(open.indexOf(dropped), 1);
+                notice(fill(T.tab_dropped || '“:old” was closed: besides the Dashboard, two screens stay open at a time.', { old: dropped.title }));
+            }
+            open.push(native);
+        }
+    }
+    native.url = location.href; native.title = pageTitle || native.title;
+    native.isNative = true; native.stack = [location.href]; native.pos = 0;
+    var active = native;
+
+    // The frames, laid over the screen area.
+    var host = make('div'); host.id = 'ws-frames';
+    document.body.appendChild(host);
+    var frameLoaded;
+    var makeFrame = function (t, name) {
+        var f = make('iframe'); f.title = t.title || ''; if (name) f.name = name;
+        f.wsTab = t;
+        // An empty frame reports a load as soon as it is added; that one is ignored.
+        f.addEventListener('load', function () { if (frameLoaded) frameLoaded(f); });
+        host.appendChild(f);
+        return f;
+    };
+    // Forms and links on this page's own content load into this frame, so
+    // sending one does not reload the window and close the other tabs.
+    var nativeFrame = live ? makeFrame(native, 'ws-native') : null;
+    var aimForm = function (f) {
+        if (!nativeFrame || f.getAttribute('target') || f.closest('.pcoded-header, .pcoded-navbar, #ws-titlebar, #ws-palette, #ws-status')) return;
+        f.setAttribute('target', 'ws-native');
+    };
+    var formWatch = null;
+    if (live) {
+        document.querySelectorAll('form').forEach(aimForm);
+        formWatch = new MutationObserver(function (changes) {
+            changes.forEach(function (c) {
+                c.addedNodes.forEach(function (n) {
+                    if (n.nodeType !== 1) return;
+                    if (n.tagName === 'FORM') aimForm(n);
+                    n.querySelectorAll && n.querySelectorAll('form').forEach(aimForm);
+                });
+            });
+        });
+        formWatch.observe(document.body, { childList: true, subtree: true });
+    }
+    // Once this page's content has been replaced, let it go.
+    var freeNative = function () {
+        if (native.freed) return;
+        native.freed = true;
+        if (formWatch) formWatch.disconnect();
+        var c = main && main.querySelector('.pcoded-content');
+        if (c) c.replaceChildren();
+        // From now on the address follows the tab on screen.
+        try { history.replaceState(history.state, '', active.url); } catch (e) { /* ignore */ }
+    };
+
+    var busyTimer = {};
+    // The page's loading screen (partials/loading-screen) covers the window
+    // while the tab on screen loads, and only then.
+    var showLoading = function () {
+        if (!window.appLoading) return;
+        if (active && active.loading) window.appLoading.show(); else window.appLoading.hide();
+    };
+    var setBusy = function (t, on) {
+        t.loading = on;
+        clearTimeout(busyTimer[t.id]);
+        // A download never finishes loading a page; stop waiting for it.
+        if (on) busyTimer[t.id] = setTimeout(function () { t.loading = false; drawTabs(); if (t === active) showLoading(); }, 20000);
+        drawTabs();
+        if (t === active) showLoading();
+    };
+
+    var show = function (t) {
+        showLoading();
+        var frameOn = !!t.frame;
+        host.classList.toggle('on', frameOn);
+        if (main) main.inert = frameOn;
+        host.querySelectorAll('iframe').forEach(function (f) { f.classList.toggle('on', f === t.frame); });
+        pageName.textContent = t.title;
+        document.title = t.title + titleSuffix;
+        // The address follows the tab on screen, so a refresh opens it; not
+        // while this page's own content is alive, whose forms post to it.
+        if (native.freed) { try { history.replaceState(history.state, '', t.url); } catch (e) { /* ignore */ } }
+    };
     var drawTabs = function () {
-        var current = keyOf(location.href);
         tabs.replaceChildren();
-        var add = function (t, pinned) {
-            var a = make('a', 'ws-tab' + (t.key === current ? ' active' : '') + (pinned ? ' pinned' : ''));
-            a.href = t.url; a.title = t.title; a.dataset.key = t.key; a.setAttribute('role', 'tab');
-            a.appendChild(make('span', null, t.title));
-            if (!pinned) {
+        all().forEach(function (t) {
+            var a = make('a', 'ws-tab' + (t === active ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.loading ? ' loading' : ''));
+            a.href = t.url; a.title = t.title; a.dataset.id = t.id;
+            a.setAttribute('role', 'tab'); a.setAttribute('aria-selected', String(t === active));
+            a.appendChild(make('span', null, t.title || T.loading || '…'));
+            if (!t.pinned) {
                 var x = make('button', 'ws-x', '×'); x.type = 'button';
                 x.title = T.close_tab || 'Close this tab'; x.setAttribute('aria-label', (T.close_tab || 'Close this tab') + ': ' + t.title);
                 a.appendChild(x);
             }
             tabs.appendChild(a);
-            if (t.key === current) requestAnimationFrame(function () { a.scrollIntoView({ inline: 'nearest', block: 'nearest' }); });
-        };
-        add({ key: homeKey, url: dashboardUrl, title: T.dashboard || 'Dashboard' }, true);
-        readTabs().forEach(function (t) { add(t, false); });
+            if (t === active) requestAnimationFrame(function () { a.scrollIntoView({ inline: 'nearest', block: 'nearest' }); });
+        });
     };
-    var rememberTab = function () {
-        var key = keyOf(location.href);
-        if (key !== homeKey) {
-            var list = readTabs();
-            var entry = { key: key, url: location.href, title: pageTitle || document.title };
-            var i = list.findIndex(function (t) { return t.key === key; });
-            if (i >= 0) list[i] = entry; else list.push(entry);
-            while (list.length > 10) list.splice(list.findIndex(function (t) { return t.key !== key; }), 1);
-            writeTabs(list);
+    var activate = function (t) {
+        if (!t) return;
+        if (!live) { location.href = t.url; return; }
+        active = t; t.used = Date.now();
+        // A tab not loaded yet (after a refresh, or this page's own once let go) loads now.
+        if (!t.frame && (!t.isNative || t.freed)) {
+            t.frame = makeFrame(t); t.stack = []; t.pos = -1;
+            setBusy(t, true);
+            t.frame.src = t.url;
         }
-        drawTabs();
+        show(t); drawTabs(); save();
+        if (t.frame) { try { t.frame.contentWindow.focus(); } catch (e) { /* ignore */ } }
     };
-    var closeTab = function (key) {
-        var list = readTabs(); var i = list.findIndex(function (t) { return t.key === key; });
-        if (i < 0) return;
-        list.splice(i, 1); writeTabs(list);
-        if (key === keyOf(location.href)) { var next = list[i] || list[i - 1]; location.href = next ? next.url : dashboardUrl; }
-        else drawTabs();
+    var closeTab = function (t, keepActive) {
+        var i = open.indexOf(t); if (i < 0) return;
+        open.splice(i, 1);
+        if (t.frame) t.frame.remove();
+        if (t.isNative) {
+            freeNative();
+            if (nativeFrame && nativeFrame !== t.frame) nativeFrame.remove();
+            nativeFrame = null;
+        }
+        if (active === t && !keepActive) activate(open[i] || open[i - 1] || home);
+        else { drawTabs(); save(); }
     };
+    var labelFor = function (href) {
+        var k = keyOf(href);
+        var s = screens.filter(function (x) { return keyOf(x.href) === k; })[0];
+        return s ? s.text : (T.loading || '…');
+    };
+    var confirmClose = function (victim, nextTitle, ok) {
+        var d = make('dialog', 'ws-confirm');
+        d.setAttribute('aria-labelledby', 'ws-confirm-title');
+        var h = make('h3', null, T.tabs_full_title || 'Two screens are already open'); h.id = 'ws-confirm-title';
+        var v = { 'new': nextTitle, old: victim.title };
+        var p = make('p', null, fill(T.tabs_full_body || 'Besides the Dashboard, two screens stay open at a time. Opening “:new” will close “:old”, the one you used longest ago. Anything not saved on “:old” will be lost.', v));
+        var row = make('div', 'ws-confirm-row');
+        var no = make('button', 'ws-btn', T.cancel || 'Cancel'); no.type = 'button';
+        var yes = make('button', 'ws-btn primary', fill(T.tabs_full_ok || 'Close “:old” and open', v)); yes.type = 'button';
+        row.append(no, yes); d.append(h, p, row); document.body.appendChild(d);
+        var done = function (go) { if (d.open) d.close(); d.remove(); if (go) ok(); };
+        no.addEventListener('click', function () { done(false); });
+        yes.addEventListener('click', function () { done(true); });
+        d.addEventListener('cancel', function (e) { e.preventDefault(); done(false); });
+        d.showModal(); yes.focus();
+    };
+    var openUrl = function (href) {
+        if (!live) { location.href = href; return; }
+        var key = keyOf(href);
+        if (key === homeKey) { activate(home); return; }
+        var have = open.filter(function (x) { return keyOf(x.url) === key; })[0];
+        if (have) { activate(have); return; }
+        var go = function () {
+            var t = { id: 't' + (seq++), url: href, title: labelFor(href), stack: [], pos: -1 };
+            open.push(t); activate(t);
+        };
+        if (open.length < MAX_TABS) { go(); return; }
+        var victim = leastUsed();
+        if (!victim) return;
+        confirmClose(victim, labelFor(href), function () { closeTab(victim, true); go(); });
+    };
+    var navigateNative = function (href) {
+        if (!nativeFrame) { location.href = href; return; }
+        setBusy(native, true);
+        nativeFrame.src = href;
+    };
+
+    frameLoaded = function (f) {
+        var t = f.wsTab; if (!t) return;
+        var w = f.contentWindow, href;
+        try { href = w.location.href; } catch (e) { return; }
+        if (!href || href === 'about:blank') return;
+        var d = w.document;
+        // Signed out (the session ended, or signed out in this tab): the whole window goes to sign in.
+        if (!d.querySelector('.pcoded-main-container') && d.querySelector('input[type="password"]')) { location.href = href; return; }
+        setBusy(t, false);
+        // A form on this page's own content was sent here: its loading screen can go.
+        if (f === nativeFrame && window.appLoading) window.appLoading.hide();
+        if (t.isNative && f === nativeFrame && !t.frame) { t.frame = f; freeNative(); }
+        if (t.goingTo != null) { t.pos = t.goingTo; t.goingTo = null; }
+        else if (t.stack[t.pos] !== href) { t.stack = t.stack.slice(0, t.pos + 1); t.stack.push(href); t.pos = t.stack.length - 1; }
+        t.url = href; t.title = titleOf(d) || t.title; f.title = t.title;
+        var key = keyOf(href);
+        if (t === home && key !== homeKey) {
+            // Something sent on the Dashboard opened another screen: that is a tab of its own.
+            var nt = { id: 't' + (seq++), url: href, title: t.title, frame: f, stack: home.stack, pos: home.pos, used: Date.now() };
+            f.wsTab = nt; home.frame = null; home.stack = []; home.pos = -1; home.url = dashboardUrl; home.title = T.dashboard || 'Dashboard';
+            if (open.length >= MAX_TABS) {
+                var gone = leastUsed() || open[0];
+                closeTab(gone, true);
+                notice(fill(T.tab_dropped || '“:old” was closed: besides the Dashboard, two screens stay open at a time.', { old: gone.title }));
+            }
+            open.push(nt); activate(nt); return;
+        }
+        if (t !== home && key === homeKey) {
+            // A screen led back to the Dashboard: that is the pinned tab.
+            var homeAlive = home.frame || (home.isNative && !home.freed);
+            open.splice(open.indexOf(t), 1);
+            if (homeAlive) f.remove(); else { home.frame = f; f.wsTab = home; home.stack = t.stack; home.pos = t.pos; }
+            activate(home); return;
+        }
+        if (t === home) { home.title = T.dashboard || 'Dashboard'; }
+        if (t === active) show(t);
+        drawTabs(); save();
+    };
+
+    // Back, forward and refresh act on the tab on screen, and only on it.
+    var step = function (d) {
+        if (!live) { history.go(d); return; }
+        var t = active; if (!t.frame) return;
+        var p = t.pos + d; if (p < 0 || p >= t.stack.length) return;
+        t.goingTo = p; setBusy(t, true);
+        t.frame.contentWindow.location.replace(t.stack[p]);
+    };
+    var reloadTab = function () {
+        if (!live) { location.reload(); return; }
+        var t = active;
+        if (t.frame) { setBusy(t, true); t.frame.contentWindow.location.reload(); }
+        // This page's own screen reloads into its frame, which keeps the other tabs.
+        else if (t.isNative) navigateNative(t.url);
+    };
+    var printTab = function () {
+        if (live && active.frame) { active.frame.contentWindow.focus(); active.frame.contentWindow.print(); }
+        else window.print();
+    };
+
     tabs.addEventListener('click', function (e) {
-        var x = e.target.closest('.ws-x'); if (!x) return;
-        e.preventDefault(); e.stopPropagation(); closeTab(x.closest('.ws-tab').dataset.key);
+        var a = e.target.closest('.ws-tab'); if (!a) return;
+        var t = all().filter(function (x) { return x.id === a.dataset.id; })[0];
+        if (!t) return;
+        e.preventDefault();
+        if (e.target.closest('.ws-x')) { e.stopPropagation(); closeTab(t); return; }
+        activate(t);
     });
     tabs.addEventListener('auxclick', function (e) {
-        var t = e.target.closest('.ws-tab:not(.pinned)'); if (e.button !== 1 || !t) return;
-        e.preventDefault(); closeTab(t.dataset.key);
+        var a = e.target.closest('.ws-tab:not(.pinned)'); if (e.button !== 1 || !a) return;
+        e.preventDefault();
+        var t = all().filter(function (x) { return x.id === a.dataset.id; })[0];
+        if (t) closeTab(t);
     });
-    window.addEventListener('storage', function (e) { if (e.key === TABS) drawTabs(); });
-    rememberTab();
+
+    // Which links open a screen: this admin's own pages, opened plainly.
+    var screenLink = function (a) {
+        if (!a || a.hasAttribute('download')) return null;
+        var tg = (a.getAttribute('target') || '').toLowerCase(); if (tg && tg !== '_self') return null;
+        var raw = (a.getAttribute('href') || '').trim();
+        if (!raw || raw.charAt(0) === '#' || /^(javascript|mailto|tel):/i.test(raw)) return null;
+        var u; try { u = new URL(a.href, location.href); } catch (e) { return null; }
+        if (u.origin !== location.origin || !/\/admin(\/|$)/.test(u.pathname) || /\/(login|logout)(\/|$)/.test(u.pathname)) return null;
+        return u.href;
+    };
+    if (live) {
+        document.addEventListener('click', function (e) {
+            if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+            var a = e.target.closest && e.target.closest('a[href]');
+            if (!a || a.closest('#ws-tabs')) return;
+            var href = screenLink(a); if (!href) return;
+            e.preventDefault();
+            // The page's loading screen expects the window to change page; it
+            // does not, the tab shows its own progress instead.
+            if (window.appLoading) window.appLoading.hide();
+            closeMenus(); closePalette();
+            // The menus, the sidebar and the Dashboard open screens in tabs;
+            // a link inside a screen moves that screen on, like a browser tab.
+            var inChrome = a.closest('.pcoded-navbar, .pcoded-header, #ws-titlebar, #ws-palette, #ws-status');
+            if (inChrome || native === home) openUrl(href); else navigateNative(href);
+        });
+        document.addEventListener('submit', function (e) {
+            if (!e.defaultPrevented && e.target.getAttribute('target') === 'ws-native') setBusy(native, true);
+        });
+        // The screens in the frames reach the window through this.
+        window.WS_SHELL = {
+            palette: function () { openPalette(); },
+            tab: function (n) { var t = all()[n - 1]; if (t) activate(t); },
+            step: step,
+            link: function (win, a) {
+                var t = all().filter(function (x) { return x.frame && x.frame.contentWindow === win; })[0];
+                if (t !== home) return false;
+                var href = screenLink(a); if (!href) return false;
+                openUrl(href); return true;
+            }
+        };
+    }
+    drawTabs(); save();
+    // After a refresh, the tab that was on screen comes back on screen.
+    // A screen asked for by its address (a bookmark, a link) stays on screen.
+    if (live && saved.at === location.href && saved.active && saved.active !== active.id) {
+        var back = all().filter(function (x) { return x.id === saved.active; })[0];
+        if (back) activate(back);
+    }
 
     // The strip starts where the sidebar ends, rail or full.
-    var placeTabs = function () { tabs.style.left = (navbar && isDesk() ? Math.round(navbar.getBoundingClientRect().right) : 0) + 'px'; };
+    var placeTabs = function () {
+        var left = (navbar && isDesk() ? Math.round(navbar.getBoundingClientRect().right) : 0) + 'px';
+        tabs.style.left = left; host.style.left = left;
+    };
     placeTabs();
     window.addEventListener('resize', placeTabs);
     if (navbar && window.ResizeObserver) new ResizeObserver(placeTabs).observe(navbar);
@@ -297,14 +624,33 @@
     var conn = make('span', 'ws-conn'); conn.appendChild(make('span', 'ws-dot'));
     var connText = make('span', null, T.connected || 'Connected'); conn.appendChild(connText);
     var session = document.querySelector('.header-session-badge');
-    var layout = make('button', null); layout.id = 'ws-layout'; layout.type = 'button'; layout.title = T.layout_hint || '';
     var go = make('button'); go.type = 'button'; go.dataset.ws = 'palette';
     go.appendChild(make('kbd', null, 'Ctrl K')); go.appendChild(document.createTextNode(' ' + (T.goto || 'Go to…')));
     var clock = make('span'); clock.style.fontVariantNumeric = 'tabular-nums';
     status.append(conn);
     if (session) status.append(make('strong', null, textOf(session)));
-    status.append(make('span', 'ws-spacer'), go, layout, clock);
+    status.append(make('span', 'ws-spacer'), go, clock);
     document.body.appendChild(status);
+
+    // The assistant's launcher floats over the screen's corner; on the
+    // desktop layout it is a button here instead, pressing the real one.
+    // The widget comes after this script in the page, so wait for it.
+    var addAsk = function () {
+        var chatToggle = document.getElementById('pax-chat-toggle');
+        if (!chatToggle) return;
+        var ask = make('button', 'ws-ask', textOf(chatToggle.querySelector('.pax-chat-toggle-label')) || 'Ask PAX');
+        ask.type = 'button';
+        ask.addEventListener('click', function () {
+            var panel = document.getElementById('pax-chat-panel');
+            var close = document.getElementById('pax-chat-close');
+            if (panel && !panel.hidden && close) close.click(); else chatToggle.click();
+        });
+        var showUnread = function () { ask.classList.toggle('unread', chatToggle.classList.contains('has-unread')); };
+        new MutationObserver(showUnread).observe(chatToggle, { attributes: true, attributeFilter: ['class'] });
+        showUnread();
+        status.insertBefore(ask, clock);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addAsk); else addAsk();
 
     var showConn = function () {
         status.dataset.conn = navigator.onLine ? 'online' : 'offline';
@@ -316,15 +662,6 @@
         clock.textContent = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) + '  ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     };
     tick(); setInterval(tick, 15000);
-
-    var showLayout = function () { layout.textContent = html.classList.contains('ws-classic') ? (T.layout_desktop || 'Desktop layout') : (T.layout_classic || 'Classic layout'); };
-    layout.addEventListener('click', function () {
-        var classic = html.classList.toggle('ws-classic');
-        store.set('ws.layout', classic ? 'classic' : 'desktop');
-        if (navbar) navbar.classList.toggle('navbar-collapsed', !classic && store.get('ws.sidebarFull') !== '1');
-        showLayout(); fitAnnouncement();
-    });
-    showLayout();
 
     // ── "Go to…": every screen in the menus, found by typing ──
     var screens = [];
@@ -366,7 +703,7 @@
     input.addEventListener('keydown', function (e) {
         if (e.key === 'ArrowDown') { sel = Math.min(sel + 1, shown.length - 1); draw(); e.preventDefault(); }
         else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); draw(); e.preventDefault(); }
-        else if (e.key === 'Enter' && shown[sel]) { location.href = shown[sel].href; }
+        else if (e.key === 'Enter' && shown[sel]) { e.preventDefault(); closePalette(); openUrl(shown[sel].href); }
         else if (e.key === 'Escape') closePalette();
     });
     pal.addEventListener('click', function (e) { if (e.target === pal) closePalette(); });
@@ -393,12 +730,25 @@
     });
 
     document.addEventListener('keydown', function (e) {
-        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); return; }
+        var k = (e.key || '').toLowerCase(), ctl = e.ctrlKey || e.metaKey;
+        if (ctl && !e.shiftKey && k === 'k') { e.preventDefault(); openPalette(); return; }
         if (!isDesk()) return;
+        if (live && e.altKey && !ctl && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); step(e.key === 'ArrowLeft' ? -1 : 1); return; }
+        // With a tab's frame on screen, refresh and print that screen only.
+        if (live && active.frame && ((e.key === 'F5' && !ctl && !e.shiftKey) || (ctl && !e.shiftKey && k === 'r'))) { e.preventDefault(); reloadTab(); return; }
+        if (live && active.frame && ctl && !e.shiftKey && k === 'p') { e.preventDefault(); printTab(); return; }
         if (e.key === 'F10' && !e.shiftKey) { e.preventDefault(); var f = menubar.querySelector('.ws-top'); if (f) f.focus(); return; }
         if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
-            var t = tabs.querySelectorAll('.ws-tab')[Number(e.key) - 1];
-            if (t) { e.preventDefault(); location.href = t.href; }
+            var t = all()[Number(e.key) - 1];
+            if (t) { e.preventDefault(); activate(t); }
         }
     });
+
+    // Links in the window's own parts open tabs; the page's loading screen
+    // (partials/loading-screen) is for page changes, so it leaves them alone.
+    if (live) {
+        [tabs, bar, pal, status, navbar, document.querySelector('.pcoded-header')].forEach(function (el) {
+            if (el) el.setAttribute('data-no-loading', '');
+        });
+    }
 })();

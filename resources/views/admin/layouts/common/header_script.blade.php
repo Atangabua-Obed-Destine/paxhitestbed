@@ -47,6 +47,9 @@
         <link rel="stylesheet" href="{{ asset('dashboard/css/admin-header-responsive.css') }}?v={{ time() }}" type="text/css" media="screen, print">
 
         <!-- Desktop workspace: title bar with menus, tabs, icon rail, status bar (wide screens) -->
+        {{-- A screen opened in a workspace tab shows only its content; marked here,
+             before anything is drawn, so the full layout never flashes inside the tab. --}}
+        <script>try { if (window.parent !== window && window.parent.WS_SHELL) document.documentElement.classList.add('ws-framed'); } catch (e) {}</script>
         <link rel="stylesheet" href="{{ asset('dashboard/css/workspace.css') }}?v={{ @filemtime(public_path('dashboard/css/workspace.css')) }}" type="text/css" media="screen, print">
 
         <!-- Page specific styles -->

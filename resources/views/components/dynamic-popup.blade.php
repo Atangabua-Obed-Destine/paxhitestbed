@@ -205,6 +205,9 @@
     
     // Load popups when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
+        // A screen inside a workspace tab: the window around it shows the
+        // announcements once; each tab showing them again would repeat them.
+        if (document.documentElement.classList.contains('ws-framed')) return;
         loadPopups();
     });
     

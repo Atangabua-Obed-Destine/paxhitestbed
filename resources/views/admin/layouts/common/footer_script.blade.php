@@ -644,9 +644,12 @@
             'close_tab' => __('Close this tab'),
             'connected' => __('Connected'),
             'offline' => __('No network'),
-            'layout_classic' => __('Classic layout'),
-            'layout_desktop' => __('Desktop layout'),
-            'layout_hint' => __('Switch between the desktop workspace and the classic layout'),
+            'loading' => __('Opening…'),
+            'cancel' => __('Cancel'),
+            'tabs_full_title' => __('Two screens are already open'),
+            'tabs_full_body' => __('Besides the Dashboard, two screens stay open at a time. Opening “:new” will close “:old”, the one you used longest ago. Anything not saved on “:old” will be lost.'),
+            'tabs_full_ok' => __('Close “:old” and open'),
+            'tab_dropped' => __('“:old” was closed: besides the Dashboard, two screens stay open at a time.'),
         ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) !!};
     </script>
     <script src="{{ asset('dashboard/js/workspace.js') }}?v={{ @filemtime(public_path('dashboard/js/workspace.js')) }}"></script>
