@@ -31,7 +31,7 @@
 </section>
 
 {{-- QUICK-ACTION BAR --}}
-<section class="bg-white border-b border-surface-100 sticky top-[60px] z-30 shadow-sm">
+<section class="bg-white border-b border-surface-100 sticky top-[60px] z-30 shadow-sm" style="top: calc(60px + var(--notice-h, 0px))">
     <div class="section-container">
         <div class="flex gap-4 overflow-x-auto py-3 text-sm font-medium scrollbar-thin">
             <a href="#dates" class="flex items-center gap-2 px-4 py-2 rounded-full bg-primary-50 text-primary-600 hover:bg-primary-100 whitespace-nowrap transition-colors"><i class="fas fa-calendar-alt"></i> Key Dates</a>

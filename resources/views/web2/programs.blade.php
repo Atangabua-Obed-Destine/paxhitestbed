@@ -29,7 +29,7 @@
 
 
 {{-- FILTER BAR --}}
-<section class="bg-white border-b border-surface-100 sticky top-[60px] z-30 shadow-sm">
+<section class="bg-white border-b border-surface-100 sticky top-[60px] z-30 shadow-sm" style="top: calc(60px + var(--notice-h, 0px))">
     <div class="section-container py-4">
         <form method="GET" action="{{ url('/programs') }}" class="flex flex-col sm:flex-row items-center gap-3">
             <div class="flex items-center gap-2 text-sm text-surface-500 flex-shrink-0">

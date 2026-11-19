@@ -29,7 +29,7 @@
 </section>
 
 {{-- FILTER BAR --}}
-<section class="bg-white border-b border-surface-100 sticky top-[60px] z-30 shadow-sm">
+<section class="bg-white border-b border-surface-100 sticky top-[60px] z-30 shadow-sm" style="top: calc(60px + var(--notice-h, 0px))">
     <div class="section-container">
         <form method="GET" action="{{ url('/projects') }}" class="flex flex-wrap items-center gap-3 py-3">
             {{-- Faculty --}}

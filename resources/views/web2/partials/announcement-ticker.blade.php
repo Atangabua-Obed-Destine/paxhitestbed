@@ -1,25 +1,24 @@
 {{--
-    Announcement Ticker — Fixed top banner with horizontally scrolling notices
+    Announcement Ticker — top banner with horizontally scrolling notices
     Uses Alpine.js for show/hide + CSS animation for ticker scroll
+
+    The bar sticks to the top of the window while the page scrolls. Its height
+    is published as --notice-h so the sticky header, and the sticky filter bars
+    under it, sit just below it rather than sliding underneath; dismissing the
+    bar sets it back to 0.
 --}}
 @php
-    $announcements = \App\Models\Web\Announcement::where('status', 1)
-        ->where(function($q) {
-            $q->whereNull('start_date')->orWhere('start_date', '<=', now());
-        })
-        ->where(function($q) {
-            $q->whereNull('end_date')->orWhere('end_date', '>=', now());
-        })
-        ->get();
+    $announcements = \App\Models\Web\Announcement::live()->get();
 @endphp
 
 @if($announcements->count() > 0)
 <div x-data="{ dismissed: false }"
      x-show="!dismissed"
+     x-effect="document.documentElement.style.setProperty('--notice-h', dismissed ? '0px' : '36px')"
      x-transition:leave="transition ease-in duration-200"
      x-transition:leave-start="opacity-100 -translate-y-0"
      x-transition:leave-end="opacity-0 -translate-y-full"
-     class="relative z-[60] bg-accent-500 text-white overflow-hidden"
+     class="sticky top-0 z-[60] bg-accent-500 text-white overflow-hidden"
      id="announcement-ticker"
      role="marquee"
      aria-label="Announcements"
@@ -40,14 +39,14 @@
                 @foreach($announcements as $a)
                     <span class="inline-flex items-center px-8 text-[13px] font-medium">
                         <span class="w-1.5 h-1.5 rounded-full bg-white/60 mr-3 flex-shrink-0"></span>
-                        {{ $a->message }}
+                        {{ $a->ticker_text }}
                     </span>
                 @endforeach
                 {{-- Duplicate for seamless loop --}}
                 @foreach($announcements as $a)
                     <span class="inline-flex items-center px-8 text-[13px] font-medium" aria-hidden="true">
                         <span class="w-1.5 h-1.5 rounded-full bg-white/60 mr-3 flex-shrink-0"></span>
-                        {{ $a->message }}
+                        {{ $a->ticker_text }}
                     </span>
                 @endforeach
             </div>
@@ -65,6 +64,7 @@
 </div>
 
 <style>
+    :root { --notice-h: 36px; }
     @keyframes ticker-scroll-anim {
         0% { transform: translateX(0); }
         100% { transform: translateX(-50%); }

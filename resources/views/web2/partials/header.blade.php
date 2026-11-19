@@ -84,6 +84,7 @@
 <header x-data="stickyHeader"
         :class="scrolled ? 'bg-white/95 backdrop-blur-lg shadow-[var(--shadow-nav)] py-2' : 'bg-white py-3'"
         class="sticky top-0 z-50 transition-all duration-300 border-b border-surface-100"
+        style="top: var(--notice-h, 0px)"
         id="main-header"
 >
     <div class="section-container">

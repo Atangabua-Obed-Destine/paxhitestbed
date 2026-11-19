@@ -46,13 +46,13 @@
         $animationDuration = 25 + ($announcementCount * 15);
         $mobileAnimationDuration = 22 + ($announcementCount * 12);
     @endphp
-    <div class="site-announcement" style="position:fixed;top:0;left:0;right:0;background:#fff8e1;border-bottom:1px solid #eee;overflow:hidden;z-index:10000;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+    <div class="site-announcement" style="position:fixed;top:0;left:0;right:0;height:50px;box-sizing:border-box;background:#fff8e1;border-bottom:1px solid #eee;overflow:hidden;z-index:10000;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
         <div class="container-fluid">
-            <div class="announcement-ticker-wrapper" style="position:relative;padding:10px 0;">
+            <div class="announcement-ticker-wrapper" style="position:relative;padding:0;line-height:49px;">
                 <div class="announcement-ticker" id="announcementTicker">
                     @foreach($announcements as $a)
                         <span class="announcement-item" style="display:inline-block;padding:0 40px;color:#333;font-weight:600;white-space:nowrap;">
-                            {!! $a->message !!}
+                            {{ $a->ticker_text }}
                         </span>
                     @endforeach
                 </div>
@@ -60,6 +60,11 @@
         </div>
     </div>
     <style>
+        /* One line of plain text in a bar of fixed height: the offsets below
+           that push the page down assume exactly 50px (45px on phones). The
+           message is rich text from the editor, so it is flattened by
+           Announcement::ticker_text; a heading or pasted style would otherwise
+           make the bar grow over the page. */
         .announcement-ticker-wrapper {
             overflow: hidden;
             width: 100%;
@@ -94,6 +99,8 @@
             margin-top: 106px !important; /* 56px header + 50px announcement */
         }
         @media (max-width: 768px) {
+            .site-announcement { height: 45px !important; }
+            .announcement-ticker-wrapper { line-height: 44px !important; }
             .announcement-ticker {
                 animation-duration: {{ $mobileAnimationDuration }}s;
             }
