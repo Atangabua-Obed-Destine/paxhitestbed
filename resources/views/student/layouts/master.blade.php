@@ -159,6 +159,19 @@
     <!-- [ Sidebar Overlay ] -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
+    @php
+        // Used by the desktop chips and the phone context line in the header.
+        $currentSession = \App\Models\Session::where('current', 1)->where('status', 1)->first();
+        $currentSemesterTitle = null;
+        // If a student is logged in, try to get their current enroll -> semester
+        if(\Illuminate\Support\Facades\Auth::guard('student')->check()){
+            $student = \Illuminate\Support\Facades\Auth::guard('student')->user();
+            $currentEnroll = $student->currentEnroll ?? null;
+            if($currentEnroll && $currentEnroll->semester){
+                $currentSemesterTitle = $currentEnroll->semester->title ?? null;
+            }
+        }
+    @endphp
     <!-- [ Header ] start -->
     <header class="navbar pcoded-header navbar-expand-lg navbar-light headerpos-fixed header-lightblue">
         <div class="m-header">
@@ -172,6 +185,18 @@
             </a>
             @endif
             @endif
+            {{-- Phones only (CSS): the session/semester chips are hidden there,
+                 so the same facts sit here, beside the menu button. --}}
+            @if(!empty($currentSemesterTitle) || $currentSession)
+            <div class="m-context" title="{{ $currentSemesterTitle }}{{ $currentSemesterTitle && $currentSession ? ' · ' : '' }}{{ $currentSession->title ?? '' }}">
+                @if(!empty($currentSemesterTitle))
+                <span class="m-context-main">{{ $currentSemesterTitle }}</span>
+                @endif
+                @if($currentSession)
+                <span class="m-context-sub"><i class="fas fa-graduation-cap"></i>{{ $currentSession->title }}</span>
+                @endif
+            </div>
+            @endif
         </div>
         <!-- mobile-header button hidden by CSS -->
         <a class="mobile-menu" id="mobile-header" href="#!">
@@ -183,41 +208,23 @@
                 <li>
                     <h4 class="topbar-title">{{ $setting->title ?? config('app.name') }}</h4>
                 </li>
-                @php
-                    $currentSession = \App\Models\Session::where('current', 1)->where('status', 1)->first();
-                    $currentSemesterTitle = null;
-                    // If a student is logged in, try to get their current enroll -> semester
-                    if(\Illuminate\Support\Facades\Auth::guard('student')->check()){
-                        $student = \Illuminate\Support\Facades\Auth::guard('student')->user();
-                        $currentEnroll = $student->currentEnroll ?? null;
-                        if($currentEnroll && $currentEnroll->semester){
-                            $currentSemesterTitle = $currentEnroll->semester->title ?? null;
-                        }
-                    }
-                @endphp
                 @if($currentSession)
-                <li class="ms-3">
-                    <div class="d-flex align-items-center">
-                        <div class="d-flex align-items-center text-white">
-                            <i class="fas fa-graduation-cap me-2"></i>
-                            <div style="font-size: 14px; font-weight: 600;">
-                                <span class="badge bg-success">{{ __('current_session') }}: {{ $currentSession->title }}</span>
-                            </div>
-                        </div>
-                    </div>
+                <li class="hdr-chip-item">
+                    <span class="badge bg-success hdr-chip" title="{{ __('current_session') }}: {{ $currentSession->title }}">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span class="hdr-chip-label">{{ __('current_session') }}:</span>
+                        <span class="hdr-chip-value">{{ $currentSession->title }}</span>
+                    </span>
                 </li>
                 @endif
 
                 @if(!empty($currentSemesterTitle))
-                <li class="ms-2">
-                    <div class="d-flex align-items-center">
-                        <div class="d-flex align-items-center text-white">
-                            <i class="fas fa-layer-group me-2"></i>
-                            <div style="font-size: 14px; font-weight: 600;">
-                                <span class="badge bg-info">{{ __('current_semester') }}: {{ $currentSemesterTitle }}</span>
-                            </div>
-                        </div>
-                    </div>
+                <li class="hdr-chip-item hdr-chip-item--semester">
+                    <span class="badge bg-info hdr-chip" title="{{ __('current_semester') }}: {{ $currentSemesterTitle }}">
+                        <i class="fas fa-layer-group"></i>
+                        <span class="hdr-chip-label">{{ __('current_semester') }}:</span>
+                        <span class="hdr-chip-value">{{ $currentSemesterTitle }}</span>
+                    </span>
                 </li>
                 @endif
             </ul>
@@ -438,12 +445,12 @@
 
                 <!-- Language -->
                 <li>
-                    <div class="dropdown">
+                    <div class="dropdown hdr-lang">
                         <a href="#" class="dropdown-toggle" data-bs-toggle="dropdown">
-                            @php 
+                            @php
                             $version = App\Models\Language::version(); 
                             @endphp
-                            <i class="fas fa-language"></i> {{ $version->name }}
+                            <i class="fas fa-language"></i><span class="hdr-lang-name">{{ $version->name }}</span>
                         </a>
                         <div class="dropdown-menu dropdown-menu-right notification">
                             <div class="noti-head">
@@ -547,7 +554,7 @@
                 <li>
                     <div class="dropdown drp-user">
                         <a href="#" class="dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown" style="padding: 2px 8px; background: rgba(255,255,255,0.15); border-radius: 18px; text-decoration: none;">
-                            <span class="text-white me-2" style="font-weight: 500; font-size: 13px;">{{ Auth::guard('student')->user()->first_name }} {{ Auth::guard('student')->user()->last_name }}</span>
+                            <span class="text-white me-2 hdr-user-name" style="font-weight: 500; font-size: 13px;">{{ Auth::guard('student')->user()->first_name }} {{ Auth::guard('student')->user()->last_name }}</span>
                             <div style="width: 26px; height: 26px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-user-circle" style="color: #182b49; font-size: 16px;"></i>
                             </div>
@@ -1039,18 +1046,6 @@
             }
         }
         
-        #progression-button-container {
-            margin: 0 10px;
-        }
-        
-        #progression-button {
-            animation: gentle-bounce 3s ease-in-out infinite;
-        }
-        
-        @keyframes gentle-bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-5px); }
-        }
     </style>
 
     @include('student.layouts.common.footer_script')
