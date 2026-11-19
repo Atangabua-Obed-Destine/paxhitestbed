@@ -1,1437 +1,920 @@
 @extends('admin.layouts.master')
 @section('title', $title)
 
+{{--
+    The EduTrust dashboard.
+
+    It is laid out like a day book, the register a school office keeps: today's
+    date in the margin, a greeting, then what the day holds. It reads two ways.
+
+    A lecturer opens their own desk first: a welcome, their classes today in
+    order with the one in progress and the next one marked, the live class
+    kiosk, their courses and their week.
+
+    Staff who run the institution then see what is waiting on them (only what
+    actually needs doing, never a row of zeros), four figures with the context
+    that makes them mean something, where the students are, the day at a
+    glance, and a directory of the screens they can open.
+
+    Every panel and link is behind the same permission it had before; no figure
+    is calculated differently. The figures come from DashboardController.
+--}}
+
 @section('page_css')
 <style>
-    /* Modern Dashboard Styles */
-    .welcome-banner {
-        background: linear-gradient(135deg, #182b49 0%, #2c4168 100%);
-        border-radius: 15px;
-        padding: 2rem;
-        color: white;
-        box-shadow: 0 8px 20px rgba(24, 43, 73, 0.3);
-        margin-bottom: 2rem;
-        position: relative;
-        overflow: hidden;
+    .et-dash {
+        --et-ink: #182b49;
+        --et-ink-2: #334155;
+        --et-muted: #64748b;
+        --et-faint: #94a3b8;
+        --et-line: #e3e7ee;
+        --et-rule: #eef1f6;
+        --et-surface: #ffffff;
+        --et-tint: #f6f8fb;
+        --et-accent: #1f5fa8;
+        --et-accent-tint: #e8f0fa;
+        --et-margin: #e8b54a;
+        --et-good: #0f7a3d;
+        --et-good-tint: #e6f4ec;
+        --et-warn: #9a5b00;
+        --et-warn-tint: #fdf3e1;
+        --et-bad: #b3261e;
+        --et-bad-tint: #fbe9e7;
+        --et-serif: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+        color: var(--et-ink-2);
+        font-variant-numeric: tabular-nums;
     }
-    
-    .welcome-banner::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        right: -10%;
-        width: 300px;
-        height: 300px;
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 50%;
+    .et-dash *, .et-dash *::before, .et-dash *::after { box-sizing: border-box; }
+    .et-dash a { text-decoration: none; }
+    .et-dash a:focus-visible, .et-dash button:focus-visible { outline: 2px solid var(--et-accent); outline-offset: 2px; border-radius: 6px; }
+
+    /* ── Masthead: the day book's page head ───────────────────────────── */
+    .et-mast {
+        position: relative; overflow: hidden;
+        display: grid; grid-template-columns: auto 1fr auto; gap: 0 28px; align-items: center;
+        padding: 26px 28px; margin-bottom: 24px;
+        background-color: var(--et-surface);
+        /* Ruled faintly, like a register page, with its margin line. */
+        background-image:
+            linear-gradient(to right, transparent 111px, var(--et-margin) 111px, var(--et-margin) 112px, transparent 112px),
+            repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--et-rule) 31px, var(--et-rule) 32px);
+        border: 1px solid var(--et-line); border-radius: 12px;
     }
-    
-    .welcome-banner h2 {
-        font-size: 2rem;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        position: relative;
-        z-index: 1;
-        color: white !important;
+    .et-date { width: 84px; text-align: center; line-height: 1; color: var(--et-ink); }
+    .et-date-day { display: block; font-family: var(--et-serif); font-size: 56px; letter-spacing: -1px; }
+    .et-date-week { display: block; margin-top: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--et-muted); }
+    .et-date-month { display: block; margin-top: 3px; font-size: 12px; color: var(--et-muted); }
+    .et-mast-main { min-width: 0; padding-left: 8px; }
+    .et-eyebrow { margin: 0 0 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--et-muted); }
+    .et-greet { margin: 0; font-family: var(--et-serif); font-weight: 400; font-size: 32px; line-height: 1.15; color: var(--et-ink); text-wrap: balance; }
+    .et-lede { margin: 8px 0 0; max-width: 62ch; font-size: 15px; line-height: 1.55; color: var(--et-ink-2); }
+    .et-lede strong { color: var(--et-ink); font-weight: 600; }
+    .et-mast-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; text-align: right; }
+    .et-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--et-tint); color: var(--et-ink); border: 1px solid var(--et-line); white-space: nowrap; }
+    .et-chip i { color: var(--et-muted); }
+    .et-clock { font-size: 12px; color: var(--et-muted); }
+
+    @media (max-width: 767.98px) {
+        .et-mast { grid-template-columns: auto 1fr; padding: 20px 18px; background-image:
+            linear-gradient(to right, transparent 87px, var(--et-margin) 87px, var(--et-margin) 88px, transparent 88px),
+            repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--et-rule) 31px, var(--et-rule) 32px); }
+        .et-date { width: 64px; }
+        .et-date-day { font-size: 42px; }
+        .et-greet { font-size: 24px; }
+        .et-mast-side { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; margin-top: 14px; }
     }
-    
-    .welcome-banner p {
-        font-size: 1rem;
-        opacity: 0.9;
-        margin-bottom: 0;
-        position: relative;
-        z-index: 1;
-        color: white !important;
+
+    /* ── Sections and panels ───────────────────────────────────────────── */
+    .et-section { margin: 0 0 28px; }
+    .et-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 2px 12px; }
+    .et-section-title { margin: 0; font-family: var(--et-serif); font-weight: 400; font-size: 22px; color: var(--et-ink); }
+    .et-section-note { font-size: 13px; color: var(--et-muted); }
+
+    .et-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch; }
+    .et-row > * { flex: 1 1 360px; min-width: 0; }
+    .et-row > .et-wide { flex-grow: 1.6; }
+
+    .et-panel { background: var(--et-surface); border: 1px solid var(--et-line); border-radius: 12px; display: flex; flex-direction: column; }
+    .et-panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--et-rule); }
+    .et-panel-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--et-ink); }
+    .et-panel-link { font-size: 13px; font-weight: 600; color: var(--et-accent) !important; white-space: nowrap; }
+    .et-panel-link:hover { text-decoration: underline !important; }
+    .et-panel-body { padding: 16px 20px 18px; flex: 1; }
+    .et-empty { display: flex; align-items: center; gap: 12px; padding: 18px 20px; color: var(--et-muted); font-size: 14px; }
+    .et-empty i { font-size: 18px; color: var(--et-good); }
+
+    /* ── Waiting on you ────────────────────────────────────────────────── */
+    .et-todo { list-style: none; margin: 0; padding: 6px 0; }
+    .et-todo a { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 14px; padding: 11px 20px; color: inherit; transition: background-color .15s; }
+    .et-todo a:hover { background: var(--et-tint); }
+    .et-todo li + li a { border-top: 1px solid var(--et-rule); }
+    .et-count { display: inline-flex; justify-content: center; min-width: 44px; padding: 5px 8px; border-radius: 8px; font-size: 16px; font-weight: 700; background: var(--et-accent-tint); color: var(--et-accent); }
+    .et-count.warn { background: var(--et-warn-tint); color: var(--et-warn); }
+    .et-count.bad { background: var(--et-bad-tint); color: var(--et-bad); }
+    .et-todo-label { display: block; font-size: 14px; font-weight: 600; color: var(--et-ink); }
+    .et-todo-note { display: block; margin-top: 1px; font-size: 13px; color: var(--et-muted); }
+    .et-todo .fa-chevron-right { color: var(--et-faint); font-size: 12px; }
+
+    /* ── Figures ───────────────────────────────────────────────────────── */
+    .et-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
+    .et-figure { display: block; padding: 18px 20px; background: var(--et-surface); border: 1px solid var(--et-line); border-radius: 12px; color: inherit; transition: border-color .15s; }
+    a.et-figure:hover { border-color: #c7d2e1; }
+    .et-figure-label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--et-muted); }
+    .et-figure-value { margin: 10px 0 2px; font-size: 30px; font-weight: 700; line-height: 1.1; color: var(--et-ink); letter-spacing: -.5px; }
+    .et-figure-value small { font-size: 15px; font-weight: 600; color: var(--et-muted); letter-spacing: 0; }
+    .et-figure-sub { margin: 0; font-size: 13px; color: var(--et-muted); line-height: 1.5; }
+    .et-figure-sub b { color: var(--et-ink-2); font-weight: 600; }
+    .et-meter { display: flex; height: 8px; margin: 12px 0 8px; border-radius: 99px; overflow: hidden; background: var(--et-rule); gap: 2px; }
+    .et-meter span { display: block; height: 100%; }
+    .et-meter .good { background: var(--et-good); }
+    .et-meter .bad { background: var(--et-bad); }
+    .et-meter .accent { background: var(--et-accent); }
+    .et-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--et-muted); }
+    .et-key span::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 2px; background: currentColor; vertical-align: 0; }
+    .et-key .good::before { background: var(--et-good); }
+    .et-key .bad::before { background: var(--et-bad); }
+    .et-key .accent::before { background: var(--et-accent); }
+    .et-key .rest::before { background: var(--et-rule); border: 1px solid var(--et-line); }
+
+    /* ── Where the students are ────────────────────────────────────────── */
+    .et-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--et-tint); border: 1px solid var(--et-line); }
+    .et-tab { border: 0; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--et-muted); cursor: pointer; }
+    .et-tab[aria-selected="true"] { background: var(--et-surface); color: var(--et-ink); box-shadow: 0 1px 2px rgba(24, 43, 73, .12); }
+    .et-bars { list-style: none; margin: 0; padding: 0; }
+    .et-bars li { display: grid; grid-template-columns: minmax(0, 1fr) 56px; gap: 4px 12px; align-items: center; padding: 7px 0; }
+    .et-bars li + li { border-top: 1px solid var(--et-rule); }
+    .et-bar-name { font-size: 14px; color: var(--et-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .et-bar-count { grid-row: span 2; text-align: right; font-size: 15px; font-weight: 700; color: var(--et-ink); }
+    .et-bar-track { height: 6px; border-radius: 99px; background: var(--et-rule); overflow: hidden; }
+    .et-bar-fill { display: block; height: 100%; border-radius: 99px; background: var(--et-accent); min-width: 2px; }
+    .et-more summary { margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--et-accent); cursor: pointer; list-style: none; }
+    .et-more summary::-webkit-details-marker { display: none; }
+    .et-more[open] summary { margin-bottom: 4px; }
+
+    /* ── The day at a glance ───────────────────────────────────────────── */
+    .et-daybook { list-style: none; margin: 0; padding: 4px 0; }
+    .et-daybook a, .et-daybook .et-line { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 12px; padding: 9px 20px; color: inherit; }
+    .et-daybook a:hover { background: var(--et-tint); }
+    .et-daybook li + li > * { border-top: 1px solid var(--et-rule); }
+    .et-daybook i { text-align: center; color: var(--et-muted); }
+    .et-daybook .et-day-label { font-size: 14px; color: var(--et-ink-2); }
+    .et-daybook .et-day-count { font-size: 15px; font-weight: 700; color: var(--et-ink); }
+    .et-daybook .is-zero .et-day-count { color: var(--et-faint); font-weight: 600; }
+    .et-subhead { padding: 12px 20px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--et-faint); }
+
+    /* ── Directory of screens ──────────────────────────────────────────── */
+    .et-directory { columns: 4 220px; column-gap: 20px; }
+    .et-dir-group { break-inside: avoid; margin: 0 0 20px; padding: 14px 16px; background: var(--et-surface); border: 1px solid var(--et-line); border-radius: 12px; }
+    .et-dir-title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--et-muted); }
+    .et-dir-title i { width: 16px; text-align: center; }
+    .et-dir-links { list-style: none; margin: 0; padding: 0; }
+    .et-dir-links a { display: block; padding: 4px 0; font-size: 14px; color: var(--et-ink) !important; }
+    .et-dir-links a:hover { color: var(--et-accent) !important; text-decoration: underline !important; }
+
+    /* ── The lecturer's desk ───────────────────────────────────────────── */
+    .et-timeline { list-style: none; margin: 0; padding: 8px 0; }
+    .et-class { position: relative; display: grid; grid-template-columns: 92px 18px 1fr; gap: 0 14px; padding: 10px 20px; }
+    .et-class-time { text-align: right; line-height: 1.3; }
+    .et-class-time b { display: block; font-size: 15px; color: var(--et-ink); }
+    .et-class-time span { font-size: 12px; color: var(--et-muted); }
+    .et-class-node { position: relative; }
+    .et-class-node::before { content: ''; position: absolute; left: 8px; top: 0; bottom: -20px; width: 2px; background: var(--et-rule); }
+    .et-class:last-child .et-class-node::before { display: none; }
+    .et-class-node::after { content: ''; position: absolute; left: 3px; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--et-surface); border: 2px solid var(--et-faint); }
+    .et-class.is-now .et-class-node::after { background: var(--et-good); border-color: var(--et-good); box-shadow: 0 0 0 4px var(--et-good-tint); }
+    .et-class.is-next .et-class-node::after { border-color: var(--et-accent); background: var(--et-accent-tint); }
+    .et-class.is-done { opacity: .62; }
+    .et-class-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--et-ink); }
+    .et-code { display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 5px; font-size: 12px; font-weight: 700; background: var(--et-tint); border: 1px solid var(--et-line); color: var(--et-ink); }
+    .et-class-meta { margin: 3px 0 0; font-size: 13px; color: var(--et-muted); }
+    .et-state { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; vertical-align: 2px; }
+    .et-state.now { background: var(--et-good-tint); color: var(--et-good); }
+    .et-state.next { background: var(--et-accent-tint); color: var(--et-accent); }
+    .et-state.done { background: var(--et-tint); color: var(--et-muted); }
+
+    .et-kiosk { padding: 18px 20px; flex: 1; }
+    .et-kiosk-panel.is-live { background: var(--et-good-tint); border-color: #b9dcc7; }
+    .et-kiosk-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 16px; font-weight: 700; color: var(--et-ink); }
+    .et-kiosk-panel.is-live .et-kiosk-title { color: var(--et-good); }
+    .et-live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--et-good); box-shadow: 0 0 0 4px rgba(15, 122, 61, .18); }
+    .et-kiosk p { margin: 8px 0 14px; font-size: 14px; line-height: 1.5; color: var(--et-ink-2); }
+    .et-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; background: var(--et-ink); color: #fff !important; border: 0; }
+    .et-btn:hover { background: #233a63; }
+    .et-btn.good { background: var(--et-good); }
+    .et-btn.good:hover { background: #0c6532; }
+    .et-btn-quiet { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--et-accent) !important; background: var(--et-accent-tint); }
+    .et-btn-quiet:hover { background: #dbe7f6; }
+    .et-trio { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--et-rule); }
+    .et-trio div { padding: 14px 10px; text-align: center; }
+    .et-trio div + div { border-left: 1px solid var(--et-rule); }
+    .et-trio b { display: block; font-size: 22px; color: var(--et-ink); }
+    .et-trio span { font-size: 12px; color: var(--et-muted); }
+
+    .et-courses { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .et-course { display: flex; flex-direction: column; padding: 16px; background: var(--et-surface); border: 1px solid var(--et-line); border-radius: 12px; }
+    .et-course-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .et-course-title { margin: 6px 0 0; font-size: 14px; line-height: 1.4; color: var(--et-ink-2); }
+    .et-course-students { flex-shrink: 0; font-size: 13px; color: var(--et-muted); white-space: nowrap; }
+    .et-course-groups { margin: 10px 0 12px; font-size: 13px; color: var(--et-muted); }
+    .et-course-groups ul { list-style: none; margin: 6px 0 0; padding: 0; }
+    .et-course-groups li { padding: 5px 0; border-top: 1px solid var(--et-rule); }
+    .et-course-groups a { color: var(--et-accent) !important; font-weight: 600; }
+    .et-course .et-btn { margin-top: auto; justify-content: center; }
+    .et-toggle { color: var(--et-accent) !important; font-weight: 600; cursor: pointer; }
+
+    .et-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--et-line); border-radius: 12px; overflow: hidden; background: var(--et-surface); }
+    .et-weekday { min-height: 120px; border-left: 1px solid var(--et-rule); }
+    .et-weekday:first-child { border-left: 0; }
+    .et-weekday-name { padding: 9px 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--et-muted); border-bottom: 1px solid var(--et-rule); background: var(--et-tint); }
+    .et-weekday.is-today .et-weekday-name { background: var(--et-ink); color: #fff; }
+    .et-weekday.is-today { background: #fbfcfe; }
+    .et-slot { margin: 8px; padding: 7px 8px; border-radius: 8px; background: var(--et-tint); border-left: 3px solid var(--et-accent); font-size: 12px; line-height: 1.35; }
+    .et-slot b { display: block; color: var(--et-ink); }
+    .et-slot span { color: var(--et-muted); }
+    .et-slot-none { margin: 10px; font-size: 12px; color: var(--et-faint); }
+    @media (max-width: 991.98px) {
+        .et-week { grid-template-columns: 1fr; }
+        .et-weekday { min-height: 0; border-left: 0; border-top: 1px solid var(--et-rule); }
+        .et-weekday:first-child { border-top: 0; }
+        .et-weekday.is-empty { display: none; }
     }
-    
-    .stat-card {
-        background: white;
-        border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        margin-bottom: 1.5rem;
-        border: none;
-        position: relative;
-        overflow: hidden;
+    @media (max-width: 575.98px) {
+        .et-class { grid-template-columns: 70px 18px 1fr; padding: 10px 14px; gap: 0 10px; }
+        .et-todo a { grid-template-columns: 46px 1fr auto; padding: 11px 14px; }
+        .et-panel-head, .et-panel-body { padding-left: 14px; padding-right: 14px; }
     }
-    
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 4px;
-        background: linear-gradient(90deg, #04a9f5, #1de9b6);
-        transform: scaleX(0);
-        transition: transform 0.3s ease;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
-    
-    .stat-card:hover::before {
-        transform: scaleX(1);
-    }
-    
-    .stat-icon {
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 28px;
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
-    }
-    
-    .stat-card:hover .stat-icon {
-        transform: scale(1.1) rotate(5deg);
-    }
-    
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 0.3rem;
-        color: #182b49;
-    }
-    
-    .stat-label {
-        font-size: 0.9rem;
-        color: #6c757d;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .quick-actions-section {
-        background: white;
-        border-radius: 15px;
-        padding: 2rem;
-        box-shadow: 0 2px 15px rgba(0,0,0,0.08);
-        margin-bottom: 2rem;
-    }
-    
-    .section-title {
-        font-size: 1.3rem;
-        font-weight: 600;
-        color: #182b49;
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        padding-bottom: 1rem;
-        border-bottom: 2px solid #f0f0f0;
-    }
-    
-    .section-title i {
-        margin-right: 0.8rem;
-        color: #04a9f5;
-    }
-    
-    .action-btn {
-        display: block;
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 1rem 1.2rem;
-        color: #333;
-        text-decoration: none;
-        transition: all 0.3s ease;
-        margin-bottom: 0.8rem;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .action-btn::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(4, 169, 245, 0.1), transparent);
-        transition: left 0.5s ease;
-    }
-    
-    .action-btn:hover::before {
-        left: 100%;
-    }
-    
-    .action-btn:hover {
-        transform: translateX(5px);
-        box-shadow: 0 4px 15px rgba(4, 169, 245, 0.2);
-        border-color: #04a9f5;
-        color: #04a9f5;
-    }
-    
-    .action-btn i {
-        margin-right: 0.8rem;
-        width: 25px;
-        text-align: center;
-    }
-    
-    .action-btn .badge {
-        float: right;
-        margin-top: 2px;
-    }
-    
-    /* Color variations for stat icons */
-    .stat-blue { background: linear-gradient(135deg, #04a9f5 0%, #0692d8 100%); color: white; }
-    .stat-green { background: linear-gradient(135deg, #1de9b6 0%, #17c79a 100%); color: white; }
-    .stat-orange { background: linear-gradient(135deg, #f4c22b 0%, #dba719 100%); color: white; }
-    .stat-red { background: linear-gradient(135deg, #f44236 0%, #d9362b 100%); color: white; }
-    .stat-purple { background: linear-gradient(135deg, #8a5fc6 0%, #7146b4 100%); color: white; }
-    .stat-teal { background: linear-gradient(135deg, #1dd1a1 0%, #10ac84 100%); color: white; }
-    .stat-indigo { background: linear-gradient(135deg, #5f27cd 0%, #4b1eae 100%); color: white; }
-    .stat-pink { background: linear-gradient(135deg, #ee5a6f 0%, #d9455a 100%); color: white; }
-    
-    /* Pulse animation */
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-    }
-    
-    .pulse-animation {
-        animation: pulse 2s infinite;
-    }
-    
-    /* Section Grid */
-    .sections-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1.5rem;
-        margin-top: 2rem;
-    }
-    
-    @media (max-width: 768px) {
-        .welcome-banner h2 {
-            font-size: 1.5rem;
-        }
-        .stat-value {
-            font-size: 1.5rem;
-        }
-        .sections-grid {
-            grid-template-columns: 1fr;
-        }
+    @media (prefers-reduced-motion: reduce) {
+        .et-dash * { transition: none !important; }
     }
 </style>
 @endsection
 
 @section('content')
+@php
+    $me = Auth::user();
+    $now = now();
+    $greeting = $now->hour < 12 ? __('Good morning') : ($now->hour < 17 ? __('Good afternoon') : __('Good evening'));
+    // Timetable times, without seconds. The setting offers "HH:MM:SS" (stored as
+    // h:i:s, which PHP reads as a 12-hour clock with no AM/PM, so 17:08 would
+    // print as 05:08) and "HH:MM:SS XM". Read them as the labels promise.
+    $timeFormat = preg_match('/[aA]/', $setting->time_format ?? '') ? 'g:i A' : 'H:i';
+    $at = fn ($time) => date($timeFormat, strtotime($time));
+    $money = fn ($amount) => ($setting->currency_symbol ?? '$') . number_format($amount, 0);
 
-<!-- Start Content-->
+    // The system numbers days 1 = Saturday … 7 = Friday.
+    $todayNumber = [1 => 3, 2 => 4, 3 => 5, 4 => 6, 5 => 7, 6 => 1, 7 => 2][(int) $now->format('N')];
+
+    // ── The lecturer's day ──
+    $classesToday = collect();
+    $nextClass = null;
+    $classNow = null;
+    if ($is_teacher) {
+        $clock = $now->format('H:i:s');
+        // A service course is often one class in one room shared by many groups,
+        // and the timetable holds a row per group. The lecturer teaches it once,
+        // so it is shown once, with its groups counted.
+        $classesToday = $teacher_today_classes
+            ->groupBy(fn ($c) => implode('|', [$c->start_time, $c->end_time, $c->subject_id, $c->room_id]))
+            ->map(function ($rows) { $class = $rows->first(); $class->dash_groups = $rows; return $class; })
+            ->values()
+            ->map(function ($class) use ($clock) {
+            $start = date('H:i:s', strtotime($class->start_time));
+            $end = date('H:i:s', strtotime($class->end_time));
+            $class->dash_state = $end <= $clock ? 'done' : ($start <= $clock ? 'now' : 'later');
+            return $class;
+        });
+        $classNow = $classesToday->firstWhere('dash_state', 'now');
+        // Counted the same way: a class shared by several groups is one class.
+        $weeklyTaught = $teacher_weekly_schedule->flatten()
+            ->unique(fn ($c) => implode('|', [$c->day, $c->start_time, $c->end_time, $c->subject_id, $c->room_id]))
+            ->count();
+        $nextClass = $classesToday->firstWhere('dash_state', 'later');
+        if ($nextClass) {
+            $nextClass->dash_state = 'next';
+        }
+
+        $activeSession = \App\Models\ClassSession::where('teacher_id', Auth::id())
+            ->where('date', $now->toDateString())->where('status', 'in_progress')
+            ->with(['subject', 'program'])->first();
+        $pendingSessions = \App\Models\ClassSession::where('teacher_id', Auth::id())
+            ->where('date', $now->toDateString())->where('status', 'pending')->count();
+        $completedSessions = \App\Models\ClassSession::where('teacher_id', Auth::id())
+            ->where('date', $now->toDateString())->where('status', 'completed')->count();
+    }
+
+    // ── What is waiting on this person: only what they may act on, only above zero ──
+    $waitingItems = [
+        ['application-view', $pending_applications, 'admin.application.index', __('Applications to review'), __('New applicants waiting for a decision'), ''],
+        ['payment-receipt-verify', $payment_verifications, 'admin.payment-verification.index', __('Payment receipts to verify'), __('Students are waiting for their payments to be confirmed'), 'warn'],
+        ['resit-request-view', $resit_requests, 'admin.resit-requests.index', __('Resit requests'), __('Requested or waiting for payment'), ''],
+        ['payroll-view', $pending_payroll, 'admin.payroll.index', __('Payroll to complete'), __('Salaries generated but not yet paid'), 'warn'],
+        ['journal-entry-view', $unposted_entries ?? 0, 'admin.journal-entries.index', __('Journal entries to post'), __('Recorded but not yet in the ledger'), ''],
+        ['issue-return-view', $books_overdue, 'admin.issue-return.index', __('Library books overdue'), __('Past their return date'), 'bad'],
+        ['book-request-view', $pending_book_requests, 'admin.book-request.index', __('Book requests'), __('Waiting for the library to answer'), ''],
+    ];
+    $canSeeWaiting = false;
+    $waiting = [];
+    foreach ($waitingItems as [$permission, $count, $route, $label, $note, $tone]) {
+        if (!$me->can($permission)) continue;
+        $canSeeWaiting = true;
+        if ($count > 0) $waiting[] = compact('count', 'route', 'label', 'note', 'tone');
+    }
+    $waitingTotal = count($waiting);
+
+    $canStudents = $me->canany(['application-view', 'student-view']);
+    $canFees = $me->can('fees-student-report');
+    $canAttendance = $me->can('student-attendance-action');
+    $canStaff = $me->canany(['user-view', 'payroll-view']);
+    $canFigures = $canStudents || $canFees || $canAttendance || $canStaff;
+
+    // ── The day at a glance ──
+    $dayItems = array_values(array_filter([
+        ['class-routine-view', 'fa-chalkboard-teacher', __('Classes on the timetable today'), $today_classes, 'admin.class-routine.index'],
+        ['event-view', 'fa-calendar', __('Upcoming events'), $upcoming_events, 'admin.event.index'],
+        ['notice-view', 'fa-sticky-note', __('Notices published'), $active_notices, 'admin.notice.index'],
+        ['assignment-view', 'fa-tasks', __('Assignments open'), $active_assignments, 'admin.assignment.index'],
+        ['payment-plan.index', 'fa-calendar-check', __('Active payment plans'), $active_payment_plans, 'admin.payment-plan.index'],
+        ['issue-return-view', 'fa-book', __('Books out on loan'), $books_issued, 'admin.issue-return.index'],
+    ], fn ($item) => $me->can($item[0])));
+    $frontItems = array_values(array_filter([
+        [['visitor-view', 'visitor-create'], 'fa-user-friends', __('Visitors'), $daily_visitors->count(), 'admin.visitor.index'],
+        [['phone-log-view', 'phone-log-create'], 'fa-phone-alt', __('Phone calls'), $daily_phone_logs->count(), 'admin.phone-log.index'],
+        [['enquiry-view', 'enquiry-create'], 'fa-question-circle', __('Enquiries'), $daily_enqueries->count(), 'admin.enquiry.index'],
+        [['postal-exchange-view', 'postal-exchange-create'], 'fa-envelope', __('Post in and out'), $daily_postals->count(), 'admin.postal-exchange.index'],
+    ], fn ($item) => $me->canany($item[0])));
+
+    // ── Directory of screens, grouped as in the menu ──
+    $directory = [
+        [trans_choice('module_admission', 2), 'fa-university', [
+            ['application-view', 'admin.application.index', trans_choice('module_application', 2)],
+            ['student-view', 'admin.student.index', trans_choice('module_student', 1) . ' ' . __('list')],
+            ['student-transfer-in-view', 'admin.student-transfer-in.index', trans_choice('module_transfer_in', 1)],
+            ['student-card', 'admin.id-card.index', trans_choice('module_id_card', 2)],
+        ]],
+        [trans_choice('module_student', 2), 'fa-user-graduate', [
+            ['student-attendance-action', 'admin.student-attendance.index', trans_choice('module_attendance', 2)],
+            ['student-enroll-single', 'admin.single-enroll.index', trans_choice('module_single_enroll', 1)],
+            ['student-enroll-complete', 'admin.course-complete.index', trans_choice('module_course_complete', 2)],
+            ['student-enroll-alumni', 'admin.student-alumni.index', trans_choice('module_student_alumni', 1)],
+        ]],
+        [trans_choice('module_routine', 2), 'fa-calendar-alt', [
+            ['class-routine-view', 'admin.class-routine.index', trans_choice('module_class_routine', 2)],
+            ['exam-routine-view', 'admin.exam-routine.index', trans_choice('module_exam_routine', 2)],
+            ['class-routine-teacher', 'admin.class-routine.teacher', trans_choice('module_teacher_routine', 2)],
+        ]],
+        [trans_choice('module_examination', 2), 'fa-file-alt', [
+            ['exam-attendance', 'admin.exam-attendance.index', trans_choice('module_exam_attendance', 2)],
+            ['exam-marking', 'admin.exam-marking.index', trans_choice('module_exam_marking', 2)],
+            ['exam-marking', 'admin.student-exam-config.index', __('Student Exam Config')],
+            ['subject-marking', 'admin.subject-marking.index', trans_choice('module_subject_marking', 2)],
+            ['resit-request-view', 'admin.resit-requests.index', __('Resit Requests')],
+            ['admit-card-view', 'admin.admit-card.index', trans_choice('module_admit_card', 2)],
+        ]],
+        [trans_choice('module_study_material', 2), 'fa-newspaper', [
+            ['assignment-view', 'admin.assignment.index', trans_choice('module_assignment', 2)],
+            ['content-view', 'admin.content.index', trans_choice('module_content', 1) . ' ' . __('list')],
+        ]],
+        [trans_choice('module_fees_collection', 1), 'fa-money-bill-wave', [
+            ['fees-student-due', 'admin.fees-student.index', trans_choice('module_student_fees', 2)],
+            ['fees-student-report', 'admin.fees-student.report', trans_choice('module_fees_report', 2)],
+            ['payment-plan.index', 'admin.payment-plan.index', __('Payment Plans')],
+            ['fees-master-create', 'admin.fees-master.create', trans_choice('module_fees_master', 2)],
+            ['fees-master-view', 'admin.fees-master.index', trans_choice('module_fees_master_history', 2)],
+            ['payment-receipt-verify', 'admin.payment-verification.index', trans_choice('module_payment_verification', 2)],
+        ]],
+        [trans_choice('module_human_resource', 2), 'fa-users-cog', [
+            ['user-view', 'admin.user.index', trans_choice('module_staff', 1) . ' ' . __('list')],
+            ['staff-assignment-index', 'admin.staff-assignment.index', __('Staff Assign')],
+            ['staff-view', 'admin.staff-id-card.index', trans_choice('module_staff', 1) . ' ' . __('field_id_card')],
+            ['payroll-view', 'admin.payroll.index', trans_choice('module_payroll', 2)],
+            ['payroll-report', 'admin.payroll.report', trans_choice('module_payroll_report', 2)],
+            ['tax-setting-view', 'admin.tax-setting.index', trans_choice('module_tax_setting', 2)],
+        ]],
+        [trans_choice('module_staff_attendance', 2), 'fa-calendar-check', [
+            ['staff-daily-attendance-action', 'admin.staff-daily-attendance.index', trans_choice('module_staff_daily_attendance', 2)],
+            ['staff-hourly-attendance-action', 'admin.staff-hourly-attendance.index', trans_choice('module_staff_hourly_attendance', 2)],
+        ]],
+        [__('Accounting'), 'fa-calculator', [
+            ['income-view', 'admin.income.index', trans_choice('module_income', 1) . ' ' . __('list')],
+            ['expense-view', 'admin.expense.index', trans_choice('module_expense', 1) . ' ' . __('list')],
+            ['budget-view', 'admin.budget.dashboard', __('budget_dashboard')],
+            ['budget-view', 'admin.budget.index', trans_choice('module_budget', 2)],
+            ['payment-account-view', 'admin.payment-account.index', __('Payment Accounts')],
+            ['payment-account-view', 'admin.payment-account-transfer.index', __('Account Transfers')],
+            ['chart-of-accounts-view', 'admin.chart-of-accounts.index', __('Chart of Accounts')],
+            ['journal-entry-view', 'admin.journal-entries.index', __('Journal Entries')],
+            ['general-ledger-view', 'admin.general-ledger.index', __('General Ledger')],
+        ]],
+        [trans_choice('module_library', 1), 'fa-book-open', [
+            ['issue-return-create', 'admin.issue-return.create', trans_choice('module_issue_book', 1)],
+            ['issue-return-view', 'admin.issue-return.index', trans_choice('module_issue_return', 2)],
+            ['book-view', 'admin.book-list.index', trans_choice('module_book_list', 2)],
+            ['book-request-view', 'admin.book-request.index', trans_choice('module_book_request', 2)],
+            ['e-library-view', 'admin.e-library.index', __('E-Library')],
+        ]],
+        [trans_choice('module_inventory', 2), 'fa-boxes', [
+            ['item-issue-create', 'admin.item-issue.create', trans_choice('module_issue_item', 1)],
+            ['item-issue-view', 'admin.item-issue.index', trans_choice('module_item_issue', 2)],
+            ['item-view', 'admin.item-list.index', trans_choice('module_item_list', 2)],
+            ['item-view', 'admin.item-stock.index', trans_choice('module_item_stock', 2)],
+        ]],
+        [trans_choice('module_communicate', 2), 'fa-bullhorn', [
+            ['email-notify-create', 'admin.email-notify.index', trans_choice('module_email_notify', 2)],
+            ['event-view', 'admin.event.index', trans_choice('module_event', 2)],
+            ['event-view', 'admin.event.calendar', trans_choice('module_calendar', 2)],
+            ['notice-view', 'admin.notice.index', trans_choice('module_notice', 2)],
+        ]],
+        [__('Reports & Transcripts'), 'fa-chart-line', [
+            ['transcript-view', 'admin.marksheet.semester', __('Semester Marksheet')],
+            ['transcript-view', 'admin.marksheet.index', trans_choice('module_transcript', 2)],
+            ['report-view', 'admin.report.student', trans_choice('module_student', 1) . ' ' . __('report')],
+            ['report-view', 'admin.report.student-fees', __('Student Fees Report')],
+        ]],
+        [__('System Management'), 'fa-cogs', [
+            ['role-view', 'admin.role.index', trans_choice('module_role_permission', 2)],
+            ['audit-log-view', 'admin.audit-log.index', __('Audit Log')],
+        ]],
+    ];
+    $directory = array_values(array_filter(array_map(function ($group) use ($me) {
+        $group[2] = array_values(array_filter($group[2], fn ($link) => $me->can($link[0])));
+        return $group;
+    }, $directory), fn ($group) => count($group[2]) > 0));
+
+    // ── Where the students are ──
+    $breakdowns = [
+        'faculty' => [__('Faculty'), $students_by_faculty->map(fn ($f) => [$f->title, (int) $f->active_students_count])->values()],
+        'department' => [__('Department'), $students_by_department->map(fn ($d) => [$d->title, (int) $d->active_students_count])->values()],
+        'program' => [__('Programme'), $students_by_program->map(fn ($p) => [$p->title, (int) $p->student_enrolls_count])->filter(fn ($row) => $row[1] > 0)->values()],
+    ];
+    $breakdowns = array_filter($breakdowns, fn ($b) => $b[1]->count() > 0);
+@endphp
+
 <div class="main-body">
     <div class="page-wrapper">
-        <!-- [ Main Content ] start -->
-        
-        <!-- Welcome Banner -->
-        <div class="welcome-banner">
-            <h2>👋 Welcome back, {{ Auth::user()->first_name }}!</h2>
-            <p>Here's what's happening in your institution today - {{ \Carbon\Carbon::now()->format('l, F d, Y') }}</p>
-        </div>
-        
-        <!-- Teacher Dashboard Section -->
-        @if($is_teacher)
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                        <h5 style="margin: 0; color: white;">
-                            <i class="fas fa-chalkboard-teacher"></i> My Teaching Schedule
-                        </h5>
-                    </div>
-                    <div class="card-block">
-                        <div class="row">
-                            <!-- Summary Cards -->
-                            <div class="col-md-4">
-                                <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
-                                    <div class="card-block text-center">
-                                        <h3 style="color: white; margin: 0;">{{ $teacher_today_classes->count() }}</h3>
-                                        <p style="margin: 5px 0; color: white;">Classes Today</p>
-                                        <small style="color: rgba(255,255,255,0.8);">{{ \Carbon\Carbon::now()->format('l') }}</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none;">
-                                    <div class="card-block text-center">
-                                        <h3 style="color: white; margin: 0;">{{ $teacher_subjects->count() }}</h3>
-                                        <p style="margin: 5px 0; color: white;">Courses Teaching</p>
-                                        <small style="color: rgba(255,255,255,0.8);">This Session</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border: none;">
-                                    <div class="card-block text-center">
-                                        <h3 style="color: white; margin: 0;">{{ $teacher_total_classes }}</h3>
-                                        <p style="margin: 5px 0; color: white;">Weekly Classes</p>
-                                        <small style="color: rgba(255,255,255,0.8);">Total Schedule</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Live Class Kiosk Quick Access -->
-                        @php
-                            $today = date('Y-m-d');
-                            $activeSession = \App\Models\ClassSession::where('teacher_id', Auth::id())
-                                ->where('date', $today)
-                                ->where('status', 'in_progress')
-                                ->with(['subject', 'program'])
-                                ->first();
-                            
-                            $pendingSessions = \App\Models\ClassSession::where('teacher_id', Auth::id())
-                                ->where('date', $today)
-                                ->where('status', 'pending')
-                                ->count();
-                            
-                            $completedSessions = \App\Models\ClassSession::where('teacher_id', Auth::id())
-                                ->where('date', $today)
-                                ->where('status', 'completed')
-                                ->count();
-                        @endphp
-                        
-                        <div class="mt-3">
-                            @if($activeSession)
-                            <!-- Active Session Alert -->
-                            <div class="card mb-3" style="border: 3px solid #28a745; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); animation: pulse 2s infinite;">
-                                <div class="card-block">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="d-flex align-items-center">
-                                            <div style="width: 60px; height: 60px; background: #28a745; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; animation: pulse 1.5s infinite;">
-                                                <i class="fas fa-broadcast-tower fa-2x text-white"></i>
-                                            </div>
-                                            <div>
-                                                <h5 class="mb-1" style="color: #155724;">
-                                                    <span class="badge badge-success mr-2" style="animation: pulse 1s infinite;">LIVE NOW</span>
-                                                    Class In Progress
-                                                </h5>
-                                                <p class="mb-0" style="color: #155724;">
-                                                    <strong>{{ $activeSession->subject->code ?? '' }} - {{ $activeSession->subject->title ?? 'Unknown Course' }}</strong>
-                                                    <br>
-                                                    <small>
-                                                        <i class="fas fa-graduation-cap"></i> {{ $activeSession->program->short_form ?? $activeSession->program->title ?? 'N/A' }}
-                                                        @if($activeSession->actual_start_time)
-                                                        | <i class="fas fa-clock"></i> Started {{ \Carbon\Carbon::parse($activeSession->actual_start_time)->diffForHumans() }}
-                                                        @endif
-                                                    </small>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <a href="{{ route('admin.class-session.kiosk') }}" class="btn btn-success btn-lg">
-                                            <i class="fas fa-sign-in-alt mr-2"></i> Return to Kiosk
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                            @else
-                            <!-- Quick Access Card -->
-                            <div class="card mb-3" style="border: 2px solid #17a2b8; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
-                                <div class="card-block">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div class="d-flex align-items-center">
-                                            <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
-                                                <i class="fas fa-qrcode fa-2x text-white"></i>
-                                            </div>
-                                            <div>
-                                                <h5 class="mb-1" style="color: #0c5460;">
-                                                    <i class="fas fa-chalkboard mr-2"></i> Live Class Kiosk
-                                                </h5>
-                                                <p class="mb-0" style="color: #0c5460;">
-                                                    Start classes, take attendance with QR scanner, manage logbooks
-                                                    <br>
-                                                    <small>
-                                                        @if($pendingSessions > 0)
-                                                        <span class="badge badge-warning mr-2"><i class="fas fa-hourglass-half"></i> {{ $pendingSessions }} pending</span>
-                                                        @endif
-                                                        @if($completedSessions > 0)
-                                                        <span class="badge badge-secondary"><i class="fas fa-check"></i> {{ $completedSessions }} completed today</span>
-                                                        @endif
-                                                        @if($pendingSessions == 0 && $completedSessions == 0)
-                                                        <span class="text-muted">No sessions scheduled for today</span>
-                                                        @endif
-                                                    </small>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <a href="{{ route('admin.class-session.kiosk') }}" class="btn btn-info btn-lg">
-                                            <i class="fas fa-external-link-alt mr-2"></i> Open Kiosk
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                            @endif
-                        </div>
-                        
-                        <!-- Today's Classes -->
-                        @if($teacher_today_classes->count() > 0)
-                        <div class="mt-3">
-                            <h6><i class="fas fa-clock"></i> Today's Classes</h6>
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Time</th>
-                                            <th>Course</th>
-                                            <th>Program</th>
-                                            <th>Semester</th>
-                                            <th>Section</th>
-                                            <th>Room</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach($teacher_today_classes as $class)
-                                        <tr>
-                                            <td>
-                                                <strong>
-                                                    @if(isset($setting->time_format))
-                                                    {{ date($setting->time_format, strtotime($class->start_time)) }}
-                                                    @else
-                                                    {{ date("h:i A", strtotime($class->start_time)) }}
-                                                    @endif
-                                                    -
-                                                    @if(isset($setting->time_format))
-                                                    {{ date($setting->time_format, strtotime($class->end_time)) }}
-                                                    @else
-                                                    {{ date("h:i A", strtotime($class->end_time)) }}
-                                                    @endif
-                                                </strong>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-primary">{{ $class->subject->code ?? '' }}</span>
-                                                {{ $class->subject->title ?? '' }}
-                                            </td>
-                                            <td>{{ $class->program->title ?? '' }}</td>
-                                            <td>{{ $class->semester->title ?? '' }}</td>
-                                            <td>{{ $class->section->title ?? '' }}</td>
-                                            <td><i class="fas fa-door-open"></i> {{ $class->room->title ?? '' }}</td>
-                                        </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+    <div class="et-dash">
+
+        {{-- ══ Masthead ══ --}}
+        <header class="et-mast">
+            <div class="et-date" aria-hidden="true">
+                <span class="et-date-day">{{ $now->format('j') }}</span>
+                <span class="et-date-week">{{ $now->translatedFormat('l') }}</span>
+                <span class="et-date-month">{{ $now->translatedFormat('M Y') }}</span>
+            </div>
+
+            <div class="et-mast-main">
+                <p class="et-eyebrow">{{ $is_teacher ? __('Your lecturer\'s desk') : institution_name() }}</p>
+                <h1 class="et-greet">{{ $greeting }}, {{ $me->first_name }}.</h1>
+                <p class="et-lede">
+                    @if($is_teacher)
+                        @if($classNow)
+                            {!! __('You are teaching :course right now, until :end.', ['course' => '<strong>' . e(trim(($classNow->subject->code ?? '') . ' ' . ($classNow->subject->title ?? ''))) . '</strong>', 'end' => e($at($classNow->end_time))]) !!}
+                            @if($nextClass) {!! __('Next is :course at :time.', ['course' => '<strong>' . e($nextClass->subject->code ?? $nextClass->subject->title ?? '') . '</strong>', 'time' => e($at($nextClass->start_time))]) !!} @endif
+                        @elseif($nextClass)
+                            {{ trans_choice('{1} You have one class today.|[2,*] You have :n classes today.', $classesToday->count(), ['n' => $classesToday->count()]) }}
+                            {!! __('The next is :course at :time:room.', [
+                                'course' => '<strong>' . e(trim(($nextClass->subject->code ?? '') . ' ' . ($nextClass->subject->title ?? ''))) . '</strong>',
+                                'time' => e($at($nextClass->start_time)),
+                                'room' => $nextClass->room ? ', ' . e(__('in :room', ['room' => $nextClass->room->title])) : '',
+                            ]) !!}
+                        @elseif($classesToday->count())
+                            {{ __('That is all your classes for today. Thank you for your work.') }}
                         @else
-                        <div class="alert alert-info mt-3">
-                            <i class="fas fa-info-circle"></i> No classes scheduled for today.
-                        </div>
+                            {{ __('There are no classes on your timetable today. Welcome — everything you teach is below.') }}
                         @endif
-                        
-                        <!-- My Courses -->
-                        {{-- A tile is a SUBJECT; the classes it is taught to sit inside it.
-                             Collapsing them, as this card did before, hides 200 of this
-                             install's 305 classes behind 105 tiles -- and leaves a single
-                             link no way to say which of them it means.
+                        @if($waitingTotal)
+                            {{ trans_choice('{1} One thing is also waiting on you below.|[2,*] :n things are also waiting on you below.', $waitingTotal, ['n' => $waitingTotal]) }}
+                        @endif
+                    @elseif($canSeeWaiting)
+                        @if($waitingTotal)
+                            {{ trans_choice('{1} One thing is waiting on you today.|[2,*] :n things are waiting on you today.', $waitingTotal, ['n' => $waitingTotal]) }}
+                            {{ __('Everything else is in order.') }}
+                        @else
+                            {{ __('Nothing is waiting on you today. Everything is up to date.') }}
+                        @endif
+                    @else
+                        {{ __('Welcome back. Here is the institution today.') }}
+                    @endif
+                </p>
+            </div>
 
-                             The primary action is therefore the WHOLE course: attendance is
-                             kept per (student, subject, date) with no programme on it, so
-                             for a service course taught to twelve programmes the whole
-                             course IS the register the lecturer keeps. The per-group links
-                             are there for when they want one programme's slice. --}}
-                        @if($teacher_courses->count() > 0)
-                        <div class="mt-3">
-                            <h6><i class="fas fa-book"></i> My Courses This Session</h6>
-                            <div class="row">
-                                @foreach($teacher_courses as $course)
-                                @php
-                                    $subject = $course['subject'];
-                                    $groups  = $course['classes'];
-                                    $base    = ['session' => $course['session_id'], 'subject' => $subject->id];
-                                @endphp
-                                <div class="col-md-6 col-xl-4 mb-3">
-                                    <div class="card h-100 mb-0" style="border-left: 4px solid #667eea;">
-                                        <div class="card-block" style="padding: 12px;">
+            <div class="et-mast-side">
+                @if($current_session)
+                    <span class="et-chip"><i class="fas fa-graduation-cap" aria-hidden="true"></i> {{ __('Academic year :year', ['year' => $current_session->title]) }}</span>
+                @endif
+                <span class="et-clock">{{ $now->translatedFormat('l, j F Y') }}</span>
+            </div>
+        </header>
 
-                                            <div class="d-flex justify-content-between align-items-start">
-                                                <div class="pr-2">
-                                                    <strong>{{ $subject->code }}</strong><br>
-                                                    <small class="text-muted">{{ $subject->title }}</small>
-                                                </div>
-                                                <span class="badge badge-light text-nowrap" title="{{ __('Students taking this course') }}">
-                                                    <i class="fas fa-user-graduate"></i> {{ $course['students'] }}
-                                                </span>
-                                            </div>
-
-                                            <a href="{{ route('admin.course-class-list.index', $base) }}"
-                                               class="btn btn-sm btn-primary btn-block mt-2">
-                                                <i class="fas fa-clipboard-list"></i> {{ __('Class list & attendance') }}
-                                            </a>
-
-                                            @if($groups->count() > 1)
-                                            <a class="d-block text-center small mt-2 text-muted" data-bs-toggle="collapse"
-                                               data-toggle="collapse" href="#course-groups-{{ $subject->id }}"
-                                               role="button" aria-expanded="false"
-                                               aria-controls="course-groups-{{ $subject->id }}">
-                                                {{ __('Taught to :n groups — pick one', ['n' => $groups->count()]) }}
-                                                <i class="fas fa-chevron-down"></i>
-                                            </a>
-                                            <div class="collapse mt-1" id="course-groups-{{ $subject->id }}">
-                                                <ul class="list-unstyled mb-0 small">
-                                                    @foreach($groups as $group)
-                                                    <li class="border-top py-1">
-                                                        {{-- array_merge, not +: the + operator keeps the
-                                                             left-hand value on a key collision, which is a
-                                                             silent no-op the day $base grows one of these keys. --}}
-                                                        <a href="{{ route('admin.course-class-list.index', array_merge($base, [
-                                                                'program'  => $group['program_id'],
-                                                                'semester' => $group['semester_id'],
-                                                                'section'  => $group['section_id'],
-                                                           ])) }}">
-                                                            {{ $group['program'] }}
-                                                        </a>
-                                                        <span class="text-muted">
-                                                            — {{ $group['semester'] }}
-                                                            @if($group['section']) · {{ $group['section'] }} @endif
-                                                            · {{ $group['students'] }}
-                                                        </span>
-                                                    </li>
-                                                    @endforeach
-                                                </ul>
-                                            </div>
-                                            @elseif($groups->count() === 1)
-                                            <div class="small text-muted mt-2">
-                                                {{ $groups[0]['program'] }}
-                                                <span class="text-muted">— {{ $groups[0]['semester'] }}@if($groups[0]['section']) · {{ $groups[0]['section'] }}@endif</span>
-                                            </div>
-                                            @endif
-
-                                        </div>
-                                    </div>
+        {{-- ══ The lecturer's desk ══ --}}
+        @if($is_teacher)
+        <section class="et-section" aria-labelledby="et-today-title">
+            <div class="et-row">
+                <div class="et-panel et-wide">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title" id="et-today-title">{{ __('Your classes today') }}</h2>
+                        @can('class-routine-teacher')
+                            <a class="et-panel-link" href="{{ route('admin.class-routine.teacher') }}">{{ __('Full timetable') }} →</a>
+                        @endcan
+                    </div>
+                    @if($classesToday->count())
+                        <ol class="et-timeline">
+                            @foreach($classesToday as $class)
+                            <li class="et-class is-{{ $class->dash_state }}">
+                                <div class="et-class-time">
+                                    <b>{{ $at($class->start_time) }}</b>
+                                    <span>{{ __('to :time', ['time' => $at($class->end_time)]) }}</span>
                                 </div>
-                                @endforeach
-                            </div>
-                        </div>
-                        @endif
-                        
-                        <!-- Full Weekly Schedule (Collapsible) -->
-                        @if($teacher_weekly_schedule->count() > 0)
-                        <div class="mt-3">
-                            <button class="btn btn-outline-info btn-block" type="button" data-bs-toggle="collapse" data-bs-target="#fullScheduleCollapse" aria-expanded="false" aria-controls="fullScheduleCollapse">
-                                <i class="fas fa-calendar-week"></i> Show Full Weekly Schedule
-                                <i class="fas fa-chevron-down float-right mt-1"></i>
-                            </button>
-                            
-                            <div class="collapse mt-2" id="fullScheduleCollapse">
-                                <div class="card">
-                                    <div class="card-block">
-                                        <h6 class="mb-3"><i class="fas fa-calendar-alt"></i> Complete Weekly Schedule</h6>
-                                        
-                                        @php
-                                        $days = [
-                                            '1' => 'Saturday',
-                                            '2' => 'Sunday',
-                                            '3' => 'Monday',
-                                            '4' => 'Tuesday',
-                                            '5' => 'Wednesday',
-                                            '6' => 'Thursday',
-                                            '7' => 'Friday'
-                                        ];
-                                        @endphp
-                                        
-                                        @foreach($days as $dayNumber => $dayName)
-                                            @if($teacher_weekly_schedule->has($dayNumber))
-                                            <div class="mb-3">
-                                                <h6 class="text-primary"><i class="fas fa-calendar-day"></i> {{ $dayName }}</h6>
-                                                <div class="table-responsive">
-                                                    <table class="table table-sm table-bordered">
-                                                        <thead class="thead-light">
-                                                            <tr>
-                                                                <th width="15%">Time</th>
-                                                                <th width="20%">Subject</th>
-                                                                <th width="20%">Program</th>
-                                                                <th width="15%">Semester</th>
-                                                                <th width="15%">Section</th>
-                                                                <th width="15%">Room</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @foreach($teacher_weekly_schedule[$dayNumber] as $class)
-                                                            <tr>
-                                                                <td>
-                                                                    <small>
-                                                                        @if(isset($setting->time_format))
-                                                                        {{ date($setting->time_format, strtotime($class->start_time)) }}
-                                                                        @else
-                                                                        {{ date("h:i A", strtotime($class->start_time)) }}
-                                                                        @endif
-                                                                        -
-                                                                        @if(isset($setting->time_format))
-                                                                        {{ date($setting->time_format, strtotime($class->end_time)) }}
-                                                                        @else
-                                                                        {{ date("h:i A", strtotime($class->end_time)) }}
-                                                                        @endif
-                                                                    </small>
-                                                                </td>
-                                                                <td>
-                                                                    <span class="badge badge-info">{{ $class->subject->code ?? '' }}</span>
-                                                                    <br><small>{{ $class->subject->title ?? '' }}</small>
-                                                                </td>
-                                                                <td><small>{{ $class->program->title ?? '' }}</small></td>
-                                                                <td><small>{{ $class->semester->title ?? '' }}</small></td>
-                                                                <td><small>{{ $class->section->title ?? '' }}</small></td>
-                                                                <td><small><i class="fas fa-door-open"></i> {{ $class->room->title ?? '' }}</small></td>
-                                                            </tr>
-                                                            @endforeach
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                            @endif
-                                        @endforeach
-                                        
-                                        @if($teacher_weekly_schedule->count() == 0)
-                                        <div class="alert alert-info">
-                                            <i class="fas fa-info-circle"></i> No classes scheduled for this week.
-                                        </div>
+                                <div class="et-class-node" aria-hidden="true"></div>
+                                <div>
+                                    <p class="et-class-title">
+                                        @if($class->subject->code ?? false)<span class="et-code">{{ $class->subject->code }}</span>@endif{{ $class->subject->title ?? '' }}
+                                        @if($class->dash_state === 'now')<span class="et-state now">{{ __('In progress') }}</span>
+                                        @elseif($class->dash_state === 'next')<span class="et-state next">{{ __('Next') }}</span>
+                                        @elseif($class->dash_state === 'done')<span class="et-state done">{{ __('Finished') }}</span>@endif
+                                    </p>
+                                    <p class="et-class-meta">
+                                        @if($class->dash_groups->count() > 1)
+                                            {{ __(':n groups together', ['n' => $class->dash_groups->count()]) }}
+                                        @else
+                                            {{ collect([$class->program->title ?? null, $class->semester->title ?? null, $class->section->title ?? null])->filter()->implode(' · ') }}
                                         @endif
-                                    </div>
+                                        @if($class->room) · <i class="fas fa-door-open" aria-hidden="true"></i> {{ $class->room->title }}@endif
+                                    </p>
                                 </div>
+                            </li>
+                            @endforeach
+                        </ol>
+                    @else
+                        <div class="et-empty"><i class="fas fa-mug-hot" aria-hidden="true"></i> {{ __('No classes on your timetable today.') }}</div>
+                    @endif
+                </div>
+
+                <div class="et-panel et-kiosk-panel {{ $activeSession ? 'is-live' : '' }}">
+                    <div class="et-kiosk">
+                        @if($activeSession)
+                            <h2 class="et-kiosk-title"><span class="et-live-dot" aria-hidden="true"></span> {{ __('Class in progress') }}</h2>
+                            <p>
+                                <strong>{{ trim(($activeSession->subject->code ?? '') . ' ' . ($activeSession->subject->title ?? __('Unknown course'))) }}</strong>
+                                · {{ $activeSession->program->short_form ?? $activeSession->program->title ?? '' }}
+                                @if($activeSession->actual_start_time)
+                                    <br>{{ __('Started :when', ['when' => \Carbon\Carbon::parse($activeSession->actual_start_time)->diffForHumans()]) }}
+                                @endif
+                            </p>
+                            <a href="{{ route('admin.class-session.kiosk') }}" class="et-btn good"><i class="fas fa-sign-in-alt" aria-hidden="true"></i> {{ __('Return to the kiosk') }}</a>
+                        @else
+                            <h2 class="et-kiosk-title"><i class="fas fa-qrcode" aria-hidden="true"></i> {{ __('Live class kiosk') }}</h2>
+                            <p>
+                                {{ __('Start a class, take attendance with the QR scanner and keep the logbook.') }}
+                                @if($pendingSessions || $completedSessions)
+                                    <br>
+                                    @if($pendingSessions){{ trans_choice('{1} One session to start|[2,*] :n sessions to start', $pendingSessions, ['n' => $pendingSessions]) }}@endif
+                                    @if($pendingSessions && $completedSessions) · @endif
+                                    @if($completedSessions){{ trans_choice('{1} one finished today|[2,*] :n finished today', $completedSessions, ['n' => $completedSessions]) }}@endif
+                                @endif
+                            </p>
+                            <a href="{{ route('admin.class-session.kiosk') }}" class="et-btn"><i class="fas fa-chalkboard" aria-hidden="true"></i> {{ __('Open the kiosk') }}</a>
+                        @endif
+                    </div>
+                    <div class="et-trio">
+                        <div><b>{{ $classesToday->count() }}</b><span>{{ __('today') }}</span></div>
+                        <div><b>{{ $teacher_subjects->count() }}</b><span>{{ __('courses') }}</span></div>
+                        <div><b>{{ $weeklyTaught }}</b><span>{{ __('classes a week') }}</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {{-- A tile is a SUBJECT; the classes it is taught to sit inside it.
+             Collapsing them hides most of a lecturer's classes behind one tile
+             and leaves a single link no way to say which group it means.
+
+             The primary action is therefore the WHOLE course: attendance is
+             kept per (student, subject, date) with no programme on it, so for
+             a service course taught to twelve programmes the whole course IS
+             the register the lecturer keeps. The per-group links are there for
+             when they want one programme's slice. --}}
+        @if($teacher_courses->count())
+        <section class="et-section" aria-labelledby="et-courses-title">
+            <div class="et-section-head">
+                <h2 class="et-section-title" id="et-courses-title">{{ __('Your courses this session') }}</h2>
+                <span class="et-section-note">{{ trans_choice('{1} One course|[2,*] :n courses', $teacher_courses->count(), ['n' => $teacher_courses->count()]) }}</span>
+            </div>
+            <div class="et-courses">
+                @foreach($teacher_courses as $course)
+                @php
+                    $subject = $course['subject'];
+                    $groups  = $course['classes'];
+                    $base    = ['session' => $course['session_id'], 'subject' => $subject->id];
+                @endphp
+                <article class="et-course">
+                    <div class="et-course-head">
+                        <span class="et-code">{{ $subject->code }}</span>
+                        <span class="et-course-students" title="{{ __('Students taking this course') }}"><i class="fas fa-user-graduate" aria-hidden="true"></i> {{ $course['students'] }}</span>
+                    </div>
+                    <p class="et-course-title">{{ $subject->title }}</p>
+
+                    <div class="et-course-groups">
+                        @if($groups->count() > 1)
+                            <a class="et-toggle" data-bs-toggle="collapse" data-toggle="collapse" href="#course-groups-{{ $subject->id }}"
+                               role="button" aria-expanded="false" aria-controls="course-groups-{{ $subject->id }}">
+                                {{ __('Taught to :n groups — pick one', ['n' => $groups->count()]) }} <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </a>
+                            <div class="collapse" id="course-groups-{{ $subject->id }}">
+                                <ul>
+                                    @foreach($groups as $group)
+                                    <li>
+                                        {{-- array_merge, not +: the + operator keeps the
+                                             left-hand value on a key collision, which is a
+                                             silent no-op the day $base grows one of these keys. --}}
+                                        <a href="{{ route('admin.course-class-list.index', array_merge($base, [
+                                                'program'  => $group['program_id'],
+                                                'semester' => $group['semester_id'],
+                                                'section'  => $group['section_id'],
+                                           ])) }}">{{ $group['program'] }}</a>
+                                        — {{ $group['semester'] }}@if($group['section']) · {{ $group['section'] }}@endif · {{ $group['students'] }}
+                                    </li>
+                                    @endforeach
+                                </ul>
                             </div>
+                        @elseif($groups->count() === 1)
+                            {{ $groups[0]['program'] }} — {{ $groups[0]['semester'] }}@if($groups[0]['section']) · {{ $groups[0]['section'] }}@endif
+                        @endif
+                    </div>
+
+                    <a href="{{ route('admin.course-class-list.index', $base) }}" class="et-btn">
+                        <i class="fas fa-clipboard-list" aria-hidden="true"></i> {{ __('Class list & attendance') }}
+                    </a>
+                </article>
+                @endforeach
+            </div>
+        </section>
+        @endif
+
+        @if($teacher_weekly_schedule->count())
+        <section class="et-section" aria-labelledby="et-week-title">
+            <div class="et-section-head">
+                <h2 class="et-section-title" id="et-week-title">{{ __('Your week') }}</h2>
+                <span class="et-section-note">{{ trans_choice('{1} One class a week|[2,*] :n classes a week', $weeklyTaught, ['n' => $weeklyTaught]) }}</span>
+            </div>
+            @php
+                // Monday first; the system's own numbers are 1 = Saturday … 7 = Friday.
+                $weekDays = [3 => __('Monday'), 4 => __('Tuesday'), 5 => __('Wednesday'), 6 => __('Thursday'), 7 => __('Friday'), 1 => __('Saturday'), 2 => __('Sunday')];
+            @endphp
+            <div class="et-week">
+                @foreach($weekDays as $dayNumber => $dayName)
+                    @php
+                        // One entry per class taught, not per group sharing it.
+                        $slots = $teacher_weekly_schedule->get($dayNumber, collect())
+                            ->groupBy(fn ($c) => implode('|', [$c->start_time, $c->end_time, $c->subject_id, $c->room_id]))
+                            ->map(function ($rows) { $slot = $rows->first(); $slot->dash_groups = $rows->count(); return $slot; })
+                            ->values();
+                    @endphp
+                    <div class="et-weekday {{ $dayNumber === $todayNumber ? 'is-today' : '' }} {{ $slots->isEmpty() ? 'is-empty' : '' }}">
+                        <div class="et-weekday-name">{{ $dayName }}@if($dayNumber === $todayNumber) · {{ __('today') }}@endif</div>
+                        @forelse($slots as $slot)
+                            <div class="et-slot" title="{{ trim(($slot->subject->title ?? '') . ' — ' . ($slot->program->title ?? '')) }}">
+                                <b>{{ $at($slot->start_time) }} · {{ $slot->subject->code ?? $slot->subject->title ?? '' }}</b>
+                                <span>{{ collect([$slot->room->title ?? null, $slot->dash_groups > 1 ? __(':n groups', ['n' => $slot->dash_groups]) : null])->filter()->implode(' · ') }}</span>
+                            </div>
+                        @empty
+                            <div class="et-slot-none">—</div>
+                        @endforelse
+                    </div>
+                @endforeach
+            </div>
+        </section>
+        @endif
+        @endif
+
+        {{-- ══ The institution ══ --}}
+        @if($canSeeWaiting || $canFigures)
+        <section class="et-section" aria-labelledby="et-inst-title">
+            <div class="et-section-head">
+                <h2 class="et-section-title" id="et-inst-title">{{ $is_teacher ? __('The institution today') : __('Today at a glance') }}</h2>
+            </div>
+            <div class="et-row">
+                @if($canSeeWaiting)
+                <div class="et-panel">
+                    <div class="et-panel-head">
+                        <h3 class="et-panel-title">{{ __('Waiting on you') }}</h3>
+                        @if($waitingTotal)<span class="et-section-note">{{ trans_choice('{1} One item|[2,*] :n items', $waitingTotal, ['n' => $waitingTotal]) }}</span>@endif
+                    </div>
+                    @if($waitingTotal)
+                        <ul class="et-todo">
+                            @foreach($waiting as $item)
+                            <li>
+                                <a href="{{ route($item['route']) }}">
+                                    <span class="et-count {{ $item['tone'] }}">{{ number_format($item['count']) }}</span>
+                                    <span>
+                                        <span class="et-todo-label">{{ $item['label'] }}</span>
+                                        <span class="et-todo-note">{{ $item['note'] }}</span>
+                                    </span>
+                                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                                </a>
+                            </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <div class="et-empty"><i class="fas fa-check-circle" aria-hidden="true"></i> {{ __('Nothing is waiting on you. Everything is up to date.') }}</div>
+                    @endif
+                </div>
+                @endif
+
+                @if($canFigures)
+                <div class="et-figures et-wide">
+                    @if($canStudents)
+                    @php $studentsTag = $me->can('student-view') ? 'a' : 'div'; @endphp
+                    <{{ $studentsTag }} class="et-figure" @if($studentsTag === 'a') href="{{ route('admin.student.index') }}" @endif>
+                        <p class="et-figure-label"><i class="fas fa-user-graduate" aria-hidden="true"></i> {{ __('Students') }}</p>
+                        <p class="et-figure-value">{{ number_format($active_students) }} <small>{{ __('on roll') }}</small></p>
+                        @php $enrolShare = $active_students > 0 ? min(100, round($enrolled_students / $active_students * 100)) : 0; @endphp
+                        <div class="et-meter" aria-hidden="true"><span class="accent" style="width: {{ $enrolShare }}%"></span></div>
+                        <p class="et-figure-sub">
+                            <b>{{ number_format($enrolled_students) }}</b> {{ __('enrolled this term') }}
+                            @can('student-enroll-complete') · <b>{{ number_format($course_completed) }}</b> {{ __('completed their course') }}@endcan
+                        </p>
+                    </{{ $studentsTag }}>
+                    @endif
+
+                    @if($canFees)
+                    @php
+                        $billed = $total_fees_collected + $total_fees_due;
+                        $collectedShare = $billed > 0 ? round($total_fees_collected / $billed * 100) : 0;
+                    @endphp
+                    <a class="et-figure" href="{{ route('admin.fees-student.report') }}">
+                        <p class="et-figure-label"><i class="fas fa-money-bill-wave" aria-hidden="true"></i> {{ __('Fees') }}</p>
+                        <p class="et-figure-value">{!! $money($total_fees_collected) !!} <small>{{ __('collected') }}</small></p>
+                        <div class="et-meter" role="img" aria-label="{{ __(':p% of fees billed have been collected', ['p' => $collectedShare]) }}"><span class="good" style="width: {{ $collectedShare }}%"></span></div>
+                        <p class="et-figure-sub"><b>{{ $collectedShare }}%</b> {{ __('of what was billed') }} · <b>{!! $money($total_fees_due) !!}</b> {{ __('still owed') }}</p>
+                    </a>
+                    @endif
+
+                    @if($canAttendance)
+                    @php
+                        $marked = $today_present + $today_absent;
+                        $presentShare = $marked > 0 ? round($today_present / $marked * 100) : 0;
+                    @endphp
+                    <a class="et-figure" href="{{ route('admin.student-attendance.index') }}">
+                        <p class="et-figure-label"><i class="fas fa-clipboard-check" aria-hidden="true"></i> {{ __('Attendance today') }}</p>
+                        @if($marked)
+                            <p class="et-figure-value">{{ $presentShare }}% <small>{{ __('present') }}</small></p>
+                            <div class="et-meter" aria-hidden="true"><span class="good" style="width: {{ $presentShare }}%"></span><span class="bad" style="width: {{ 100 - $presentShare }}%"></span></div>
+                            <div class="et-key"><span class="good">{{ __(':n present', ['n' => number_format($today_present)]) }}</span><span class="bad">{{ __(':n absent', ['n' => number_format($today_absent)]) }}</span></div>
+                        @else
+                            <p class="et-figure-value">— <small>{{ __('not taken yet') }}</small></p>
+                            <p class="et-figure-sub">{{ __('No attendance has been recorded today.') }}</p>
+                        @endif
+                    </a>
+                    @endif
+
+                    @if($canStaff)
+                    @php $staffTag = $me->can('user-view') ? 'a' : 'div'; @endphp
+                    <{{ $staffTag }} class="et-figure" @if($staffTag === 'a') href="{{ route('admin.user.index') }}" @endif>
+                        <p class="et-figure-label"><i class="fas fa-users" aria-hidden="true"></i> {{ __('Staff') }}</p>
+                        <p class="et-figure-value">{{ number_format($active_staffs) }} <small>{{ __('active') }}</small></p>
+                        <p class="et-figure-sub">
+                            @if($staff_on_leave)
+                                <b>{{ number_format($staff_on_leave) }}</b> {{ __('on leave today') }}
+                            @else
+                                {{ __('No one is on leave today.') }}
+                            @endif
+                        </p>
+                    </{{ $staffTag }}>
+                    @endif
+                </div>
+                @endif
+            </div>
+        </section>
+        @endif
+
+        @if(($me->can('student-view') && count($breakdowns)) || count($dayItems) || count($frontItems))
+        <section class="et-section">
+            <div class="et-row">
+                @if($me->can('student-view') && count($breakdowns))
+                <div class="et-panel et-wide">
+                    <div class="et-panel-head">
+                        <h3 class="et-panel-title">{{ __('Where our students are') }}</h3>
+                        @if(count($breakdowns) > 1)
+                        <div class="et-tabs" role="tablist" aria-label="{{ __('Group students by') }}">
+                            @foreach($breakdowns as $key => [$label, $rows])
+                                <button type="button" class="et-tab" role="tab" id="et-tab-{{ $key }}" aria-controls="et-pane-{{ $key }}"
+                                        aria-selected="{{ $loop->first ? 'true' : 'false' }}" tabindex="{{ $loop->first ? '0' : '-1' }}">{{ $label }}</button>
+                            @endforeach
                         </div>
                         @endif
-                        
-                        <!-- Quick Links -->
-                        <div hidden class="mt-3">
-                            <a href="{{ route('admin.class-routine.teacher') }}" class="btn btn-primary btn-sm">
-                                <i class="fas fa-calendar-alt"></i> View Full Schedule
-                            </a>
-                            <a href="{{ route('admin.class-routine.index') }}" class="btn btn-outline-primary btn-sm">
-                                <i class="fas fa-list"></i> All Class Routines
-                            </a>
-                        </div>
                     </div>
-                </div>
-            </div>
-        </div>
-        @endif
-        
-        <!-- Quick Stats Overview -->
-        <div class="row">
-            <!-- Admission Stats -->
-            @canany(['application-view', 'student-view'])
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-blue">
-                        <i class="fas fa-file-alt"></i>
-                    </div>
-                    <div class="stat-value">{{ $pending_applications }}</div>
-                    <div class="stat-label">Pending Applications</div>
-                </div>
-            </div>
-            
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-green">
-                        <i class="fas fa-user-graduate"></i>
-                    </div>
-                    <div class="stat-value">{{ $active_students }}</div>
-                    <div class="stat-label">Active Students</div>
-                </div>
-            </div>
-            @endcanany
-            
-            @canany(['student-enroll-single', 'student-enroll-group'])
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-purple">
-                        <i class="fas fa-book-reader"></i>
-                    </div>
-                    <div class="stat-value">{{ $enrolled_students }}</div>
-                    <div class="stat-label">Enrolled Students</div>
-                </div>
-            </div>
-            @endcanany
-            
-            @can('student-enroll-complete')
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-teal">
-                        <i class="fas fa-graduation-cap"></i>
-                    </div>
-                    <div class="stat-value">{{ $course_completed }}</div>
-                    <div class="stat-label">Graduated Students</div>
-                </div>
-            </div>
-            @endcan
-        </div>
-        
-        <!-- Attendance & Classes -->
-        @canany(['student-attendance-action', 'class-routine-view'])
-        <div class="row">
-            @can('student-attendance-action')
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-green pulse-animation">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <div class="stat-value">{{ $today_present }}</div>
-                    <div class="stat-label">Present Today</div>
-                </div>
-            </div>
-            
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-red">
-                        <i class="fas fa-times-circle"></i>
-                    </div>
-                    <div class="stat-value">{{ $today_absent }}</div>
-                    <div class="stat-label">Absent Today</div>
-                </div>
-            </div>
-            @endcan
-            
-            @can('class-routine-view')
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-indigo">
-                        <i class="fas fa-calendar-day"></i>
-                    </div>
-                    <div class="stat-value">{{ $today_classes }}</div>
-                    <div class="stat-label">Classes Today</div>
-                </div>
-            </div>
-            
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-orange">
-                        <i class="fas fa-calendar-alt"></i>
-                    </div>
-                    <div class="stat-value">{{ $total_exam_routines }}</div>
-                    <div class="stat-label">Exam Schedules</div>
-                </div>
-            </div>
-            @endcan
-        </div>
-        @endcanany
-        
-        <!-- Fees & Payments -->
-        @canany(['fees-student-report'])
-        <div class="row">
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-green">
-                        <i class="fas fa-money-bill-wave"></i>
-                    </div>
-                    <div class="stat-value">{!! $setting->currency_symbol ?? '$' !!}{{ number_format($total_fees_collected, 0) }}</div>
-                    <div class="stat-label">Fees Collected</div>
-                </div>
-            </div>
-            
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-orange pulse-animation">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <div class="stat-value">{!! $setting->currency_symbol ?? '$' !!}{{ number_format($total_fees_due, 0) }}</div>
-                    <div class="stat-label">Fees Due</div>
-                </div>
-            </div>
-            
-            @can('payment-receipt-verify')
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-purple">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <div class="stat-value">{{ $payment_verifications }}</div>
-                    <div class="stat-label">Pending Verifications</div>
-                </div>
-            </div>
-            @endcan
-            
-            @can('payment-plan.index')
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-teal">
-                        <i class="fas fa-calendar-check"></i>
-                    </div>
-                    <div class="stat-value">{{ $active_payment_plans }}</div>
-                    <div class="stat-label">Active Payment Plans</div>
-                </div>
-            </div>
-            @endcan
-        </div>
-        @endcanany
-        
-        <!-- Staff & HR -->
-        @canany(['user-view', 'payroll-view'])
-        <div class="row">
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-blue">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div class="stat-value">{{ $active_staffs }}</div>
-                    <div class="stat-label">Active Staff</div>
-                </div>
-            </div>
-            
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-orange">
-                        <i class="fas fa-umbrella-beach"></i>
-                    </div>
-                    <div class="stat-value">{{ $staff_on_leave }}</div>
-                    <div class="stat-label">Staff on Leave</div>
-                </div>
-            </div>
-            
-            @can('payroll-view')
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-red pulse-animation">
-                        <i class="fas fa-wallet"></i>
-                    </div>
-                    <div class="stat-value">{{ $pending_payroll }}</div>
-                    <div class="stat-label">Pending Payroll</div>
-                </div>
-            </div>
-            @endcan
-            
-            @can('book-view')
-            <div class="col-xl-3 col-lg-6 col-md-6">
-                <div class="stat-card">
-                    <div class="stat-icon stat-purple">
-                        <i class="fas fa-book"></i>
-                    </div>
-                    <div class="stat-value">{{ $library_books }}</div>
-                    <div class="stat-label">Library Books</div>
-                </div>
-            </div>
-            @endcan
-        </div>
-        @endcanany
-        
-        <!-- Active Students Breakdown (Collapsible) -->
-        @can('student-view')
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white" id="headingOne">
-                        <h5 class="mb-0">
-                            <button class="btn btn-link btn-block text-left collapsed d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne" style="text-decoration: none; color: #333;">
-                                <span><i class="fas fa-chart-pie text-primary mr-2"></i> Active Students Breakdown</span>
-                                <i class="fas fa-chevron-down"></i>
-                            </button>
-                        </h5>
-                    </div>
-
-                    <div id="collapseOne" class="collapse" aria-labelledby="headingOne">
-                        <div class="card-body">
-                            <ul class="nav nav-pills mb-3" id="breakdownTab" role="tablist">
-                                <li class="nav-item">
-                                    <button class="nav-link active" id="faculty-tab" data-bs-toggle="tab" data-bs-target="#faculty" type="button" role="tab" aria-controls="faculty" aria-selected="true">By Faculty</button>
-                                </li>
-                                <li class="nav-item">
-                                    <button class="nav-link" id="department-tab" data-bs-toggle="tab" data-bs-target="#department" type="button" role="tab" aria-controls="department" aria-selected="false">By Department</button>
-                                </li>
-                                <li class="nav-item">
-                                    <button class="nav-link" id="program-tab" data-bs-toggle="tab" data-bs-target="#program" type="button" role="tab" aria-controls="program" aria-selected="false">By Program</button>
-                                </li>
-                            </ul>
-                            <div class="tab-content" id="breakdownTabContent">
-                                <!-- Faculty Tab -->
-                                <div class="tab-pane fade show active" id="faculty" role="tabpanel" aria-labelledby="faculty-tab">
-                                    <div class="table-responsive">
-                                        <table class="table table-hover table-striped" id="facultyTable">
-                                            <thead class="thead-light">
-                                                <tr>
-                                                    <th>Faculty</th>
-                                                    <th class="text-right">Active Students</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($students_by_faculty as $faculty)
-                                                <tr>
-                                                    <td>{{ $faculty->title }}</td>
-                                                    <td class="text-right"><span class="badge badge-primary badge-pill">{{ $faculty->active_students_count }}</span></td>
-                                                </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <!-- Department Tab -->
-                                <div class="tab-pane fade" id="department" role="tabpanel" aria-labelledby="department-tab">
-                                    <div class="table-responsive">
-                                        <table class="table table-hover table-striped" id="departmentTable">
-                                            <thead class="thead-light">
-                                                <tr>
-                                                    <th>Department</th>
-                                                    <th class="text-right">Active Students</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($students_by_department as $dept)
-                                                <tr>
-                                                    <td>{{ $dept->title }}</td>
-                                                    <td class="text-right"><span class="badge badge-info badge-pill">{{ $dept->active_students_count }}</span></td>
-                                                </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                <!-- Program Tab -->
-                                <div class="tab-pane fade" id="program" role="tabpanel" aria-labelledby="program-tab">
-                                    <div class="table-responsive">
-                                        <table class="table table-hover table-striped" id="programTable">
-                                            <thead class="thead-light">
-                                                <tr>
-                                                    <th>Program</th>
-                                                    <th class="text-right">Active Students</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($students_by_program as $prog)
-                                                <tr>
-                                                    <td>{{ $prog->title }}</td>
-                                                    <td class="text-right"><span class="badge badge-success badge-pill">{{ $prog->student_enrolls_count }}</span></td>
-                                                </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                    <div class="et-panel-body">
+                        @foreach($breakdowns as $key => [$label, $rows])
+                            @php $max = max(1, $rows->max(fn ($r) => $r[1])); @endphp
+                            <div role="tabpanel" id="et-pane-{{ $key }}" aria-labelledby="et-tab-{{ $key }}" @unless($loop->first) hidden @endunless>
+                                <ul class="et-bars">
+                                    @foreach($rows->take(8) as [$name, $count])
+                                        <li>
+                                            <span class="et-bar-name" title="{{ $name }}">{{ $name }}</span>
+                                            <span class="et-bar-count">{{ number_format($count) }}</span>
+                                            <span class="et-bar-track" aria-hidden="true"><span class="et-bar-fill" style="width: {{ round($count / $max * 100, 1) }}%"></span></span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                @if($rows->count() > 8)
+                                <details class="et-more">
+                                    <summary>{{ __('Show all :n', ['n' => $rows->count()]) }}</summary>
+                                    <ul class="et-bars">
+                                        @foreach($rows->slice(8) as [$name, $count])
+                                            <li>
+                                                <span class="et-bar-name" title="{{ $name }}">{{ $name }}</span>
+                                                <span class="et-bar-count">{{ number_format($count) }}</span>
+                                                <span class="et-bar-track" aria-hidden="true"><span class="et-bar-fill" style="width: {{ round($count / $max * 100, 1) }}%"></span></span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </details>
+                                @endif
                             </div>
-                        </div>
+                        @endforeach
                     </div>
                 </div>
-            </div>
-        </div>
-        @endcan
+                @endif
 
-        <!-- Quick Actions Grid -->
-        <div class="sections-grid">
-            
-            <!-- Admission Section -->
-            @canany(['application-view', 'student-view', 'student-transfer-in-view', 'student-card'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-university"></i>
-                    {{ trans_choice('module_admission', 2) }}
+                @if(count($dayItems) || count($frontItems))
+                <div class="et-panel">
+                    <div class="et-panel-head">
+                        <h3 class="et-panel-title">{{ __('The day book') }}</h3>
+                        <span class="et-section-note">{{ $now->translatedFormat('j F') }}</span>
+                    </div>
+                    <ul class="et-daybook">
+                        @foreach($dayItems as [$perm, $icon, $label, $count, $route])
+                            <li class="{{ $count ? '' : 'is-zero' }}">
+                                <a href="{{ route($route) }}"><i class="fas {{ $icon }}" aria-hidden="true"></i><span class="et-day-label">{{ $label }}</span><span class="et-day-count">{{ number_format($count) }}</span></a>
+                            </li>
+                        @endforeach
+                    </ul>
+                    @if(count($frontItems))
+                        <div class="et-subhead">{{ __('At the front desk today') }}</div>
+                        <ul class="et-daybook">
+                            @foreach($frontItems as [$perm, $icon, $label, $count, $route])
+                                <li class="{{ $count ? '' : 'is-zero' }}">
+                                    <a href="{{ route($route) }}"><i class="fas {{ $icon }}" aria-hidden="true"></i><span class="et-day-label">{{ $label }}</span><span class="et-day-count">{{ number_format($count) }}</span></a>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
                 </div>
-                @can('application-view')
-                <a href="{{ route('admin.application.index') }}" class="action-btn">
-                    <i class="fas fa-scroll"></i> {{ trans_choice('module_application', 2) }}
-                    @if($pending_applications > 0)
-                    <span class="badge badge-danger">{{ $pending_applications }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('student-view')
-                <a href="{{ route('admin.student.index') }}" class="action-btn">
-                    <i class="fas fa-users"></i> {{ trans_choice('module_student', 1) }} {{ __('list') }}
-                </a>
-                @endcan
-                @can('student-transfer-in-view')
-                <a href="{{ route('admin.student-transfer-in.index') }}" class="action-btn">
-                    <i class="fas fa-exchange-alt"></i> {{ trans_choice('module_transfer_in', 1) }}
-                </a>
-                @endcan
-                @can('student-card')
-                <a href="{{ route('admin.id-card.index') }}" class="action-btn">
-                    <i class="fas fa-id-card"></i> {{ trans_choice('module_id_card', 2) }}
-                </a>
-                @endcan
+                @endif
             </div>
-            @endcanany
-            
-            <!-- Student Management -->
-            @canany(['student-attendance-action', 'student-enroll-single', 'student-enroll-complete', 'student-enroll-alumni'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-user-graduate"></i>
-                    {{ trans_choice('module_student', 2) }}
-                </div>
-                @can('student-attendance-action')
-                <a href="{{ route('admin.student-attendance.index') }}" class="action-btn">
-                    <i class="fas fa-calendar-check"></i> {{ trans_choice('module_attendance', 2) }}
-                </a>
-                @endcan
-                @can('student-enroll-single')
-                <a href="{{ route('admin.single-enroll.index') }}" class="action-btn">
-                    <i class="fas fa-user-plus"></i> {{ trans_choice('module_single_enroll', 1) }}
-                </a>
-                @endcan
-                @can('student-enroll-complete')
-                <a href="{{ route('admin.course-complete.index') }}" class="action-btn">
-                    <i class="fas fa-check-circle"></i> {{ trans_choice('module_course_complete', 2) }}
-                    @if($course_completed > 0)
-                    <span class="badge badge-success">{{ $course_completed }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('student-enroll-alumni')
-                <a href="{{ route('admin.student-alumni.index') }}" class="action-btn">
-                    <i class="fas fa-user-tie"></i> {{ trans_choice('module_student_alumni', 1) }}
-                </a>
-                @endcan
+        </section>
+        @endif
+
+        {{-- ══ Every screen this person can open, grouped as in the menu ══ --}}
+        @if(count($directory))
+        <section class="et-section" aria-labelledby="et-dir-title">
+            <div class="et-section-head">
+                <h2 class="et-section-title" id="et-dir-title">{{ __('Go to') }}</h2>
+                <span class="et-section-note">{{ __('Everything you can open, grouped as in the menu') }}</span>
             </div>
-            @endcanany
-            
-            <!-- Routines -->
-            @canany(['class-routine-view', 'exam-routine-view', 'class-routine-teacher'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="far fa-calendar-alt"></i>
-                    {{ trans_choice('module_routine', 2) }}
-                </div>
-                @can('class-routine-view')
-                <a href="{{ route('admin.class-routine.index') }}" class="action-btn">
-                    <i class="fas fa-chalkboard-teacher"></i> {{ trans_choice('module_class_routine', 2) }}
-                    @if($today_classes > 0)
-                    <span class="badge badge-info">{{ $today_classes }} today</span>
-                    @endif
-                </a>
-                @endcan
-                @can('exam-routine-view')
-                <a href="{{ route('admin.exam-routine.index') }}" class="action-btn">
-                    <i class="fas fa-file-alt"></i> {{ trans_choice('module_exam_routine', 2) }}
-                </a>
-                @endcan
-                @can('class-routine-teacher')
-                <a href="{{ route('admin.class-routine.teacher') }}" class="action-btn">
-                    <i class="fas fa-user-clock"></i> {{ trans_choice('module_teacher_routine', 2) }}
-                </a>
-                @endcan
+            <div class="et-directory">
+                @foreach($directory as [$groupTitle, $groupIcon, $links])
+                <nav class="et-dir-group" aria-label="{{ $groupTitle }}">
+                    <p class="et-dir-title"><i class="fas {{ $groupIcon }}" aria-hidden="true"></i> {{ $groupTitle }}</p>
+                    <ul class="et-dir-links">
+                        @foreach($links as [$perm, $route, $label])
+                            <li><a href="{{ route($route) }}">{{ $label }}</a></li>
+                        @endforeach
+                    </ul>
+                </nav>
+                @endforeach
             </div>
-            @endcanany
-            
-            <!-- Examination -->
-            @canany(['exam-attendance', 'exam-marking', 'subject-marking', 'resit-request-view', 'admit-card-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-file-alt"></i>
-                    {{ trans_choice('module_examination', 2) }}
-                </div>
-                @can('exam-attendance')
-                <a href="{{ route('admin.exam-attendance.index') }}" class="action-btn">
-                    <i class="fas fa-clipboard-check"></i> {{ trans_choice('module_exam_attendance', 2) }}
-                </a>
-                @endcan
-                @can('exam-marking')
-                <a href="{{ route('admin.exam-marking.index') }}" class="action-btn">
-                    <i class="fas fa-edit"></i> {{ trans_choice('module_exam_marking', 2) }}
-                </a>
-                <a href="{{ route('admin.student-exam-config.index') }}" class="action-btn">
-                    <i class="fas fa-cog"></i> {{ __('Student Exam Config') }}
-                </a>
-                @endcan
-                @can('subject-marking')
-                <a href="{{ route('admin.subject-marking.index') }}" class="action-btn">
-                    <i class="fas fa-marker"></i> {{ trans_choice('module_subject_marking', 2) }}
-                </a>
-                @endcan
-                @can('resit-request-view')
-                <a href="{{ route('admin.resit-requests.index') }}" class="action-btn">
-                    <i class="fas fa-redo"></i> {{ __('Resit Requests') }}
-                    @if($resit_requests > 0)
-                    <span class="badge badge-warning pulse-animation">{{ $resit_requests }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('admit-card-view')
-                <a href="{{ route('admin.admit-card.index') }}" class="action-btn">
-                    <i class="fas fa-id-badge"></i> {{ trans_choice('module_admit_card', 2) }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Study Material -->
-            @canany(['assignment-view', 'content-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-newspaper"></i>
-                    {{ trans_choice('module_study_material', 2) }}
-                </div>
-                @can('assignment-view')
-                <a href="{{ route('admin.assignment.index') }}" class="action-btn">
-                    <i class="fas fa-tasks"></i> {{ trans_choice('module_assignment', 2) }}
-                    @if($active_assignments > 0)
-                    <span class="badge badge-primary">{{ $active_assignments }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('content-view')
-                <a href="{{ route('admin.content.index') }}" class="action-btn">
-                    <i class="fas fa-file-download"></i> {{ trans_choice('module_content', 1) }} {{ __('list') }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Fees Collection -->
-            @canany(['fees-student-due', 'fees-student-report', 'payment-plan.index', 'fees-master-view', 'payment-receipt-verify'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-money-bill-wave"></i>
-                    {{ trans_choice('module_fees_collection', 1) }}
-                </div>
-                @can('fees-student-due')
-                <a href="{{ route('admin.fees-student.index') }}" class="action-btn">
-                    <i class="fas fa-file-invoice-dollar"></i> {{ trans_choice('module_student_fees', 2) }}
-                    @if($pending_payments > 0)
-                    <span class="badge badge-warning">{{ $pending_payments }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('fees-student-report')
-                <a href="{{ route('admin.fees-student.report') }}" class="action-btn">
-                    <i class="fas fa-chart-bar"></i> {{ trans_choice('module_fees_report', 2) }}
-                </a>
-                @endcan
-                @can('payment-plan.index')
-                <a href="{{ route('admin.payment-plan.index') }}" class="action-btn">
-                    <i class="fas fa-calendar-alt"></i> Payment Plans
-                    @if($active_payment_plans > 0)
-                    <span class="badge badge-info">{{ $active_payment_plans }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('fees-master-create')
-                <a href="{{ route('admin.fees-master.create') }}" class="action-btn">
-                    <i class="fas fa-plus-circle"></i> {{ trans_choice('module_fees_master', 2) }}
-                </a>
-                @endcan
-                @can('fees-master-view')
-                <a href="{{ route('admin.fees-master.index') }}" class="action-btn">
-                    <i class="fas fa-history"></i> {{ trans_choice('module_fees_master_history', 2) }}
-                </a>
-                @endcan
-                @can('payment-receipt-verify')
-                <a href="{{ route('admin.payment-verification.index') }}" class="action-btn">
-                    <i class="fas fa-check-double"></i> {{ trans_choice('module_payment_verification', 2) }}
-                    @if($payment_verifications > 0)
-                    <span class="badge badge-danger pulse-animation">{{ $payment_verifications }}</span>
-                    @endif
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Human Resource -->
-            @canany(['user-view', 'staff-assignment-index', 'staff-view', 'payroll-view', 'payroll-report', 'tax-setting-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-users-cog"></i>
-                    {{ trans_choice('module_human_resource', 2) }}
-                </div>
-                @can('user-view')
-                <a href="{{ route('admin.user.index') }}" class="action-btn">
-                    <i class="fas fa-users"></i> {{ trans_choice('module_staff', 1) }} {{ __('list') }}
-                    <span class="badge badge-secondary">{{ $active_staffs }}</span>
-                </a>
-                @endcan
-                @can('staff-assignment-index')
-                <a href="{{ route('admin.staff-assignment.index') }}" class="action-btn">
-                    <i class="fas fa-user-tag"></i> {{ __('Staff Assign') }}
-                </a>
-                @endcan
-                @can('staff-view')
-                <a href="{{ route('admin.staff-id-card.index') }}" class="action-btn">
-                    <i class="fas fa-id-card"></i> {{ trans_choice('module_staff', 1) }} {{ __('field_id_card') }}
-                </a>
-                @endcan
-                @can('payroll-view')
-                <a href="{{ route('admin.payroll.index') }}" class="action-btn">
-                    <i class="fas fa-money-check-alt"></i> {{ trans_choice('module_payroll', 2) }}
-                    @if($pending_payroll > 0)
-                    <span class="badge badge-danger">{{ $pending_payroll }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('payroll-report')
-                <a href="{{ route('admin.payroll.report') }}" class="action-btn">
-                    <i class="fas fa-file-invoice"></i> {{ trans_choice('module_payroll_report', 2) }}
-                </a>
-                @endcan
-                @can('tax-setting-view')
-                <a href="{{ route('admin.tax-setting.index') }}" class="action-btn">
-                    <i class="fas fa-percent"></i> {{ trans_choice('module_tax_setting', 2) }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Staff Attendance -->
-            @canany(['staff-daily-attendance-action', 'staff-hourly-attendance-action'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-calendar-check"></i>
-                    {{ trans_choice('module_staff_attendance', 2) }}
-                </div>
-                @can('staff-daily-attendance-action')
-                <a href="{{ route('admin.staff-daily-attendance.index') }}" class="action-btn">
-                    <i class="fas fa-calendar-day"></i> {{ trans_choice('module_staff_daily_attendance', 2) }}
-                </a>
-                @endcan
-                @can('staff-hourly-attendance-action')
-                <a href="{{ route('admin.staff-hourly-attendance.index') }}" class="action-btn">
-                    <i class="fas fa-clock"></i> {{ trans_choice('module_staff_hourly_attendance', 2) }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Accounting -->
-            @canany(['income-view', 'expense-view', 'budget-view', 'chart-of-accounts-view', 'journal-entry-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-calculator"></i>
-                    {{ __('Accounting') }}
-                </div>
-                @can('income-view')
-                <a href="{{ route('admin.income.index') }}" class="action-btn">
-                    <i class="fas fa-hand-holding-usd"></i> {{ trans_choice('module_income', 1) }} {{ __('list') }}
-                </a>
-                @endcan
-                @can('expense-view')
-                <a href="{{ route('admin.expense.index') }}" class="action-btn">
-                    <i class="fas fa-credit-card"></i> {{ trans_choice('module_expense', 1) }} {{ __('list') }}
-                </a>
-                @endcan
-                @can('budget-view')
-                <a href="{{ route('admin.budget.dashboard') }}" class="action-btn">
-                    <i class="fas fa-chart-pie"></i> {{ __('budget_dashboard') }}
-                </a>
-                <a href="{{ route('admin.budget.index') }}" class="action-btn">
-                    <i class="fas fa-list"></i> {{ trans_choice('module_budget', 2) }}
-                </a>
-                @endcan
-                @can('payment-account-view')
-                <a href="{{ route('admin.payment-account.index') }}" class="action-btn">
-                    <i class="fas fa-university"></i> {{ __('Payment Accounts') }}
-                </a>
-                <a href="{{ route('admin.payment-account-transfer.index') }}" class="action-btn">
-                    <i class="fas fa-exchange-alt"></i> {{ __('Account Transfers') }}
-                </a>
-                @endcan
-                @can('chart-of-accounts-view')
-                <a href="{{ route('admin.chart-of-accounts.index') }}" class="action-btn">
-                    <i class="fas fa-sitemap"></i> {{ __('Chart of Accounts') }}
-                </a>
-                @endcan
-                @can('journal-entry-view')
-                <a href="{{ route('admin.journal-entries.index') }}" class="action-btn">
-                    <i class="fas fa-book"></i> {{ __('Journal Entries') }}
-                    @if(isset($unposted_entries) && $unposted_entries > 0)
-                    <span class="badge badge-warning">{{ $unposted_entries }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('general-ledger-view')
-                <a href="{{ route('admin.general-ledger.index') }}" class="action-btn">
-                    <i class="fas fa-file-invoice"></i> {{ __('General Ledger') }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Library -->
-            @canany(['issue-return-create', 'issue-return-view', 'book-view', 'book-request-view', 'e-library-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-book-open"></i>
-                    {{ trans_choice('module_library', 1) }}
-                </div>
-                @can('issue-return-create')
-                <a href="{{ route('admin.issue-return.create') }}" class="action-btn">
-                    <i class="fas fa-book-medical"></i> {{ trans_choice('module_issue_book', 1) }}
-                </a>
-                @endcan
-                @can('issue-return-view')
-                <a href="{{ route('admin.issue-return.index') }}" class="action-btn">
-                    <i class="fas fa-list"></i> {{ trans_choice('module_issue_return', 2) }}
-                    @if($books_issued > 0)
-                    <span class="badge badge-info">{{ $books_issued }} issued</span>
-                    @endif
-                    @if($books_overdue > 0)
-                    <span class="badge badge-danger pulse-animation">{{ $books_overdue }} overdue</span>
-                    @endif
-                </a>
-                @endcan
-                @can('book-view')
-                <a href="{{ route('admin.book-list.index') }}" class="action-btn">
-                    <i class="fas fa-books"></i> {{ trans_choice('module_book_list', 2) }}
-                    <span class="badge badge-secondary">{{ $library_books }}</span>
-                </a>
-                @endcan
-                @can('book-request-view')
-                <a href="{{ route('admin.book-request.index') }}" class="action-btn">
-                    <i class="fas fa-book-reader"></i> {{ trans_choice('module_book_request', 2) }}
-                    @if($pending_book_requests > 0)
-                    <span class="badge badge-warning">{{ $pending_book_requests }}</span>
-                    @endif
-                </a>
-                @endcan
-                @can('e-library-view')
-                <a href="{{ route('admin.e-library.index') }}" class="action-btn">
-                    <i class="fas fa-laptop"></i> {{ __('E-Library') }}
-                    <span class="badge badge-info">{{ $e_library_resources }}</span>
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Inventory -->
-            @canany(['item-issue-create', 'item-issue-view', 'item-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-boxes"></i>
-                    {{ trans_choice('module_inventory', 2) }}
-                </div>
-                @can('item-issue-create')
-                <a href="{{ route('admin.item-issue.create') }}" class="action-btn">
-                    <i class="fas fa-plus-circle"></i> {{ trans_choice('module_issue_item', 1) }}
-                </a>
-                @endcan
-                @can('item-issue-view')
-                <a href="{{ route('admin.item-issue.index') }}" class="action-btn">
-                    <i class="fas fa-list"></i> {{ trans_choice('module_item_issue', 2) }}
-                </a>
-                @endcan
-                @can('item-view')
-                <a href="{{ route('admin.item-list.index') }}" class="action-btn">
-                    <i class="fas fa-box"></i> {{ trans_choice('module_item_list', 2) }}
-                </a>
-                <a href="{{ route('admin.item-stock.index') }}" class="action-btn">
-                    <i class="fas fa-warehouse"></i> {{ trans_choice('module_item_stock', 2) }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Communication -->
-            @canany(['email-notify-create', 'event-view', 'notice-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-bullhorn"></i>
-                    {{ trans_choice('module_communicate', 2) }}
-                </div>
-                @can('email-notify-create')
-                <a href="{{ route('admin.email-notify.index') }}" class="action-btn">
-                    <i class="fas fa-envelope"></i> {{ trans_choice('module_email_notify', 2) }}
-                </a>
-                @endcan
-                @can('event-view')
-                <a href="{{ route('admin.event.index') }}" class="action-btn">
-                    <i class="fas fa-calendar"></i> {{ trans_choice('module_event', 2) }}
-                    @if($upcoming_events > 0)
-                    <span class="badge badge-info">{{ $upcoming_events }}</span>
-                    @endif
-                </a>
-                <a href="{{ route('admin.event.calendar') }}" class="action-btn">
-                    <i class="fas fa-calendar-alt"></i> {{ trans_choice('module_calendar', 2) }}
-                </a>
-                @endcan
-                @can('notice-view')
-                <a href="{{ route('admin.notice.index') }}" class="action-btn">
-                    <i class="fas fa-sticky-note"></i> {{ trans_choice('module_notice', 2) }}
-                    @if($active_notices > 0)
-                    <span class="badge badge-primary">{{ $active_notices }}</span>
-                    @endif
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- Reports & Transcripts -->
-            @canany(['transcript-view', 'report-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-chart-line"></i>
-                    {{ __('Reports & Transcripts') }}
-                </div>
-                @can('transcript-view')
-                <a href="{{ route('admin.marksheet.semester') }}" class="action-btn">
-                    <i class="fas fa-file-alt"></i> {{ __('Semester Marksheet') }}
-                </a>
-                <a href="{{ route('admin.marksheet.index') }}" class="action-btn">
-                    <i class="fas fa-certificate"></i> {{ trans_choice('module_transcript', 2) }}
-                </a>
-                @endcan
-                @can('report-view')
-                <a href="{{ route('admin.report.student') }}" class="action-btn">
-                    <i class="fas fa-chart-bar"></i> {{ trans_choice('module_student', 1) }} {{ __('report') }}
-                </a>
-                <a href="{{ route('admin.report.student-fees') }}" class="action-btn">
-                    <i class="fas fa-file-invoice-dollar"></i> {{ __('Student Fees Report') }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-            <!-- System Management -->
-            @canany(['role-view', 'audit-log-view'])
-            <div class="quick-actions-section">
-                <div class="section-title">
-                    <i class="fas fa-cogs"></i>
-                    {{ __('System Management') }}
-                </div>
-                @can('role-view')
-                <a href="{{ route('admin.role.index') }}" class="action-btn">
-                    <i class="fas fa-user-shield"></i> {{ trans_choice('module_role_permission', 2) }}
-                </a>
-                @endcan
-                @can('audit-log-view')
-                <a href="{{ route('admin.audit-log.index') }}" class="action-btn">
-                    <i class="fas fa-history"></i> {{ __('Audit Log') }}
-                </a>
-                @endcan
-            </div>
-            @endcanany
-            
-        </div>
-        
-        <!-- [ Main Content ] end -->
+        </section>
+        @endif
+
+    </div>
     </div>
 </div>
-<!-- End Content-->
 
 @endsection
 
 @section('page_js')
 <script>
-    // Add smooth entrance animations
-    $(document).ready(function() {
-        $('.stat-card, .quick-actions-section').hide().each(function(i) {
-            $(this).delay(50 * i).fadeIn(400);
+    // "Where our students are": tabs, with the arrow keys moving between them.
+    (function () {
+        var tabs = Array.prototype.slice.call(document.querySelectorAll('.et-tab'));
+        if (!tabs.length) return;
+        var select = function (tab) {
+            tabs.forEach(function (t) {
+                var on = t === tab;
+                t.setAttribute('aria-selected', on ? 'true' : 'false');
+                t.tabIndex = on ? 0 : -1;
+                document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+            });
+        };
+        tabs.forEach(function (tab, i) {
+            tab.addEventListener('click', function () { select(tab); });
+            tab.addEventListener('keydown', function (e) {
+                if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+                var next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+                select(next); next.focus(); e.preventDefault();
+            });
         });
-        
-        // Manual toggle for schedule collapse (compatibility fix)
-        $('[data-bs-toggle="collapse"]').on('click', function(e) {
-            // Toggle chevron icon
-            var icon = $(this).find('.fa-chevron-down, .fa-chevron-up');
-            if (icon.hasClass('fa-chevron-down')) {
-                icon.removeClass('fa-chevron-down').addClass('fa-chevron-up');
-            } else {
-                icon.removeClass('fa-chevron-up').addClass('fa-chevron-down');
-            }
-        });
-
-        // Initialize DataTables for the breakdown tables
-        $('#facultyTable').DataTable({
-            "pageLength": 20,
-            "lengthMenu": [[10, 20, 50, -1], [10, 20, 50, "All"]],
-            "order": [[ 1, "desc" ]]
-        });
-        $('#departmentTable').DataTable({
-            "pageLength": 20,
-            "lengthMenu": [[10, 20, 50, -1], [10, 20, 50, "All"]],
-            "order": [[ 1, "desc" ]]
-        });
-        $('#programTable').DataTable({
-            "pageLength": 20,
-            "lengthMenu": [[10, 20, 50, -1], [10, 20, 50, "All"]],
-            "order": [[ 1, "desc" ]]
-        });
-    });
+    })();
 </script>
 @endsection

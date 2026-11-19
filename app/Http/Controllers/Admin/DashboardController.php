@@ -83,10 +83,19 @@ class DashboardController extends Controller
 		$data['today_absent'] = \App\Models\StudentAttendance::whereDate('date', $today_date)
 			->where('attendance', 2)->distinct('student_enroll_id')->count('student_enroll_id');
 		
+		// The academic year the dashboard's masthead names, and today's classes count in.
+		$data['current_session'] = \App\Models\Session::where('status', '1')->where('current', '1')->first();
+
 		// Class & Exam Routines
 		$data['total_classes'] = \App\Models\ClassRoutine::where('status', '1')->count();
+		// The timetable numbers its days 1 = Saturday … 7 = Friday; it never
+		// holds the day's name, so comparing with date('l') always counted 0.
 		$data['today_classes'] = \App\Models\ClassRoutine::where('status', '1')
-			->where('day', date('l'))->count();
+			->where('session_id', optional($data['current_session'])->id)
+			->where('day', [1 => 3, 2 => 4, 3 => 5, 4 => 6, 5 => 7, 6 => 1, 7 => 2][(int) date('N')])
+			// One class shared by several groups has a row per group; it is one class.
+			->selectRaw('count(distinct teacher_id, subject_id, start_time, end_time, coalesce(room_id, 0)) as n')
+			->value('n');
 		$data['total_exam_routines'] = \App\Models\ExamRoutine::where('status', '1')->count();
 		
 		// Assignment Stats
