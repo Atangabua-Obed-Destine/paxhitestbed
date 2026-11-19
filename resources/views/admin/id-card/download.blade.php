@@ -218,6 +218,7 @@
         }
 
         @include('admin.id-card.partials.validity-style', ['card' => '.id-card'])
+        @include('admin.id-card.partials.barcode-style', ['card' => '.id-card'])
         
         .loading-overlay {
             display: none;
@@ -318,7 +319,7 @@
                     <img src="{{ $qrCode }}" alt="QR Code" crossorigin="anonymous">
                 </div>
 
-                @include('admin.id-card.partials.barcode', ['matricule' => $displayMatricule])
+                @include('admin.id-card.partials.barcode', ['matricule' => $displayMatricule, 'variant' => optional($print)->barcodeBesideQr() ? 'barcode-beside' : ''])
             </div>
         </div>
     @endforeach

@@ -67,10 +67,13 @@ class StudentIdCardSettingController extends Controller
             'background' => 'nullable|image',
             'validity' => 'required|numeric',
             'validity_position' => 'nullable|in:' . implode(',', array_keys(IdCardSetting::validityPositions())),
+            'barcode_position' => 'nullable|in:' . implode(',', array_keys(IdCardSetting::barcodePositions())),
         ]);
 
         // Where the card prints its validity. Not sent means as it always was.
         $validityPosition = $request->validity_position ?: IdCardSetting::VALIDITY_TOP;
+        // And its barcode. Not sent means framed at the left, as it always was.
+        $barcodePosition = $request->barcode_position ?: IdCardSetting::BARCODE_LEFT;
 
 
         // Student Photo
@@ -108,6 +111,7 @@ class StudentIdCardSettingController extends Controller
             $setting->website_url = $request->website_url;
             $setting->validity = $request->validity;
             $setting->validity_position = $validityPosition;
+            $setting->barcode_position = $barcodePosition;
             $setting->address = $request->address;
             $setting->prefix = $request->prefix;
             $setting->student_photo = $student_photo;
@@ -125,6 +129,7 @@ class StudentIdCardSettingController extends Controller
             $setting->website_url = $request->website_url;
             $setting->validity = $request->validity;
             $setting->validity_position = $validityPosition;
+            $setting->barcode_position = $barcodePosition;
             $setting->address = $request->address;
             $setting->prefix = $request->prefix;
             $setting->student_photo = $student_photo;

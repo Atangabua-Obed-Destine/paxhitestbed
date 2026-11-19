@@ -398,6 +398,7 @@
                 color: #001F5B;
             }
             @include('admin.id-card.partials.validity-style', ['card' => '.zip-id-card'])
+            @include('admin.id-card.partials.barcode-style', ['card' => '.zip-id-card'])
         `;
         container.appendChild(style);
         

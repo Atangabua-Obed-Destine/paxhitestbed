@@ -60,6 +60,21 @@
                             </select>
                         </div>
 
+                        {{-- How the card shows its barcode. Framed at the left is how the
+                             card has always looked, and on the built-in artwork that frame
+                             also covers a decorative barcode printed into the background.
+                             Without the border it moves right, beside the QR code. --}}
+                        <div class="form-group col-md-6">
+                            <label for="barcode_position">{{ __('Barcode position') }}</label>
+                            @php $barcodePosition = $row->barcode_position ?? \App\Models\IdCardSetting::BARCODE_LEFT; @endphp
+                            <select class="form-control" name="barcode_position" id="barcode_position">
+                                @foreach(\App\Models\IdCardSetting::barcodePositions() as $value => $label)
+                                    <option value="{{ $value }}" @selected($barcodePosition === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            <small class="text-muted d-block mt-1">{{ __('Moving the barcode uncovers the left of the card artwork; use it with artwork that has nothing printed there.') }}</small>
+                        </div>
+
                         <div class="form-group col-md-6">
                             <label for="address">{{ __('field_address') }} <span>*</span></label>
                             <input type="text" class="form-control" name="address" id="address" value="{{ isset($row->address)?$row->address:'' }}" required>

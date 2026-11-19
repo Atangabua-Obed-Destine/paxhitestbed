@@ -40,7 +40,8 @@
 @endphp
 
 @if($drawBarcode)
-    <div class="barcode">
+    {{-- $variant: an extra class from the card's settings, e.g. barcode-beside. --}}
+    <div class="barcode{{ !empty($variant) ? ' ' . $variant : '' }}">
         {!! $svg !!}
         <span class="barcode-label">{{ $value }}</span>
     </div>

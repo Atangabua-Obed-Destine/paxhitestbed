@@ -370,6 +370,7 @@ class StudentIdCardController extends Controller
                 // carry different symbols for the same student.
                 'barcode' => view('admin.id-card.partials.barcode', [
                     'matricule' => $displayMatricule,
+                    'variant' => optional($print)->barcodeBesideQr() ? 'barcode-beside' : '',
                 ])->render(),
             ];
         }
