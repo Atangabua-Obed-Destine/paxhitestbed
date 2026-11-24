@@ -252,7 +252,7 @@
                     <p class="mb-2">
                         {{ __('A salary is taxed by the band with the highest minimum at or below it. Where no band covers a salary it is charged the band beneath instead — the payroll still produces a figure, so this is not visible anywhere else.') }}
                         {{ __('Only ranges reaching the highest current salary are listed') }}
-                        ({{ number_format($highest_salary) }}).
+                        ({{ format_amount($highest_salary) }}).
                     </p>
 
                     @foreach($groupsWithProblems as $g)
@@ -262,13 +262,13 @@
                         <ul class="mb-0">
                             @foreach($c['biting_gaps'] as $gap)
                             <li>
-                                {{ number_format($gap['from']) }} – {{ number_format($gap['to']) }}
+                                {{ format_amount($gap['from']) }} – {{ format_amount($gap['to']) }}
                                 — {{ __('charged as') }} <em>{{ $gap['charged_as'] }}</em>
                             </li>
                             @endforeach
                             @if($c['top_exceeded'])
                             <li>
-                                {{ __('above') }} {{ number_format($c['open_top']['from'] - 1) }}
+                                {{ __('above') }} {{ format_amount($c['open_top']['from'] - 1) }}
                                 — {{ __('every salary is charged as') }} <em>{{ $c['open_top']['band'] }}</em>,
                                 {{ __('however high it goes') }}
                             </li>

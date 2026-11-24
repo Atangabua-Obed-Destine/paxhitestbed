@@ -106,11 +106,105 @@
                 <div class="card">
                     @if(isset($rows))
                     <div class="card-block">
+                        @php
+                            $bulk = session('payroll_bulk_result');
+                            $listQuery = ['month' => $selected_month, 'year' => $selected_year, 'salary_type' => $selected_salary_type ?: null];
+                        @endphp
+
+                        @if($bulk)
+                        <div class="alert {{ empty($bulk['skipped']) ? 'alert-success' : 'alert-warning' }} payroll-bulk-result">
+                            <strong>{{ count($bulk['done']) }} {{ $bulk['verb'] }}@if(count($bulk['skipped'])), {{ count($bulk['skipped']) }} {{ __('skipped') }}@endif.</strong>
+                            @if(count($bulk['skipped']))
+                            <ul class="mb-0 mt-1">
+                                @foreach($bulk['skipped'] as $line)<li>{{ $line }}</li>@endforeach
+                            </ul>
+                            @endif
+                            @foreach($bulk['notes'] as $note)<div class="mt-1"><small>{{ $note }}</small></div>@endforeach
+                        </div>
+                        @endif
+
+                        @can($access.'-action')
+                        <form id="payrollBulkForm" action="{{ route($route.'.bulk') }}" method="post" class="d-none">
+                            @csrf
+                            <input type="hidden" name="action" value="">
+                            <input type="hidden" name="month" value="{{ $selected_month }}">
+                            <input type="hidden" name="year" value="{{ $selected_year }}">
+                        </form>
+
+                        <div class="d-flex flex-wrap align-items-center mb-3 payroll-toolbar" style="gap: 8px;">
+                            <button type="button" class="btn btn-sm btn-primary" data-needs-pick data-bulk-action="generate"
+                                data-confirm="{{ __('Generate the payroll for every ticked staff member who has none this month?') }}">
+                                <i class="fas fa-plus"></i> {{ __('Generate ticked') }}
+                            </button>
+                            @if($settings->require_approval)
+                            @can($access.'-approve')
+                            <button type="button" class="btn btn-sm btn-info" data-needs-pick data-bulk-action="approve"
+                                data-confirm="{{ __('Approve the generated payroll of every ticked staff member?') }}">
+                                <i class="fas fa-check-double"></i> {{ __('Approve ticked') }}
+                            </button>
+                            @endcan
+                            @endif
+                            <button type="button" class="btn btn-sm btn-success" data-needs-pick data-bs-toggle="modal" data-bs-target="#payrollBulkPayModal">
+                                <i class="fas fa-money-check"></i> {{ __('Pay ticked') }}
+                            </button>
+                            <div class="dropdown d-inline-block">
+                                <button class="btn btn-sm btn-outline-dark dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-file-csv"></i> {{ __('Bank file') }}
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" data-bank-file href="{{ route($route.'.bank-file', $listQuery + ['which' => 'unpaid']) }}">{{ __('Payrolls to pay (not yet paid)') }}</a>
+                                    <a class="dropdown-item" data-bank-file href="{{ route($route.'.bank-file', $listQuery + ['which' => 'paid']) }}">{{ __('Payrolls already paid') }}</a>
+                                    <a class="dropdown-item" data-bank-file href="{{ route($route.'.bank-file', $listQuery + ['which' => 'all']) }}">{{ __('All payrolls this month') }}</a>
+                                    <div class="dropdown-divider"></div>
+                                    <span class="dropdown-item-text small text-muted">{{ __('Only the ticked staff, if any are ticked.') }}</span>
+                                </div>
+                            </div>
+                            <small class="text-muted ml-2" id="payrollPickCount"></small>
+                        </div>
+
+                        <div class="modal fade" id="payrollBulkPayModal" tabindex="-1" role="dialog" aria-hidden="true">
+                            <div class="modal-dialog" role="document">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">{{ __('Pay ticked payrolls') }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p class="small text-muted">{{ __('Each ticked payroll is paid into the staff member\'s default payment account. Anyone not generated, not approved or without an account is skipped and listed.') }}</p>
+                                        <div class="form-group">
+                                            <label class="form-label" for="bulk_pay_date">{{ __('field_pay_date') }} <span>*</span></label>
+                                            <input type="date" class="form-control" name="pay_date" id="bulk_pay_date" form="payrollBulkForm" value="{{ date('Y-m-d') }}" max="{{ date('Y-m-d') }}" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="bulk_payment_method">{{ __('field_payment_method') }} <span>*</span></label>
+                                            <select class="form-control" name="payment_method" id="bulk_payment_method" form="payrollBulkForm" required>
+                                                <option value="4">{{ __('payment_method_bank') }}</option>
+                                                <option value="2">{{ __('payment_method_cash') }}</option>
+                                                <option value="3">{{ __('payment_method_cheque') }}</option>
+                                                <option value="1">{{ __('payment_method_card') }}</option>
+                                                <option value="5">{{ __('payment_method_e_wallet') }}</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label" for="bulk_note">{{ __('field_note') }}</label>
+                                            <input type="text" class="form-control" name="note" id="bulk_note" form="payrollBulkForm" maxlength="255">
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times"></i> {{ __('btn_close') }}</button>
+                                        <button type="button" class="btn btn-success" data-bulk-action="pay"><i class="fas fa-money-check"></i> {{ __('Pay ticked') }}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @endcan
+
                         <!-- [ Data table ] start -->
                         <div class="table-responsive">
                             <table class="display table nowrap table-striped table-hover" style="width:100%">
                                 <thead>
                                     <tr>
+                                        <th style="width: 28px;"><input type="checkbox" id="payrollPickAll" title="{{ __('Tick all') }}"></th>
                                         <th>{{ __('field_staff_id') }}</th>
                                         <th>{{ __('field_name') }}</th>
                                         <th>{{ __('field_department') }}</th>
@@ -125,6 +219,7 @@
                                   @foreach( $rows as $key => $row )
                                   @if($row->status == 1)
                                     <tr>
+                                        <td><input type="checkbox" class="payroll-pick" name="users[]" value="{{ $row->id }}" form="payrollBulkForm"></td>
                                         <td>
                                             <a href="{{ route('admin.user.show', $row->id) }}">
                                                 #{{ $row->staff_id }}
@@ -162,6 +257,11 @@
                                             @if( $payroll_generate == 1 )
                                             @if($payroll_status == 1)
                                             <span class="badge badge-pill badge-success">{{ __('status_paid') }}</span>
+                                            @if($payroll_data->payslip_emailed_at)<br><small class="text-muted" title="{{ $payroll_data->payslip_emailed_at }}"><i class="far fa-envelope"></i> {{ __('emailed') }}</small>@endif
+                                            @elseif($settings->require_approval && $payroll_data->approved_at)
+                                            <span class="badge badge-pill badge-info" title="{{ optional($payroll_data->approver)->first_name }} {{ optional($payroll_data->approver)->last_name }}">{{ __('Approved') }}</span>
+                                            @elseif($settings->require_approval)
+                                            <span class="badge badge-pill badge-warning">{{ __('Awaiting approval') }}</span>
                                             @else
                                             <span class="badge badge-pill badge-primary">{{ __('status_generated') }}</span>
                                             @endif
@@ -180,6 +280,14 @@
 
                                             @if(isset($payroll_data))
                                             @if($payroll_status == 0)
+                                            @if($settings->require_approval && !$payroll_data->approved_at)
+                                            @can($access.'-approve')
+                                            <form action="{{ route($route.'.approve', $payroll_data->id) }}" method="post" class="d-inline">
+                                                @csrf
+                                                <button type="submit" class="btn btn-info btn-sm"><i class="fas fa-check-double"></i> {{ __('Approve') }}</button>
+                                            </form>
+                                            @endcan
+                                            @else
                                             @can($access.'-action')
                                             <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#payModal-{{ $row->id }}">
                                                 <i class="fas fa-money-check"></i> {{ __('btn_pay') }}
@@ -187,6 +295,7 @@
                                             <!-- Include Edit modal -->
                                             @include($view.'.pay')
                                             @endcan
+                                            @endif
 
                                             @can($access.'-action')
                                             <a href="{{ route($route.'.generate', ['id' => $row->id, 'month' => $selected_month, 'year' => $selected_year]) }}" class="btn btn-icon btn-primary btn-sm">
@@ -204,6 +313,10 @@
                                             @endcan
 
                                             @can($access.'-action')
+                                            <form action="{{ route($route.'.email', $payroll_data->id) }}" method="post" class="d-inline">
+                                                @csrf
+                                                <button type="submit" class="btn btn-icon btn-outline-primary btn-sm" title="{{ __('Email the payslip') }}"><i class="far fa-envelope"></i></button>
+                                            </form>
                                             <button type="button" class="btn btn-icon btn-danger btn-sm" title="{{ __('status_unpaid') }}" data-bs-toggle="modal" data-bs-target="#unpayModal-{{ $row->id }}">
                                                 <i class="fas fa-undo"></i>
                                             </button>
@@ -237,6 +350,38 @@
 @endsection
 
 @section('page_js')
+    <script type="text/javascript">
+        (function () {
+            var all = document.getElementById('payrollPickAll');
+            var picks = function () { return Array.prototype.slice.call(document.querySelectorAll('.payroll-pick')); };
+            var count = document.getElementById('payrollPickCount');
+            var refresh = function () {
+                var n = picks().filter(function (c) { return c.checked; }).length;
+                if (count) { count.textContent = n ? n + ' {{ __('ticked') }}' : '{{ __('Tick staff to act on several at once') }}'; }
+                document.querySelectorAll('[data-needs-pick]').forEach(function (b) { b.disabled = n === 0; });
+            };
+            if (all) { all.addEventListener('change', function () { picks().forEach(function (c) { c.checked = all.checked; }); refresh(); }); }
+            picks().forEach(function (c) { c.addEventListener('change', refresh); });
+            document.querySelectorAll('[data-bulk-action]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    var form = document.getElementById('payrollBulkForm');
+                    form.querySelector('input[name="action"]').value = b.getAttribute('data-bulk-action');
+                    var question = b.getAttribute('data-confirm');
+                    if (question && !confirm(question)) { return; }
+                    form.submit();
+                });
+            });
+            document.querySelectorAll('[data-bank-file]').forEach(function (a) {
+                a.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var url = new URL(a.getAttribute('href'), window.location.href);
+                    picks().filter(function (c) { return c.checked; }).forEach(function (c) { url.searchParams.append('users[]', c.value); });
+                    window.location.href = url.toString();
+                });
+            });
+            refresh();
+        })();
+    </script>
     <script type="text/javascript">
         "use strict";
         function salaryCalculator(type, id) {

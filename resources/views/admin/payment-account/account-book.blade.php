@@ -138,20 +138,20 @@
                                         </td>
                                         <td class="text-right">
                                             @if($transaction->transaction_type == 'debit')
-                                            <span class="text-danger">{{ number_format($transaction->amount, 2) }}</span>
+                                            <span class="text-danger">{{ format_amount($transaction->amount) }}</span>
                                             @else
                                             -
                                             @endif
                                         </td>
                                         <td class="text-right">
                                             @if($transaction->transaction_type == 'credit')
-                                            <span class="text-success">{{ number_format($transaction->amount, 2) }}</span>
+                                            <span class="text-success">{{ format_amount($transaction->amount) }}</span>
                                             @else
                                             -
                                             @endif
                                         </td>
                                         <td class="text-right">
-                                            <strong>{{ number_format($transaction->balance_after, 2) }}</strong>
+                                            <strong>{{ format_amount($transaction->balance_after) }}</strong>
                                         </td>
                                         <td>
                                             <div class="btn-group">
@@ -200,10 +200,10 @@
                                     <tr>
                                         <th colspan="5" class="text-right">{{ __('total') }}:</th>
                                         <th class="text-right text-danger">
-                                            {{ number_format($transactions->where('transaction_type', 'debit')->sum('amount'), 2) }}
+                                            {{ format_amount($transactions->where('transaction_type', 'debit')->sum('amount')) }}
                                         </th>
                                         <th class="text-right text-success">
-                                            {{ number_format($transactions->where('transaction_type', 'credit')->sum('amount'), 2) }}
+                                            {{ format_amount($transactions->where('transaction_type', 'credit')->sum('amount')) }}
                                         </th>
                                         <th colspan="2"></th>
                                     </tr>

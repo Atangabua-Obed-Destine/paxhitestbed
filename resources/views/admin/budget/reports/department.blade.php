@@ -78,9 +78,9 @@
                                     <tr>
                                         <td><strong>{{ $row['department'] }}</strong></td>
                                         <td class="text-center">{{ $row['budget_count'] }}</td>
-                                        <td class="text-right">{{ number_format($row['total_budget'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($row['total_spent'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($row['total_remaining'], 2) }}</td>
+                                        <td class="text-right">{{ format_amount($row['total_budget']) }}</td>
+                                        <td class="text-right">{{ format_amount($row['total_spent']) }}</td>
+                                        <td class="text-right">{{ format_amount($row['total_remaining']) }}</td>
                                         <td class="text-right">
                                             @php
                                                 $progressClass = $row['utilization_rate'] > 90 ? 'danger' : ($row['utilization_rate'] > 75 ? 'warning' : 'success');

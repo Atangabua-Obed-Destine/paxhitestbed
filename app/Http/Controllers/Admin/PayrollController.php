@@ -16,12 +16,20 @@ use App\Models\PrintSetting;
 use App\Models\Transaction;
 use App\Models\Designation;
 use Illuminate\Support\Str;
-use App\Models\TaxSetting;
 use App\Models\TaxGroup;
 use App\Models\Department;
 use App\Models\Payroll;
 use App\Services\PayrollAccountingService;
 use App\Services\PayrollTaxBreakdownService;
+use App\Services\PayrollCalculator;
+use App\Services\PayrollWriter;
+use App\Services\PayrollPayer;
+use App\Services\PayslipService;
+use App\Services\PayrollBankFile;
+use App\Models\PayrollSetting;
+use App\Models\StaffLoan;
+use App\Models\TransactionMapping;
+use App\Models\JournalEntry;
 use Carbon\Carbon;
 use App\User;
 
@@ -30,9 +38,6 @@ class PayrollController extends Controller
     protected $title, $route, $view, $path, $access;
     protected $payrollAccountingService;
 
-    /** The group that must have rates in force before any payroll can be taxed. */
-    protected const GROUP_INCOME_TAX = 1;
-    
     /**
      * Create a new controller instance.
      *
@@ -51,7 +56,8 @@ class PayrollController extends Controller
         $this->access = 'payroll';
 
 
-        $this->middleware('permission:'.$this->access.'-action', ['only' => ['index','generate','store','pay','unpay']]);
+        $this->middleware('permission:'.$this->access.'-action', ['only' => ['index','generate','preview','store','pay','unpay','bulk','bankFile','emailPayslip']]);
+        $this->middleware('permission:'.$this->access.'-approve', ['only' => ['approve']]);
         $this->middleware('permission:'.$this->access.'-view', ['only' => ['index']]);
         $this->middleware('permission:'.$this->access.'-report', ['only' => ['report']]);
         $this->middleware('permission:'.$this->access.'-print', ['only' => ['index','print']]);
@@ -111,6 +117,7 @@ class PayrollController extends Controller
         $data['departments'] = Department::where('status', '1')->orderBy('title', 'asc')->get();
         $data['designations'] = Designation::where('status', '1')->orderBy('title', 'asc')->get();
         $data['print'] = PrintSetting::where('slug', 'pay-slip')->first();
+        $data['settings'] = PayrollSetting::current();
 
 
         // Filter Users
@@ -159,7 +166,7 @@ class PayrollController extends Controller
                 });
             }
 
-            $data['payrolls'] = $payrolls->orderBy('id', 'asc')->get();
+            $data['payrolls'] = $payrolls->with('approver')->orderBy('id', 'asc')->get();
         }
 
 
@@ -167,253 +174,217 @@ class PayrollController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * The payroll screen for one staff member and month.
      *
-     * @return \Illuminate\Http\Response
+     * Its figures come from PayrollCalculator, the same class that saving
+     * uses, so what the page shows on arrival is what would be saved.
      */
     public function generate($id, $month, $year)
     {
-        //
         $data['title'] = $this->title;
         $data['route'] = $this->route;
         $data['view'] = $this->view;
         $data['path'] = $this->path;
-
 
         $data['selected_month'] = $month;
         $data['selected_year'] = $year;
 
         $user = $data['row'] = User::with('exemptTaxes')->where('id', $id)->where('status', '1')->firstOrFail();
 
-        // Filter Payroll
-        $data['payroll'] = $payroll = Payroll::where('user_id', $id)
+        $data['payroll'] = $payroll = Payroll::with('details')->where('user_id', $id)
                         ->whereYear('salary_month', $year)
                         ->whereMonth('salary_month', $month)
                         ->first();
 
-        // Update Validation
-        if(isset($payroll) && $payroll->status == 1){
+        // A paid payroll is history; it can only be looked at on its payslip.
+        if (isset($payroll) && $payroll->status == 1) {
             return redirect()->back();
         }
 
-        // Attendances
-        if($user->salary_type == 1){
-        $data['attendances'] = StaffAttendance::whereYear('date', $year)
+        // This staff member's attendance only. The query used to load every
+        // staff member's attendance for the month and filter in the view.
+        $attendanceModel = $user->salary_type == 2 ? StaffHourlyAttendance::class : StaffAttendance::class;
+        $data['attendances'] = $attendanceModel::where('user_id', $user->id)
+            ->whereYear('date', $year)
             ->whereMonth('date', $month)
             ->get();
-        }
-        if($user->salary_type == 2){
-        $data['attendances'] = StaffHourlyAttendance::whereYear('date', $year)
-            ->whereMonth('date', $month)
-            ->get();
-        }
 
         $data['total_days'] = Carbon::createFromDate($year, $month, 1)->daysInMonth;
 
-        // Get active and effective tax brackets for the payroll month
-        $payrollDate = Carbon::createFromDate($year, $month, 1);
-        
-        // Get tax groups with their brackets (for progressive tax calculation)
-        $data['tax_groups'] = TaxGroup::getEffectiveGroups($payrollDate);
-        
-        // Get standalone tax brackets (not in any group) — base taxes only
-        $data['taxs'] = TaxSetting::getEffectiveBrackets($payrollDate);
-        
-        // Get standalone dependent tax brackets
-        $data['dependent_taxs'] = TaxSetting::getEffectiveDependentBrackets($payrollDate);
-        
-        // Get staff tax exemptions with custom values (only non-expired)
-        $data['staff_tax_exemptions'] = \App\Models\StaffTaxExemption::where('user_id', $id)
-            ->notExpired($payrollDate)
-            ->get()
-            ->keyBy('tax_setting_id');
+        $salaryMonth = Carbon::createFromDate($year, $month, 1)->format('Y-m-d');
 
-        // Get allowance and deduction types for dropdowns
+        // Start from what was saved last time, if this month was generated
+        // before; otherwise from last month's lines (when the school carries
+        // them over) and the instalments of any open loans.
+        if ($payroll) {
+            $allowances = $payroll->details->where('status', 1)->map(fn ($d) => ['title' => $d->title, 'amount' => $d->amount])->values()->all();
+            $deductions = $payroll->details->where('status', 0)->map(fn ($d) => ['title' => $d->title, 'amount' => $d->amount, 'loan_id' => $d->staff_loan_id])->values()->all();
+            $data['carried_from'] = null;
+
+            // A loan given after this payroll was generated: its instalment
+            // is due this month but not yet on the payroll.
+            $onPayroll = $payroll->details->pluck('staff_loan_id')->filter()->all();
+            foreach (StaffLoan::dueLines($user->id, $salaryMonth, $payroll->id) as $line) {
+                if (!in_array($line['loan_id'], $onPayroll)) {
+                    $deductions[] = $line;
+                }
+            }
+        } else {
+            $start = app(PayrollWriter::class)->startingLines($user, $salaryMonth);
+            $allowances = $start['allowances'];
+            $deductions = $start['deductions'];
+            $data['carried_from'] = $start['from'];
+        }
+
+        $data['calc'] = app(PayrollCalculator::class)->calculate($user, $salaryMonth, $allowances, $deductions, $payroll);
+        $data['start_allowances'] = $allowances;
+        $data['start_deductions'] = $deductions;
+        $data['open_loans'] = StaffLoan::where('user_id', $user->id)->where('status', 'active')->get()
+            ->filter(fn ($loan) => $loan->available($payroll?->id) > 0)
+            ->values();
+
+        $data['tax_groups'] = TaxGroup::getEffectiveGroups(Carbon::parse($salaryMonth));
         $data['allowance_types'] = \App\Models\AllowanceType::where('status', '1')->orderBy('title', 'asc')->get();
         $data['deduction_types'] = \App\Models\DeductionType::where('status', '1')->orderBy('title', 'asc')->get();
-
 
         return view($this->view.'.generate', $data);
     }
 
     /**
-     * Store a newly created resource in storage.
+     * The figures for a payroll as its lines are being typed.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
+     * The screen calls this instead of working the tax out in JavaScript, so
+     * there is one tax engine, on the server, and the page cannot show a
+     * figure that saving would then refuse.
      */
-    public function store(Request $request)
+    public function preview(Request $request)
     {
-        // Field Validation
         $request->validate([
-            'user_id' => 'required',
-            'basic_salary' => 'required|numeric',
-            'total_earning' => 'required|numeric',
-            'total_allowance' => 'required|numeric',
-            'total_deduction' => 'required|numeric',
-            'gross_salary' => 'required|numeric',
-            'tax' => 'required|numeric',
-            'employer_tax' => 'nullable|numeric',
-            'net_salary' => 'required|numeric',
-            'total_cost' => 'nullable|numeric',
+            'user_id' => 'required|integer',
             'salary_month' => 'required|date',
         ]);
 
+        $user = User::where('id', $request->user_id)->where('status', '1')->firstOrFail();
+        $existing = Payroll::where('user_id', $user->id)->where('salary_month', Carbon::parse($request->salary_month)->format('Y-m-d'))->first();
 
-        // Insert Data
-        try{
-            DB::beginTransaction();
+        $calc = app(PayrollCalculator::class)->calculate(
+            $user,
+            $request->salary_month,
+            $this->postedLines($request, 'allowance_titles', 'allowances'),
+            $this->postedLines($request, 'deduction_titles', 'deductions', 'deduction_loans'),
+            $existing
+        );
 
-            // The tax is RECOMPUTED here, not taken from the form.
-            //
-            // Every figure on the payroll screen is produced by JavaScript and
-            // posted back in a readonly input, the tax among them, and this
-            // method used to store `$request->tax` verbatim. That made the
-            // browser the authority on how much the institution withholds:
-            // whatever arrived went into the books, with no record of the rates
-            // behind it, and the services that know the rules were only ever
-            // advisory. It is also why one payroll on this installation holds
-            // 37 160 that nothing can re-derive.
-            //
-            // Now the server works it out and stores its own answer, and a
-            // posted figure that disagrees is refused rather than quietly
-            // overridden -- so what the screen showed and what the books hold
-            // cannot drift apart. The usual cause of a disagreement is a page
-            // left open while the rates changed underneath it, which is exactly
-            // the case worth stopping.
-            $authority = $this->authoritativeTax(
-                (int) $request->user_id,
-                (float) $request->total_earning,
-                (string) $request->salary_month
-            );
+        return response()->json($calc);
+    }
 
-            $posted = (float) $request->tax;
-            $postedEmployer = (float) ($request->employer_tax ?? 0);
+    /**
+     * Save a payroll.
+     *
+     * Every figure is worked out here by PayrollCalculator from the staff
+     * record, the attendance, the allowance and deduction lines and the rates
+     * in force. The figures the page posts are only compared with that: if
+     * any disagrees the payroll is refused rather than quietly overridden, so
+     * what the screen showed and what the books hold cannot drift apart. The
+     * usual cause is a page left open while the rates or the staff record
+     * changed underneath it, which is exactly the case worth stopping.
+     *
+     * This used to store the posted gross, allowance total, earning and basic
+     * salary as they arrived and recheck only the tax, so a form edited in
+     * the browser could pay somebody 500,000 more, or declare less tax on the
+     * same pay, and be saved.
+     */
+    public function store(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|integer',
+            'salary_month' => 'required|date',
+            'allowance_titles' => 'nullable|array',
+            'allowances' => 'nullable|array',
+            'deduction_titles' => 'nullable|array',
+            'deductions' => 'nullable|array',
+            'basic_salary' => 'nullable|numeric',
+            'total_earning' => 'nullable|numeric',
+            'total_allowance' => 'nullable|numeric',
+            'total_deduction' => 'nullable|numeric',
+            'gross_salary' => 'nullable|numeric',
+            'tax' => 'nullable|numeric',
+            'employer_tax' => 'nullable|numeric',
+            'net_salary' => 'nullable|numeric',
+        ]);
 
-            if (!$this->agrees($posted, $authority['employee'])
-                || !$this->agrees($postedEmployer, $authority['employer'])) {
-                DB::rollBack();
+        $user = User::where('id', $request->user_id)->where('status', '1')->firstOrFail();
+        $salaryMonth = Carbon::parse($request->salary_month)->startOfMonth()->format('Y-m-d');
 
-                Flasher::addError(__(
-                    'This payroll was not saved: the tax on the page (:shown) does not match the configured rates (:computed). The rates may have changed since the page was opened — reload it and generate the payroll again.',
-                    [
-                        'shown' => number_format($posted, 2),
-                        'computed' => number_format($authority['employee'], 2),
-                    ]
-                ), __('msg_error'));
+        $existing = Payroll::where('user_id', $user->id)->where('salary_month', $salaryMonth)->first();
 
-                return redirect()->back()->withInput();
+        if ($existing && $existing->status == 1) {
+            Flasher::addError(__('This payroll has been paid and can no longer be edited. Reverse the payment first.'), __('msg_error'));
+
+            return redirect()->back();
+        }
+
+        $calc = app(PayrollCalculator::class)->calculate(
+            $user,
+            $salaryMonth,
+            $this->postedLines($request, 'allowance_titles', 'allowances'),
+            $this->postedLines($request, 'deduction_titles', 'deductions', 'deduction_loans'),
+            $existing
+        );
+
+        if (!empty($calc['problems'])) {
+            Flasher::addError(__('This payroll was not saved:') . ' ' . implode(' ', $calc['problems']), __('msg_error'));
+
+            return redirect()->back()->withInput();
+        }
+
+        // What the page showed against what the server works out. Only
+        // figures the page actually sent are compared.
+        $shown = [
+            'basic_salary' => __('field_basic_salary'),
+            'total_earning' => __('field_total_earning'),
+            'total_allowance' => __('field_total_allowance'),
+            'total_deduction' => __('field_total_deduction'),
+            'gross_salary' => __('field_gross_salary'),
+            'tax' => __('field_tax'),
+            'employer_tax' => __('field_employer_tax'),
+            'net_salary' => __('field_net_salary'),
+        ];
+
+        $disagree = [];
+        foreach ($shown as $field => $label) {
+            if ($request->filled($field) && !$this->agrees((float) $request->input($field), (float) $calc[$field])) {
+                $disagree[] = __(':label: the page showed :shown, the correct figure is :computed', [
+                    'label' => $label,
+                    'shown' => number_format((float) $request->input($field), 2),
+                    'computed' => number_format((float) $calc[$field], 2),
+                ]);
             }
+        }
 
-            $employerTax = round($authority['employer'], 2);
-            $tax = round($authority['employee'], 2);
-            $netSalary = round((float) $request->gross_salary - $tax, 2);
-            $totalCost = round($netSalary + $tax + $employerTax, 2);
+        if ($disagree) {
+            Flasher::addError(__('This payroll was not saved because the figures on the page do not match the staff record and the configured rates. Reload the page and generate the payroll again.') . ' ' . implode('; ', $disagree) . '.', __('msg_error'));
 
-            // Insert Or Update Data
-            $payroll = Payroll::updateOrCreate(
-                [
-                    'user_id' => $request->user_id,
-                    'salary_month' => $request->salary_month
-                ],
-                [
-                    'user_id' => $request->user_id,
-                    'basic_salary' => $request->basic_salary,
-                    'salary_type' => $request->salary_type,
-                    'total_earning' => $request->total_earning,
-                    'total_allowance' => $request->total_allowance,
-                    'bonus' => '0',
-                    'total_deduction' => $request->total_deduction,
-                    'gross_salary' => $request->gross_salary,
-                    'tax' => $tax,
-                    'employer_tax' => $employerTax,
-                    'net_salary' => $netSalary,
-                    'total_cost' => $totalCost,
-                    'salary_month' => $request->salary_month,
-                    'status' => '0',
-                    'created_by' => Auth::guard('web')->user()->id
-                ]
-            );
+            return redirect()->back()->withInput();
+        }
 
-
-            // Remove Old Details
-            PayrollDetail::where('payroll_id', $payroll->id)->delete();
-
-            // Payroll Allowances
-            if(is_array($request->allowances)){
-            foreach($request->allowances as $key =>$allowance){
-                if($allowance != '' && $allowance != null){
-                // Insert Data
-                $allowance = new PayrollDetail;
-                $allowance->payroll_id = $payroll->id;
-                $allowance->title = $request->allowance_titles[$key];
-                $allowance->amount = $request->allowances[$key];
-                $allowance->status = '1';
-                $allowance->save();
-                }
-            }}
-
-            // Payroll Deductions
-            if(is_array($request->deductions)){
-            foreach($request->deductions as $key =>$deduction){
-                if($deduction != '' && $deduction != null){
-                // Insert Data
-                $deduction = new PayrollDetail;
-                $deduction->payroll_id = $payroll->id;
-                $deduction->title = $request->deduction_titles[$key];
-                $deduction->amount = $request->deductions[$key];
-                $deduction->status = '0';
-                $deduction->save();
-                }
-            }}
-
-            // Itemise the tax in the same transaction that charged it.
-            //
-            // payroll_tax_lines is what credits each tax to the authority it
-            // is owed to -- the employee's social contributions to 431, the
-            // State's withholdings to 443 -- and what the remittance screen
-            // reads to say what is due and to whom. Without it
-            // PayrollAccountingService has nothing to split on and posts every
-            // franc to one lump account, which is how the 431/443 split that
-            // is already configured came to have never actually happened.
-            //
-            // It used to be written only by a hand-run command, so in practice
-            // it was never written at all. The payroll and its breakdown are
-            // the same fact and are now recorded together or not at all.
-            $recorded = app(PayrollTaxBreakdownService::class)->record($payroll);
-
-            if (!$recorded['reconciled']) {
-                // Unreachable while the figures above come from the same
-                // service, so if it ever fires something is genuinely wrong and
-                // a half-itemised payroll is the worst thing to leave behind.
-                throw new \RuntimeException(sprintf(
-                    'The tax breakdown (%s) does not add up to the tax charged (%s).',
-                    number_format(app(PayrollTaxBreakdownService::class)->totals($recorded['lines'])['employee'], 2),
-                    number_format((float) $payroll->tax, 2)
-                ));
-            }
-
-            DB::commit();
-
+        try {
+            app(PayrollWriter::class)->save($user, $salaryMonth, $calc, Auth::guard('web')->user()->id);
 
             Flasher::addSuccess(__('msg_created_successfully'), __('msg_success'));
 
-            return redirect()->route($this->route.'.index');
-        }
-        catch(\Throwable $e){
-
-            // This used to swallow the exception without rolling back, leaving
-            // the transaction open for whatever ran next on the connection.
-            DB::rollBack();
-
+            return redirect()->route($this->route.'.index', [
+                'salary_type' => $user->salary_type,
+                'month' => Carbon::parse($salaryMonth)->format('m'),
+                'year' => Carbon::parse($salaryMonth)->format('Y'),
+            ]);
+        } catch (\Throwable $e) {
             Log::error('Payroll could not be generated', [
                 'user' => $request->user_id,
                 'month' => $request->salary_month,
                 'error' => $e->getMessage(),
             ]);
 
-            // A misconfiguration is something the admin can act on, so it is
-            // reported as itself rather than as "something went wrong".
             Flasher::addError(
                 $e instanceof \RuntimeException ? $e->getMessage() : __('msg_created_error'),
                 __('msg_error')
@@ -424,202 +395,37 @@ class PayrollController extends Controller
     }
 
     /**
-     * What the configured rates say is due on this pay, for this month.
+     * An allowance or deduction list as the form posts it: two parallel
+     * arrays, titles and amounts.
      *
-     * The single place the server decides a tax figure. It reads the rates in
-     * force for the salary month, so a payroll generated for an earlier month
-     * is charged that month's rates rather than today's.
-     *
-     * @return array{employee: float, employer: float}
+     * @return array<int, array{title:mixed, amount:mixed}>
      */
-    protected function authoritativeTax(int $userId, float $taxableEarning, string $salaryMonth): array
+    protected function postedLines(Request $request, string $titles, string $amounts, ?string $loans = null): array
     {
-        $breakdown = app(PayrollTaxBreakdownService::class);
+        $titleList = (array) $request->input($titles, []);
+        $loanList = $loans ? (array) $request->input($loans, []) : [];
 
-        // No income tax in force for that month means the tax cannot be worked
-        // out -- which must not be allowed to read as "no tax is due". Rates
-        // carry an effective_from, so a payroll back-dated before the rates
-        // were configured would otherwise come out short, look deliberate, and
-        // be paid.
-        //
-        // The test is specifically for the income tax, not for any group at
-        // all: a single undated group left over from an earlier setup is
-        // effective on every date, which would make a blanket check pass while
-        // the income tax itself was missing.
-        $date = Carbon::parse($salaryMonth);
-        $incomeTax = TaxGroup::getEffectiveGroups($date)
-            ->first(fn ($group) => (int) $group->id === self::GROUP_INCOME_TAX);
-
-        // Read as the loaded relation, not as `brackets()`. getEffectiveGroups()
-        // eager-loads only the bands in force on this date; calling the
-        // relation as a method would issue a fresh query and count every band
-        // whatever its dates, so the check would pass on a month that has none.
-        $bandsInForce = $incomeTax ? $incomeTax->brackets->where('status', 1)->count() : 0;
-
-        if (!$incomeTax || $bandsInForce === 0) {
-            throw new \RuntimeException(sprintf(
-                'No income tax rates are in force for %s, so the tax on this payroll cannot be worked out. Configure rates effective from that month before generating it.',
-                $date->format('F Y')
-            ));
-        }
-
-        // A salary in an uncovered range is charged the band BELOW it, because
-        // bracket selection takes the highest floor at or under the salary and
-        // never consults max_amount. That is how this institution came to
-        // charge somebody on 100 000 the tax due on 90 000: the table held
-        // isolated sample points and the holes between them were invisible.
-        //
-        // The screen has warned about this for a while. It never stopped
-        // anyone, so the payroll was generated anyway and the warning scrolled
-        // past. With the table configured from the barème there are no holes
-        // left, which is precisely why this can be a refusal now rather than a
-        // warning: if one ever appears again it means a band was edited into a
-        // wrong shape, and that is worth stopping on.
-        $gap = $incomeTax->gapFor($taxableEarning);
-
-        if ($gap !== null) {
-            // An open top reports no upper bound, so it is described as "above
-            // X" rather than as a range ending at nothing.
-            $range = $gap['to'] === null
-                ? 'anything above ' . number_format($gap['from'])
-                : number_format($gap['from']) . ' to ' . number_format($gap['to']);
-
-            throw new \RuntimeException(sprintf(
-                'Pay of %s is not covered by the income tax table (%s is uncovered), so it would be charged under "%s", the band below it. Correct the bands before generating this payroll.',
-                number_format($taxableEarning),
-                $range,
-                $gap['charged_as'] ?? 'the band below'
-            ));
-        }
-
-        $lines = $breakdown->forSalary(
-            $taxableEarning,
-            Carbon::parse($salaryMonth),
-            \App\Models\StaffTaxExemption::where('user_id', $userId)
-                ->notExpired(Carbon::parse($salaryMonth))
-                ->get()
-                ->keyBy('tax_setting_id')
-        );
-
-        return $breakdown->totals($lines);
+        return collect((array) $request->input($amounts, []))
+            ->map(fn ($amount, $key) => [
+                'title' => $titleList[$key] ?? '',
+                'amount' => $amount,
+                'loan_id' => $loanList[$key] ?? null,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
      * Close enough to be the same figure.
      *
-     * The browser rounds each tax to the franc before adding them up and the
-     * server adds them before rounding, so the two can differ by a franc or so
-     * on a payroll carrying several taxes without either being wrong. The
-     * tolerance covers that and nothing more: a genuine rate difference moves
-     * the total by far more.
+     * The page rounds to the franc; the server keeps two decimals. The
+     * tolerance covers that and nothing more: a genuine difference in rates,
+     * salary or lines moves a figure by far more.
      */
     protected function agrees(float $posted, float $computed, float $tolerance = 2.0): bool
     {
         return abs($posted - $computed) <= $tolerance;
     }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, $id)
-    {
-        // Field Validation
-        $request->validate([
-            'user_id' => 'required',
-            'basic_salary' => 'required|numeric',
-            'total_earning' => 'required|numeric',
-            'bonus' => 'required|numeric',
-            'total_deduction' => 'required|numeric',
-            'gross_salary' => 'required|numeric',
-            'tax' => 'required|numeric',
-            'net_salary' => 'required|numeric',
-            'salary_month' => 'required|date',
-        ]);
-
-
-        $payroll = Payroll::findOrFail($id);
-
-        // A paid payroll is history. Editing one would change a figure the
-        // ledger and a remittance have already been built on, so it is refused
-        // here rather than left to whoever finds the discrepancy later.
-        if ($payroll->status == 1) {
-            Flasher::addError(__('This payroll has been paid and can no longer be edited. Reverse the payment first.'), __('msg_error'));
-
-            return redirect()->back();
-        }
-
-        // Recomputed server-side, for the reasons set out in store().
-        $authority = $this->authoritativeTax(
-            (int) $request->user_id,
-            (float) $request->total_earning,
-            (string) $request->salary_month
-        );
-
-        if (!$this->agrees((float) $request->tax, $authority['employee'])) {
-            Flasher::addError(__(
-                'This payroll was not saved: the tax on the page (:shown) does not match the configured rates (:computed). The rates may have changed since the page was opened — reload it and try again.',
-                [
-                    'shown' => number_format((float) $request->tax, 2),
-                    'computed' => number_format($authority['employee'], 2),
-                ]
-            ), __('msg_error'));
-
-            return redirect()->back()->withInput();
-        }
-
-        // The payroll and its itemisation are one fact, so they are written
-        // together. This method had no transaction at all, which meant a
-        // failure part-way left the payroll changed and its breakdown stale.
-        DB::beginTransaction();
-
-        try {
-            $tax = round($authority['employee'], 2);
-            $employerTax = round($authority['employer'], 2);
-            $netSalary = round((float) $request->gross_salary - $tax, 2);
-
-            $payroll->user_id = $request->user_id;
-            $payroll->basic_salary = $request->basic_salary;
-            $payroll->salary_type = $request->salary_type;
-            $payroll->total_earning = $request->total_earning;
-            $payroll->total_allowance = '0';
-            $payroll->bonus = $request->bonus;
-            $payroll->total_deduction = $request->total_deduction;
-            $payroll->gross_salary = $request->gross_salary;
-            $payroll->tax = $tax;
-            $payroll->employer_tax = $employerTax;
-            $payroll->net_salary = $netSalary;
-            $payroll->total_cost = round($netSalary + $tax + $employerTax, 2);
-            $payroll->salary_month = $request->salary_month;
-            $payroll->note = $request->note;
-            $payroll->status = '0';
-            $payroll->created_by = Auth::guard('web')->user()->id;
-            $payroll->save();
-
-            $recorded = app(PayrollTaxBreakdownService::class)->record($payroll);
-
-            if (!$recorded['reconciled']) {
-                throw new \RuntimeException('The tax breakdown does not add up to the tax charged.');
-            }
-
-            DB::commit();
-        } catch (\Throwable $e) {
-            DB::rollBack();
-
-            Log::error('Payroll update failed', ['payroll' => $id, 'error' => $e->getMessage()]);
-            Flasher::addError(__('msg_updated_error'), __('msg_error'));
-
-            return redirect()->back()->withInput();
-        }
-
-        Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
-
-        return redirect()->back();
-    }
-
     /**
      * Update the specified resource in storage.
      *
@@ -629,127 +435,105 @@ class PayrollController extends Controller
      */
     public function pay(Request $request, $id)
     {
-        // Field Validation
         $request->validate([
             'pay_date' => 'required|date|before_or_equal:today',
-            'payment_method' => 'required',
+            'payment_method' => 'required|in:1,2,3,4,5',
             'bank_account_id' => 'required|exists:staff_bank_accounts,id',
+            'note' => 'nullable|string|max:255',
         ]);
 
-        DB::beginTransaction();
-        
+        $payroll = Payroll::findOrFail($id);
+
         try {
-            // Update Data
-            $payroll = Payroll::findOrFail($id);
-            $payroll->pay_date = $request->pay_date;
-            $payroll->payment_method = $request->payment_method;
-            $payroll->bank_account_id = $request->bank_account_id;
-            $payroll->note = $request->note;
-            $payroll->status = '1';
-            $payroll->updated_by = Auth::guard('web')->user()->id;
-            $payroll->save();
-
-            // Transaction (legacy transaction record)
-            $transaction = new Transaction;
-            $transaction->transaction_id = Str::random(16);
-            $transaction->amount = $payroll->net_salary;
-            $transaction->type = '2';
-            $transaction->created_by = Auth::guard('web')->user()->id;
-            $payroll->user->transactions()->save($transaction);
-
-            // Record what each individual tax took, before the journal entry
-            // is built — the entry reads these lines to decide which liability
-            // account each withholding accrues to.
-            //
-            // A breakdown that does not add up to the payroll's own total is
-            // refused rather than written (see PayrollTaxBreakdownService),
-            // and the payroll still goes through: the money has moved, and a
-            // missing breakdown can be backfilled while a wrong one recorded
-            // as fact cannot be told from a right one.
-            $breakdown = app(PayrollTaxBreakdownService::class)->record($payroll);
-
-            if (!$breakdown['reconciled']) {
-                Log::warning('PayrollController::pay — itemised taxes for payroll #' . $payroll->id
-                    . ' did not reconcile to the payroll total; no breakdown recorded.');
-            }
-
-            // Create journal entry for accounting integration
-            $journalEntry = $this->payrollAccountingService->createPayrollJournalEntry(
-                $payroll,
-                Auth::guard('web')->user()->id
-            );
-
-            DB::commit();
-
-            if ($journalEntry) {
-                Flasher::addSuccess(__('msg_paid_successfully_with_journal'), __('msg_success'));
-            } else {
-                Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
-                Flasher::addInfo(__('msg_journal_entry_not_created'), __('msg_info'));
-            }
+            $result = app(PayrollPayer::class)->pay($payroll, $request->only('pay_date', 'payment_method', 'bank_account_id', 'note'), Auth::guard('web')->user()->id);
+        } catch (\RuntimeException $e) {
+            Flasher::addError($e->getMessage(), __('msg_error'));
 
             return redirect()->back();
-            
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
             Log::error('PayrollController::pay error: ' . $e->getMessage());
             Flasher::addError(__('msg_error_occurred') . ': ' . $e->getMessage(), __('msg_error'));
+
             return redirect()->back();
+        }
+
+        $this->reportPayment($result);
+
+        return redirect()->back();
+    }
+
+    /** Tell the screen how a payment went: posted or not, emailed or not. */
+    protected function reportPayment(array $result): void
+    {
+        if ($result['journal']) {
+            Flasher::addSuccess(__('The payroll was paid and posted to the accounts.'), __('msg_success'));
+        } else {
+            Flasher::addSuccess(__('The payroll was paid.'), __('msg_success'));
+            Flasher::addInfo(__('No journal entry was created: check the payroll account mapping, the fiscal year and the open accounting period for the pay date.'), __('msg_info'));
+        }
+
+        if ($result['emailed'] === true) {
+            Flasher::addInfo(__('The payslip was emailed to the staff member.'), __('msg_info'));
+        } elseif ($result['emailed'] === false) {
+            Flasher::addWarning(__('The payslip was not emailed: :why', ['why' => $result['email_error']]), __('msg_warning'));
         }
     }
 
     /**
-     * Update the specified resource in storage.
+     * Reverse a payment.
      *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * The ledger reversal is part of the unpay, not an extra: if the salary
+     * expense was posted and cannot be reversed, the payroll stays paid. This
+     * used to log a warning and mark the payroll unpaid anyway, which left the
+     * books carrying an expense for a payroll the screens said was not paid.
      */
     public function unpay(Request $request, $id)
     {
+        $payroll = Payroll::findOrFail($id);
+
+        // Checked before any transaction is opened. This branch used to return
+        // from inside one, leaving it open on the connection.
+        if ($payroll->status == '0') {
+            Flasher::addWarning(__('Payroll is already unpaid'), __('msg_warning'));
+
+            return redirect()->back();
+        }
+
         DB::beginTransaction();
-        
+
         try {
-            // Update Data
-            $payroll = Payroll::findOrFail($id);
-            
-            // Check if payroll is already unpaid
-            if ($payroll->status == '0') {
-                Flasher::addWarning(__('Payroll is already unpaid'), __('msg_warning'));
-                return redirect()->back();
+            // Is there a live ledger entry for this payment? A payroll paid
+            // before the accounting integration has none, and that is fine.
+            $mapping = TransactionMapping::where('transaction_type', 'payroll')
+                ->where('transaction_id', $payroll->id)
+                ->first();
+            $posted = $mapping && $mapping->journal_entry_id && $mapping->status !== 'reversed'
+                && JournalEntry::whereKey($mapping->journal_entry_id)->exists();
+
+            $reversal = $this->payrollAccountingService->reversePayrollJournalEntry(
+                $payroll,
+                Auth::guard('web')->user()->id
+            );
+
+            if ($posted && !$reversal) {
+                throw new \RuntimeException(__('The payment could not be reversed in the ledger, so the payroll is still paid. Check that the current accounting period is open, then try again.'));
             }
-            
-            // Reverse journal entry first (before changing status)
-            try {
-                $reversalEntry = $this->payrollAccountingService->reversePayrollJournalEntry(
-                    $payroll, 
-                    Auth::guard('web')->user()->id
-                );
-            } catch (\Exception $e) {
-                // Log the error but continue - the original entry might not exist
-                Log::warning('Could not reverse payroll journal entry: ' . $e->getMessage());
-            }
-            
-            // An unpaid payroll withheld nothing, so it owes nothing. Leaving
-            // the lines behind would keep the month showing tax due to DGI and
-            // CNPS that the ledger no longer carries, and the remittance
-            // screen would invite someone to pay it.
+
+            // An unpaid payroll withheld nothing, so it owes nothing: leaving
+            // the lines would keep tax showing as due to DGI and CNPS.
             app(PayrollTaxBreakdownService::class)->clear($payroll);
 
-            // Update payroll status
             $payroll->pay_date = null;
             $payroll->payment_method = null;
             $payroll->status = '0';
             $payroll->updated_by = Auth::guard('web')->user()->id;
             $payroll->save();
 
-            // Create reversal transaction
             $transaction = new Transaction;
             $transaction->transaction_id = Str::random(16);
             $transaction->amount = $payroll->net_salary;
-            $transaction->type = '1'; // Type 1 = Credit/Reversal
+            $transaction->type = '1'; // Credit / reversal
             $transaction->created_by = Auth::guard('web')->user()->id;
-
             $payroll->user->transactions()->save($transaction);
 
             DB::commit();
@@ -757,15 +541,17 @@ class PayrollController extends Controller
             Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
 
             return redirect()->back();
-            
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Payroll unpay error: ' . $e->getMessage());
-            Flasher::addError(__('An error occurred while unpaying the payroll'), __('msg_error'));
+            Log::error('Payroll unpay error: ' . $e->getMessage(), ['payroll' => $payroll->id]);
+            Flasher::addError(
+                $e instanceof \RuntimeException ? $e->getMessage() : __('An error occurred while unpaying the payroll'),
+                __('msg_error')
+            );
+
             return redirect()->back();
         }
     }
-
     /**
      * Display a listing of the resource.
      *
@@ -874,40 +660,225 @@ class PayrollController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * The payslip.
      *
-     * @return \Illuminate\Http\Response
+     * It prints the taxes this payroll was actually charged, from its own
+     * itemised lines. It used to recompute them in the view from the rates in
+     * force, which left out the dependent taxes (the Additional Council Tax)
+     * so the lines did not add up to the tax withheld, and would have changed
+     * an old payslip whenever a rate changed.
      */
     public function print($id)
     {
-        //
+        $data = app(PayslipService::class)->data(Payroll::findOrFail($id));
         $data['title'] = $this->title;
         $data['route'] = $this->route;
         $data['view'] = $this->view;
-        $data['path'] = 'print-setting';
 
-        // View
-        $data['print'] = PrintSetting::where('slug', 'pay-slip')->firstOrFail();
-        $data['row'] = Payroll::findOrFail($id);
-        
-        // Get effective tax brackets for the payroll month
-        $payrollDate = Carbon::parse($data['row']->salary_month);
-        
-        // Get tax groups with their brackets
-        $data['tax_groups'] = TaxGroup::getEffectiveGroups($payrollDate);
-        
-        // Get standalone tax brackets — base taxes only
-        $data['taxs'] = TaxSetting::getEffectiveBrackets($payrollDate);
-        
-        // Get standalone dependent tax brackets
-        $data['dependent_taxs'] = TaxSetting::getEffectiveDependentBrackets($payrollDate);
-        
-        // Get staff tax exemptions with custom values (non-expired)
-        $data['staff_tax_exemptions'] = \App\Models\StaffTaxExemption::where('user_id', $data['row']->user_id)
-            ->notExpired($payrollDate)
-            ->get()
-            ->keyBy('tax_setting_id');
+        abort_unless($data['print'], 404);
 
         return view($this->view.'.print', $data);
+    }
+
+    /**
+     * Approve a generated payroll, when the school requires approval before
+     * paying. Approval is cleared again whenever the payroll is regenerated.
+     */
+    public function approve($id)
+    {
+        $payroll = Payroll::findOrFail($id);
+
+        if ((int) $payroll->status === 1) {
+            Flasher::addWarning(__('This payroll has already been paid.'), __('msg_warning'));
+        } elseif ($payroll->isApproved()) {
+            Flasher::addInfo(__('This payroll is already approved.'), __('msg_info'));
+        } else {
+            $payroll->forceFill(['approved_by' => Auth::guard('web')->user()->id, 'approved_at' => now()])->save();
+            Flasher::addSuccess(__('The payroll was approved.'), __('msg_success'));
+        }
+
+        return redirect()->back();
+    }
+
+    /**
+     * Generate, approve or pay several payrolls from the list at once.
+     *
+     * Each staff member goes through exactly what the single screens do, one
+     * at a time and each in its own transaction, so one refusal (a missing
+     * account, a deduction bigger than the pay) leaves the others done and is
+     * reported by name.
+     */
+    public function bulk(Request $request)
+    {
+        $request->validate([
+            'action' => 'required|in:generate,approve,pay',
+            'month' => 'required|integer|between:1,12',
+            'year' => 'required|integer|min:2000|max:2100',
+            'users' => 'required|array|min:1',
+            'users.*' => 'integer',
+            'pay_date' => 'required_if:action,pay|nullable|date|before_or_equal:today',
+            'payment_method' => 'required_if:action,pay|nullable|in:1,2,3,4,5',
+            'note' => 'nullable|string|max:255',
+        ], [
+            'users.required' => __('Tick at least one staff member first.'),
+        ]);
+
+        if ($request->action === 'approve' && !Auth::guard('web')->user()->can('payroll-approve')) {
+            abort(403);
+        }
+
+        $by = Auth::guard('web')->user()->id;
+        $salaryMonth = Carbon::createFromDate($request->year, $request->month, 1)->format('Y-m-d');
+        $users = User::whereIn('id', $request->users)->where('status', '1')->orderBy('staff_id')->get();
+
+        $done = [];
+        $skipped = [];
+        $notes = [];
+        $name = fn ($u) => trim($u->first_name . ' ' . $u->last_name) . ' (' . $u->staff_id . ')';
+
+        foreach ($users as $user) {
+            $payroll = Payroll::where('user_id', $user->id)->where('salary_month', $salaryMonth)->first();
+
+            try {
+                if ($request->action === 'generate') {
+                    if ($payroll) {
+                        $skipped[] = $name($user) . ': ' . ($payroll->status == 1 ? __('already paid') : __('already generated'));
+                        continue;
+                    }
+                    $result = app(PayrollWriter::class)->generateFromStartingLines($user, $salaryMonth, $by);
+                    if (!$result['payroll']) {
+                        $skipped[] = $name($user) . ': ' . implode(' ', $result['calc']['problems']);
+                        continue;
+                    }
+                    $done[] = $name($user);
+                } elseif ($request->action === 'approve') {
+                    if (!$payroll || $payroll->status == 1) {
+                        $skipped[] = $name($user) . ': ' . (!$payroll ? __('not generated') : __('already paid'));
+                        continue;
+                    }
+                    if (!$payroll->isApproved()) {
+                        $payroll->forceFill(['approved_by' => $by, 'approved_at' => now()])->save();
+                    }
+                    $done[] = $name($user);
+                } else {
+                    if (!$payroll) {
+                        $skipped[] = $name($user) . ': ' . __('not generated');
+                        continue;
+                    }
+                    if ($payroll->status == 1) {
+                        $skipped[] = $name($user) . ': ' . __('already paid');
+                        continue;
+                    }
+                    $account = \App\Models\StaffBankAccount::where('user_id', $user->id)->where('status', 1)
+                        ->orderByDesc('is_default')->orderBy('id')->first();
+                    if (!$account) {
+                        $skipped[] = $name($user) . ': ' . __('no payment account on the staff record');
+                        continue;
+                    }
+                    $result = app(PayrollPayer::class)->pay($payroll, [
+                        'pay_date' => $request->pay_date,
+                        'payment_method' => $request->payment_method,
+                        'bank_account_id' => $account->id,
+                        'note' => $request->note,
+                    ], $by);
+                    $done[] = $name($user);
+                    if (!$result['journal']) {
+                        $notes['journal'] = __('Some payments were not posted to the accounts: check the payroll account mapping, the fiscal year and the open accounting period.');
+                    }
+                    if ($result['emailed'] === false) {
+                        $notes[] = $name($user) . ': ' . __('payslip not emailed') . ' (' . $result['email_error'] . ')';
+                    }
+                }
+            } catch (\RuntimeException $e) {
+                $skipped[] = $name($user) . ': ' . $e->getMessage();
+            } catch (\Throwable $e) {
+                Log::error('Bulk payroll ' . $request->action . ' failed', ['user' => $user->id, 'error' => $e->getMessage()]);
+                $skipped[] = $name($user) . ': ' . __('an unexpected error occurred');
+            }
+        }
+
+        $verb = ['generate' => __('generated'), 'approve' => __('approved'), 'pay' => __('paid')][$request->action];
+
+        if ($done) {
+            Flasher::addSuccess(trans_choice('{1} 1 payroll :verb.|[2,*] :count payrolls :verb.', count($done), ['count' => count($done), 'verb' => $verb]), __('msg_success'));
+        }
+        if ($skipped) {
+            Flasher::addWarning(trans_choice('{1} 1 staff member skipped.|[2,*] :count staff members skipped.', count($skipped), ['count' => count($skipped)]), __('msg_warning'));
+        }
+
+        return redirect()->back()->with('payroll_bulk_result', [
+            'action' => $request->action,
+            'verb' => $verb,
+            'done' => $done,
+            'skipped' => $skipped,
+            'notes' => array_values($notes),
+        ]);
+    }
+
+    /**
+     * The bank file for a month, in the layout set on the Payroll Settings
+     * page: the payrolls not yet paid (to send before paying), those paid, or
+     * both, optionally only the staff ticked on the list.
+     */
+    public function bankFile(Request $request)
+    {
+        $request->validate([
+            'month' => 'required|integer|between:1,12',
+            'year' => 'required|integer|min:2000|max:2100',
+            'which' => 'required|in:unpaid,paid,all',
+            'salary_type' => 'nullable|in:1,2',
+            'users' => 'nullable|array',
+            'users.*' => 'integer',
+        ]);
+
+        $payrolls = Payroll::with('user', 'bankAccount')
+            ->whereYear('salary_month', $request->year)
+            ->whereMonth('salary_month', $request->month)
+            ->when($request->salary_type, fn ($q) => $q->where('salary_type', $request->salary_type))
+            ->when($request->which === 'unpaid', fn ($q) => $q->where('status', 0))
+            ->when($request->which === 'paid', fn ($q) => $q->where('status', 1))
+            ->when(!empty($request->users), fn ($q) => $q->whereIn('user_id', $request->users))
+            ->whereHas('user', fn ($q) => $q->whereDoesntHave('roles', fn ($r) => $r->whereIn('name', ['Super Admin', 'Admin'])))
+            ->get()
+            ->sortBy(fn ($p) => $p->user->staff_id ?? '')
+            ->values();
+
+        // With approval required, an unpaid payroll is only ready once approved.
+        if (PayrollSetting::current()->require_approval && $request->which !== 'paid') {
+            $payrolls = $payrolls->filter(fn ($p) => $p->status == 1 || $p->isApproved())->values();
+        }
+
+        $file = app(PayrollBankFile::class);
+        $built = $file->build($payrolls);
+
+        if (empty($built['rows'])) {
+            Flasher::addWarning(__('There is nothing to put in a bank file for that month.') . ($built['missing'] ? ' ' . __('No payment account: :names.', ['names' => implode(', ', $built['missing'])]) : ''), __('msg_warning'));
+
+            return redirect()->back();
+        }
+
+        $name = 'salaries-' . sprintf('%04d-%02d', $request->year, $request->month) . '-' . $request->which . '.csv';
+
+        return response($file->csv($built['rows']), 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $name . '"',
+            'X-Payroll-Rows' => (string) count($built['rows']),
+            'X-Payroll-Total' => (string) $built['total'],
+            'X-Payroll-Missing' => rawurlencode(implode('; ', $built['missing'])),
+        ]);
+    }
+
+    /** Send a paid payroll's payslip to the staff member now. */
+    public function emailPayslip($id)
+    {
+        $result = app(PayslipService::class)->email(Payroll::with('user')->findOrFail($id));
+
+        if ($result === true) {
+            Flasher::addSuccess(__('The payslip was emailed to the staff member.'), __('msg_success'));
+        } else {
+            Flasher::addError($result, __('msg_error'));
+        }
+
+        return redirect()->back();
     }
 }

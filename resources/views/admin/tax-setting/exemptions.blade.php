@@ -62,7 +62,7 @@
                                 <div class="form-group">
                                     <label for="custom_fixed_amount_{{ $row->id }}" class="form-label">{{ __('field_custom_fixed_amount') }} ({!! $setting->currency_symbol !!})</label>
                                     <input type="number" step="0.01" min="0" class="form-control" name="custom_fixed_amount" id="custom_fixed_amount_{{ $row->id }}" placeholder="e.g., 100.00">
-                                    <small class="text-muted">Default: {{ number_format($row->fixed_amount, 2) }} {!! $setting->currency_symbol !!}</small>
+                                    <small class="text-muted">Default: {{ format_amount($row->fixed_amount) }} {!! $setting->currency_symbol !!}</small>
                                 </div>
                             </div>
                             @endif
@@ -113,7 +113,7 @@
                                         @if($row->tax_type == 1 && $exemption->custom_percentage)
                                             <span class="badge bg-info text-white">{{ number_format($exemption->custom_percentage, 2) }}%</span>
                                         @elseif($row->tax_type == 2 && $exemption->custom_fixed_amount)
-                                            <span class="badge bg-warning text-white">{{ number_format($exemption->custom_fixed_amount, 2) }} {!! $setting->currency_symbol !!}</span>
+                                            <span class="badge bg-warning text-white">{{ format_amount($exemption->custom_fixed_amount) }} {!! $setting->currency_symbol !!}</span>
                                         @else
                                             <span class="badge bg-success text-white">{{ __('fully_exempt') }}</span>
                                         @endif

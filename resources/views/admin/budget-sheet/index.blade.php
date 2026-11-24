@@ -45,7 +45,7 @@
                                                             &ndash;
                                                             {{ optional($row->end_date)->format('d M Y') }}
                                                         </td>
-                                                        <td class="text-right">{{ number_format($row->opening_balance) }}</td>
+                                                        <td class="text-right">{{ format_amount($row->opening_balance) }}</td>
                                                         <td><span class="badge badge-secondary">{{ ucfirst($row->status) }}</span></td>
                                                         <td class="text-right">
                                                             <a href="{{ route('admin.budget-sheet.show', $row->id) }}" class="btn btn-sm btn-primary">

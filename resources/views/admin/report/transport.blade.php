@@ -104,7 +104,7 @@
                                         <td>{{ $row->transportable->first_name ?? '' }} {{ $row->transportable->last_name ?? '' }}</td>
                                         <td>{{ $row->transportRoute->title ?? '' }}</td>
                                         <td>{{ $row->transportVehicle->number ?? '' }}</td>
-                                        <td>{{ number_format((float)$row->transportRoute->fee ?? 0, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->transportRoute->fee ?? 0) }} {!! $setting->currency_symbol !!}</td>
                                         <td>
                                             @if( $row->transportable->gender == 1 )
                                             {{ __('gender_male') }}
@@ -125,7 +125,7 @@
                                         <th></th>
                                         <th></th>
                                         <th>{{ __('field_grand_total') }}</th>
-                                        <th>{{ number_format((float)$total_fee, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$total_fee) }} {!! $setting->currency_symbol !!}</th>
                                         <th></th>
                                         <th></th>
                                     </tr>

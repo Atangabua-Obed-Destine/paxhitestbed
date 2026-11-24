@@ -113,15 +113,15 @@
         <div class="db-figures">
             <div class="db-figure in">
                 <div class="label">{{ __('Money in') }}</div>
-                <div class="value">{{ number_format($totalIn) }}</div>
+                <div class="value">{{ format_amount($totalIn) }}</div>
             </div>
             <div class="db-figure out">
                 <div class="label">{{ __('Money out') }}</div>
-                <div class="value">{{ number_format($totalOut) }}</div>
+                <div class="value">{{ format_amount($totalOut) }}</div>
             </div>
             <div class="db-figure">
                 <div class="label">{{ __('Net movement') }}</div>
-                <div class="value">{{ number_format($totalIn - $totalOut) }}</div>
+                <div class="value">{{ format_amount($totalIn - $totalOut) }}</div>
             </div>
             <div class="db-figure">
                 <div class="label">{{ __('Entries') }}</div>
@@ -170,10 +170,10 @@
                                     @endif
                                 </td>
                                 <td class="db-num db-in">
-                                    {{ $row['direction'] === 'in' ? number_format($row['amount']) : '' }}
+                                    {{ $row['direction'] === 'in' ? format_amount($row['amount']) : '' }}
                                 </td>
                                 <td class="db-num db-out">
-                                    {{ $row['direction'] === 'out' ? number_format($row['amount']) : '' }}
+                                    {{ $row['direction'] === 'out' ? format_amount($row['amount']) : '' }}
                                 </td>
                             </tr>
                         @empty
@@ -189,8 +189,8 @@
                         <tfoot>
                             <tr class="db-foot">
                                 <td colspan="4">{{ __('TOTAL FOR') }} {{ strtoupper($period->name) }}</td>
-                                <td class="db-num">{{ number_format($totalIn) }}</td>
-                                <td class="db-num">{{ number_format($totalOut) }}</td>
+                                <td class="db-num">{{ format_amount($totalIn) }}</td>
+                                <td class="db-num">{{ format_amount($totalOut) }}</td>
                             </tr>
                         </tfoot>
                     @endif

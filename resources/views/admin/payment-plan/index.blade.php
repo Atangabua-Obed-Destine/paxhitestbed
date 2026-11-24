@@ -92,15 +92,15 @@
                                             {{ $row->fee->category->title ?? '' }}<br>
                                             <small class="text-muted">{{ $row->fee->studentEnroll->program->title ?? '' }}</small>
                                         </td>
-                                        <td>{{ number_format($row->total_amount, 2) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount($row->total_amount) }} {!! $setting->currency_symbol !!}</td>
                                         <td>
                                             <span class="badge badge-info">{{ $row->installments_count }} {{ __('installments') }}</span>
                                         </td>
                                         <td class="text-success">
-                                            <strong>{{ number_format($row->total_paid, 2) }} {!! $setting->currency_symbol !!}</strong>
+                                            <strong>{{ format_amount($row->total_paid) }} {!! $setting->currency_symbol !!}</strong>
                                         </td>
                                         <td class="text-danger">
-                                            <strong>{{ number_format($row->remaining_balance, 2) }} {!! $setting->currency_symbol !!}</strong>
+                                            <strong>{{ format_amount($row->remaining_balance) }} {!! $setting->currency_symbol !!}</strong>
                                         </td>
                                         <td>
                                             <div class="progress" style="height: 20px;">

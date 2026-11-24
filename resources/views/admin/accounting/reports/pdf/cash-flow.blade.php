@@ -5,8 +5,8 @@
 @section('content')
     @if(isset($data['fiscal_year']))
     <p class="text-center" style="margin-bottom: 20px;">
-        <strong>{{ __('Fiscal Year') }}:</strong> {{ $data['fiscal_year']['name'] ?? '' }}
-        ({{ $data['fiscal_year']['start_date'] ?? '' }} - {{ $data['fiscal_year']['end_date'] ?? '' }})
+        <strong>{{ __('Fiscal Year') }}:</strong> {{ $data['fiscal_year'] }}
+        ({{ \Carbon\Carbon::parse($data['start_date'])->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($data['end_date'])->format('d/m/Y') }})
     </p>
     @endif
 
@@ -14,11 +14,11 @@
     <div class="section-title">{{ __('Operating Activities') }}</div>
     <table>
         <tbody>
-            @if(isset($data['operating']))
-                @foreach($data['operating']['items'] ?? [] as $item)
+            @if(isset($data['operating_activities']))
+                @foreach($data['operating_activities']['items'] ?? [] as $item)
                 <tr>
                     <td>{{ $item['description'] ?? '' }}</td>
-                    <td class="text-right">{{ number_format($item['amount'] ?? 0) }} XAF</td>
+                    <td class="text-right">{{ format_amount($item['amount'] ?? 0) }} XAF</td>
                 </tr>
                 @endforeach
             @endif
@@ -26,7 +26,7 @@
         <tfoot>
             <tr class="totals-row">
                 <td>{{ __('Net Cash from Operating Activities') }}</td>
-                <td class="text-right">{{ number_format($data['operating']['total'] ?? 0) }} XAF</td>
+                <td class="text-right">{{ format_amount($data['operating_activities']['total'] ?? 0) }} XAF</td>
             </tr>
         </tfoot>
     </table>
@@ -35,11 +35,11 @@
     <div class="section-title">{{ __('Investing Activities') }}</div>
     <table>
         <tbody>
-            @if(isset($data['investing']))
-                @foreach($data['investing']['items'] ?? [] as $item)
+            @if(isset($data['investing_activities']))
+                @foreach($data['investing_activities']['items'] ?? [] as $item)
                 <tr>
                     <td>{{ $item['description'] ?? '' }}</td>
-                    <td class="text-right">{{ number_format($item['amount'] ?? 0) }} XAF</td>
+                    <td class="text-right">{{ format_amount($item['amount'] ?? 0) }} XAF</td>
                 </tr>
                 @endforeach
             @endif
@@ -47,7 +47,7 @@
         <tfoot>
             <tr class="totals-row">
                 <td>{{ __('Net Cash from Investing Activities') }}</td>
-                <td class="text-right">{{ number_format($data['investing']['total'] ?? 0) }} XAF</td>
+                <td class="text-right">{{ format_amount($data['investing_activities']['total'] ?? 0) }} XAF</td>
             </tr>
         </tfoot>
     </table>
@@ -56,11 +56,11 @@
     <div class="section-title">{{ __('Financing Activities') }}</div>
     <table>
         <tbody>
-            @if(isset($data['financing']))
-                @foreach($data['financing']['items'] ?? [] as $item)
+            @if(isset($data['financing_activities']))
+                @foreach($data['financing_activities']['items'] ?? [] as $item)
                 <tr>
                     <td>{{ $item['description'] ?? '' }}</td>
-                    <td class="text-right">{{ number_format($item['amount'] ?? 0) }} XAF</td>
+                    <td class="text-right">{{ format_amount($item['amount'] ?? 0) }} XAF</td>
                 </tr>
                 @endforeach
             @endif
@@ -68,7 +68,7 @@
         <tfoot>
             <tr class="totals-row">
                 <td>{{ __('Net Cash from Financing Activities') }}</td>
-                <td class="text-right">{{ number_format($data['financing']['total'] ?? 0) }} XAF</td>
+                <td class="text-right">{{ format_amount($data['financing_activities']['total'] ?? 0) }} XAF</td>
             </tr>
         </tfoot>
     </table>
@@ -79,19 +79,19 @@
         <tbody>
             <tr>
                 <td>{{ __('Net Increase/(Decrease) in Cash') }}</td>
-                <td class="text-right font-bold {{ ($data['net_change'] ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
-                    {{ number_format($data['net_change'] ?? 0) }} XAF
+                <td class="text-right font-bold {{ ($data['net_change_in_cash'] ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
+                    {{ format_amount($data['net_change_in_cash'] ?? 0) }} XAF
                 </td>
             </tr>
             <tr>
                 <td>{{ __('Beginning Cash Balance') }}</td>
-                <td class="text-right">{{ number_format($data['beginning_cash'] ?? 0) }} XAF</td>
+                <td class="text-right">{{ format_amount($data['beginning_cash_balance'] ?? 0) }} XAF</td>
             </tr>
         </tbody>
         <tfoot>
             <tr class="totals-row">
                 <td>{{ __('Ending Cash Balance') }}</td>
-                <td class="text-right">{{ number_format($data['ending_cash'] ?? 0) }} XAF</td>
+                <td class="text-right">{{ format_amount($data['ending_cash_balance'] ?? 0) }} XAF</td>
             </tr>
         </tfoot>
     </table>

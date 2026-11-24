@@ -651,7 +651,7 @@
                     <span class="box">
                         @if($row->admissionFee)
                             {{ (int) $row->admissionFee->status === 1 ? __('Paid') : ((int) $row->admissionFee->status === 2 ? __('Partially Paid') : __('Unpaid')) }}
-                            &nbsp;·&nbsp; {{ number_format((float) $row->admissionFee->paid_amount, 0) }} / {{ number_format((float) $row->admissionFee->fee_amount, 0) }}
+                            &nbsp;·&nbsp; {{ format_amount((float) $row->admissionFee->paid_amount) }} / {{ format_amount((float) $row->admissionFee->fee_amount) }}
                             {{ $setting->currency_symbol ?? '' }}
                         @endif
                     </span>

@@ -163,7 +163,7 @@
                         @endif
                     </h5>
                     <div class="meta-info">
-                        <span><i class="fas fa-calendar mr-1"></i> {{ $session->date->format('M d, Y') }}</span>
+                        <span><i class="fas fa-calendar mr-1"></i> {{ $session->date->format('d/m/Y') }}</span>
                         <span><i class="fas fa-clock mr-1"></i> 
                             {{ $session->actual_start_time ? $session->actual_start_time->format('H:i') : 'N/A' }} - 
                             {{ $session->actual_end_time ? $session->actual_end_time->format('H:i') : 'N/A' }}

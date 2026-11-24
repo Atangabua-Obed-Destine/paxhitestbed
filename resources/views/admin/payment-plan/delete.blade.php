@@ -18,7 +18,7 @@
                     </div>
 
                     <p><strong>{{ __('field_student') }}:</strong> {{ $row->student->first_name }} {{ $row->student->last_name }}</p>
-                    <p><strong>{{ __('field_total_amount') }}:</strong> {{ number_format($row->total_amount, 2) }} {!! $setting->currency_symbol !!}</p>
+                    <p><strong>{{ __('field_total_amount') }}:</strong> {{ format_amount($row->total_amount) }} {!! $setting->currency_symbol !!}</p>
                     <p><strong>{{ __('field_installments') }}:</strong> {{ $row->installments_count }}</p>
 
                     <p class="text-danger"><strong>{{ __('warning') }}:</strong> {{ __('this_action_cannot_be_undone') }}</p>

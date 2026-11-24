@@ -27,6 +27,15 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="is_taxable-{{ $row->id }}" class="form-label">{{ __('Taxed on payroll') }}</label>
+                        <select class="form-control" name="is_taxable" id="is_taxable-{{ $row->id }}">
+                            <option value="0" @if(!$row->is_taxable) selected @endif>{{ __('No, paid without tax') }}</option>
+                            <option value="1" @if($row->is_taxable) selected @endif>{{ __('Yes, added to the pay that is taxed') }}</option>
+                        </select>
+                        <small class="form-text text-muted">{{ __('A change applies to payrolls generated after it, not to ones already saved.') }}</small>
+                    </div>
+
+                    <div class="form-group">
                         <label for="status" class="form-label">{{ __('select_status') }}</label>
                         <select class="form-control" name="status" id="status">
                             <option value="1" @if( $row->status == 1 ) selected @endif>{{ __('status_active') }}</option>

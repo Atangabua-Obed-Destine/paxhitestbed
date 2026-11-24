@@ -131,10 +131,10 @@
                                             @if($row->start_date || $row->end_date)
                                             <small>
                                                 @if($row->start_date)
-                                                <i class="fas fa-play text-success"></i> {{ $row->start_date->format('M d, Y') }}<br>
+                                                <i class="fas fa-play text-success"></i> {{ $row->start_date->format('d/m/Y') }}<br>
                                                 @endif
                                                 @if($row->end_date)
-                                                <i class="fas fa-stop text-danger"></i> {{ $row->end_date->format('M d, Y') }}
+                                                <i class="fas fa-stop text-danger"></i> {{ $row->end_date->format('d/m/Y') }}
                                                 @endif
                                             </small>
                                             @else

@@ -84,13 +84,13 @@
                                     <tr>
                                         <th>{{ __('total_debit') }}</th>
                                         <td class="text-right">
-                                            <strong>{{ number_format($entry->total_debit, 0, ',', ' ') }}</strong> FCFA
+                                            <strong>{{ format_amount($entry->total_debit) }}</strong> FCFA
                                         </td>
                                     </tr>
                                     <tr>
                                         <th>{{ __('total_credit') }}</th>
                                         <td class="text-right">
-                                            <strong>{{ number_format($entry->total_credit, 0, ',', ' ') }}</strong> FCFA
+                                            <strong>{{ format_amount($entry->total_credit) }}</strong> FCFA
                                         </td>
                                     </tr>
                                     <tr>
@@ -99,7 +99,7 @@
                                             @if($entry->isBalanced())
                                             <span class="badge badge-success">{{ __('yes') }}</span>
                                             @else
-                                            <span class="badge badge-danger">{{ __('no') }} ({{ __('difference') }}: {{ number_format(abs($entry->total_debit - $entry->total_credit), 0, ',', ' ') }} FCFA)</span>
+                                            <span class="badge badge-danger">{{ __('no') }} ({{ __('difference') }}: {{ format_amount(abs($entry->total_debit - $entry->total_credit)) }} FCFA)</span>
                                             @endif
                                         </td>
                                     </tr>
@@ -159,14 +159,14 @@
                                                 <td>{{ $line->description ?? '-' }}</td>
                                                 <td class="text-right">
                                                     @if($line->debit > 0)
-                                                    <strong>{{ number_format($line->debit, 0, ',', ' ') }}</strong>
+                                                    <strong>{{ format_amount($line->debit) }}</strong>
                                                     @else
                                                     -
                                                     @endif
                                                 </td>
                                                 <td class="text-right">
                                                     @if($line->credit > 0)
-                                                    <strong>{{ number_format($line->credit, 0, ',', ' ') }}</strong>
+                                                    <strong>{{ format_amount($line->credit) }}</strong>
                                                     @else
                                                     -
                                                     @endif
@@ -178,10 +178,10 @@
                                             <tr class="table-info">
                                                 <td colspan="4" class="text-right"><strong>{{ __('total') }}:</strong></td>
                                                 <td class="text-right">
-                                                    <strong>{{ number_format($entry->total_debit, 0, ',', ' ') }}</strong> FCFA
+                                                    <strong>{{ format_amount($entry->total_debit) }}</strong> FCFA
                                                 </td>
                                                 <td class="text-right">
-                                                    <strong>{{ number_format($entry->total_credit, 0, ',', ' ') }}</strong> FCFA
+                                                    <strong>{{ format_amount($entry->total_credit) }}</strong> FCFA
                                                 </td>
                                             </tr>
                                         </tfoot>

@@ -81,7 +81,7 @@
                                     <span class="info-box-icon"><i class="fas fa-file-invoice-dollar"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('total_budget') }}</span>
-                                        <span class="info-box-number">{{ number_format($totals['budget'] ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($totals['budget'] ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -90,7 +90,7 @@
                                     <span class="info-box-icon"><i class="fas fa-coins"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('total_actual') }}</span>
-                                        <span class="info-box-number">{{ number_format($totals['actual'] ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($totals['actual'] ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -99,7 +99,7 @@
                                     <span class="info-box-icon"><i class="fas fa-balance-scale"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('variance') }}</span>
-                                        <span class="info-box-number">{{ number_format($totals['variance'] ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($totals['variance'] ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -137,17 +137,17 @@
                                             <td>
                                                 <strong>{{ $item['account_code'] }}</strong> - {{ $item['account_name'] }}
                                             </td>
-                                            <td class="text-right">{{ number_format($item['budget'], 0, ',', ' ') }}</td>
-                                            <td class="text-right">{{ number_format($item['actual'], 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($item['budget']) }}</td>
+                                            <td class="text-right">{{ format_amount($item['actual']) }}</td>
                                             <td class="text-right {{ $item['variance'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ $item['variance'] >= 0 ? '+' : '' }}{{ number_format($item['variance'], 0, ',', ' ') }}
+                                                {{ $item['variance'] >= 0 ? '+' : '' }}{{ format_amount($item['variance']) }}
                                             </td>
                                             <td class="text-right">{{ number_format($item['variance_pct'], 1) }}%</td>
                                             <td>
                                                 @php $pct = min(100, max(0, $item['achievement_pct'] ?? 0)); @endphp
                                                 <div class="progress" style="height: 15px;">
                                                     <div class="progress-bar bg-{{ $pct >= 100 ? 'success' : ($pct >= 75 ? 'info' : ($pct >= 50 ? 'warning' : 'danger')) }}" 
-                                                         style="width: {{ $pct }}%;">{{ number_format($pct, 0) }}%</div>
+                                                         style="width: {{ $pct }}%;">{{ format_amount($pct) }}%</div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -160,9 +160,9 @@
                                     <tfoot class="table-success">
                                         <tr>
                                             <th>{{ __('total_revenue') }}</th>
-                                            <th class="text-right">{{ number_format($revenueTotals['budget'] ?? 0, 0, ',', ' ') }}</th>
-                                            <th class="text-right">{{ number_format($revenueTotals['actual'] ?? 0, 0, ',', ' ') }}</th>
-                                            <th class="text-right">{{ number_format($revenueTotals['variance'] ?? 0, 0, ',', ' ') }}</th>
+                                            <th class="text-right">{{ format_amount($revenueTotals['budget'] ?? 0) }}</th>
+                                            <th class="text-right">{{ format_amount($revenueTotals['actual'] ?? 0) }}</th>
+                                            <th class="text-right">{{ format_amount($revenueTotals['variance'] ?? 0) }}</th>
                                             <th class="text-right">{{ number_format($revenueTotals['variance_pct'] ?? 0, 1) }}%</th>
                                             <th></th>
                                         </tr>
@@ -194,10 +194,10 @@
                                             <td>
                                                 <strong>{{ $item['account_code'] }}</strong> - {{ $item['account_name'] }}
                                             </td>
-                                            <td class="text-right">{{ number_format($item['budget'], 0, ',', ' ') }}</td>
-                                            <td class="text-right">{{ number_format($item['actual'], 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($item['budget']) }}</td>
+                                            <td class="text-right">{{ format_amount($item['actual']) }}</td>
                                             <td class="text-right {{ $item['variance'] <= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ $item['variance'] >= 0 ? '+' : '' }}{{ number_format($item['variance'], 0, ',', ' ') }}
+                                                {{ $item['variance'] >= 0 ? '+' : '' }}{{ format_amount($item['variance']) }}
                                             </td>
                                             <td class="text-right">{{ number_format($item['variance_pct'], 1) }}%</td>
                                             <td>
@@ -207,7 +207,7 @@
                                                 @endphp
                                                 <div class="progress" style="height: 15px;">
                                                     <div class="progress-bar bg-{{ $pct > 100 ? 'danger' : ($pct > 90 ? 'warning' : 'success') }}" 
-                                                         style="width: {{ min(100, $pct) }}%;">{{ number_format(min(100, $pct), 0) }}%</div>
+                                                         style="width: {{ min(100, $pct) }}%;">{{ format_amount(min(100, $pct)) }}%</div>
                                                     @if($pct > 100)
                                                     <div class="progress-bar bg-danger" style="width: {{ min(50, $pct - 100) }}%;"></div>
                                                     @endif
@@ -223,9 +223,9 @@
                                     <tfoot class="table-danger">
                                         <tr>
                                             <th>{{ __('total_expenses') }}</th>
-                                            <th class="text-right">{{ number_format($expenseTotals['budget'] ?? 0, 0, ',', ' ') }}</th>
-                                            <th class="text-right">{{ number_format($expenseTotals['actual'] ?? 0, 0, ',', ' ') }}</th>
-                                            <th class="text-right">{{ number_format($expenseTotals['variance'] ?? 0, 0, ',', ' ') }}</th>
+                                            <th class="text-right">{{ format_amount($expenseTotals['budget'] ?? 0) }}</th>
+                                            <th class="text-right">{{ format_amount($expenseTotals['actual'] ?? 0) }}</th>
+                                            <th class="text-right">{{ format_amount($expenseTotals['variance'] ?? 0) }}</th>
                                             <th class="text-right">{{ number_format($expenseTotals['variance_pct'] ?? 0, 1) }}%</th>
                                             <th></th>
                                         </tr>
@@ -243,11 +243,11 @@
                                 <table class="table table-bordered">
                                     <tr>
                                         <td width="40%">{{ __('budgeted_net_income') }}</td>
-                                        <td class="text-right">{{ number_format(($revenueTotals['budget'] ?? 0) - ($expenseTotals['budget'] ?? 0), 0, ',', ' ') }} FCFA</td>
+                                        <td class="text-right">{{ format_amount(($revenueTotals['budget'] ?? 0) - ($expenseTotals['budget'] ?? 0)) }} FCFA</td>
                                     </tr>
                                     <tr>
                                         <td>{{ __('actual_net_income') }}</td>
-                                        <td class="text-right">{{ number_format(($revenueTotals['actual'] ?? 0) - ($expenseTotals['actual'] ?? 0), 0, ',', ' ') }} FCFA</td>
+                                        <td class="text-right">{{ format_amount(($revenueTotals['actual'] ?? 0) - ($expenseTotals['actual'] ?? 0)) }} FCFA</td>
                                     </tr>
                                     <tr class="table-primary font-weight-bold">
                                         <td>{{ __('variance') }}</td>
@@ -255,7 +255,7 @@
                                             $netVariance = (($revenueTotals['actual'] ?? 0) - ($expenseTotals['actual'] ?? 0)) - (($revenueTotals['budget'] ?? 0) - ($expenseTotals['budget'] ?? 0));
                                         @endphp
                                         <td class="text-right {{ $netVariance >= 0 ? 'text-success' : 'text-danger' }}">
-                                            {{ $netVariance >= 0 ? '+' : '' }}{{ number_format($netVariance, 0, ',', ' ') }} FCFA
+                                            {{ $netVariance >= 0 ? '+' : '' }}{{ format_amount($netVariance) }} FCFA
                                         </td>
                                     </tr>
                                 </table>

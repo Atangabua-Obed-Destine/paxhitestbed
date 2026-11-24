@@ -16,7 +16,12 @@ class Payroll extends Model
      * @var array
      */
     protected $fillable = [
-        'user_id', 'basic_salary', 'salary_type', 'total_earning', 'total_allowance', 'bonus', 'total_deduction', 'gross_salary', 'tax', 'employer_tax', 'net_salary', 'total_cost', 'salary_month', 'pay_date', 'payment_method', 'payment_account_id', 'bank_account_id', 'note', 'status', 'created_by', 'updated_by',
+        'user_id', 'basic_salary', 'salary_type', 'total_earning', 'total_allowance', 'bonus', 'total_deduction', 'gross_salary', 'taxable_salary', 'hours_worked', 'paid_days', 'period_days', 'tax', 'employer_tax', 'net_salary', 'total_cost', 'salary_month', 'pay_date', 'payment_method', 'payment_account_id', 'bank_account_id', 'note', 'status', 'approved_by', 'approved_at', 'payslip_emailed_at', 'created_by', 'updated_by',
+    ];
+
+    protected $casts = [
+        'approved_at' => 'datetime',
+        'payslip_emailed_at' => 'datetime',
     ];
 
     public function user()
@@ -37,6 +42,22 @@ class Payroll extends Model
     public function details()
     {
         return $this->hasMany(PayrollDetail::class, 'payroll_id', 'id');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function isApproved(): bool
+    {
+        return !empty($this->approved_at);
+    }
+
+    /** Each tax's share of this payroll, as it was charged. */
+    public function taxLines()
+    {
+        return $this->hasMany(PayrollTaxLine::class, 'payroll_id', 'id');
     }
     
     /**

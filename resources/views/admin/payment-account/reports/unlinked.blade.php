@@ -125,7 +125,7 @@
                                                 <span class="badge badge-info">{{ $transaction['invoice_no'] }}</span>
                                             @endif
                                         </td>
-                                        <td><strong>{!! $setting->currency_symbol !!} {{ number_format($transaction['amount'], 2) }}</strong></td>
+                                        <td><strong>{!! $setting->currency_symbol !!} {{ format_amount($transaction['amount']) }}</strong></td>
                                         <td>
                                             @if($transaction['payment_type'] == 'Fee Payment')
                                                 <span class="badge badge-success">{{ $transaction['payment_type'] }}</span>

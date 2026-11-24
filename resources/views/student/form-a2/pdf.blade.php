@@ -186,7 +186,7 @@
             @foreach($breakdowns as $breakdown)
             <tr>
                 <td>{{ $breakdown->title }}</td>
-                <td class="text-right">{{ number_format($breakdown->amount, 0) }}</td>
+                <td class="text-right">{{ format_amount($breakdown->amount) }}</td>
                 <td></td>
             </tr>
             @endforeach
@@ -195,14 +195,14 @@
             @if(count($breakdowns) == 0)
             <tr>
                 <td>Tuition (First Installment)</td>
-                <td class="text-right">{{ number_format($totalAmount, 0) }}</td>
+                <td class="text-right">{{ format_amount($totalAmount) }}</td>
                 <td></td>
             </tr>
             @endif
 
             <tr style="font-weight: bold;">
                 <td>TOTAL</td>
-                <td class="text-right">{{ number_format($totalAmount, 0) }}</td>
+                <td class="text-right">{{ format_amount($totalAmount) }}</td>
                 <td class="text-center">{{ $totalAmountWords }} FCFA</td>
             </tr>
         </tbody>

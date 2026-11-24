@@ -124,7 +124,7 @@
                                         </td>
                                         <td>
                                             @isset($row->penalty)
-                                            {{ number_format((float)$row->penalty, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}
+                                            {{ format_amount((float)$row->penalty) }} {!! $setting->currency_symbol !!}
                                             @endisset
                                         </td>
                                         <td>
@@ -159,7 +159,7 @@
                                         <th></th>
                                         <th></th>
                                         <th>{{ __('field_grand_total') }}</th>
-                                        <th>{{ number_format((float)$rows->sum('penalty'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('penalty')) }} {!! $setting->currency_symbol !!}</th>
                                         <th></th>
                                         <th></th>
                                     </tr>

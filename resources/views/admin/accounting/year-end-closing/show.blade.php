@@ -47,7 +47,7 @@
                                     <span class="info-box-icon"><i class="fas fa-coins"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('net_income') }}</span>
-                                        <span class="info-box-number">{{ number_format($closing->net_income ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($closing->net_income ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -129,15 +129,15 @@
                                         <table class="table table-sm">
                                             <tr>
                                                 <th>{{ __('total_assets') }}</th>
-                                                <td class="text-right">{{ number_format($closing->trial_balance_summary['total_assets'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right">{{ format_amount($closing->trial_balance_summary['total_assets'] ?? 0) }} FCFA</td>
                                             </tr>
                                             <tr>
                                                 <th>{{ __('total_liabilities') }}</th>
-                                                <td class="text-right">{{ number_format($closing->trial_balance_summary['total_liabilities'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right">{{ format_amount($closing->trial_balance_summary['total_liabilities'] ?? 0) }} FCFA</td>
                                             </tr>
                                             <tr>
                                                 <th>{{ __('total_equity') }}</th>
-                                                <td class="text-right">{{ number_format($closing->trial_balance_summary['total_equity'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right">{{ format_amount($closing->trial_balance_summary['total_equity'] ?? 0) }} FCFA</td>
                                             </tr>
                                         </table>
                                     </div>
@@ -145,15 +145,15 @@
                                         <table class="table table-sm">
                                             <tr>
                                                 <th>{{ __('total_revenue') }}</th>
-                                                <td class="text-right">{{ number_format($closing->trial_balance_summary['total_revenue'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right">{{ format_amount($closing->trial_balance_summary['total_revenue'] ?? 0) }} FCFA</td>
                                             </tr>
                                             <tr>
                                                 <th>{{ __('total_expenses') }}</th>
-                                                <td class="text-right">{{ number_format($closing->trial_balance_summary['total_expenses'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right">{{ format_amount($closing->trial_balance_summary['total_expenses'] ?? 0) }} FCFA</td>
                                             </tr>
                                             <tr class="table-primary">
                                                 <th>{{ __('net_income') }}</th>
-                                                <td class="text-right"><strong>{{ number_format($closing->net_income ?? 0, 0, ',', ' ') }} FCFA</strong></td>
+                                                <td class="text-right"><strong>{{ format_amount($closing->net_income ?? 0) }} FCFA</strong></td>
                                             </tr>
                                         </table>
                                     </div>

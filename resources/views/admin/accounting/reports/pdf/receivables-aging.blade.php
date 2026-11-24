@@ -14,27 +14,27 @@
     <div class="summary-section">
         <div class="summary-box">
             <div class="label">{{ __('Current (0-30 days)') }}</div>
-            <div class="value text-success">{{ number_format($data['summary']['current'] ?? 0) }} XAF</div>
+            <div class="value text-success">{{ format_amount($data['summary']['current'] ?? 0) }} XAF</div>
         </div>
         <div class="summary-box">
             <div class="label">{{ __('31-60 Days') }}</div>
-            <div class="value">{{ number_format($data['summary']['days_31_60'] ?? 0) }} XAF</div>
+            <div class="value">{{ format_amount($data['summary']['days_31_60'] ?? 0) }} XAF</div>
         </div>
         <div class="summary-box">
             <div class="label">{{ __('61-90 Days') }}</div>
-            <div class="value text-warning">{{ number_format($data['summary']['days_61_90'] ?? 0) }} XAF</div>
+            <div class="value text-warning">{{ format_amount($data['summary']['days_61_90'] ?? 0) }} XAF</div>
         </div>
         <div class="summary-box">
             <div class="label">{{ __('91-120 Days') }}</div>
-            <div class="value" style="color: #fd7e14;">{{ number_format($data['summary']['days_91_120'] ?? 0) }} XAF</div>
+            <div class="value" style="color: #fd7e14;">{{ format_amount($data['summary']['days_91_120'] ?? 0) }} XAF</div>
         </div>
         <div class="summary-box">
             <div class="label">{{ __('Over 120 Days') }}</div>
-            <div class="value text-danger">{{ number_format($data['summary']['over_120'] ?? 0) }} XAF</div>
+            <div class="value text-danger">{{ format_amount($data['summary']['over_120'] ?? 0) }} XAF</div>
         </div>
         <div class="summary-box">
             <div class="label">{{ __('Total Outstanding') }}</div>
-            <div class="value font-bold">{{ number_format($data['summary']['total'] ?? 0) }} XAF</div>
+            <div class="value font-bold">{{ format_amount($data['summary']['total'] ?? 0) }} XAF</div>
         </div>
     </div>
     @endif
@@ -57,12 +57,12 @@
             @forelse($data['details'] ?? [] as $item)
             <tr>
                 <td>{{ $item['customer_name'] ?? '' }}</td>
-                <td class="text-right">{{ number_format($item['current'] ?? 0) }}</td>
-                <td class="text-right">{{ number_format($item['days_31_60'] ?? 0) }}</td>
-                <td class="text-right">{{ number_format($item['days_61_90'] ?? 0) }}</td>
-                <td class="text-right">{{ number_format($item['days_91_120'] ?? 0) }}</td>
-                <td class="text-right text-danger">{{ number_format($item['over_120'] ?? 0) }}</td>
-                <td class="text-right font-bold">{{ number_format($item['total'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($item['current'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($item['days_31_60'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($item['days_61_90'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($item['days_91_120'] ?? 0) }}</td>
+                <td class="text-right text-danger">{{ format_amount($item['over_120'] ?? 0) }}</td>
+                <td class="text-right font-bold">{{ format_amount($item['total'] ?? 0) }}</td>
             </tr>
             @empty
             <tr>
@@ -74,12 +74,12 @@
         <tfoot>
             <tr class="totals-row">
                 <td>{{ __('Grand Total') }}</td>
-                <td class="text-right">{{ number_format($data['summary']['current'] ?? 0) }}</td>
-                <td class="text-right">{{ number_format($data['summary']['days_31_60'] ?? 0) }}</td>
-                <td class="text-right">{{ number_format($data['summary']['days_61_90'] ?? 0) }}</td>
-                <td class="text-right">{{ number_format($data['summary']['days_91_120'] ?? 0) }}</td>
-                <td class="text-right text-danger">{{ number_format($data['summary']['over_120'] ?? 0) }}</td>
-                <td class="text-right">{{ number_format($data['summary']['total'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($data['summary']['current'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($data['summary']['days_31_60'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($data['summary']['days_61_90'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($data['summary']['days_91_120'] ?? 0) }}</td>
+                <td class="text-right text-danger">{{ format_amount($data['summary']['over_120'] ?? 0) }}</td>
+                <td class="text-right">{{ format_amount($data['summary']['total'] ?? 0) }}</td>
             </tr>
         </tfoot>
         @endif

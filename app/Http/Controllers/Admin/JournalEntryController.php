@@ -26,6 +26,11 @@ class JournalEntryController extends Controller
         $this->middleware('permission:journal-entry-edit', ['only' => ['edit', 'update']]);
         $this->middleware('permission:journal-entry-delete', ['only' => ['destroy']]);
         $this->middleware('permission:journal-entry-post', ['only' => ['post']]);
+        // Un-posting changes the books as much as posting does, and was open to
+        // anyone who could reach the route.
+        $this->middleware('permission:journal-entry-unpost', ['only' => ['unpost']]);
+        $this->middleware('permission:journal-entry-create', ['only' => ['duplicate']]);
+        $this->middleware('permission:journal-entry-delete', ['only' => ['trash', 'restore', 'forceDelete']]);
         $this->middleware('permission:journal-entry-reverse', ['only' => ['reverse']]);
     }
 
@@ -134,7 +139,11 @@ class JournalEntryController extends Controller
             'description' => 'required|string',
             'reference_number' => 'nullable|string|max:255',
             'lines' => 'required|array|min:2',
-            'lines.*.account_id' => 'required|exists:chart_of_accounts,id',
+            'lines.*.account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
             'lines.*.description' => 'nullable|string',
             'lines.*.debit' => 'required|numeric|min:0',
             'lines.*.credit' => 'required|numeric|min:0',
@@ -193,7 +202,7 @@ class JournalEntryController extends Controller
 
             // Create journal entry
             $entry = JournalEntry::create([
-                'entry_number' => JournalEntry::generateEntryNumber(),
+                'entry_number' => JournalEntry::generateEntryNumber($request->entry_date),
                 'entry_date' => $request->entry_date,
                 'fiscal_year_id' => $request->fiscal_year_id,
                 'accounting_period_id' => $accountingPeriodId,
@@ -312,7 +321,11 @@ class JournalEntryController extends Controller
             'description' => 'required|string',
             'reference_number' => 'nullable|string|max:255',
             'lines' => 'required|array|min:2',
-            'lines.*.account_id' => 'required|exists:chart_of_accounts,id',
+            'lines.*.account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
             'lines.*.description' => 'nullable|string',
             'lines.*.debit' => 'required|numeric|min:0',
             'lines.*.credit' => 'required|numeric|min:0',
@@ -505,7 +518,7 @@ class JournalEntryController extends Controller
             
             // Create new entry
             $newEntry = JournalEntry::create([
-                'entry_number' => JournalEntry::generateEntryNumber(),
+                'entry_number' => JournalEntry::generateEntryNumber(now()->format('Y-m-d')),
                 'entry_date' => now()->format('Y-m-d'),
                 // A copy is dated today, so it belongs to today's exercice —
                 // and gets today's period rather than none at all.

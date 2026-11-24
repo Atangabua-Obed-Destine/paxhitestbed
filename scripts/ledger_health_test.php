@@ -93,9 +93,26 @@ foreach ([
 check('eighteen checks in all', 18, count($baseline));
 
 // The findings that are real on this database, as regression anchors.
-check('the four unposted incomes are found', 4, find($baseline, 'source_unposted')['count']);
-check('worth 20,254,000', '20254000.00',
-    number_format(find($baseline, 'source_unposted')['value'], 2, '.', ''));
+// The four tuition incomes this used to find (20,254,000 in categories with
+// no account mapping) were mapped and posted on 23 Nov 2026.
+check('every transaction that should be posted is', 'ok', find($baseline, 'source_unposted')['state']);
+
+// The check itself, on a transaction made here with no entry: an income
+// written straight to the table, so no observer posts it.
+DB::beginTransaction();
+try {
+    DB::table('incomes')->insert(['category_id' => DB::table('income_categories')->value('id'), 'title' => 'TEST unposted',
+        'amount' => 12345, 'date' => date('Y-m-d'), 'status' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    $health->forget();
+    $withUnposted = $health->checks();
+    $unposted = find($withUnposted, 'source_unposted');
+    ok('an income with no entry is found', $unposted['count'] >= 1);
+    check('a transaction with no entry is critical', 'critical', $unposted['state']);
+    ok('and its check offers an action', $unposted['action'] !== null);
+} finally {
+    DB::rollBack();
+    $health->forget();
+}
 /*
  * The amount differences are asserted by their SHAPE, not by a figure.
  *
@@ -156,15 +173,17 @@ check('no transaction has two live entries', 'ok', find($baseline, 'entry_duplic
 
 echo "\n=== 2. severity is a property of the fault, not of the count ===\n";
 
-check('a transaction with no entry is critical', 'critical', find($baseline, 'source_unposted')['state']);
 check('an amount difference is a warning', 'warning', find($baseline, 'amount_drift')['state']);
 ok('a passing check offers no action', find($baseline, 'date_drift')['action'] === null);
-ok('a failing one does', find($baseline, 'source_unposted')['action'] !== null);
 
 echo "\n=== 3. the verdict reflects the worst finding ===\n";
 
-check('the books currently need attention', 'critical', $health->worstState($baseline));
-check('and two checks found something', 2, $health->concerns($baseline));
+// Worked out from the findings themselves, so the check holds whatever the
+// books currently show.
+$states = array_column($baseline, 'state');
+$expectedWorst = in_array('critical', $states, true) ? 'critical' : (in_array('warning', $states, true) ? 'warning' : 'ok');
+check('the verdict is the worst finding on the books', $expectedWorst, $health->worstState($baseline));
+check('and it counts every check that found something', count(array_filter($states, fn ($s) => $s !== 'ok')), $health->concerns($baseline));
 
 $allOk = [['key' => 'a', 'state' => 'ok'], ['key' => 'b', 'state' => 'ok']];
 check('a clean run reports ok', 'ok', $health->worstState($allOk));

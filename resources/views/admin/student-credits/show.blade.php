@@ -38,7 +38,7 @@
                             <tr>
                                 <th>{{ __('original_amount') }}</th>
                                 <td class="font-weight-bold">
-                                    {{ number_format($credit->original_amount, $setting->decimal_place ?? 2) }}
+                                    {{ format_amount($credit->original_amount) }}
                                     {{ $setting->currency ?? 'GHS' }}
                                 </td>
                             </tr>
@@ -46,7 +46,7 @@
                                 <th>{{ __('remaining_amount') }}</th>
                                 <td>
                                     <span class="{{ $credit->remaining_amount > 0 ? 'text-success font-weight-bold' : 'text-muted' }}">
-                                        {{ number_format($credit->remaining_amount, $setting->decimal_place ?? 2) }}
+                                        {{ format_amount($credit->remaining_amount) }}
                                         {{ $setting->currency ?? 'GHS' }}
                                     </span>
                                 </td>
@@ -54,7 +54,7 @@
                             <tr>
                                 <th>{{ __('applied_amount') }}</th>
                                 <td>
-                                    {{ number_format($credit->original_amount - $credit->remaining_amount, $setting->decimal_place ?? 2) }}
+                                    {{ format_amount($credit->original_amount - $credit->remaining_amount) }}
                                     {{ $setting->currency ?? 'GHS' }}
                                 </td>
                             </tr>
@@ -121,7 +121,7 @@
                             </tr>
                             <tr>
                                 <th>{{ __('created_at') }}</th>
-                                <td>{{ $credit->created_at->format('M d, Y H:i:s') }}</td>
+                                <td>{{ $credit->created_at->format('d/m/Y H:i:s') }}</td>
                             </tr>
                             <tr>
                                 <th>{{ __('created_by') }}</th>
@@ -166,7 +166,7 @@
                             @if($credit->refund_requested_at)
                             <tr>
                                 <th>{{ __('requested_at') }}</th>
-                                <td>{{ $credit->refund_requested_at->format('M d, Y H:i:s') }}</td>
+                                <td>{{ $credit->refund_requested_at->format('d/m/Y H:i:s') }}</td>
                             </tr>
                             @endif
                             @if($credit->refundRequestedBy)
@@ -178,7 +178,7 @@
                             @if($credit->refund_approved_at)
                             <tr>
                                 <th>{{ __('approved_at') }}</th>
-                                <td>{{ $credit->refund_approved_at->format('M d, Y H:i:s') }}</td>
+                                <td>{{ $credit->refund_approved_at->format('d/m/Y H:i:s') }}</td>
                             </tr>
                             @endif
                             @if($credit->refundApprovedBy)
@@ -190,7 +190,7 @@
                             @if($credit->refund_processed_at)
                             <tr>
                                 <th>{{ __('refunded_at') }}</th>
-                                <td>{{ $credit->refund_processed_at->format('M d, Y H:i:s') }}</td>
+                                <td>{{ $credit->refund_processed_at->format('d/m/Y H:i:s') }}</td>
                             </tr>
                             @endif
                             @if($credit->refund_method)
@@ -219,7 +219,7 @@
                         <table class="table table-borderless">
                             <tr>
                                 <th width="40%">{{ __('rejected_at') }}</th>
-                                <td>{{ optional($credit->refund_rejected_at)->format('M d, Y H:i:s') }}</td>
+                                <td>{{ optional($credit->refund_rejected_at)->format('d/m/Y H:i:s') }}</td>
                             </tr>
                             @if($credit->refundRejectedBy)
                             <tr>
@@ -319,11 +319,11 @@
                                             @endif
                                         </td>
                                         <td class="text-success font-weight-bold">
-                                            {{ number_format($application->amount_applied, $setting->decimal_place ?? 2) }}
+                                            {{ format_amount($application->amount_applied) }}
                                             {{ $setting->currency ?? 'GHS' }}
                                         </td>
                                         <td>{{ $application->createdBy->name ?? 'System' }}</td>
-                                        <td>{{ $application->created_at ? $application->created_at->format('M d, Y H:i') : 'N/A' }}</td>
+                                        <td>{{ $application->created_at ? $application->created_at->format('d/m/Y H:i') : 'N/A' }}</td>
                                         <td>{{ $application->note ?? '-' }}</td>
                                     </tr>
                                     @endforeach
@@ -356,7 +356,7 @@
                 <div class="modal-body">
                     <div class="alert alert-info">
                         <strong>{{ __('refund_amount') }}:</strong>
-                        {{ number_format($credit->remaining_amount, $setting->decimal_place ?? 2) }}
+                        {{ format_amount($credit->remaining_amount) }}
                         {{ $setting->currency ?? 'GHS' }}
                     </div>
                     <div class="form-group">
@@ -387,7 +387,7 @@
                 <div class="modal-body">
                     <div class="alert alert-success">
                         {{ __('you_are_about_to_approve_refund') }}
-                        <strong>{{ number_format($credit->remaining_amount, $setting->decimal_place ?? 2) }} {{ $setting->currency ?? 'GHS' }}</strong>
+                        <strong>{{ format_amount($credit->remaining_amount) }} {{ $setting->currency ?? 'GHS' }}</strong>
                     </div>
                     <div class="form-group">
                         <label>{{ __('approval_note') }}</label>
@@ -446,7 +446,7 @@
                 <div class="modal-body">
                     <div class="alert alert-info">
                         <strong>{{ __('refund_amount') }}:</strong>
-                        {{ number_format($credit->remaining_amount, $setting->decimal_place ?? 2) }}
+                        {{ format_amount($credit->remaining_amount) }}
                         {{ $setting->currency ?? 'GHS' }}
                     </div>
                     <div class="form-group">
@@ -492,7 +492,7 @@
                 <div class="modal-body">
                     <div class="alert alert-info mb-3">
                         <strong>{{ __('available_credit') }}:</strong>
-                        {{ number_format($credit->remaining_amount, $setting->decimal_place ?? 2) }}
+                        {{ format_amount($credit->remaining_amount) }}
                         {{ $setting->currency ?? 'GHS' }}
                     </div>
                     
@@ -523,7 +523,7 @@
                                     {{ $fee->category->title ?? 'N/A' }}
                                     ({{ optional($fee->studentEnroll->session ?? null)->title ?? '' }}
                                     - {{ optional($fee->studentEnroll->semester ?? null)->title ?? '' }})
-                                    - {{ __('remaining') }}: {{ number_format($remaining, $setting->decimal_place ?? 2) }} {{ $setting->currency ?? 'GHS' }}
+                                    - {{ __('remaining') }}: {{ format_amount($remaining) }} {{ $setting->currency ?? 'GHS' }}
                                 </option>
                             @endforeach
                         </select>
@@ -533,7 +533,7 @@
                         <input type="number" name="amount" class="form-control" required
                                step="0.01" min="0.01" max="{{ $credit->remaining_amount }}"
                                placeholder="{{ __('enter_amount') }}" id="applyAmount">
-                        <small class="text-muted">{{ __('max') }}: {{ number_format($credit->remaining_amount, $setting->decimal_place ?? 2) }} {{ $setting->currency ?? 'GHS' }}</small>
+                        <small class="text-muted">{{ __('max') }}: {{ format_amount($credit->remaining_amount) }} {{ $setting->currency ?? 'GHS' }}</small>
                     </div>
                     <div class="form-group">
                         <label>{{ __('note') }}</label>

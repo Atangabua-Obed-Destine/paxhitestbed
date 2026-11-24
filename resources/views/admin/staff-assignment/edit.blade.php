@@ -19,7 +19,7 @@
                     @if($hasClassRoutine)
                     <div class="card-block">
                         <div class="alert alert-danger" role="alert">
-                            <h5 class="alert-heading"><i class="fas fa-exclamation-circle"></i> {{ __('Class Routine Detected!') }}</h5>
+                            <h5 class="alert-heading"><i class="fas fa-exclamation-circle"></i> {{ __('This staff member already has a class routine') }}</h5>
                             <p>{{ __('This staff member has existing class routine assignments. Updating their assignments will restrict their access to ONLY the selected areas.') }}</p>
                             <hr>
                             <p class="mb-0">

@@ -49,7 +49,7 @@
                         <p><strong><i class="fas fa-sort-numeric-down me-2"></i>Sort Order:</strong> {{ $row->sort_order }}</p>
                     </div>
                     <div class="col-md-4">
-                        <p><strong><i class="fas fa-calendar me-2"></i>Created:</strong> {{ $row->created_at->format('M d, Y H:i') }}</p>
+                        <p><strong><i class="fas fa-calendar me-2"></i>Created:</strong> {{ $row->created_at->format('d/m/Y H:i') }}</p>
                     </div>
                     <div class="col-md-4">
                         <p><strong><i class="fas fa-toggle-on me-2"></i>Status:</strong>

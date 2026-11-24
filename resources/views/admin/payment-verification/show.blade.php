@@ -331,7 +331,7 @@
                                             @foreach($approvedReceipts as $approved)
                                             <tr>
                                                 <td>{{ $approved->id }}</td>
-                                                <td>{{ date('M d, Y', strtotime($approved->payment_date)) }}</td>
+                                                <td>{{ date('d/m/Y', strtotime($approved->payment_date)) }}</td>
                                                 <td>
                                                     @if(isset($setting->decimal_place))
                                                     {{ number_format((float)$approved->amount, $setting->decimal_place, '.', '') }} 
@@ -506,7 +506,7 @@
                     <div class="text-center mb-3">
                         <div class="text-muted small text-uppercase">{{ __('Amount being approved') }}</div>
                         <div style="font-size:2.2rem;line-height:1.1;font-weight:700;">
-                            {{ number_format((float) ($row->amount ?? 0), 2) }}
+                            {{ format_amount((float) ($row->amount ?? 0)) }}
                         </div>
                         <div class="text-muted">{!! $setting->currency_symbol !!}</div>
                     </div>

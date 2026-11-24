@@ -90,7 +90,7 @@
                                         @endif
                                     </td>
                                     <td>
-                                        <small>{{ $whitelist->created_at->format('M d, Y H:i') }}</small>
+                                        <small>{{ $whitelist->created_at->format('d/m/Y H:i') }}</small>
                                     </td>
                                     <td>
                                         <div class="btn-group">

@@ -662,9 +662,9 @@
                     <div class="icon-wrapper">
                         <i class="fas fa-money-bill-wave"></i>
                     </div>
-                    <h3 class="metric-loader">{{ number_format($dueFees ?? 0, 0) }}</h3>
+                    <h3 class="metric-loader">{{ format_amount($dueFees ?? 0) }}</h3>
                     <p>Fees Balance (XAF)</p>
-                    <small style="opacity: 0.8;">Paid: {{ number_format($paidFees ?? 0, 0) }} XAF</small>
+                    <small style="opacity: 0.8;">Paid: {{ format_amount($paidFees ?? 0) }} XAF</small>
                 </div>
             </div>
         </div>
@@ -1024,7 +1024,7 @@
                                         </a>
                                         <br><small class="text-muted">
                                             <i class="fas fa-book"></i> {{ $assignment->assignment->subject->code ?? '' }}
-                                            | <i class="fas fa-calendar"></i> Due: {{ date('M d, Y', strtotime($assignment->assignment->end_date)) }}
+                                            | <i class="fas fa-calendar"></i> Due: {{ date('d/m/Y', strtotime($assignment->assignment->end_date)) }}
                                         </small>
                                     </div>
                                 </div>
@@ -1170,7 +1170,7 @@
                             <div class="list-item mb-0">
                                 <strong>{{ $exam->subject->title ?? 'N/A' }}</strong>
                                 <br><small class="text-muted">
-                                    <i class="fas fa-calendar"></i> {{ date('M d, Y', strtotime($exam->exam_date)) }}
+                                    <i class="fas fa-calendar"></i> {{ date('d/m/Y', strtotime($exam->exam_date)) }}
                                     <br><i class="fas fa-clock"></i> {{ date('h:i A', strtotime($exam->start_time)) }}
                                     @if($exam->room)
                                     <br><i class="fas fa-door-open"></i> {{ $exam->room }}
@@ -1202,7 +1202,7 @@
                                 <strong>{{ Str::limit($notice->title, 50) }}</strong>
                             </a>
                             <br><small class="text-muted">
-                                <i class="fas fa-calendar"></i> {{ date('M d, Y', strtotime($notice->created_at)) }}
+                                <i class="fas fa-calendar"></i> {{ date('d/m/Y', strtotime($notice->created_at)) }}
                             </small>
                         </div>
                         @endforeach
@@ -1224,7 +1224,7 @@
                             <h5>Payment Reminder</h5>
                         </div>
                         <div class="alert alert-warning mb-3">
-                            <strong>Outstanding Balance:</strong> {{ number_format($dueFees, 0) }} XAF
+                            <strong>Outstanding Balance:</strong> {{ format_amount($dueFees) }} XAF
                         </div>
                         @if(isset($upcomingPayments) && count($upcomingPayments) > 0)
                         <p class="mb-2"><strong>Pending Payments:</strong></p>
@@ -1302,7 +1302,7 @@
                                         <br><small class="text-muted">
                                             {{ date('M d', strtotime($event->start_date)) }} 
                                             @if($event->start_date != $event->end_date)
-                                            - {{ date('M d, Y', strtotime($event->end_date)) }}
+                                            - {{ date('d/m/Y', strtotime($event->end_date)) }}
                                             @else
                                             , {{ date('Y', strtotime($event->start_date)) }}
                                             @endif

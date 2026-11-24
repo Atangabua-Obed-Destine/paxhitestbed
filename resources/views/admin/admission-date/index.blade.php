@@ -74,7 +74,7 @@
                                         <td><strong>{{ $row->event_title }}</strong></td>
                                         <td>
                                             <span class="badge badge-pill badge-info">
-                                                {{ date('M d, Y', strtotime($row->event_date)) }}
+                                                {{ date('d/m/Y', strtotime($row->event_date)) }}
                                             </span>
                                         </td>
                                         <td>{{ Str::limit($row->description, 60) }}</td>

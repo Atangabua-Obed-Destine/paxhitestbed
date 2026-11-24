@@ -49,7 +49,7 @@
 </p>
 
 @php
-    $money = fn ($v) => $v ? number_format($v) : '—';
+    $money = fn ($v) => $v ? format_amount($v) : '—';
     $currentSection = null;
 @endphp
 
@@ -93,7 +93,7 @@
                 <td class="num prior">{{ $money($p) }}</td>
                 <td class="num">{{ $money($b) }}</td>
                 <td class="num">{{ $money($a) }}</td>
-                <td class="num">{{ $b ? number_format($v) : '—' }}</td>
+                <td class="num">{{ $b ? format_amount($v) : '—' }}</td>
             </tr>
 
             {{-- The group's own total, ruled off at its foot. On paper this is
@@ -113,7 +113,7 @@
                     <td class="num prior">{{ $money($gp) }}</td>
                     <td class="num">{{ $money($gb) }}</td>
                     <td class="num">{{ $money($ga) }}</td>
-                    <td class="num">{{ $gb ? number_format($gv) : '—' }}</td>
+                    <td class="num">{{ $gb ? format_amount($gv) : '—' }}</td>
                 </tr>
             @endif
         @endforeach
@@ -124,7 +124,7 @@
             <td class="num prior">{{ $previous ? $money($priorTotals['income']) : '—' }}</td>
             <td class="num">{{ $money($totals['budget']['income']) }}</td>
             <td class="num">{{ $money($totals['actual']['income']) }}</td>
-            <td class="num">{{ number_format($totals['actual']['income'] - $totals['budget']['income']) }}</td>
+            <td class="num">{{ format_amount($totals['actual']['income'] - $totals['budget']['income']) }}</td>
         </tr>
         <tr class="total">
             <td></td>
@@ -132,7 +132,7 @@
             <td class="num prior">{{ $previous ? $money($priorTotals['expenditure']) : '—' }}</td>
             <td class="num">{{ $money($totals['budget']['expenditure']) }}</td>
             <td class="num">{{ $money($totals['actual']['expenditure']) }}</td>
-            <td class="num">{{ number_format($totals['actual']['expenditure'] - $totals['budget']['expenditure']) }}</td>
+            <td class="num">{{ format_amount($totals['actual']['expenditure'] - $totals['budget']['expenditure']) }}</td>
         </tr>
         <tr class="total">
             <td></td>
@@ -148,7 +148,7 @@
             <td class="num prior">{{ $previous ? $money($priorTotals['capital']) : '—' }}</td>
             <td class="num">{{ $money($totals['budget']['capital']) }}</td>
             <td class="num">{{ $money($totals['actual']['capital']) }}</td>
-            <td class="num">{{ number_format($totals['actual']['capital'] - $totals['budget']['capital']) }}</td>
+            <td class="num">{{ format_amount($totals['actual']['capital'] - $totals['budget']['capital']) }}</td>
         </tr>
     </tbody>
 </table>

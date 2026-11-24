@@ -115,7 +115,7 @@
                                 <h5 class="mb-3">Category Statistics</h5>
                                 <div class="row">
                                     <div class="col-md-3">
-                                        <div class="card bg-primary text-white">
+                                        <div class="card stat-tile stat-primary">
                                             <div class="card-body text-center">
                                                 <h3 class="mb-0 text-white">{{ $categories->count() }}</h3>
                                                 <small class="text-white">Total Categories</small>
@@ -123,7 +123,7 @@
                                         </div>
                                     </div>
                                     <div class="col-md-3">
-                                        <div class="card bg-success text-white">
+                                        <div class="card stat-tile stat-success">
                                             <div class="card-body text-center">
                                                 <h3 class="mb-0 text-white">{{ $categories->where('status', 1)->count() }}</h3>
                                                 <small class="text-white">Active Categories</small>
@@ -131,7 +131,7 @@
                                         </div>
                                     </div>
                                     <div class="col-md-3">
-                                        <div class="card bg-info text-white">
+                                        <div class="card stat-tile stat-info">
                                             <div class="card-body text-center">
                                                 <h3 class="mb-0 text-white">{{ $categories->sum('books_count') ?? 0 }}</h3>
                                                 <small class="text-white">Total Books</small>
@@ -139,10 +139,10 @@
                                         </div>
                                     </div>
                                     <div class="col-md-3">
-                                        <div class="card" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+                                        <div class="card stat-tile stat-warning">
                                             <div class="card-body text-center">
-                                                <h3 class="mb-0 text-white" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">{{ $categories->where('books_count', '>', 0)->count() }}</h3>
-                                                <small class="text-white" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">Categories with Books</small>
+                                                <h3 class="mb-0 text-white">{{ $categories->where('books_count', '>', 0)->count() }}</h3>
+                                                <small class="text-white">Categories with Books</small>
                                             </div>
                                         </div>
                                     </div>

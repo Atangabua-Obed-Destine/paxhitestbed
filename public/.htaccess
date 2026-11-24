@@ -19,3 +19,11 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# Compress text responses (pages, CSS, JS, JSON, SVG): a 355 KB stylesheet
+# travels as about 50 KB. Only where the server has mod_deflate.
+<IfModule mod_deflate.c>
+<IfModule mod_filter.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/x-javascript application/json image/svg+xml
+</IfModule>
+</IfModule>

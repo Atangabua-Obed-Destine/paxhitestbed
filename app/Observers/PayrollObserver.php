@@ -3,32 +3,22 @@
 namespace App\Observers;
 
 use App\Models\Payroll;
-use App\Services\TransactionAutoMapService;
 
 class PayrollObserver
 {
-    protected $autoMapService;
-
-    public function __construct(TransactionAutoMapService $autoMapService)
-    {
-        $this->autoMapService = $autoMapService;
-    }
-
     /**
      * Handle the Payroll "created" event.
+     *
+     * Deliberately does nothing. A payroll is created unpaid; it is the pay
+     * action (PayrollAccountingService) that posts it to the ledger, once the
+     * money has moved. This used to auto-map the payroll here as well, which
+     * failed on every generate (an unpaid payroll has no pay date) and logged
+     * an error, and would have posted the salary twice had a pay date ever
+     * been present at creation.
      */
     public function created(Payroll $payroll): void
     {
-        $this->autoMapService->autoMap(
-            'payroll',
-            $payroll->id,
-            null, // Payroll doesn't have a category
-            [
-                'amount' => $payroll->net_salary,
-                'date' => $payroll->pay_date,
-                'description' => 'Salary Payment - ' . ($payroll->staff->name ?? 'Staff')
-            ]
-        );
+        //
     }
 
     /**

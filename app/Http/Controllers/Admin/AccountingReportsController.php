@@ -373,6 +373,105 @@ class AccountingReportsController extends Controller
     }
 
     /**
+     * The fiscal year an export is for: the one asked for, else the active one.
+     */
+    protected function exportYear(Request $request)
+    {
+        return $request->fiscal_year_id ?: FiscalYear::getActiveFiscalYear()?->id;
+    }
+
+    /**
+     * Budget against actual in the shape its PDF reads: detail lines only
+     * (a header already totals its children), with the totals and the lines
+     * over budget.
+     */
+    protected function budgetVsActualForPdf($fiscalYearId): array
+    {
+        $rows = collect($this->generateBudgetVsActualReport($fiscalYearId))->reject(fn ($r) => $r['is_header']);
+        $details = $rows->map(fn ($r) => $r + [
+            'percentage_used' => $r['budget'] != 0 ? round($r['actual'] / $r['budget'] * 100, 1) : 0,
+        ])->values()->all();
+        $budget = (float) $rows->sum('budget');
+        $actual = (float) $rows->sum('actual');
+
+        return [
+            'fiscal_year' => ['name' => optional(FiscalYear::find($fiscalYearId))->name],
+            'details' => $details,
+            'summary' => [
+                'total_budget' => $budget,
+                'total_actual' => $actual,
+                'total_variance' => $budget - $actual,
+                'utilization_rate' => $budget != 0 ? round($actual / $budget * 100, 1) : 0,
+            ],
+            'over_budget_items' => collect($details)
+                ->filter(fn ($r) => $r['section'] !== 'income' && $r['budget'] > 0 && $r['actual'] > $r['budget'])
+                ->values()->all(),
+        ];
+    }
+
+    /**
+     * The rows of a CSV export, header first.
+     *
+     * @return array<int, array<int, mixed>>
+     */
+    protected function csvRows(string $reportType, $data): array
+    {
+        $bands = ['current', 'days_31_60', 'days_61_90', 'days_91_120', 'over_120'];
+        $bandHeads = ['0-30 Days', '31-60 Days', '61-90 Days', '91-120 Days', 'Over 120 Days'];
+
+        switch ($reportType) {
+            case 'receivables_aging':
+            case 'payables_aging':
+                $rows = [array_merge(['Account Code', 'Account Name'], $bandHeads, ['Total'])];
+                foreach ($data['details'] ?? [] as $r) {
+                    $rows[] = array_merge([$r['account_code'], $r['account_name']], array_map(fn ($b) => $r[$b], $bands), [$r['total']]);
+                }
+                $rows[] = array_merge(['', 'Total'], array_map(fn ($b) => $data['summary'][$b] ?? 0, $bands), [$data['summary']['total'] ?? 0]);
+                return $rows;
+
+            case 'student_fee_aging':
+                $rows = [array_merge(['Matricule', 'Student', 'Programme'], $bandHeads, ['Total'])];
+                foreach ($data['details'] ?? [] as $r) {
+                    $rows[] = array_merge([$r['student_code'], $r['student_name'], $r['program_name'] ?? ''], array_map(fn ($b) => $r[$b], $bands), [$r['total']]);
+                }
+                $rows[] = array_merge(['', 'Total', ''], array_map(fn ($b) => $data['summary'][$b] ?? 0, $bands), [$data['summary']['total'] ?? 0]);
+                return $rows;
+
+            case 'cash_flow':
+                $rows = [['Section', 'Line', 'Amount'], ['', 'Cash at beginning of period', $data['beginning_cash_balance']]];
+                foreach (['operating', 'investing', 'financing'] as $section) {
+                    foreach ($data[$section . '_activities']['items'] as $item) {
+                        $rows[] = [ucfirst($section), $item['description'], $item['amount']];
+                    }
+                    $rows[] = [ucfirst($section), 'Net cash from ' . $section . ' activities', $data['net_' . $section]];
+                }
+                $rows[] = ['', 'Net change in cash', $data['net_change_in_cash']];
+                $rows[] = ['', 'Cash at end of period', $data['ending_cash_balance']];
+                return $rows;
+
+            case 'comparative_cash_flow':
+                $rows = [['Section', 'Line', $data['periods']['current']['name'], $data['periods']['previous']['name'], 'Change']];
+                foreach (['operating', 'investing', 'financing'] as $section) {
+                    foreach ($data[$section]['items'] as $item) {
+                        $rows[] = [ucfirst($section), $item['description'], $item['current'], $item['previous'], $item['variance']];
+                    }
+                    $rows[] = [ucfirst($section), 'Net cash from ' . $section . ' activities', $data[$section]['current_total'], $data[$section]['previous_total'], $data[$section]['variance']];
+                }
+                $rows[] = ['', 'Net change in cash', $data['net_change']['current'], $data['net_change']['previous'], $data['net_change']['variance']];
+                return $rows;
+
+            case 'budget_vs_actual':
+                $rows = [['Code', 'Line', 'Section', 'Budget', 'Actual', 'Variance', 'Variance %']];
+                foreach ($data as $r) {
+                    $rows[] = [$r['account_code'], ($r['is_header'] ? '' : '  ') . $r['account_name'], $r['section'], $r['budget'], $r['actual'], $r['variance'], round($r['variance_percent'], 1)];
+                }
+                return $rows;
+        }
+
+        return [];
+    }
+
+    /**
      * Get account balance for fiscal year
      */
     protected function getAccountBalance($accountId, $fiscalYearId)
@@ -427,22 +526,22 @@ class AccountingReportsController extends Controller
                     break;
 
                 case 'student_fee_aging':
-                    $data = $this->agingService->getStudentFeeAging($request->as_of_date);
+                    $data = $this->agingService->getStudentFeeAging($request->as_of_date, $request->only(['program_id', 'batch_id']));
                     $view = 'admin.accounting.reports.pdf.student-fee-aging';
                     break;
 
                 case 'cash_flow':
-                    $data = $this->cashFlowService->generateCashFlowStatement($request->fiscal_year_id);
+                    $data = $this->cashFlowService->generateCashFlowStatement($this->exportYear($request), $request->start_date ?: null, $request->end_date ?: null);
                     $view = 'admin.accounting.reports.pdf.cash-flow';
                     break;
 
                 case 'comparative_cash_flow':
-                    $data = $this->cashFlowService->generateComparativeCashFlowStatement($request->fiscal_year_id);
+                    $data = $this->cashFlowService->generateComparativeCashFlowStatement($this->exportYear($request), $request->previous_fiscal_year_id);
                     $view = 'admin.accounting.reports.pdf.comparative-cash-flow';
                     break;
 
                 case 'budget_vs_actual':
-                    $data = $this->generateBudgetVsActualReport($request->fiscal_year_id);
+                    $data = $this->budgetVsActualForPdf($this->exportYear($request));
                     $view = 'admin.accounting.reports.pdf.budget-vs-actual';
                     break;
             }
@@ -494,19 +593,19 @@ class AccountingReportsController extends Controller
                     break;
 
                 case 'student_fee_aging':
-                    $data = $this->agingService->getStudentFeeAging($request->as_of_date);
+                    $data = $this->agingService->getStudentFeeAging($request->as_of_date, $request->only(['program_id', 'batch_id']));
                     break;
 
                 case 'cash_flow':
-                    $data = $this->cashFlowService->generateCashFlowStatement($request->fiscal_year_id);
+                    $data = $this->cashFlowService->generateCashFlowStatement($this->exportYear($request), $request->start_date ?: null, $request->end_date ?: null);
                     break;
 
                 case 'comparative_cash_flow':
-                    $data = $this->cashFlowService->generateComparativeCashFlowStatement($request->fiscal_year_id);
+                    $data = $this->cashFlowService->generateComparativeCashFlowStatement($this->exportYear($request), $request->previous_fiscal_year_id);
                     break;
 
                 case 'budget_vs_actual':
-                    $data = $this->generateBudgetVsActualReport($request->fiscal_year_id);
+                    $data = $this->generateBudgetVsActualReport($this->exportYear($request));
                     break;
             }
 
@@ -517,26 +616,14 @@ class AccountingReportsController extends Controller
                 'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             ];
 
-            $callback = function () use ($data, $reportType) {
+            $rows = $this->csvRows($reportType, $data);
+            $callback = function () use ($rows) {
                 $file = fopen('php://output', 'w');
-                
-                // Write headers based on report type
-                if (in_array($reportType, ['receivables_aging', 'payables_aging'])) {
-                    fputcsv($file, ['Account Code', 'Account Name', '0-30 Days', '31-60 Days', '61-90 Days', '91-120 Days', 'Over 120 Days', 'Total']);
-                    foreach ($data['accounts'] ?? [] as $account) {
-                        fputcsv($file, [
-                            $account['account_code'],
-                            $account['account_name'],
-                            $account['brackets']['bracket_0'] ?? 0,
-                            $account['brackets']['bracket_1'] ?? 0,
-                            $account['brackets']['bracket_2'] ?? 0,
-                            $account['brackets']['bracket_3'] ?? 0,
-                            $account['brackets']['bracket_4'] ?? 0,
-                            $account['total'],
-                        ]);
-                    }
+                // A byte-order mark, so Excel reads accented names correctly.
+                fwrite($file, "\xEF\xBB\xBF");
+                foreach ($rows as $row) {
+                    fputcsv($file, $row);
                 }
-                
                 fclose($file);
             };
 

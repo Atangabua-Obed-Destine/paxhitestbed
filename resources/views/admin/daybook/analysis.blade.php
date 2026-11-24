@@ -371,23 +371,23 @@
         <div class="tiles">
             <div class="tile in">
                 <div class="label">{{ __('Money in, year to date') }}</div>
-                <div class="value">{{ number_format($a['totals']['in']) }}</div>
+                <div class="value">{{ format_amount($a['totals']['in']) }}</div>
                 <div class="note">{{ __('Fees, subventions and other income actually received.') }}</div>
             </div>
             <div class="tile out">
                 <div class="label">{{ __('Money out, year to date') }}</div>
-                <div class="value">{{ number_format($a['totals']['out']) }}</div>
+                <div class="value">{{ format_amount($a['totals']['out']) }}</div>
                 <div class="note">{{ __('Expenditure and capital, including salaries.') }}</div>
             </div>
             <div class="tile {{ $closing < 0 ? 'deficit' : '' }}">
                 <div class="label">{{ __('Closing cash position') }}</div>
-                <div class="value">{{ number_format($closing) }}</div>
+                <div class="value">{{ format_amount($closing) }}</div>
                 <div class="note">
                     {{ __('Opening balance plus everything that has moved since.') }}
                     @if($lowest < 0)
                         <span class="status-chip chip-critical">
                             <i class="fas fa-exclamation-triangle"></i>
-                            {{ __('Lowest :amount in :month', ['amount' => number_format($lowest), 'month' => $lowestLabel]) }}
+                            {{ __('Lowest :amount in :month', ['amount' => format_amount($lowest), 'month' => $lowestLabel]) }}
                         </span>
                     @endif
                 </div>
@@ -409,7 +409,7 @@
                         {{ __('Spending is :consumed% of the budget entered. That is usually a budget still being filled in rather than a real overspend.', ['consumed' => number_format($pacing['consumed'], 0)]) }}
                         <span class="status-chip chip-warning">
                             <i class="fas fa-exclamation-triangle"></i>
-                            {{ __('Budgeted:') }} {{ number_format($pacing['budgeted']) }} &nbsp;·&nbsp; {{ __('Spent:') }} {{ number_format($pacing['spent']) }}
+                            {{ __('Budgeted:') }} {{ format_amount($pacing['budgeted']) }} &nbsp;·&nbsp; {{ __('Spent:') }} {{ format_amount($pacing['spent']) }}
                         </span>
                     </div>
                 @else
@@ -431,7 +431,7 @@
         <div class="viz-card">
             <div class="viz-head">
                 <h5>{{ __('Cash position, month by month') }}</h5>
-                <p class="sub">{{ __('What the balance stood at on the last day of each month, starting from the opening balance of :amount.', ['amount' => number_format($a['opening_balance'])]) }}</p>
+                <p class="sub">{{ __('What the balance stood at on the last day of each month, starting from the opening balance of :amount.', ['amount' => format_amount($a['opening_balance'])]) }}</p>
             </div>
             <div class="viz-body">
                 <div class="viz-canvas"><canvas id="chartCash"></canvas></div>
@@ -457,8 +457,8 @@
                         @foreach($cash as $p)
                             <tr>
                                 <td>{{ $p['label'] }}</td>
-                                <td class="n {{ $p['net'] >= 0 ? 'mv-up' : 'mv-down' }}">{{ number_format($p['net']) }}</td>
-                                <td class="n">{{ number_format($p['balance']) }}</td>
+                                <td class="n {{ $p['net'] >= 0 ? 'mv-up' : 'mv-down' }}">{{ format_amount($p['net']) }}</td>
+                                <td class="n">{{ format_amount($p['balance']) }}</td>
                             </tr>
                         @endforeach
                         </tbody>
@@ -497,9 +497,9 @@
                         @foreach($months as $m)
                             <tr>
                                 <td>{{ $m['label'] }}</td>
-                                <td class="n">{{ number_format($m['in']) }}</td>
-                                <td class="n">{{ number_format($m['out']) }}</td>
-                                <td class="n {{ $m['net'] >= 0 ? 'mv-up' : 'mv-down' }}">{{ number_format($m['net']) }}</td>
+                                <td class="n">{{ format_amount($m['in']) }}</td>
+                                <td class="n">{{ format_amount($m['out']) }}</td>
+                                <td class="n {{ $m['net'] >= 0 ? 'mv-up' : 'mv-down' }}">{{ format_amount($m['net']) }}</td>
                             </tr>
                         @endforeach
                         </tbody>
@@ -565,8 +565,8 @@
                         @else
                             {{ __('A curve that climbs steeply and early usually means annual costs paid up front rather than genuine overspending — check before reacting. A steady climb above the guide line is the one to act on, and the earlier the cheaper.') }}
                             @if($pacing['projected'] > 0 && $pacing['budgeted'] > 0)
-                                <br><strong>{{ __('At the current rate the year would finish at about :amount.', ['amount' => number_format($pacing['projected'])]) }}</strong>
-                                {{ __('Budget:') }} {{ number_format($pacing['budgeted']) }}.
+                                <br><strong>{{ __('At the current rate the year would finish at about :amount.', ['amount' => format_amount($pacing['projected'])]) }}</strong>
+                                {{ __('Budget:') }} {{ format_amount($pacing['budgeted']) }}.
                             @endif
                         @endif
                     </p>
@@ -598,7 +598,7 @@
                                     </div>
                                 </td>
                                 <td style="width:56px" class="rank-share">{{ number_format($row['share'], 0) }}%</td>
-                                <td style="width:130px" class="rank-num">{{ number_format($row['amount']) }}</td>
+                                <td style="width:130px" class="rank-num">{{ format_amount($row['amount']) }}</td>
                             </tr>
                         @endforeach
                     </table>
@@ -640,7 +640,7 @@
                                     </div>
                                 </td>
                                 <td style="width:56px" class="rank-share">{{ number_format($row['share'], 0) }}%</td>
-                                <td style="width:130px" class="rank-num">{{ number_format($row['amount']) }}</td>
+                                <td style="width:130px" class="rank-num">{{ format_amount($row['amount']) }}</td>
                             </tr>
                         @endforeach
                     </table>
@@ -677,11 +677,11 @@
                         @foreach($a['movers']['rows'] as $row)
                             <tr>
                                 <td>{{ $row['line'] }}</td>
-                                <td class="rank-num">{{ number_format($row['previous']) }}</td>
-                                <td class="rank-num">{{ number_format($row['current']) }}</td>
+                                <td class="rank-num">{{ format_amount($row['previous']) }}</td>
+                                <td class="rank-num">{{ format_amount($row['current']) }}</td>
                                 <td class="rank-num {{ $row['direction'] === 'up' ? 'mv-up' : 'mv-down' }}">
                                     <i class="fas {{ $row['direction'] === 'up' ? 'fa-arrow-up' : 'fa-arrow-down' }}"></i>
-                                    {{ number_format(abs($row['change'])) }}
+                                    {{ format_amount(abs($row['change'])) }}
                                 </td>
                             </tr>
                         @endforeach
@@ -727,7 +727,7 @@
                                     {{ $row['line'] ?: __('— no budget line —') }}
                                 </td>
                                 <td class="rank-num {{ $row['direction'] === 'in' ? 'mv-up' : 'mv-down' }}">
-                                    {{ number_format($row['amount']) }}
+                                    {{ format_amount($row['amount']) }}
                                 </td>
                             </tr>
                         @endforeach
@@ -743,7 +743,7 @@
                 <div class="viz-head">
                     <h5>{{ __('Money on no budget line') }}</h5>
                     <p class="sub">
-                        <strong>{{ number_format($a['unallocated']['amount']) }}</strong>
+                        <strong>{{ format_amount($a['unallocated']['amount']) }}</strong>
                         {{ __('across :n transaction(s) — :pct% of everything that moved. It is in the book and in the bank, and on no line of the Income & Expenditure sheet.', [
                             'n' => $a['unallocated']['count'],
                             'pct' => number_format($a['unallocated']['share'], 1),
@@ -764,7 +764,7 @@
                                 <td>{{ $row['date'] }}</td>
                                 <td class="text-muted">{{ $row['ref'] }}</td>
                                 <td>{{ $row['description'] }}</td>
-                                <td class="rank-num">{{ number_format($row['amount']) }}</td>
+                                <td class="rank-num">{{ format_amount($row['amount']) }}</td>
                             </tr>
                         @endforeach
                         </tbody>

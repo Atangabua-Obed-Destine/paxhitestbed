@@ -930,7 +930,7 @@
                                 <div class="alert-item-meta">
                                     @if($alert->due_date)
                                     <span class="text-danger">
-                                        <i class="fas fa-calendar mr-1"></i>Due: {{ $alert->due_date->format('M d, Y') }}
+                                        <i class="fas fa-calendar mr-1"></i>Due: {{ $alert->due_date->format('d/m/Y') }}
                                     </span>
                                     @endif
                                     <span class="ml-2">by {{ $alert->student->first_name ?? 'Unknown' }}</span>

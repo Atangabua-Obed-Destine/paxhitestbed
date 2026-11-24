@@ -466,7 +466,7 @@
 
     <ol style="font-size:10px; padding-left: 20px; margin-top: 4px;">
         @if($formSettings['fee_enabled'] ?? false)
-        <li>A Receipt of Registration Fee of {{ number_format($formSettings['fee_amount']) }} {{ $currency }} paid into the {{ $institutionName }} or any other evidence of payment.</li>
+        <li>A Receipt of Registration Fee of {{ format_amount($formSettings['fee_amount']) }} {{ $currency }} paid into the {{ $institutionName }} or any other evidence of payment.</li>
         @endif
         @foreach($documents as $key => $doc)
         <li>{{ $doc['label'] }}@if(!empty($doc['description'])) — <em>{{ $doc['description'] }}</em>@endif</li>

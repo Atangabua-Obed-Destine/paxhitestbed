@@ -224,7 +224,7 @@
                             <div class="col-md-3">
                                 <div class="small-box bg-primary">
                                     <div class="inner">
-                                        <h3>{{ number_format(collect($paginatedTransactions)->sum('amount'), 0, '.', ',') }}</h3>
+                                        <h3>{{ format_amount(collect($paginatedTransactions)->sum('amount')) }}</h3>
                                         <p>{{ __('total_amount') }} FCFA</p>
                                     </div>
                                     <div class="icon">
@@ -317,7 +317,7 @@
                                         </td>
                                         <td>{{ $transaction['description'] }}</td>
                                         <td><small class="text-muted">{{ $transaction['reference'] }}</small></td>
-                                        <td class="text-right font-weight-bold">{{ number_format($transaction['amount'], 0, '.', ',') }} FCFA</td>
+                                        <td class="text-right font-weight-bold">{{ format_amount($transaction['amount']) }} FCFA</td>
                                         <td class="text-center">
                                             @if($transaction['is_mapped'])
                                                 <span class="badge badge-success status-badge">

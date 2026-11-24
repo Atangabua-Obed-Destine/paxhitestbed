@@ -62,6 +62,9 @@ class LedgerHealth
         'payroll' => [
             'table' => 'payrolls', 'amount' => 'net_salary', 'date' => 'pay_date',
             'label' => 'Payroll', 'should_post' => 'status = 1',
+            'entry_amount' => "(SELECT COALESCE(SUM(pl.credit - pl.debit), 0) FROM journal_entry_lines pl
+                JOIN chart_of_accounts pa ON pa.id = pl.account_id
+                WHERE pl.journal_entry_id = j.id AND pa.account_code LIKE '5%')",
         ],
     ];
 
@@ -461,12 +464,18 @@ class LedgerHealth
 
             $dateDrift = array_merge($dateDrift, $drift->all());
 
+            // What the entry says moved. For a payroll that is the cash it
+            // paid out: its total also carries the tax, CNPS and advance
+            // repayments withheld, so comparing that with net pay flagged
+            // every paid payroll as wrong.
+            $entryAmount = $meta['entry_amount'] ?? 'j.total_debit';
+
             $amounts = DB::table('journal_entries as j')
                 ->join($meta['table'] . ' as s', 's.id', '=', 'j.reference_id')
                 ->where('j.reference_type', $type)
                 ->where('j.is_reversed', 0)
                 ->whereNull('j.deleted_at')
-                ->whereRaw("ABS(j.total_debit - s.{$meta['amount']}) > 0.009")
+                ->whereRaw("ABS({$entryAmount} - s.{$meta['amount']}) > 0.009")
                 ->select('j.id', 'j.reference_id', 'j.total_debit',
                     DB::raw("s.{$meta['amount']} as source_amount"), DB::raw("'{$type}' as kind"))
                 ->get();

@@ -59,6 +59,7 @@
     @else
         {{-- No letterhead configured: compose one from Settings rather than
              leaving the document with no heading. --}}
+        {!! $letterhead->stateBlock() !!}
         <div class="doc-masthead-fallback">
             @php
                 $logo = optional($letterheadSetting)->logo_path;

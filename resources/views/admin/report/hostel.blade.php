@@ -91,7 +91,7 @@
                                         <td>{{ $row->hostelable->first_name ?? '' }} {{ $row->hostelable->last_name ?? '' }}</td>
                                         <td>{{ $row->room->hostel->name ?? '' }}</td>
                                         <td>{{ $row->room->name ?? '' }} ({{ $row->room->roomType->title ?? '' }})</td>
-                                        <td>{{ number_format((float)$row->room->roomType->fee ?? 0, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->room->roomType->fee ?? 0) }} {!! $setting->currency_symbol !!}</td>
                                         <td>
                                             @if( $row->hostelable->gender == 1 )
                                             {{ __('gender_male') }}
@@ -112,7 +112,7 @@
                                         <th></th>
                                         <th></th>
                                         <th>{{ __('field_grand_total') }}</th>
-                                        <th>{{ number_format((float)$total_fee, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$total_fee) }} {!! $setting->currency_symbol !!}</th>
                                         <th></th>
                                         <th></th>
                                     </tr>

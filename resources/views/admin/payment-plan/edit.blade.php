@@ -28,7 +28,7 @@
                                         <p><strong>{{ __('field_fee') }}:</strong> {{ $row->fee->category->title ?? '' }}</p>
                                     </div>
                                     <div class="col-md-6">
-                                        <p><strong>{{ __('field_total_amount') }}:</strong> {{ number_format($row->total_amount, 2) }} {!! $setting->currency_symbol !!}</p>
+                                        <p><strong>{{ __('field_total_amount') }}:</strong> {{ format_amount($row->total_amount) }} {!! $setting->currency_symbol !!}</p>
                                         <p><strong>{{ __('field_installments') }}:</strong> {{ $row->installments_count }}</p>
                                     </div>
                                 </div>

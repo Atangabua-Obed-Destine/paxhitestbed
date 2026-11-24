@@ -206,9 +206,9 @@
                                             {!! $row->admissionFee->status_badge !!}
                                             <br>
                                             <small class="text-muted">
-                                                Amount: <strong>{{ number_format($row->admissionFee->fee_amount, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol ?? '' !!}</strong> | 
-                                                Paid: <strong>{{ number_format($row->admissionFee->paid_amount, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol ?? '' !!}</strong> | 
-                                                Balance: <strong>{{ number_format($row->admissionFee->remaining_balance, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol ?? '' !!}</strong>
+                                                Amount: <strong>{{ format_amount($row->admissionFee->fee_amount) }} {!! $setting->currency_symbol ?? '' !!}</strong> | 
+                                                Paid: <strong>{{ format_amount($row->admissionFee->paid_amount) }} {!! $setting->currency_symbol ?? '' !!}</strong> | 
+                                                Balance: <strong>{{ format_amount($row->admissionFee->remaining_balance) }} {!! $setting->currency_symbol ?? '' !!}</strong>
                                             </small>
                                         </td>
                                     </tr>

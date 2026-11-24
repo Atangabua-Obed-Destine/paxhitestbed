@@ -49,8 +49,11 @@ class PayrollTaxBreakdownService
      */
     public function forPayroll(Payroll $payroll): array
     {
+        // taxable_salary is what the payroll was actually taxed on: the basic
+        // pay plus any allowance whose type is set as taxable. Payrolls from
+        // before that setting existed have none, and were taxed on the basic.
         return $this->forSalary(
-            (float) $payroll->total_earning,
+            (float) ($payroll->taxable_salary ?? $payroll->total_earning),
             Carbon::parse($payroll->salary_month),
             $this->exemptionsFor($payroll->user_id, $payroll->salary_month)
         );

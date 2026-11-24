@@ -3,7 +3,7 @@
 @section('content')
 
 @php
-    $money = fn ($amount) => number_format((float) $amount, 0);
+    $money = fn ($amount) => format_amount((float) $amount);
     $canApply = auth()->user()->can('second-instalment-catchup-apply');
     $billable = $rows->whereNull('blocked');
     $blocked = $rows->whereNotNull('blocked');

@@ -178,7 +178,7 @@
                                     <tr>
                                         <td><strong>#{{ $row->id }}</strong></td>
                                         <td>
-                                            <i class="far fa-calendar text-primary"></i> {{ $row->created_at->format('M d, Y') }}<br>
+                                            <i class="far fa-calendar text-primary"></i> {{ $row->created_at->format('d/m/Y') }}<br>
                                             <i class="far fa-clock text-muted"></i> <small class="text-muted">{{ $row->created_at->format('h:i A') }}</small><br>
                                             <small class="text-info">{{ $row->created_at->diffForHumans() }}</small>
                                         </td>

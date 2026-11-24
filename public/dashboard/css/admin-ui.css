@@ -1,0 +1,136 @@
+/*
+ * Shared admin components the template never styled.
+ *
+ * Stat cards (".small-box", AdminLTE markup used by the accounting and
+ * security screens, and ".kpi-card") are plain white cards: the figure in
+ * dark ink, its label underneath, the icon muted. Colour is kept only as a
+ * thin left accent, and only where the page gives it a meaning through a
+ * bg-* class (overdue, paid, warning). Figures line up with tabular digits.
+ */
+
+.small-box {
+    position: relative;
+    display: block;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    min-height: 84px;
+    background: #fff;
+    color: #1e293b;
+    border: 1px solid #dde2e8;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    overflow: hidden;
+}
+.small-box > .inner { position: relative; z-index: 1; padding-right: 44px; }
+.small-box > .inner h3,
+.small-box > .inner h4,
+.small-box > .inner h5 {
+    margin: 0 0 4px;
+    color: #0f172a;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.small-box > .inner h4 { font-size: 19px; }
+.small-box > .inner h5 { font-size: 17px; }
+.small-box > .inner p {
+    margin: 0;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+}
+.small-box > .icon {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    color: #94a3b8;
+    font-size: 24px;
+    line-height: 1;
+}
+.small-box > .small-box-footer {
+    display: block;
+    margin: 12px -16px -14px;
+    padding: 6px 16px;
+    border-top: 1px solid #eef0f3;
+    color: #475569;
+    font-size: 12px;
+    text-decoration: none;
+}
+.small-box > .small-box-footer:hover { background: #f8fafc; color: #0f172a; }
+
+/* bg-* on a stat card names what the figure means: a left accent, not a fill.
+   Bootstrap's bg-* use !important, so this has to as well. */
+.small-box[class*="bg-"] { background: #fff !important; color: #1e293b !important; border-left-width: 4px; }
+.small-box.bg-primary   { border-left-color: #1d4ed8; }
+.small-box.bg-info      { border-left-color: #0369a1; }
+.small-box.bg-success   { border-left-color: #15803d; }
+.small-box.bg-warning   { border-left-color: #b45309; }
+.small-box.bg-orange    { border-left-color: #c2410c; }
+.small-box.bg-danger    { border-left-color: #b91c1c; }
+.small-box.bg-secondary { border-left-color: #64748b; }
+.small-box.bg-primary   > .icon { color: #1d4ed8; opacity: .55; }
+.small-box.bg-info      > .icon { color: #0369a1; opacity: .55; }
+.small-box.bg-success   > .icon { color: #15803d; opacity: .55; }
+.small-box.bg-warning   > .icon { color: #b45309; opacity: .55; }
+.small-box.bg-orange    > .icon { color: #c2410c; opacity: .55; }
+.small-box.bg-danger    > .icon { color: #b91c1c; opacity: .55; }
+.small-box.bg-secondary > .icon { color: #64748b; opacity: .55; }
+
+/* Headline figures on dashboards (academic health, senate deliberation) */
+.kpi-card.kpi-neutral {
+    background: #fff;
+    color: #1e293b;
+    border: 1px solid #dde2e8 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important;
+}
+.kpi-card.kpi-neutral:hover { transform: none !important; box-shadow: 0 1px 2px rgba(15, 23, 42, .04) !important; }
+.kpi-card.kpi-neutral .kpi-value,
+.kpi-card.kpi-neutral h2,
+.kpi-card.kpi-neutral h3 { color: #0f172a; font-variant-numeric: tabular-nums; }
+.kpi-card.kpi-neutral .kpi-label,
+.kpi-card.kpi-neutral small { color: #64748b; opacity: 1; }
+.kpi-card.kpi-good    { border-left: 4px solid #15803d !important; }
+.kpi-card.kpi-warn    { border-left: 4px solid #b45309 !important; }
+.kpi-card.kpi-bad     { border-left: 4px solid #b91c1c !important; }
+
+/* Plain cards used as stat tiles (security, e-library): same look as .small-box */
+.card.stat-tile {
+    background: #fff;
+    color: #1e293b;
+    border: 1px solid #dde2e8;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+.card.stat-tile .text-white { color: #0f172a !important; }
+.card.stat-tile small.text-white,
+.card.stat-tile h6.text-white { color: #64748b !important; font-weight: 600; }
+.card.stat-tile i.text-white { color: #94a3b8 !important; }
+.card.stat-tile h3 { font-variant-numeric: tabular-nums; }
+.card.stat-tile .stat-figure { font-size: 30px; font-weight: 600; line-height: 1.2; margin-bottom: 6px; color: #0f172a; font-variant-numeric: tabular-nums; }
+.card.stat-tile .stat-label { font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 2px; }
+.card.stat-tile .stat-note { font-size: 12px; color: #64748b; }
+.card.stat-tile.stat-primary { border-left: 4px solid #1d4ed8 !important; }
+.card.stat-tile.stat-info    { border-left: 4px solid #0369a1 !important; }
+.card.stat-tile.stat-success { border-left: 4px solid #15803d !important; }
+.card.stat-tile.stat-warning { border-left: 4px solid #b45309 !important; }
+.card.stat-tile.stat-danger  { border-left: 4px solid #b91c1c !important; }
+
+/* Information banners that used to be purple gradients */
+.alert.alert-plain {
+    background: #f1f5f9;
+    color: #1e293b;
+    border: 1px solid #dde2e8;
+    border-left: 4px solid #1d4ed8;
+}
+.alert.alert-plain a { color: #1d4ed8; }
+
+@media print {
+    .small-box, .kpi-card.kpi-neutral { box-shadow: none !important; break-inside: avoid; }
+}

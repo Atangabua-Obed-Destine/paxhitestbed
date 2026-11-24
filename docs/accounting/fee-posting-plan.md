@@ -1,0 +1,92 @@
+# Fee posting: what is wrong today, and the plan to fix it
+
+A plan for decision. Nothing described here has been built or changed. The
+figures come from the testbed (`php artisan fees:credit-audit`, run on 23 Nov
+2026); production will have its own figures.
+
+## How fees reach the books today
+
+- A fee is recorded in the books only when money is received (cash basis).
+  Assigning a fee posts nothing; the balance sheet does not show what
+  students owe.
+- Each fee carries **one** ledger entry for everything paid on it. Every new
+  payment cancels that entry and posts the fee's total again, dated on the
+  **latest** payment.
+- Since 23 Nov the cash side follows the fee's payment method or payment
+  account (cash box, bank, mobile money). Because there is still one entry per
+  fee, a fee paid partly in cash and partly by bank posts entirely to the
+  account of the **last** payment.
+
+## What that gets wrong
+
+| # | Problem | Testbed figure | Effect on the books |
+|---|---|---|---|
+| 1 | Overpayment credit moved from one fee to another was posted again as cash received | **6,079,667** over 54 fees, Apr–Sep 2026 | Tuition revenue (711) and cash (571) both overstated by that amount |
+| 2 | Credit raised twice for the same overpayment, already spent on other fees | **759,000** on 5 fees | Students hold credit no payment backs; needs a person to decide |
+| 3 | Instalments move to the date of the last payment | every fee paid in more than one go | October cash shows in November, so monthly reports and the cash flow mislead |
+| 4 | Overpayments are counted as revenue straight away | part of #1 | The school shows income it has not earned yet; no liability for money it holds |
+| 5 | Mixed payment methods on one fee post to one account | any fee paid by two methods | The bank account in the books does not match the bank statement |
+| 6 | Fees marked paid with no receipt on file | 22 fees, 2,363,333 | Not a posting error, but cannot be confirmed from the system |
+| 7 | Credit applied to fees that were later deleted | 5 applications, 390,000 | Audit trail only; check each student |
+
+The reports that read the fee screens already correct #1 (they use the net
+figure); the **ledger** does not, which is why the income statement shows
+about 6.1M more fee revenue than the fee screens.
+
+## The plan, in three steps
+
+### Step 1 — correct the double-counted credit (small, ready now)
+
+Run `php artisan fees:credit-audit --correct-ledger`. It re-posts the 54 fees
+at the cash they actually received. Every correction is a reversal plus a new
+entry; nothing is deleted.
+
+- **Effect:** 2026 tuition revenue and cash in the books both fall by
+  6,079,667. The income statement then agrees with the fee screens.
+- **Needs:** your accountant's approval, because it changes 2026 figures.
+- Problems #2, #6 and #7 stay as reports for a person to work through; no
+  tool should guess at them.
+
+### Step 2 — hold overpayments as a liability (medium)
+
+As edutrustshsm already does:
+
+- the excess over what a fee is due is credited to **419 Clients créditeurs**
+  (money held for the student), not to revenue;
+- when the credit is used on another fee: **Dr 419 / Cr the fee's revenue
+  account**, so the money becomes revenue once, when it is earned;
+- a refund of credit: **Dr 419 / Cr cash**.
+
+This stops #1 and #4 from happening again. It needs Step 1 first, and a
+re-post of fees that currently hold credit.
+
+### Step 3 — one ledger entry per payment (large)
+
+Add a `fee_payments` record: one row per receipt with its amount, date,
+payment method, payment account and receipt number. Each row posts its own
+entry, on its own date, to its own cash account; reversing a payment reverses
+that row only.
+
+- Fixes #3 and #5 completely.
+- History is rebuilt from what exists (receipts, payment-account
+  transactions, student statement lines). Where a fee's history cannot be
+  split — only a total and a last date survive — it becomes one row marked
+  "carried from before", posted as it is today.
+- The biggest change of the three: new table, changes to fee collection,
+  reversal and receipts, and a full re-post of fee history, which re-dates
+  revenue into the months it was actually received.
+
+## Decisions needed
+
+1. Approve Step 1 (the 6,079,667 correction) — with the accountant.
+2. Decide what to do with the 759,000 of unbacked credit already spent (#2):
+   honour it as a discount, or recover it from the students concerned.
+3. Confirm the 22 fees without receipts (#6) against the cash book.
+4. Approve Steps 2 and 3, in that order, or Step 2 only.
+
+## Not in this plan
+
+Recording fees as owed when they are assigned (Dr 411 / Cr revenue, accrual
+accounting). That is a separate policy decision for the school and its
+accountant; it would make the balance sheet show what students owe, and is
+easiest to add after Step 3.

@@ -73,14 +73,19 @@ class TransactionAutoMapService
             // Create (or re-activate, after a prior reversal) the transaction mapping.
             // The (transaction_type, transaction_id) pair is unique, so re-mapping must
             // reuse the same row rather than insert a second one.
+            // The mapping decides the income or expense side; the cash side
+            // is where the money actually went (cash box, bank, wallet).
+            [$debitAccountId, $creditAccountId] = app(\App\Services\Accounting\CashAccounts::class)
+                ->apply((int) $defaultMapping->debit_account_id, (int) $defaultMapping->credit_account_id, $transactionType, (int) $transactionId);
+
             $mapping = TransactionMapping::updateOrCreate(
                 [
                     'transaction_type' => $transactionType,
                     'transaction_id' => $transactionId,
                 ],
                 [
-                    'debit_account_id' => $defaultMapping->debit_account_id,
-                    'credit_account_id' => $defaultMapping->credit_account_id,
+                    'debit_account_id' => $debitAccountId,
+                    'credit_account_id' => $creditAccountId,
                     'amount' => $transactionData['amount'],
                     'transaction_date' => $transactionData['date'],
                     'description' => $defaultMapping->description ?? $transactionData['description'],
@@ -155,7 +160,7 @@ class TransactionAutoMapService
                         = $this->reversalPlacement($original);
 
                     $reversal = JournalEntry::create([
-                        'entry_number'        => $this->generateEntryNumber(),
+                        'entry_number'        => JournalEntry::generateEntryNumber($reversalDate),
                         'entry_date'          => $reversalDate,
                         'fiscal_year_id'      => $reversalYearId,
                         'accounting_period_id'=> $reversalPeriodId,
@@ -331,7 +336,7 @@ class TransactionAutoMapService
             : null;
 
         // Generate entry number
-        $entryNumber = $this->generateEntryNumber();
+        $entryNumber = JournalEntry::generateEntryNumber($mapping->transaction_date);
 
         // Create journal entry
         $journalEntry = JournalEntry::create([

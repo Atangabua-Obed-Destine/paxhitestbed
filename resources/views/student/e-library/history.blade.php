@@ -86,7 +86,7 @@
                                                 {{ $reading->last_read_at->diffForHumans() }}
                                                 <br>
                                                 <small class="text-muted">
-                                                    Started: {{ $reading->started_at->format('M d, Y') }}
+                                                    Started: {{ $reading->started_at->format('d/m/Y') }}
                                                 </small>
                                             </td>
                                             <td>
@@ -95,7 +95,7 @@
                                                         <i class="mdi mdi-check-circle"></i> Completed
                                                     </span>
                                                     <br>
-                                                    <small class="text-muted">{{ $reading->completed_at->format('M d, Y') }}</small>
+                                                    <small class="text-muted">{{ $reading->completed_at->format('d/m/Y') }}</small>
                                                 @else
                                                     <span class="badge badge-warning">
                                                         <i class="mdi mdi-book-open"></i> In Progress

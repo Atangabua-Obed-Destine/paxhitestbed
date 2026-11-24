@@ -152,7 +152,7 @@
                                                 <td>{{ $child->account_code }}</td>
                                                 <td>{{ $child->account_name }}</td>
                                                 <td>{{ __(strtolower($child->account_type)) }}</td>
-                                                <td class="text-right">{{ number_format($child->current_balance, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right">{{ format_amount($child->current_balance) }} FCFA</td>
                                                 <td>
                                                     <a href="{{ route('admin.chart-of-accounts.show', $child->id) }}" class="btn btn-info btn-xs">
                                                         <i class="fas fa-eye"></i>
@@ -199,9 +199,9 @@
                                                 <td>{{ \Carbon\Carbon::parse($transaction->journalEntry->entry_date)->format('d M Y') }}</td>
                                                 <td>{{ $transaction->journalEntry->entry_number }}</td>
                                                 <td>{{ $transaction->description }}</td>
-                                                <td class="text-right">{{ $transaction->debit > 0 ? number_format($transaction->debit, 0, ',', ' ') : '-' }}</td>
-                                                <td class="text-right">{{ $transaction->credit > 0 ? number_format($transaction->credit, 0, ',', ' ') : '-' }}</td>
-                                                <td class="text-right"><strong>{{ number_format($runningBalance, 0, ',', ' ') }}</strong></td>
+                                                <td class="text-right">{{ $transaction->debit > 0 ? format_amount($transaction->debit) : '-' }}</td>
+                                                <td class="text-right">{{ $transaction->credit > 0 ? format_amount($transaction->credit) : '-' }}</td>
+                                                <td class="text-right"><strong>{{ format_amount($runningBalance) }}</strong></td>
                                                 <td>
                                                     <a href="{{ route('admin.journal-entries.show', $transaction->journal_entry_id) }}" class="btn btn-info btn-xs">
                                                         <i class="fas fa-eye"></i>

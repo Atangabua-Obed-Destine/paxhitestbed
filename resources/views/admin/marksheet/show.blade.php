@@ -202,7 +202,7 @@
                     </div>
                     <div class="ams-field">
                         <span class="ams-field-label">Date Printed</span>
-                        <span class="ams-field-value">{{ date('F d, Y') }}</span>
+                        <span class="ams-field-value">{{ date('j F Y') }}</span>
                     </div>
                 </div>
             </div>
@@ -660,7 +660,7 @@
                     It reflects published grades and official enrollment records as of the date printed.</p>
                 </div>
                 <div class="ams-footer-right">
-                    <p class="ams-footer-generated">Generated: {{ date('F d, Y \a\t h:i A') }}</p>
+                    <p class="ams-footer-generated">Generated: {{ date('j F Y, H:i') }}</p>
                     <p class="ams-footer-system">{{ $setting->title ?? 'Institution' }} &mdash; Admin Portal</p>
                 </div>
             </div>

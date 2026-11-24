@@ -18,11 +18,11 @@
                     </div>
                     <div class="card-block">
                         <!-- AUTOMATED WORKFLOW NOTICE -->
-                        <div class="alert alert-success mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white;">
+                        <div class="alert alert-plain mb-3">
                             <div class="d-flex align-items-center">
-                                <i class="fas fa-robot fa-2x me-3"></i>
+                                <i class="fas fa-sync-alt fa-lg me-3" style="color: #1d4ed8;"></i>
                                 <div>
-                                    <h6 class="mb-1 text-white"><strong>{{ __('Automated Resit Workflow') }}</strong></h6>
+                                    <h6 class="mb-1"><strong>{{ __('Automated Resit Workflow') }}</strong></h6>
                                     <p class="mb-0" style="font-size: 13px; opacity: 0.95;">
                                         {{ __('This system now operates fully automatically. When finance verifies payment, resits are automatically scheduled to the next available resit semester, and students are automatically enrolled. This page is for viewing and monitoring only.') }}
                                     </p>

@@ -56,7 +56,7 @@
                                     <div class="card bg-info text-white mb-0">
                                         <div class="card-block">
                                             <h6 class="text-white">{{ __('Total Amount Assigned') }}</h6>
-                                            <h3 class="text-white">{{ number_format($statistics['total_fees_assigned']) }} XAF</h3>
+                                            <h3 class="text-white">{{ format_amount($statistics['total_fees_assigned']) }} XAF</h3>
                                         </div>
                                     </div>
                                 </div>
@@ -81,7 +81,7 @@
                                                 <tr>
                                                     <td><span class="badge badge-info">{{ $category }}</span></td>
                                                     <td>{{ $data['count'] }}</td>
-                                                    <td>{{ number_format($data['amount']) }} XAF</td>
+                                                    <td>{{ format_amount($data['amount']) }} XAF</td>
                                                     <td>{{ number_format($data['amount'] / $data['count']) }} XAF</td>
                                                 </tr>
                                                 @endforeach

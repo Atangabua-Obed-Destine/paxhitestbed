@@ -65,19 +65,19 @@
                                             </tr>
                                             <tr>
                                                 <td>{{ __('total_acquisition_cost') }}:</td>
-                                                <td class="text-right">{{ number_format($item['total_acquisition_cost'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right">{{ format_amount($item['total_acquisition_cost'] ?? 0) }} FCFA</td>
                                             </tr>
                                             <tr>
                                                 <td>{{ __('depreciation_this_year') }}:</td>
-                                                <td class="text-right text-warning">{{ number_format($item['depreciation_this_year'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right text-warning">{{ format_amount($item['depreciation_this_year'] ?? 0) }} FCFA</td>
                                             </tr>
                                             <tr>
                                                 <td>{{ __('accumulated_depreciation') }}:</td>
-                                                <td class="text-right text-danger">{{ number_format($item['accumulated_depreciation'] ?? 0, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-right text-danger">{{ format_amount($item['accumulated_depreciation'] ?? 0) }} FCFA</td>
                                             </tr>
                                             <tr class="border-top">
                                                 <td><strong>{{ __('net_book_value') }}:</strong></td>
-                                                <td class="text-right"><strong class="text-success">{{ number_format($item['net_book_value'] ?? 0, 0, ',', ' ') }} FCFA</strong></td>
+                                                <td class="text-right"><strong class="text-success">{{ format_amount($item['net_book_value'] ?? 0) }} FCFA</strong></td>
                                             </tr>
                                         </table>
                                         
@@ -119,19 +119,19 @@
                                     </div>
                                     <div class="col-md-3">
                                         <div class="text-center">
-                                            <h4 class="text-info">{{ number_format(collect($summary)->sum('total_acquisition_cost'), 0, ',', ' ') }}</h4>
+                                            <h4 class="text-info">{{ format_amount(collect($summary)->sum('total_acquisition_cost')) }}</h4>
                                             <small class="text-muted">{{ __('total_acquisition_cost') }} (FCFA)</small>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="text-center">
-                                            <h4 class="text-warning">{{ number_format(collect($summary)->sum('depreciation_this_year'), 0, ',', ' ') }}</h4>
+                                            <h4 class="text-warning">{{ format_amount(collect($summary)->sum('depreciation_this_year')) }}</h4>
                                             <small class="text-muted">{{ __('depreciation_this_year') }} (FCFA)</small>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
                                         <div class="text-center">
-                                            <h4 class="text-success">{{ number_format(collect($summary)->sum('net_book_value'), 0, ',', ' ') }}</h4>
+                                            <h4 class="text-success">{{ format_amount(collect($summary)->sum('net_book_value')) }}</h4>
                                             <small class="text-muted">{{ __('net_book_value') }} (FCFA)</small>
                                         </div>
                                     </div>

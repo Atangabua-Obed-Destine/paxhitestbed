@@ -81,15 +81,15 @@
                                     @endphp
                                     <tr>
                                         <td><strong>{{ $projection['month'] }}</strong></td>
-                                        <td class="text-right">{{ number_format($projection['planned'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($projection['actual'], 2) }}</td>
+                                        <td class="text-right">{{ format_amount($projection['planned']) }}</td>
+                                        <td class="text-right">{{ format_amount($projection['actual']) }}</td>
                                         <td class="text-right {{ $variance >= 0 ? 'text-success' : 'text-danger' }}">
-                                            {{ number_format($variance, 2) }}
+                                            {{ format_amount($variance) }}
                                         </td>
-                                        <td class="text-right">{{ number_format($projection['cumulative_planned'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($projection['cumulative_actual'], 2) }}</td>
+                                        <td class="text-right">{{ format_amount($projection['cumulative_planned']) }}</td>
+                                        <td class="text-right">{{ format_amount($projection['cumulative_actual']) }}</td>
                                         <td class="text-right {{ $cumulativeVariance >= 0 ? 'text-success' : 'text-danger' }}">
-                                            {{ number_format($cumulativeVariance, 2) }}
+                                            {{ format_amount($cumulativeVariance) }}
                                         </td>
                                     </tr>
                                     @endforeach

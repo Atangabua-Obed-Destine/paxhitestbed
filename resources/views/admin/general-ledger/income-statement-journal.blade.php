@@ -51,6 +51,7 @@
                                     </div>
                                     <div class="form-group mr-3">
                                         <div class="custom-control custom-switch">
+                                            <input type="hidden" name="use_journal_entries" value="0">
                                             <input type="checkbox" class="custom-control-input" id="use_journal_entries" name="use_journal_entries" value="1" checked>
                                             <label class="custom-control-label" for="use_journal_entries">
                                                 <i class="fas fa-book"></i> {{ __('use_accounting_view') }}
@@ -97,7 +98,7 @@
                                             <i class="fas fa-angle-right text-muted"></i> 
                                             {{ $account['account_code'] }} - {{ $account['account_name'] }}
                                         </td>
-                                        <td class="text-right">{{ number_format($account['amount'], 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($account['amount']) }}</td>
                                     </tr>
                                     @empty
                                     <tr>
@@ -107,7 +108,7 @@
                                     
                                     <tr class="table-success font-weight-bold">
                                         <td><strong>{{ __('total_revenue') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalRevenue, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalRevenue) }}</strong></td>
                                     </tr>
                                     
                                     <!-- EXPENSES SECTION (Class 6) -->
@@ -126,7 +127,7 @@
                                             <i class="fas fa-angle-right text-muted"></i> 
                                             {{ $account['account_code'] }} - {{ $account['account_name'] }}
                                         </td>
-                                        <td class="text-right">{{ number_format($account['amount'], 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($account['amount']) }}</td>
                                     </tr>
                                     @empty
                                     <tr>
@@ -136,13 +137,13 @@
                                     
                                     <tr class="table-danger font-weight-bold">
                                         <td><strong>{{ __('total_expenses') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalExpenses, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalExpenses) }}</strong></td>
                                     </tr>
                                     
                                     <!-- OPERATING PROFIT/LOSS -->
                                     <tr class="table-{{ $operatingProfit >= 0 ? 'primary' : 'warning' }} font-weight-bold">
                                         <td><strong>{{ __('operating_result') }} ({{ __('resultat_exploitation') }})</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($operatingProfit, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($operatingProfit) }}</strong></td>
                                     </tr>
                                     
                                     <!-- OTHER RESULTS SECTION (Class 8) -->
@@ -162,13 +163,13 @@
                                             <i class="fas fa-angle-right text-muted"></i> 
                                             {{ $account['account_code'] }} - {{ $account['account_name'] }}
                                         </td>
-                                        <td class="text-right">{{ number_format($account['amount'], 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($account['amount']) }}</td>
                                     </tr>
                                     @endforeach
                                     
                                     <tr class="table-info font-weight-bold">
                                         <td><strong>{{ __('total_other_results') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalOtherResults, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalOtherResults) }}</strong></td>
                                     </tr>
                                     @endif
                                     
@@ -183,7 +184,7 @@
                                                 @endif
                                             </strong>
                                         </td>
-                                        <td class="text-right"><strong>{{ number_format(abs($netProfit), 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount(abs($netProfit)) }}</strong></td>
                                     </tr>
                                 </tbody>
                             </table>

@@ -18,11 +18,13 @@ class LetterheadSetting extends Model
 
     protected $fillable = [
         'mode', 'html', 'reserve_height_mm', 'status', 'updated_by',
+        'state_block', 'ministry_fr', 'ministry_en', 'delegation_fr', 'delegation_en',
     ];
 
     protected $casts = [
         'reserve_height_mm' => 'integer',
         'status' => 'boolean',
+        'state_block' => 'boolean',
     ];
 
     /**

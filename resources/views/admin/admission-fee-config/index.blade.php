@@ -146,7 +146,7 @@
                                     <tr>
                                         <th>{{ __('Fee Amount') }}:</th>
                                         <td>
-                                            <strong>{{ number_format($currentFeeAmount, $setting->decimal_place ?? 2) }}</strong> 
+                                            <strong>{{ format_amount($currentFeeAmount) }}</strong> 
                                             {!! $setting->currency_symbol !!}
                                         </td>
                                     </tr>

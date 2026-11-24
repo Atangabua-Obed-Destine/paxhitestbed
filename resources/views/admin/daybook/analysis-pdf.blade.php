@@ -121,20 +121,20 @@
     <tr>
         <td>
             <div class="lbl">{{ __('Money in') }}</div>
-            <div class="val">{{ number_format($a['totals']['in']) }}</div>
+            <div class="val">{{ format_amount($a['totals']['in']) }}</div>
             <div class="note">{{ __('Received') }}</div>
         </td>
         <td>
             <div class="lbl">{{ __('Money out') }}</div>
-            <div class="val">{{ number_format($a['totals']['out']) }}</div>
+            <div class="val">{{ format_amount($a['totals']['out']) }}</div>
             <div class="note">{{ __('Spent') }}</div>
         </td>
         <td>
             <div class="lbl">{{ __('Closing cash position') }}</div>
-            <div class="val">{{ number_format($closing) }}</div>
+            <div class="val">{{ format_amount($closing) }}</div>
             <div class="note">
                 @if($lowest < 0)
-                    {{ __('Lowest point :amount', ['amount' => number_format($lowest)]) }}
+                    {{ __('Lowest point :amount', ['amount' => format_amount($lowest)]) }}
                 @else
                     {{ __('Never went below zero') }}
                 @endif
@@ -174,18 +174,18 @@
     @foreach($cash as $i => $p)
         <tr>
             <td>{{ $a['months'][$i]['period']->name ?? $p['label'] }}</td>
-            <td class="num">{{ number_format($a['months'][$i]['in'] ?? 0) }}</td>
-            <td class="num">{{ number_format($a['months'][$i]['out'] ?? 0) }}</td>
-            <td class="num {{ $p['net'] >= 0 ? 'up' : 'down' }}">{{ number_format($p['net']) }}</td>
-            <td class="num">{{ number_format($p['balance']) }}</td>
+            <td class="num">{{ format_amount($a['months'][$i]['in'] ?? 0) }}</td>
+            <td class="num">{{ format_amount($a['months'][$i]['out'] ?? 0) }}</td>
+            <td class="num {{ $p['net'] >= 0 ? 'up' : 'down' }}">{{ format_amount($p['net']) }}</td>
+            <td class="num">{{ format_amount($p['balance']) }}</td>
         </tr>
     @endforeach
     <tr class="total">
         <td>{{ __('Total') }}</td>
-        <td class="num">{{ number_format($a['totals']['in']) }}</td>
-        <td class="num">{{ number_format($a['totals']['out']) }}</td>
-        <td class="num">{{ number_format($a['totals']['net']) }}</td>
-        <td class="num">{{ number_format($closing) }}</td>
+        <td class="num">{{ format_amount($a['totals']['in']) }}</td>
+        <td class="num">{{ format_amount($a['totals']['out']) }}</td>
+        <td class="num">{{ format_amount($a['totals']['net']) }}</td>
+        <td class="num">{{ format_amount($closing) }}</td>
     </tr>
     </tbody>
 </table>
@@ -229,7 +229,7 @@
                 <td>{{ $row['code'] }}</td>
                 <td>{{ $row['name'] }}</td>
                 <td class="num">{{ number_format($row['share'], 0) }}%</td>
-                <td class="num">{{ number_format($row['amount']) }}</td>
+                <td class="num">{{ format_amount($row['amount']) }}</td>
             </tr>
         @endforeach
         </tbody>
@@ -256,7 +256,7 @@
                 <td>{{ $row['code'] }}</td>
                 <td>{{ $row['name'] }}</td>
                 <td class="num">{{ number_format($row['share'], 0) }}%</td>
-                <td class="num">{{ number_format($row['amount']) }}</td>
+                <td class="num">{{ format_amount($row['amount']) }}</td>
             </tr>
         @endforeach
         </tbody>
@@ -276,10 +276,10 @@
         @foreach($a['movers']['rows'] as $row)
             <tr>
                 <td>{{ $row['line'] }}</td>
-                <td class="num">{{ number_format($row['previous']) }}</td>
-                <td class="num">{{ number_format($row['current']) }}</td>
+                <td class="num">{{ format_amount($row['previous']) }}</td>
+                <td class="num">{{ format_amount($row['current']) }}</td>
                 <td class="num {{ $row['direction'] === 'up' ? 'up' : 'down' }}">
-                    {{ $row['direction'] === 'up' ? '+' : '−' }}{{ number_format(abs($row['change'])) }}
+                    {{ $row['direction'] === 'up' ? '+' : '−' }}{{ format_amount(abs($row['change'])) }}
                 </td>
             </tr>
         @endforeach
@@ -304,7 +304,7 @@
                 <td>{{ $row['ref'] }}</td>
                 <td>{{ $row['description'] }}</td>
                 <td class="{{ $row['line'] ? '' : 'none' }}">{{ $row['line'] ?: __('no budget line') }}</td>
-                <td class="num {{ $row['direction'] === 'in' ? 'up' : 'down' }}">{{ number_format($row['amount']) }}</td>
+                <td class="num {{ $row['direction'] === 'in' ? 'up' : 'down' }}">{{ format_amount($row['amount']) }}</td>
             </tr>
         @endforeach
         </tbody>
@@ -314,7 +314,7 @@
 @if($a['unallocated']['count'] > 0)
     <h2>{{ __('Money on no budget line') }}</h2>
     <p class="sub">
-        <strong>{{ number_format($a['unallocated']['amount']) }}</strong>
+        <strong>{{ format_amount($a['unallocated']['amount']) }}</strong>
         {{ __('across :n transaction(s), :pct% of everything that moved. Counted in the book, absent from every line of the Income & Expenditure sheet.', [
             'n' => $a['unallocated']['count'],
             'pct' => number_format($a['unallocated']['share'], 1),
@@ -333,7 +333,7 @@
                 <td>{{ $row['date'] }}</td>
                 <td>{{ $row['ref'] }}</td>
                 <td>{{ $row['description'] }}</td>
-                <td class="num">{{ number_format($row['amount']) }}</td>
+                <td class="num">{{ format_amount($row['amount']) }}</td>
             </tr>
         @endforeach
         </tbody>
@@ -359,8 +359,8 @@
     @if($cl['scope']['matched'] && $cl['scope']['excluded']['fees'] > 0)
         {{ __('Resit fees, admission fees and everything else are not in these counts - :fees of them, :billed billed, :owed still owed. They are listed in full under "Collection by fee" below.', [
             'fees' => number_format($cl['scope']['excluded']['fees']),
-            'billed' => number_format($cl['scope']['excluded']['billed']),
-            'owed' => number_format($cl['scope']['excluded']['owed'])]) }}
+            'billed' => format_amount($cl['scope']['excluded']['billed']),
+            'owed' => format_amount($cl['scope']['excluded']['owed'])]) }}
     @endif
 </p>
 
@@ -415,9 +415,9 @@
             <td class="num">{{ number_format($row['full']) }}</td>
             <td class="num">{{ number_format($row['part']) }}</td>
             <td class="num">{{ number_format($row['none']) }}</td>
-            <td class="num">{{ number_format($row['billed']) }}</td>
-            <td class="num">{{ number_format($row['collected']) }}</td>
-            <td class="num">{{ number_format($row['outstanding']) }}</td>
+            <td class="num">{{ format_amount($row['billed']) }}</td>
+            <td class="num">{{ format_amount($row['collected']) }}</td>
+            <td class="num">{{ format_amount($row['outstanding']) }}</td>
         </tr>
         @endforeach
         @if($cap['total'] > 0)
@@ -427,9 +427,9 @@
             <td class="num">{{ number_format($cl['combined']['full']) }}</td>
             <td class="num">{{ number_format($cl['combined']['part']) }}</td>
             <td class="num">{{ number_format($cl['combined']['none']) }}</td>
-            <td class="num">{{ number_format($cl['combined']['billed']) }}</td>
-            <td class="num">{{ number_format($cl['combined']['collected']) }}</td>
-            <td class="num">{{ number_format($cl['combined']['outstanding']) }}</td>
+            <td class="num">{{ format_amount($cl['combined']['billed']) }}</td>
+            <td class="num">{{ format_amount($cl['combined']['collected']) }}</td>
+            <td class="num">{{ format_amount($cl['combined']['outstanding']) }}</td>
         </tr>
         @endif
     </tbody>
@@ -437,7 +437,7 @@
 
 @if($cl['arrears']['people'] > 0)
 <p class="sub">
-    <strong class="st-warning">{{ __('Owed from earlier years: :amount', ['amount' => number_format($cl['arrears']['amount'])]) }}</strong>
+    <strong class="st-warning">{{ __('Owed from earlier years: :amount', ['amount' => format_amount($cl['arrears']['amount'])]) }}</strong>
     {{ __('across :n people, oldest assigned :date. Not in the table above, which covers this year\'s billing only.', [
         'n' => $cl['arrears']['people'],
         'date' => $cl['arrears']['oldest'] ? \Carbon\Carbon::parse($cl['arrears']['oldest'])->format('j M Y') : '—',
@@ -471,9 +471,9 @@
             <td class="num">{{ number_format($ad['full']) }}</td>
             <td class="num">{{ number_format($ad['part']) }}</td>
             <td class="num">{{ number_format($ad['none']) }}</td>
-            <td class="num">{{ number_format($ad['billed']) }}</td>
-            <td class="num">{{ number_format($ad['collected']) }}</td>
-            <td class="num">{{ number_format($ad['outstanding']) }}</td>
+            <td class="num">{{ format_amount($ad['billed']) }}</td>
+            <td class="num">{{ format_amount($ad['collected']) }}</td>
+            <td class="num">{{ format_amount($ad['outstanding']) }}</td>
         </tr>
     </tbody>
 </table>
@@ -498,9 +498,9 @@
     @foreach($cl['by_month'] as $m)
         <tr>
             <td>{{ $m['label'] }}</td>
-            <td class="num">{{ number_format($m['cash']) }}</td>
-            <td class="num">{{ number_format($m['cumulative']) }}</td>
-            <td class="num">{{ number_format($m['all_cash']) }}</td>
+            <td class="num">{{ format_amount($m['cash']) }}</td>
+            <td class="num">{{ format_amount($m['cumulative']) }}</td>
+            <td class="num">{{ format_amount($m['all_cash']) }}</td>
         </tr>
     @endforeach
     </tbody>
@@ -530,9 +530,9 @@
             <td class="num">{{ number_format($row['full']) }}</td>
             <td class="num">{{ number_format($row['part']) }}</td>
             <td class="num">{{ number_format($row['none']) }}</td>
-            <td class="num">{{ number_format($row['billed']) }}</td>
-            <td class="num">{{ number_format($row['collected']) }}</td>
-            <td class="num">{{ number_format($row['outstanding']) }}</td>
+            <td class="num">{{ format_amount($row['billed']) }}</td>
+            <td class="num">{{ format_amount($row['collected']) }}</td>
+            <td class="num">{{ format_amount($row['outstanding']) }}</td>
             <td class="num">{{ number_format($row['rate'], 1) }}%</td>
         </tr>
     @endforeach
@@ -564,9 +564,9 @@
             <td class="num">{{ number_format($row['full']) }}</td>
             <td class="num">{{ number_format($row['part']) }}</td>
             <td class="num">{{ number_format($row['none']) }}</td>
-            <td class="num">{{ number_format($row['due']) }}</td>
-            <td class="num">{{ number_format($row['collected']) }}</td>
-            <td class="num">{{ number_format($row['owed']) }}</td>
+            <td class="num">{{ format_amount($row['due']) }}</td>
+            <td class="num">{{ format_amount($row['collected']) }}</td>
+            <td class="num">{{ format_amount($row['owed']) }}</td>
             <td class="num">{{ number_format($row['rate'], 1) }}%</td>
         </tr>
     @endforeach
@@ -593,9 +593,9 @@
             <td>{{ $row['category'] }}</td>
             <td>{{ $row['in_scope'] ? __('Counted') : __('Not counted') }}</td>
             <td class="num">{{ number_format($row['fees']) }}</td>
-            <td class="num">{{ number_format($row['due']) }}</td>
-            <td class="num">{{ number_format($row['collected']) }}</td>
-            <td class="num">{{ number_format($row['owed']) }}</td>
+            <td class="num">{{ format_amount($row['due']) }}</td>
+            <td class="num">{{ format_amount($row['collected']) }}</td>
+            <td class="num">{{ format_amount($row['owed']) }}</td>
             <td class="num">{{ number_format($row['rate'], 1) }}%</td>
         </tr>
     @endforeach
@@ -621,9 +621,9 @@
             <td>{{ $row['name'] }}@if($row['kind'] === 'applicant') <span style="font-size:7.5px;color:#666">({{ __('Applicant') }})</span>@endif</td>
             <td>{{ $row['reference'] }}</td>
             <td>{{ $row['programme'] ?: '—' }}</td>
-            <td class="num">{{ number_format($row['due']) }}</td>
-            <td class="num">{{ number_format($row['paid']) }}</td>
-            <td class="num">{{ number_format($row['owed']) }}</td>
+            <td class="num">{{ format_amount($row['due']) }}</td>
+            <td class="num">{{ format_amount($row['paid']) }}</td>
+            <td class="num">{{ format_amount($row['owed']) }}</td>
         </tr>
     @endforeach
     </tbody>
@@ -643,8 +643,8 @@
 <p class="sub">
     {{ __('A note on the totals: :count fee(s) worth :amount, of which :owed is still outstanding, are attached to enrolments that no longer exist and so belong to no named person. They are in none of the figures above. They are listed on the analysis screen for correction.', [
         'count' => number_format($cl['unattributed']['count']),
-        'amount' => number_format($cl['unattributed']['amount']),
-        'owed' => number_format($cl['unattributed']['owed']),
+        'amount' => format_amount($cl['unattributed']['amount']),
+        'owed' => format_amount($cl['unattributed']['owed']),
     ]) }}
 </p>
 @endif

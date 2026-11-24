@@ -131,21 +131,21 @@
                                             </td>
                                             <td class="text-right">
                                                 @if($account->total_debit > 0)
-                                                {{ number_format($account->total_debit, 0, ',', ' ') }}
+                                                {{ format_amount($account->total_debit) }}
                                                 @else
                                                 -
                                                 @endif
                                             </td>
                                             <td class="text-right">
                                                 @if($account->total_credit > 0)
-                                                {{ number_format($account->total_credit, 0, ',', ' ') }}
+                                                {{ format_amount($account->total_credit) }}
                                                 @else
                                                 -
                                                 @endif
                                             </td>
                                             <td class="text-right">
                                                 <strong class="text-{{ $balance >= 0 ? 'success' : 'danger' }}">
-                                                    {{ number_format($balance, 0, ',', ' ') }}
+                                                    {{ format_amount($balance) }}
                                                 </strong>
                                             </td>
                                             <td class="text-center no-print">
@@ -164,10 +164,10 @@
                                     <!-- Class Total Row -->
                                     <tr class="table-success">
                                         <td colspan="3" class="text-right"><strong>{{ __('class_total') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($classDebitTotal, 0, ',', ' ') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($classCreditTotal, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($classDebitTotal) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($classCreditTotal) }}</strong></td>
                                         <td class="text-right">
-                                            <strong>{{ number_format(abs($classDebitTotal - $classCreditTotal), 0, ',', ' ') }}</strong>
+                                            <strong>{{ format_amount(abs($classDebitTotal - $classCreditTotal)) }}</strong>
                                         </td>
                                         <td class="no-print"></td>
                                     </tr>
@@ -182,9 +182,9 @@
                                 <div class="alert alert-info">
                                     <strong>{{ __('summary') }}:</strong>
                                     {{ __('total_accounts') }}: {{ $accounts->count() }} | 
-                                    {{ __('total_debit') }}: {{ number_format($classDebitTotal, 0, ',', ' ') }} FCFA | 
-                                    {{ __('total_credit') }}: {{ number_format($classCreditTotal, 0, ',', ' ') }} FCFA | 
-                                    {{ __('difference') }}: {{ number_format(abs($classDebitTotal - $classCreditTotal), 0, ',', ' ') }} FCFA
+                                    {{ __('total_debit') }}: {{ format_amount($classDebitTotal) }} FCFA | 
+                                    {{ __('total_credit') }}: {{ format_amount($classCreditTotal) }} FCFA | 
+                                    {{ __('difference') }}: {{ format_amount(abs($classDebitTotal - $classCreditTotal)) }} FCFA
                                 </div>
                             </div>
                         </div>

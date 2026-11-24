@@ -77,7 +77,7 @@
                                     <span class="info-box-icon"><i class="fas fa-calculator"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('total_depreciation') }}</span>
-                                        <span class="info-box-number">{{ number_format($totals['total_depreciation'] ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($totals['total_depreciation'] ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -123,9 +123,9 @@
                                         <td>{{ $schedule->asset->name ?? 'N/A' }}</td>
                                         <td><span class="badge badge-info">{{ $schedule->asset->category->name ?? 'N/A' }}</span></td>
                                         <td>{{ \Carbon\Carbon::parse($schedule->depreciation_date)->format('M Y') }}</td>
-                                        <td class="text-right">{{ number_format($schedule->depreciation_amount, 0, ',', ' ') }}</td>
-                                        <td class="text-right">{{ number_format($schedule->accumulated_depreciation, 0, ',', ' ') }}</td>
-                                        <td class="text-right">{{ number_format($schedule->remaining_value, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($schedule->depreciation_amount) }}</td>
+                                        <td class="text-right">{{ format_amount($schedule->accumulated_depreciation) }}</td>
+                                        <td class="text-right">{{ format_amount($schedule->remaining_value) }}</td>
                                         <td>
                                             @if($schedule->status == 'pending')
                                             <span class="badge badge-warning">{{ __('pending') }}</span>
@@ -145,7 +145,7 @@
                                 <tfoot class="thead-light font-weight-bold">
                                     <tr>
                                         <td colspan="4">{{ __('total') }}</td>
-                                        <td class="text-right">{{ number_format($totals['total_depreciation'] ?? 0, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($totals['total_depreciation'] ?? 0) }}</td>
                                         <td colspan="3"></td>
                                     </tr>
                                 </tfoot>

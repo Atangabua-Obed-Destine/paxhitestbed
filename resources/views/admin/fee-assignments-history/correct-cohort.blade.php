@@ -157,10 +157,10 @@
                                         <td>{{ optional($fee->studentEnroll)->matricule ?? optional($student)->student_id }}</td>
                                         <td>{{ trim(optional($student)->first_name . ' ' . optional($student)->last_name) }}</td>
                                         <td>{{ optional(optional($fee->studentEnroll)->session)->title }}</td>
-                                        <td class="text-right">{{ number_format($fee->fee_amount, 2) }}</td>
-                                        <td class="text-right">{{ number_format($paid, 2) }}</td>
+                                        <td class="text-right">{{ format_amount($fee->fee_amount) }}</td>
+                                        <td class="text-right">{{ format_amount($paid) }}</td>
                                         <td class="text-right">
-                                            {{ $after === null ? '—' : number_format($after, 2) }}
+                                            {{ $after === null ? '—' : format_amount($after) }}
                                         </td>
                                         <td class="text-nowrap">
                                             {{ $row['due_date'] ? \Carbon\Carbon::parse($row['due_date'])->format('d M Y') : __('Not set') }}
@@ -172,9 +172,9 @@
                                                 {{-- The part that is actually money. --}}
                                                 <small class="d-block {{ $row['fine_after'] > $row['fine_now'] ? 'text-danger' : 'text-success' }}">
                                                     {{ __('late fee') }}
-                                                    {{ number_format($row['fine_now'], 2) }}
+                                                    {{ format_amount($row['fine_now']) }}
                                                     &rarr;
-                                                    {{ number_format($row['fine_after'], 2) }}
+                                                    {{ format_amount($row['fine_after']) }}
                                                 </small>
                                             @endif
                                         </td>
@@ -217,7 +217,7 @@
                                 </h6>
                                 @if($new_amount)
                                     <p class="mb-1">
-                                        {{ __('Each ticked fee is set to :amount. Nobody is charged twice and no payment is moved — only the amount being asked for changes. Where a student has unspent credit, it is applied to the increase.', ['amount' => number_format((float) $new_amount, 2)]) }}
+                                        {{ __('Each ticked fee is set to :amount. Nobody is charged twice and no payment is moved — only the amount being asked for changes. Where a student has unspent credit, it is applied to the increase.', ['amount' => format_amount((float) $new_amount)]) }}
                                     </p>
                                 @endif
                                 @if($new_due_date)

@@ -9,7 +9,7 @@
                 <h5>{{ $row->actorName() ?? __('Deleted record') }}</h5>
                 <span class="text-muted d-block mt-1" style="font-size:.85rem;">
                     {{ ucfirst($row->actor_type) }} · {{ ucfirst($row->surface) }} ·
-                    {{ optional($row->last_message_at)->format('M j, Y g:i A') }}
+                    {{ optional($row->last_message_at)->format('d/m/Y H:i') }}
                 </span>
             </div>
 

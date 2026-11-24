@@ -99,7 +99,7 @@
                 </div>
 
                 <div class="k">{{ __('Amount') }}</div>
-                <div class="v"><strong>{{ $currency }} {{ number_format((float)$receipt->amount, 2) }}</strong></div>
+                <div class="v"><strong>{{ $currency }} {{ format_amount((float)$receipt->amount) }}</strong></div>
 
                 <div class="k">{{ __('Payment Date') }}</div>
                 <div class="v">{{ optional($receipt->payment_date)->format('Y-m-d') }}</div>

@@ -192,7 +192,9 @@ class ReportController extends Controller
                 $query->where('status_type_id', $status);
             });
         }
-        $rows = $students->orderBy('student_id', 'desc')->get();
+        // The table walks enrolments -> marks -> subject for every student; loaded
+        // here in four queries instead of one per mark.
+        $rows = $students->with(['studentEnrolls.subjectMarks.subject', 'program', 'batch'])->orderBy('student_id', 'desc')->get();
 
         // Array Sorting
         $data['rows'] = $rows->sortByDesc(function($query){
@@ -741,7 +743,7 @@ class ReportController extends Controller
             // $query->orderBy('student_id', 'asc');
         });
 
-        $data['rows'] = $fees->orderBy('due_date', 'asc')->orderBy('updated_at', 'desc')->get();
+        $data['rows'] = $fees->withCreditMovedOut()->orderBy('due_date', 'asc')->orderBy('updated_at', 'desc')->get();
         
         // Calculate statistics
         $all_fees = Fee::with(['studentEnroll.student', 'studentEnroll.program', 'category']);
@@ -772,7 +774,7 @@ class ReportController extends Controller
             $all_fees->where('category_id', $category);
         }
         
-        $all_fees = $all_fees->whereIn('status', [0, 1, 2])->get();
+        $all_fees = $all_fees->withCreditMovedOut()->whereIn('status', [0, 1, 2])->get();
         
         $data['stats'] = [
             'total_fees' => $all_fees->count(),
@@ -1191,7 +1193,7 @@ class ReportController extends Controller
                     if(!empty($request->category) || $request->category != null){
                         $rows->where('category_id', $category);
                     }
-        $data['rows'] = $rows->orderBy('date', 'asc')->get();
+        $data['rows'] = $rows->with('category')->orderBy('date', 'asc')->get();
 
         return view($this->view.'.expense', $data);
     }

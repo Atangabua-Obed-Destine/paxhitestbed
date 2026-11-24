@@ -97,7 +97,7 @@
                                         <small class="text-muted">Downloads</small>
                                     </div>
                                     <div class="col-6">
-                                        <h4 class="text-info mb-0">{{ $row->created_at->format('M d, Y') }}</h4>
+                                        <h4 class="text-info mb-0">{{ $row->created_at->format('d/m/Y') }}</h4>
                                         <small class="text-muted">Created</small>
                                     </div>
                                 </div>

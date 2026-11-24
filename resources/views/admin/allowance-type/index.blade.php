@@ -32,6 +32,15 @@
                             </div>
 
                             <div class="form-group">
+                                <label for="is_taxable" class="form-label">{{ __('Taxed on payroll') }} <span>*</span></label>
+                                <select class="form-control" name="is_taxable" id="is_taxable" required>
+                                    <option value="0" @if(old('is_taxable', '0') == '0') selected @endif>{{ __('No, paid without tax') }}</option>
+                                    <option value="1" @if(old('is_taxable') == '1') selected @endif>{{ __('Yes, added to the pay that is taxed') }}</option>
+                                </select>
+                                <small class="form-text text-muted">{{ __('Ask your accountant which allowances are taxable. A change applies to payrolls generated after it, not to ones already saved.') }}</small>
+                            </div>
+
+                            <div class="form-group">
                                 <label for="status" class="form-label">{{ __('field_status') }} <span>*</span></label>
                                 <select class="form-control" name="status" id="status" required>
                                     <option value="1" selected>{{ __('status_active') }}</option>
@@ -61,6 +70,7 @@
                                         <th>#</th>
                                         <th>{{ __('field_title') }}</th>
                                         <th>{{ __('field_description') }}</th>
+                                        <th>{{ __('Taxed on payroll') }}</th>
                                         <th>{{ __('field_status') }}</th>
                                         <th>{{ __('field_action') }}</th>
                                     </tr>
@@ -71,6 +81,13 @@
                                         <td>{{ $key + 1 }}</td>
                                         <td>{{ $row->title }}</td>
                                         <td>{{ $row->description }}</td>
+                                        <td>
+                                            @if($row->is_taxable)
+                                            <span class="badge badge-pill badge-warning">{{ __('Taxed') }}</span>
+                                            @else
+                                            <span class="badge badge-pill badge-secondary">{{ __('Not taxed') }}</span>
+                                            @endif
+                                        </td>
                                         <td>
                                             @if( $row->status == 1 )
                                             <span class="badge badge-pill badge-success">{{ __('status_active') }}</span>

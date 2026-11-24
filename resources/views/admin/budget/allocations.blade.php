@@ -23,25 +23,25 @@
                             <div class="col-md-3">
                                 <div class="alert alert-primary">
                                     <strong>{{ __('field_total_amount') }}:</strong><br>
-                                    {{ number_format($budget->total_amount, 2) }}
+                                    {{ format_amount($budget->total_amount) }}
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="alert alert-info">
                                     <strong>{{ __('field_allocated_amount') }}:</strong><br>
-                                    {{ number_format($budget->allocated_amount, 2) }}
+                                    {{ format_amount($budget->allocated_amount) }}
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="alert alert-warning">
                                     <strong>{{ __('field_spent_amount') }}:</strong><br>
-                                    {{ number_format($budget->spent_amount, 2) }}
+                                    {{ format_amount($budget->spent_amount) }}
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="alert alert-success">
                                     <strong>{{ __('field_unallocated') }}:</strong><br>
-                                    {{ number_format($budget->total_amount - $budget->allocated_amount, 2) }}
+                                    {{ format_amount($budget->total_amount - $budget->allocated_amount) }}
                                 </div>
                             </div>
                         </div>
@@ -85,7 +85,7 @@
                                                        id="allocated_amount" 
                                                        required>
                                                 <small class="form-text text-muted">
-                                                    Max: {{ number_format($budget->total_amount - $budget->allocated_amount, 2) }}
+                                                    Max: {{ format_amount($budget->total_amount - $budget->allocated_amount) }}
                                                 </small>
                                             </div>
                                         </div>
@@ -175,9 +175,9 @@
                                             <span class="badge badge-dark">Sem 2</span>
                                             @endif
                                         </td>
-                                        <td>{{ number_format($allocation->allocated_amount, 2) }}</td>
-                                        <td>{{ number_format($allocation->spent_amount, 2) }}</td>
-                                        <td>{{ number_format($allocation->remaining_amount, 2) }}</td>
+                                        <td>{{ format_amount($allocation->allocated_amount) }}</td>
+                                        <td>{{ format_amount($allocation->spent_amount) }}</td>
+                                        <td>{{ format_amount($allocation->remaining_amount) }}</td>
                                         <td>
                                             <div class="progress" style="height: 20px;">
                                                 <div class="progress-bar bg-{{ $allocation->status_color }}" 
@@ -301,9 +301,9 @@
                                 <tfoot>
                                     <tr class="table-active">
                                         <th colspan="4">{{ __('text_total') }}</th>
-                                        <th>{{ number_format($budget->allocated_amount, 2) }}</th>
-                                        <th>{{ number_format($budget->spent_amount, 2) }}</th>
-                                        <th>{{ number_format($budget->remaining_amount, 2) }}</th>
+                                        <th>{{ format_amount($budget->allocated_amount) }}</th>
+                                        <th>{{ format_amount($budget->spent_amount) }}</th>
+                                        <th>{{ format_amount($budget->remaining_amount) }}</th>
                                         <th></th>
                                         <th></th>
                                     </tr>

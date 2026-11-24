@@ -57,7 +57,7 @@
                 <div class="col-lg-2 col-md-4">
                     <div class="small-box bg-success">
                         <div class="inner">
-                            <h4>{{ number_format($report['summary']['current'] ?? 0) }} {{ __('XAF') }}</h4>
+                            <h4>{{ format_amount($report['summary']['current'] ?? 0) }} {{ __('XAF') }}</h4>
                             <p>{{ __('Current (0-30 days)') }}</p>
                         </div>
                         <div class="icon"><i class="fas fa-check-circle"></i></div>
@@ -66,7 +66,7 @@
                 <div class="col-lg-2 col-md-4">
                     <div class="small-box bg-info">
                         <div class="inner">
-                            <h4>{{ number_format($report['summary']['days_31_60'] ?? 0) }} {{ __('XAF') }}</h4>
+                            <h4>{{ format_amount($report['summary']['days_31_60'] ?? 0) }} {{ __('XAF') }}</h4>
                             <p>{{ __('31-60 Days') }}</p>
                         </div>
                         <div class="icon"><i class="fas fa-clock"></i></div>
@@ -75,7 +75,7 @@
                 <div class="col-lg-2 col-md-4">
                     <div class="small-box bg-warning">
                         <div class="inner">
-                            <h4>{{ number_format($report['summary']['days_61_90'] ?? 0) }} {{ __('XAF') }}</h4>
+                            <h4>{{ format_amount($report['summary']['days_61_90'] ?? 0) }} {{ __('XAF') }}</h4>
                             <p>{{ __('61-90 Days') }}</p>
                         </div>
                         <div class="icon"><i class="fas fa-exclamation-triangle"></i></div>
@@ -84,7 +84,7 @@
                 <div class="col-lg-2 col-md-4">
                     <div class="small-box bg-orange">
                         <div class="inner">
-                            <h4>{{ number_format($report['summary']['days_91_120'] ?? 0) }} {{ __('XAF') }}</h4>
+                            <h4>{{ format_amount($report['summary']['days_91_120'] ?? 0) }} {{ __('XAF') }}</h4>
                             <p>{{ __('91-120 Days') }}</p>
                         </div>
                         <div class="icon"><i class="fas fa-exclamation-circle"></i></div>
@@ -93,7 +93,7 @@
                 <div class="col-lg-2 col-md-4">
                     <div class="small-box bg-danger">
                         <div class="inner">
-                            <h4>{{ number_format($report['summary']['over_120'] ?? 0) }} {{ __('XAF') }}</h4>
+                            <h4>{{ format_amount($report['summary']['over_120'] ?? 0) }} {{ __('XAF') }}</h4>
                             <p>{{ __('Over 120 Days') }}</p>
                         </div>
                         <div class="icon"><i class="fas fa-times-circle"></i></div>
@@ -102,7 +102,7 @@
                 <div class="col-lg-2 col-md-4">
                     <div class="small-box bg-secondary">
                         <div class="inner">
-                            <h4>{{ number_format($report['summary']['total'] ?? 0) }} {{ __('XAF') }}</h4>
+                            <h4>{{ format_amount($report['summary']['total'] ?? 0) }} {{ __('XAF') }}</h4>
                             <p>{{ __('Total Outstanding') }}</p>
                         </div>
                         <div class="icon"><i class="fas fa-calculator"></i></div>
@@ -141,12 +141,12 @@
                             @forelse($report['details'] ?? [] as $item)
                             <tr>
                                 <td>{{ $item['vendor_name'] }}</td>
-                                <td class="text-right">{{ number_format($item['current'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($item['days_31_60'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($item['days_61_90'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($item['days_91_120'] ?? 0) }}</td>
-                                <td class="text-right text-danger">{{ number_format($item['over_120'] ?? 0) }}</td>
-                                <td class="text-right font-weight-bold">{{ number_format($item['total'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($item['current'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($item['days_31_60'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($item['days_61_90'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($item['days_91_120'] ?? 0) }}</td>
+                                <td class="text-right text-danger">{{ format_amount($item['over_120'] ?? 0) }}</td>
+                                <td class="text-right font-weight-bold">{{ format_amount($item['total'] ?? 0) }}</td>
                             </tr>
                             @empty
                             <tr>
@@ -158,12 +158,12 @@
                         <tfoot class="bg-light font-weight-bold">
                             <tr>
                                 <td>{{ __('Grand Total') }}</td>
-                                <td class="text-right">{{ number_format($report['summary']['current'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($report['summary']['days_31_60'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($report['summary']['days_61_90'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($report['summary']['days_91_120'] ?? 0) }}</td>
-                                <td class="text-right text-danger">{{ number_format($report['summary']['over_120'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($report['summary']['total'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($report['summary']['current'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($report['summary']['days_31_60'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($report['summary']['days_61_90'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($report['summary']['days_91_120'] ?? 0) }}</td>
+                                <td class="text-right text-danger">{{ format_amount($report['summary']['over_120'] ?? 0) }}</td>
+                                <td class="text-right">{{ format_amount($report['summary']['total'] ?? 0) }}</td>
                             </tr>
                         </tfoot>
                         @endif

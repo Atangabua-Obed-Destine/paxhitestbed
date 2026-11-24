@@ -28,45 +28,45 @@
                         <!-- Statistics Cards -->
                         <div class="row mb-3">
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['total_assets'] ?? 0 }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('total_assets') }}</p>
+                                        <h3>{{ $statistics['total_assets'] ?? 0 }}</h3>
+                                        <p>{{ __('total_assets') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-building"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ number_format($statistics['total_cost'] ?? 0, 0, ',', ' ') }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('total_acquisition_cost') }} (FCFA)</p>
+                                        <h3>{{ format_amount($statistics['total_cost'] ?? 0) }}</h3>
+                                        <p>{{ __('total_acquisition_cost') }} (FCFA)</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-money-bill-wave"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ number_format($statistics['total_depreciation'] ?? 0, 0, ',', ' ') }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('accumulated_depreciation') }} (FCFA)</p>
+                                        <h3>{{ format_amount($statistics['total_depreciation'] ?? 0) }}</h3>
+                                        <p>{{ __('accumulated_depreciation') }} (FCFA)</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-chart-line"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ number_format($statistics['total_book_value'] ?? 0, 0, ',', ' ') }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('net_book_value') }} (FCFA)</p>
+                                        <h3>{{ format_amount($statistics['total_book_value'] ?? 0) }}</h3>
+                                        <p>{{ __('net_book_value') }} (FCFA)</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-balance-scale"></i>
                                     </div>
                                 </div>
@@ -177,9 +177,9 @@
                                             <span class="badge badge-info">{{ $asset->category->name ?? 'N/A' }}</span>
                                         </td>
                                         <td>{{ \Carbon\Carbon::parse($asset->acquisition_date)->format('d M Y') }}</td>
-                                        <td class="text-right"><strong>{{ number_format($asset->acquisition_cost, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($asset->acquisition_cost) }}</strong></td>
                                         <td class="text-right">
-                                            <strong>{{ number_format($asset->book_value ?? 0, 0, ',', ' ') }}</strong>
+                                            <strong>{{ format_amount($asset->book_value ?? 0) }}</strong>
                                             @if(($asset->book_value ?? 0) <= 0)
                                             <br><small class="text-danger">{{ __('fully_depreciated') }}</small>
                                             @endif
@@ -259,7 +259,7 @@
                                                         <div class="form-group">
                                                             <label>{{ __('disposal_proceeds') }}</label>
                                                             <input type="number" name="disposal_proceeds" class="form-control" value="0" min="0">
-                                                            <small class="text-muted">{{ __('current_nbv') }}: {{ number_format($asset->book_value ?? 0, 0, ',', ' ') }} FCFA</small>
+                                                            <small class="text-muted">{{ __('current_nbv') }}: {{ format_amount($asset->book_value ?? 0) }} FCFA</small>
                                                         </div>
                                                         <div class="form-group">
                                                             <label>{{ __('notes') }}</label>

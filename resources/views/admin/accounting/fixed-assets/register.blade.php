@@ -78,7 +78,7 @@
                                     <span class="info-box-icon"><i class="fas fa-building"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('total_acquisition_cost') }}</span>
-                                        <span class="info-box-number">{{ number_format($totals['acquisition_cost'] ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($totals['acquisition_cost'] ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -87,7 +87,7 @@
                                     <span class="info-box-icon"><i class="fas fa-chart-line"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('accumulated_depreciation') }}</span>
-                                        <span class="info-box-number">{{ number_format($totals['accumulated_depreciation'] ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($totals['accumulated_depreciation'] ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -96,7 +96,7 @@
                                     <span class="info-box-icon"><i class="fas fa-balance-scale"></i></span>
                                     <div class="info-box-content">
                                         <span class="info-box-text">{{ __('net_book_value') }}</span>
-                                        <span class="info-box-number">{{ number_format($totals['book_value'] ?? 0, 0, ',', ' ') }} FCFA</span>
+                                        <span class="info-box-number">{{ format_amount($totals['book_value'] ?? 0) }} FCFA</span>
                                     </div>
                                 </div>
                             </div>
@@ -129,10 +129,10 @@
                                         </td>
                                         <td><span class="badge badge-info">{{ $asset->category->name ?? 'N/A' }}</span></td>
                                         <td>{{ \Carbon\Carbon::parse($asset->acquisition_date)->format('d/m/Y') }}</td>
-                                        <td class="text-right">{{ number_format($asset->acquisition_cost, 0, ',', ' ') }}</td>
-                                        <td class="text-right">{{ number_format($asset->accumulated_depreciation, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($asset->acquisition_cost) }}</td>
+                                        <td class="text-right">{{ format_amount($asset->accumulated_depreciation) }}</td>
                                         <td class="text-right">
-                                            <strong>{{ number_format($asset->book_value, 0, ',', ' ') }}</strong>
+                                            <strong>{{ format_amount($asset->book_value) }}</strong>
                                         </td>
                                         <td>
                                             @if($asset->status == 'active')
@@ -153,9 +153,9 @@
                                 <tfoot class="thead-light font-weight-bold">
                                     <tr>
                                         <td colspan="4">{{ __('total') }}</td>
-                                        <td class="text-right">{{ number_format($totals['acquisition_cost'] ?? 0, 0, ',', ' ') }}</td>
-                                        <td class="text-right">{{ number_format($totals['accumulated_depreciation'] ?? 0, 0, ',', ' ') }}</td>
-                                        <td class="text-right">{{ number_format($totals['book_value'] ?? 0, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($totals['acquisition_cost'] ?? 0) }}</td>
+                                        <td class="text-right">{{ format_amount($totals['accumulated_depreciation'] ?? 0) }}</td>
+                                        <td class="text-right">{{ format_amount($totals['book_value'] ?? 0) }}</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>

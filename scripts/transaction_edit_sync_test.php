@@ -273,12 +273,12 @@ try {
 
         ok('it starts with a live posting', $entryBefore !== null);
 
-        $unmapped = DB::table('incomes')
-            ->whereNotIn('category_id', function ($q) {
-                $q->select('category_id')->from('default_account_mappings')
-                  ->where('mapping_type', 'income_category')->whereNotNull('category_id');
-            })
-            ->value('category_id');
+        // A category with no account mapping, made here: every real one is
+        // mapped now, and this needs one that cannot post.
+        $unmapped = DB::table('income_categories')->insertGetId([
+            'title' => 'TEST unmapped category', 'slug' => 'test-unmapped-category-' . uniqid(),
+            'status' => 1, 'created_at' => now(), 'updated_at' => now(),
+        ]);
 
         ok('and an unmapped category exists to fail against', $unmapped !== null);
 

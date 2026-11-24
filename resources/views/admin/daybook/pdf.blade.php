@@ -78,8 +78,8 @@
                         <span class="none">{{ __('none') }}</span>
                     @endif
                 </td>
-                <td class="num">{{ $row['direction'] === 'in' ? number_format($row['amount']) : '' }}</td>
-                <td class="num">{{ $row['direction'] === 'out' ? number_format($row['amount']) : '' }}</td>
+                <td class="num">{{ $row['direction'] === 'in' ? format_amount($row['amount']) : '' }}</td>
+                <td class="num">{{ $row['direction'] === 'out' ? format_amount($row['amount']) : '' }}</td>
             </tr>
         @empty
             <tr><td colspan="6">{{ __('No cash moved in this period.') }}</td></tr>
@@ -89,12 +89,12 @@
         <tfoot>
             <tr class="total">
                 <td colspan="4">{{ __('TOTAL FOR') }} {{ strtoupper($period->name) }}</td>
-                <td class="num">{{ number_format($totalIn) }}</td>
-                <td class="num">{{ number_format($totalOut) }}</td>
+                <td class="num">{{ format_amount($totalIn) }}</td>
+                <td class="num">{{ format_amount($totalOut) }}</td>
             </tr>
             <tr class="total">
                 <td colspan="4">{{ __('NET MOVEMENT') }}</td>
-                <td class="num" colspan="2">{{ number_format($totalIn - $totalOut) }}</td>
+                <td class="num" colspan="2">{{ format_amount($totalIn - $totalOut) }}</td>
             </tr>
         </tfoot>
     @endif

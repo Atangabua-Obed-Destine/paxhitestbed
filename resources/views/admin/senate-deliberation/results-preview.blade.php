@@ -141,37 +141,37 @@
 {{-- ═══ KPI CARDS ═══ --}}
 <div class="row mb-3">
     <div class="col-md-2 col-sm-4 col-6 mb-2">
-        <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+        <div class="card kpi-card kpi-neutral text-center p-3">
             <div class="kpi-value">{{ number_format($kpis['total_scripts']) }}</div>
             <div class="kpi-label">Total Scripts</div>
         </div>
     </div>
     <div class="col-md-2 col-sm-4 col-6 mb-2">
-        <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#11998e,#38ef7d);color:#fff;">
+        <div class="card kpi-card kpi-neutral kpi-good text-center p-3">
             <div class="kpi-value">{{ number_format($kpis['passed_scripts']) }}</div>
             <div class="kpi-label">Passed</div>
         </div>
     </div>
     <div class="col-md-2 col-sm-4 col-6 mb-2">
-        <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#eb3349,#f45c43);color:#fff;">
+        <div class="card kpi-card kpi-neutral kpi-bad text-center p-3">
             <div class="kpi-value">{{ number_format($kpis['failed_scripts']) }}</div>
             <div class="kpi-label">Failed</div>
         </div>
     </div>
     <div class="col-md-2 col-sm-4 col-6 mb-2">
-        <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#36d1dc,#5b86e5);color:#fff;">
+        <div class="card kpi-card kpi-neutral text-center p-3">
             <div class="kpi-value">{{ $kpis['pass_rate'] }}%</div>
             <div class="kpi-label">Pass Rate</div>
         </div>
     </div>
     <div class="col-md-2 col-sm-4 col-6 mb-2">
-        <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff;">
+        <div class="card kpi-card kpi-neutral text-center p-3">
             <div class="kpi-value">{{ number_format($kpis['average_mark'], 1) }}</div>
             <div class="kpi-label">Avg Mark</div>
         </div>
     </div>
     <div class="col-md-2 col-sm-4 col-6 mb-2">
-        <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#4facfe,#00f2fe);color:#fff;">
+        <div class="card kpi-card kpi-neutral text-center p-3">
             <div class="kpi-value">{{ number_format($kpis['unique_courses']) }}</div>
             <div class="kpi-label">Courses</div>
         </div>
@@ -884,7 +884,7 @@
             @foreach($faculty_student_matrices as $fmi => $facMatrix)
                 {{-- ── FACULTY ACCORDION ── --}}
                 <div class="card mb-2" style="border: 1px solid #343a40; border-radius: 6px; overflow: hidden;">
-                    <div class="card-header py-2 px-3" style="background: linear-gradient(135deg, #2c3e50, #34495e); cursor: pointer;"
+                    <div class="card-header py-2 px-3" style="background: #2c3e50; cursor: pointer;"
                          data-bs-toggle="collapse" data-bs-target="#matrixFac{{ $facMatrix['id'] }}">
                         <div class="d-flex justify-content-between align-items-center">
                             <h6 class="mb-0 text-white">

@@ -54,7 +54,7 @@
                                 <td>{{ ucfirst($row->surface) }}</td>
                                 <td>{{ $row->title ?: '—' }}</td>
                                 <td class="text-center">{{ $row->messages_count }}</td>
-                                <td>{{ optional($row->last_message_at)->format('M j, Y g:i A') ?: '—' }}</td>
+                                <td>{{ optional($row->last_message_at)->format('d/m/Y H:i') ?: '—' }}</td>
                                 <td class="text-end">
                                     @can('chat-conversation-view')
                                         <a href="{{ route($route.'.show', $row) }}" class="btn btn-sm btn-outline-primary">{{ __('View') }}</a>

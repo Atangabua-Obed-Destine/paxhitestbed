@@ -23,45 +23,45 @@
                         <!-- Statistics -->
                         <div class="row mb-3">
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['total'] ?? 0 }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('total_reconciliations') }}</p>
+                                        <h3>{{ $statistics['total'] ?? 0 }}</h3>
+                                        <p>{{ __('total_reconciliations') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-tasks"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['in_progress'] ?? 0 }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('in_progress') }}</p>
+                                        <h3>{{ $statistics['in_progress'] ?? 0 }}</h3>
+                                        <p>{{ __('in_progress') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-spinner"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['completed'] ?? 0 }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('completed') }}</p>
+                                        <h3>{{ $statistics['completed'] ?? 0 }}</h3>
+                                        <p>{{ __('completed') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-check-circle"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ number_format($statistics['unreconciled_amount'] ?? 0, 0, ',', ' ') }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('unreconciled_amount') }} (FCFA)</p>
+                                        <h3>{{ format_amount($statistics['unreconciled_amount'] ?? 0) }}</h3>
+                                        <p>{{ __('unreconciled_amount') }} (FCFA)</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-exclamation-triangle"></i>
                                     </div>
                                 </div>
@@ -140,14 +140,14 @@
                                             <br><small>{{ $reconciliation->bankAccount->account_name ?? '' }}</small>
                                         </td>
                                         <td>{{ \Carbon\Carbon::parse($reconciliation->statement_date)->format('d M Y') }}</td>
-                                        <td class="text-right">{{ number_format($reconciliation->statement_ending_balance, 0, ',', ' ') }}</td>
-                                        <td class="text-right">{{ number_format($reconciliation->book_balance, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($reconciliation->statement_ending_balance) }}</td>
+                                        <td class="text-right">{{ format_amount($reconciliation->book_balance) }}</td>
                                         <td class="text-right">
                                             @php
                                                 $diff = $reconciliation->statement_ending_balance - $reconciliation->adjusted_book_balance;
                                             @endphp
                                             <span class="{{ abs($diff) < 1 ? 'text-success' : 'text-danger' }}">
-                                                {{ number_format($diff, 0, ',', ' ') }}
+                                                {{ format_amount($diff) }}
                                             </span>
                                         </td>
                                         <td>

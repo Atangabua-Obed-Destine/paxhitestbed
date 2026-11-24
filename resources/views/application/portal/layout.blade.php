@@ -6,9 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ?? __('Application Portal') }}</title>
 
-    <link rel="stylesheet" href="{{ asset('dashboard/css/style.css') }}?v={{ time() }}">
-    <link rel="stylesheet" href="{{ asset('dashboard/css/pages/wizard.css') }}?v={{ time() }}">
-    <link rel="stylesheet" href="{{ asset('dashboard/plugins/fontawesome/css/all.min.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="{{ asset('dashboard/css/style.css') }}?v={{ @filemtime(public_path('dashboard/css/style.css')) }}">
+    <link rel="stylesheet" href="{{ asset('dashboard/css/pages/wizard.css') }}?v={{ @filemtime(public_path('dashboard/css/pages/wizard.css')) }}">
+    <link rel="stylesheet" href="{{ asset('dashboard/plugins/fontawesome/css/all.min.css') }}?v={{ @filemtime(public_path('dashboard/plugins/fontawesome/css/all.min.css')) }}">
     <style>
         body.application-portal {
             background: #f5f7fb;

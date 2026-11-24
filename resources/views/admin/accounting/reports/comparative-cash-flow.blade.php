@@ -71,125 +71,52 @@
                 </div>
                 <div class="card-body table-responsive">
                     @if(isset($statement))
+                    @php
+                        $pct = fn ($v) => number_format($v, 1) . '%';
+                        $money = fn ($v) => format_amount($v, true);
+                    @endphp
                     <table class="table table-bordered table-hover">
                         <thead class="bg-primary text-white">
                             <tr>
                                 <th>{{ __('Cash Flow Category') }}</th>
-                                @foreach($statement['periods'] ?? [] as $period)
-                                <th class="text-right">{{ $period }}</th>
-                                @endforeach
+                                <th class="text-right">{{ $statement['periods']['current']['name'] }}</th>
+                                <th class="text-right">{{ $statement['periods']['previous']['name'] }}</th>
                                 <th class="text-right">{{ __('Change') }}</th>
                                 <th class="text-right">{{ __('% Change') }}</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Operating Activities -->
+                            @foreach(['operating' => __('Operating Activities'), 'investing' => __('Investing Activities'), 'financing' => __('Financing Activities')] as $key => $label)
                             <tr class="bg-light font-weight-bold">
-                                <td colspan="{{ count($statement['periods'] ?? []) + 3 }}">
-                                    {{ __('Operating Activities') }}
-                                </td>
+                                <td colspan="5">{{ $label }}</td>
                             </tr>
-                            @foreach($statement['operating']['items'] ?? [] as $item)
+                            @forelse($statement[$key]['items'] as $item)
                             <tr>
-                                <td style="padding-left: 30px;">{{ $item['name'] }}</td>
-                                @foreach($item['values'] ?? [] as $value)
-                                <td class="text-right">{{ number_format($value) }}</td>
-                                @endforeach
-                                <td class="text-right {{ ($item['change'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($item['change'] ?? 0) }}
-                                </td>
-                                <td class="text-right {{ ($item['change_percent'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($item['change_percent'] ?? 0, 1) }}%
-                                </td>
+                                <td style="padding-left: 30px;">{{ $item['description'] }}</td>
+                                <td class="text-right">{{ $money($item['current']) }}</td>
+                                <td class="text-right">{{ $money($item['previous']) }}</td>
+                                <td class="text-right {{ $item['variance'] < 0 ? 'text-danger' : 'text-success' }}">{{ $money($item['variance']) }}</td>
+                                <td class="text-right">{{ $pct($item['change_percent']) }}</td>
+                            </tr>
+                            @empty
+                            <tr><td colspan="5" class="text-muted" style="padding-left: 30px;">{{ __('No movement') }}</td></tr>
+                            @endforelse
+                            <tr class="font-weight-bold">
+                                <td>{{ __('Net cash from') }} {{ strtolower($label) }}</td>
+                                <td class="text-right">{{ $money($statement[$key]['current_total']) }}</td>
+                                <td class="text-right">{{ $money($statement[$key]['previous_total']) }}</td>
+                                <td class="text-right {{ $statement[$key]['variance'] < 0 ? 'text-danger' : 'text-success' }}">{{ $money($statement[$key]['variance']) }}</td>
+                                <td class="text-right">{{ $pct($statement[$key]['change_percent']) }}</td>
                             </tr>
                             @endforeach
-                            <tr class="font-weight-bold">
-                                <td>{{ __('Net Cash from Operating') }}</td>
-                                @foreach($statement['operating']['totals'] ?? [] as $total)
-                                <td class="text-right">{{ number_format($total) }}</td>
-                                @endforeach
-                                <td class="text-right {{ ($statement['operating']['change'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($statement['operating']['change'] ?? 0) }}
-                                </td>
-                                <td class="text-right {{ ($statement['operating']['change_percent'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($statement['operating']['change_percent'] ?? 0, 1) }}%
-                                </td>
-                            </tr>
-
-                            <!-- Investing Activities -->
-                            <tr class="bg-light font-weight-bold">
-                                <td colspan="{{ count($statement['periods'] ?? []) + 3 }}">
-                                    {{ __('Investing Activities') }}
-                                </td>
-                            </tr>
-                            @foreach($statement['investing']['items'] ?? [] as $item)
-                            <tr>
-                                <td style="padding-left: 30px;">{{ $item['name'] }}</td>
-                                @foreach($item['values'] ?? [] as $value)
-                                <td class="text-right">{{ number_format($value) }}</td>
-                                @endforeach
-                                <td class="text-right {{ ($item['change'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($item['change'] ?? 0) }}
-                                </td>
-                                <td class="text-right {{ ($item['change_percent'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($item['change_percent'] ?? 0, 1) }}%
-                                </td>
-                            </tr>
-                            @endforeach
-                            <tr class="font-weight-bold">
-                                <td>{{ __('Net Cash from Investing') }}</td>
-                                @foreach($statement['investing']['totals'] ?? [] as $total)
-                                <td class="text-right">{{ number_format($total) }}</td>
-                                @endforeach
-                                <td class="text-right {{ ($statement['investing']['change'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($statement['investing']['change'] ?? 0) }}
-                                </td>
-                                <td class="text-right {{ ($statement['investing']['change_percent'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($statement['investing']['change_percent'] ?? 0, 1) }}%
-                                </td>
-                            </tr>
-
-                            <!-- Financing Activities -->
-                            <tr class="bg-light font-weight-bold">
-                                <td colspan="{{ count($statement['periods'] ?? []) + 3 }}">
-                                    {{ __('Financing Activities') }}
-                                </td>
-                            </tr>
-                            @foreach($statement['financing']['items'] ?? [] as $item)
-                            <tr>
-                                <td style="padding-left: 30px;">{{ $item['name'] }}</td>
-                                @foreach($item['values'] ?? [] as $value)
-                                <td class="text-right">{{ number_format($value) }}</td>
-                                @endforeach
-                                <td class="text-right {{ ($item['change'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($item['change'] ?? 0) }}
-                                </td>
-                                <td class="text-right {{ ($item['change_percent'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($item['change_percent'] ?? 0, 1) }}%
-                                </td>
-                            </tr>
-                            @endforeach
-                            <tr class="font-weight-bold">
-                                <td>{{ __('Net Cash from Financing') }}</td>
-                                @foreach($statement['financing']['totals'] ?? [] as $total)
-                                <td class="text-right">{{ number_format($total) }}</td>
-                                @endforeach
-                                <td class="text-right {{ ($statement['financing']['change'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($statement['financing']['change'] ?? 0) }}
-                                </td>
-                                <td class="text-right {{ ($statement['financing']['change_percent'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                    {{ number_format($statement['financing']['change_percent'] ?? 0, 1) }}%
-                                </td>
-                            </tr>
                         </tbody>
                         <tfoot class="bg-secondary text-white font-weight-bold">
                             <tr>
                                 <td>{{ __('Net Change in Cash') }}</td>
-                                @foreach($statement['net_changes'] ?? [] as $change)
-                                <td class="text-right">{{ number_format($change) }}</td>
-                                @endforeach
-                                <td class="text-right">{{ number_format($statement['total_change'] ?? 0) }}</td>
-                                <td class="text-right">{{ number_format($statement['total_change_percent'] ?? 0, 1) }}%</td>
+                                <td class="text-right">{{ $money($statement['net_change']['current']) }}</td>
+                                <td class="text-right">{{ $money($statement['net_change']['previous']) }}</td>
+                                <td class="text-right">{{ $money($statement['net_change']['variance']) }}</td>
+                                <td class="text-right">{{ $pct($statement['net_change']['change_percent']) }}</td>
                             </tr>
                         </tfoot>
                     </table>

@@ -173,28 +173,35 @@ class JournalEntry extends Model
     }
 
     /**
-     * Generate next entry number
+     * The next number in the one series every entry shares: JE-YYYY-NNNN, by
+     * the year of the entry's own date.
+     *
+     * There used to be two series — JE-YYYY-NNNN here and JE-NNNNNN for
+     * automatic postings — and the second had to ignore the first to avoid
+     * reading a year as a sequence number. One series, read by numeric value,
+     * removes that hazard: "JE-2026-9999" sorts above "JE-2026-10000" as text,
+     * so the string maximum would repeat a number at entry ten thousand.
+     *
+     * Soft-deleted entries still hold their numbers in the unique index, so
+     * they count. Read FOR UPDATE: inside a transaction two simultaneous
+     * postings then take numbers one after the other.
+     *
+     * Existing JE-NNNNNN numbers are history and are left as they are.
      */
-    public static function generateEntryNumber()
+    public static function generateEntryNumber($date = null)
     {
-        $year = date('Y');
+        $year = $date ? \Carbon\Carbon::parse($date)->year : (int) date('Y');
         $prefix = 'JE-' . $year . '-';
-        
-        $lastEntry = static::withTrashed()
-            ->where('entry_number', 'like', $prefix . '%')
-            ->orderBy('entry_number', 'desc')
-            ->first();
-        
-        if ($lastEntry) {
-            $lastNumber = (int) substr($lastEntry->entry_number, -4);
-            $nextNumber = $lastNumber + 1;
-        } else {
-            $nextNumber = 1;
-        }
-        
-        return $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
-    }
 
+        $max = static::withTrashed()
+            ->where('entry_number', 'like', $prefix . '%')
+            ->lockForUpdate()
+            ->pluck('entry_number')
+            ->map(fn ($n) => (int) substr($n, strlen($prefix)))
+            ->max() ?? 0;
+
+        return $prefix . str_pad((string) ($max + 1), 4, '0', STR_PAD_LEFT);
+    }
     /**
      * Post the journal entry
      */
@@ -243,10 +250,29 @@ class JournalEntry extends Model
     /**
      * Unpost the journal entry
      */
-    public function unpost()
+    /**
+     * Take a posted entry back to draft.
+     *
+     * Only for entries typed in by hand. An entry the system wrote for a fee,
+     * an income, an expense, a payroll or a remittance is corrected through
+     * that record, which writes a reversing entry; un-posting it here would
+     * leave the record saying one thing and the ledger another. $bySystem is
+     * for the code that owns such an entry.
+     */
+    public function unpost(bool $bySystem = false)
     {
         if (!$this->is_posted) {
             return false;
+        }
+
+        if ($this->is_system_generated && !$bySystem) {
+            throw new \Exception(__('This entry was written by the system for a fee, income, expense, payroll or remittance. Correct it through that record; it cannot be un-posted by hand.'));
+        }
+        if ($this->accountingPeriod && $this->accountingPeriod->is_closed) {
+            throw new \Exception(__('cannot_unpost_entry_in_closed_period'));
+        }
+        if ($this->fiscalYear && $this->fiscalYear->is_closed) {
+            throw new \Exception(__('Cannot un-post an entry in a closed fiscal year.'));
         }
 
         // Atomic: reverse all balance updates + clear posted flag together

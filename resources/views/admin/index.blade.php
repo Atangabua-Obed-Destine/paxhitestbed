@@ -259,7 +259,7 @@
     // print as 05:08) and "HH:MM:SS XM". Read them as the labels promise.
     $timeFormat = preg_match('/[aA]/', $setting->time_format ?? '') ? 'g:i A' : 'H:i';
     $at = fn ($time) => date($timeFormat, strtotime($time));
-    $money = fn ($amount) => ($setting->currency_symbol ?? '$') . number_format($amount, 0);
+    $money = fn ($amount) => ($setting->currency_symbol ?? '$') . format_amount($amount);
 
     // The system numbers days 1 = Saturday … 7 = Friday.
     $todayNumber = [1 => 3, 2 => 4, 3 => 5, 4 => 6, 5 => 7, 6 => 1, 7 => 2][(int) $now->format('N')];

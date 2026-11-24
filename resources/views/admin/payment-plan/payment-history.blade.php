@@ -27,7 +27,7 @@
                                 <td>{{ date('d M Y, h:i A', strtotime($payment->payment_date)) }}</td>
                                 <td>
                                     <strong @if($payment->isReversed()) class="text-decoration-line-through" @endif>
-                                        {{ number_format($payment->amount, 2) }} {!! $setting->currency_symbol !!}
+                                        {{ format_amount($payment->amount) }} {!! $setting->currency_symbol !!}
                                     </strong>
                                     @if($payment->isReversed())
                                         <span class="badge bg-danger">{{ __('Reversed') }}</span>
@@ -85,7 +85,7 @@
                         <tfoot>
                             <tr>
                                 <th>{{ __('total_paid') }}</th>
-                                <th><strong>{{ number_format($installment->paid_amount, 2) }} {!! $setting->currency_symbol !!}</strong></th>
+                                <th><strong>{{ format_amount($installment->paid_amount) }} {!! $setting->currency_symbol !!}</strong></th>
                                 <th colspan="5"></th>
                             </tr>
                         </tfoot>
@@ -119,7 +119,7 @@
                     <div class="modal-body">
                         <p>
                             {{ __('This takes :amount off instalment #:number and off the fee, and puts back the ledger entry, the payment account and the student\'s statement with it. The payment is kept, marked reversed.', [
-                                'amount' => number_format($payment->amount, 2),
+                                'amount' => format_amount($payment->amount),
                                 'number' => $installment->installment_number,
                             ]) }}
                         </p>

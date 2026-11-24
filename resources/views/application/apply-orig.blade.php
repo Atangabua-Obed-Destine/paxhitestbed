@@ -258,7 +258,7 @@
                                     <span class="text-muted">{{ __('Last Saved') }}:</span>
                                     <span id="last-saved-time">
                                         @if($application->draft_last_saved_at)
-                                            {{ $application->draft_last_saved_at->format('M j, Y g:i A') }}
+                                            {{ $application->draft_last_saved_at->format('d/m/Y H:i') }}
                                         @else
                                             {{ __('Not saved yet') }}
                                         @endif

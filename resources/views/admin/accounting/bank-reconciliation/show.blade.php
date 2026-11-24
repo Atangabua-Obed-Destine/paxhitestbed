@@ -56,7 +56,7 @@
                                 <div class="card summary-card book">
                                     <div class="card-body py-2">
                                         <small class="text-muted">{{ __('book_balance') }}</small>
-                                        <h4 class="mb-0">{{ number_format($reconciliation->book_balance, 0, ',', ' ') }} FCFA</h4>
+                                        <h4 class="mb-0">{{ format_amount($reconciliation->book_balance) }} FCFA</h4>
                                     </div>
                                 </div>
                             </div>
@@ -64,7 +64,7 @@
                                 <div class="card summary-card statement">
                                     <div class="card-body py-2">
                                         <small class="text-muted">{{ __('statement_ending_balance') }}</small>
-                                        <h4 class="mb-0">{{ number_format($reconciliation->statement_ending_balance, 0, ',', ' ') }} FCFA</h4>
+                                        <h4 class="mb-0">{{ format_amount($reconciliation->statement_ending_balance) }} FCFA</h4>
                                     </div>
                                 </div>
                             </div>
@@ -72,7 +72,7 @@
                                 <div class="card summary-card book">
                                     <div class="card-body py-2">
                                         <small class="text-muted">{{ __('adjusted_book_balance') }}</small>
-                                        <h4 class="mb-0">{{ number_format($reconciliation->adjusted_book_balance, 0, ',', ' ') }} FCFA</h4>
+                                        <h4 class="mb-0">{{ format_amount($reconciliation->adjusted_book_balance) }} FCFA</h4>
                                     </div>
                                 </div>
                             </div>
@@ -84,7 +84,7 @@
                                     <div class="card-body py-2">
                                         <small class="text-muted">{{ __('difference') }}</small>
                                         <h4 class="mb-0 {{ abs($difference) < 1 ? 'text-success' : 'text-danger' }}">
-                                            {{ number_format($difference, 0, ',', ' ') }} FCFA
+                                            {{ format_amount($difference) }} FCFA
                                         </h4>
                                     </div>
                                 </div>
@@ -113,7 +113,7 @@
                                 <table class="table table-sm table-borderless">
                                     <tr>
                                         <th width="40%">{{ __('statement_beginning_balance') }}</th>
-                                        <td>{{ number_format($reconciliation->statement_beginning_balance, 0, ',', ' ') }} FCFA</td>
+                                        <td>{{ format_amount($reconciliation->statement_beginning_balance) }} FCFA</td>
                                     </tr>
                                     <tr>
                                         <th>{{ __('prepared_by') }}</th>
@@ -163,7 +163,7 @@
                                 <tr class="reconciliation-item">
                                     <td>{{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}</td>
                                     <td>{{ $item->reference }}</td>
-                                    <td class="text-right">{{ number_format($item->amount, 0, ',', ' ') }}</td>
+                                    <td class="text-right">{{ format_amount($item->amount) }}</td>
                                     @if($reconciliation->status != 'completed')
                                     <td>
                                         <form action="{{ route('admin.bank-reconciliation.clear-item', [$reconciliation->id, $item->id]) }}" method="POST" class="d-inline">
@@ -185,7 +185,7 @@
                             <tfoot>
                                 <tr class="table-warning">
                                     <th colspan="2">{{ __('total') }}</th>
-                                    <th class="text-right">{{ number_format($totalOutstandingChecks, 0, ',', ' ') }} FCFA</th>
+                                    <th class="text-right">{{ format_amount($totalOutstandingChecks) }} FCFA</th>
                                     @if($reconciliation->status != 'completed')<th></th>@endif
                                 </tr>
                             </tfoot>
@@ -225,7 +225,7 @@
                                 <tr class="reconciliation-item">
                                     <td>{{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}</td>
                                     <td>{{ $item->reference }}</td>
-                                    <td class="text-right">{{ number_format($item->amount, 0, ',', ' ') }}</td>
+                                    <td class="text-right">{{ format_amount($item->amount) }}</td>
                                     @if($reconciliation->status != 'completed')
                                     <td>
                                         <form action="{{ route('admin.bank-reconciliation.clear-item', [$reconciliation->id, $item->id]) }}" method="POST" class="d-inline">
@@ -247,7 +247,7 @@
                             <tfoot>
                                 <tr class="table-info">
                                     <th colspan="2">{{ __('total') }}</th>
-                                    <th class="text-right">{{ number_format($totalDepositsInTransit, 0, ',', ' ') }} FCFA</th>
+                                    <th class="text-right">{{ format_amount($totalDepositsInTransit) }} FCFA</th>
                                     @if($reconciliation->status != 'completed')<th></th>@endif
                                 </tr>
                             </tfoot>
@@ -285,8 +285,8 @@
                                 <tr>
                                     <td>{{ __($item->item_type) }}</td>
                                     <td>{{ $item->description }}</td>
-                                    <td class="text-right">{{ $item->amount < 0 ? number_format(abs($item->amount), 0, ',', ' ') : '-' }}</td>
-                                    <td class="text-right">{{ $item->amount > 0 ? number_format($item->amount, 0, ',', ' ') : '-' }}</td>
+                                    <td class="text-right">{{ $item->amount < 0 ? format_amount(abs($item->amount)) : '-' }}</td>
+                                    <td class="text-right">{{ $item->amount > 0 ? format_amount($item->amount) : '-' }}</td>
                                 </tr>
                                 @php 
                                     if ($item->amount > 0) $totalAdjustmentCredits += $item->amount;
@@ -301,7 +301,7 @@
                             <tfoot>
                                 <tr class="table-secondary">
                                     <th colspan="2">{{ __('total_adjustments') }}</th>
-                                    <th class="text-right">{{ number_format($totalAdjustmentDebits, 0, ',', ' ') }}</th>
+                                    <th class="text-right">{{ format_amount($totalAdjustmentDebits) }}</th>
                                     <th class="text-right">{{ number_format($totalAdjustmentCredits, 0, ',', ' ') }}</th>
                                 </tr>
                             </tfoot>
@@ -323,19 +323,19 @@
                                 <table class="table table-sm">
                                     <tr>
                                         <td>{{ __('statement_ending_balance') }}</td>
-                                        <td class="text-right">{{ number_format($reconciliation->statement_ending_balance, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($reconciliation->statement_ending_balance) }}</td>
                                     </tr>
                                     <tr>
                                         <td>{{ __('add') }}: {{ __('deposits_in_transit') }}</td>
-                                        <td class="text-right text-success">+ {{ number_format($totalDepositsInTransit, 0, ',', ' ') }}</td>
+                                        <td class="text-right text-success">+ {{ format_amount($totalDepositsInTransit) }}</td>
                                     </tr>
                                     <tr>
                                         <td>{{ __('less') }}: {{ __('outstanding_checks') }}</td>
-                                        <td class="text-right text-danger">- {{ number_format($totalOutstandingChecks, 0, ',', ' ') }}</td>
+                                        <td class="text-right text-danger">- {{ format_amount($totalOutstandingChecks) }}</td>
                                     </tr>
                                     <tr class="table-primary font-weight-bold">
                                         <td>{{ __('adjusted_bank_balance') }}</td>
-                                        <td class="text-right">{{ number_format($reconciliation->statement_ending_balance + $totalDepositsInTransit - $totalOutstandingChecks, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($reconciliation->statement_ending_balance + $totalDepositsInTransit - $totalOutstandingChecks) }}</td>
                                     </tr>
                                 </table>
                             </div>
@@ -344,7 +344,7 @@
                                 <table class="table table-sm">
                                     <tr>
                                         <td>{{ __('book_balance') }}</td>
-                                        <td class="text-right">{{ number_format($reconciliation->book_balance, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($reconciliation->book_balance) }}</td>
                                     </tr>
                                     <tr>
                                         <td>{{ __('add') }}: {{ __('credits') }}</td>
@@ -352,11 +352,11 @@
                                     </tr>
                                     <tr>
                                         <td>{{ __('less') }}: {{ __('debits') }}</td>
-                                        <td class="text-right text-danger">- {{ number_format($totalAdjustmentDebits, 0, ',', ' ') }}</td>
+                                        <td class="text-right text-danger">- {{ format_amount($totalAdjustmentDebits) }}</td>
                                     </tr>
                                     <tr class="table-primary font-weight-bold">
                                         <td>{{ __('adjusted_book_balance') }}</td>
-                                        <td class="text-right">{{ number_format($reconciliation->adjusted_book_balance, 0, ',', ' ') }}</td>
+                                        <td class="text-right">{{ format_amount($reconciliation->adjusted_book_balance) }}</td>
                                     </tr>
                                 </table>
                             </div>

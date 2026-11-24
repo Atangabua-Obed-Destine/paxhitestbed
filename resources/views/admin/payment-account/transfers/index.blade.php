@@ -46,7 +46,7 @@
                                             <small class="text-muted">{{ $transfer->toAccount->accountType->title }}</small>
                                         </td>
                                         <td class="text-right">
-                                            <strong class="text-primary">{{ number_format($transfer->amount, 2) }}</strong>
+                                            <strong class="text-primary">{{ format_amount($transfer->amount) }}</strong>
                                         </td>
                                         <td>{{ Str::limit($transfer->note, 50) }}</td>
                                         <td>

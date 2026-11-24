@@ -16,6 +16,7 @@ class PaymentAccount extends Model
      * @var array
      */
     protected $fillable = [
+        'chart_of_account_id',
         'title',
         'account_number',
         'account_type_id',
@@ -37,6 +38,12 @@ class PaymentAccount extends Model
         'current_balance' => 'decimal:2',
         'status' => 'boolean',
     ];
+
+    /** The ledger account (class 5) this cash box, bank or wallet posts to. */
+    public function ledgerAccount()
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'chart_of_account_id');
+    }
 
     /**
      * Get the account type

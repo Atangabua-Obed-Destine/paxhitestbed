@@ -45,6 +45,11 @@ class AppServiceProvider extends ServiceProvider
     {
         //
         Schema::defaultStringLength(191);
+
+        // Embed only the glyphs a PDF uses. DejaVu (the face that prints French
+        // accents) is otherwise embedded whole, which made every statement PDF
+        // about 900 KB; the payslip went from 880 KB to 27 KB this way.
+        config(['dompdf.options.enable_font_subsetting' => true]);
         Paginator::useBootstrap();
 
         // Register observers for auto-mapping transactions

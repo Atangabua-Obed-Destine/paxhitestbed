@@ -20,7 +20,7 @@
     $enrolment = optional($first)->studentEnroll;
     $programme = optional($enrolment)->program;
     $timeline = $agreement->timeline();
-    $money = fn ($v) => number_format((float) $v, 2);
+    $money = fn ($v) => format_amount((float) $v);
     $planner = app(\App\Services\PaymentPlanAgreements::class);
     $approved = $agreement->isApproved();
 @endphp

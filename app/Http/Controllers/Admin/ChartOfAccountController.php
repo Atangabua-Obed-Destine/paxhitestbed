@@ -42,9 +42,11 @@ class ChartOfAccountController extends Controller
         // Get all accounts ordered by code with hierarchy preserved
         $data['accounts'] = $query->orderBy('account_code')->get();
         
-        // Add level attribute for indentation
+        // Add level attribute for indentation. Parents are looked up in one map of
+        // every (non-deleted) account rather than one query per step up the tree.
+        $parentOf = ChartOfAccount::pluck('parent_id', 'id')->all();
         foreach ($data['accounts'] as $account) {
-            $account->level = $this->getAccountLevel($account);
+            $account->level = $this->levelFromMap($account->parent_id, $parentOf);
         }
         
         // Get statistics
@@ -58,6 +60,23 @@ class ChartOfAccountController extends Controller
         return view('admin.chart-of-accounts.index', $data);
     }
     
+    /**
+     * getAccountLevel() worked out from an id => parent_id map: the same walk up
+     * the tree, the same answer when a parent no longer exists, no queries.
+     */
+    private function levelFromMap($parentId, array $parentOf, $level = 0)
+    {
+        if (!$parentId) {
+            return 0;
+        }
+
+        if (array_key_exists($parentId, $parentOf)) {
+            return $this->levelFromMap($parentOf[$parentId], $parentOf, $level + 1) + 1;
+        }
+
+        return $level;
+    }
+
     /**
      * Get the hierarchical level of an account
      */

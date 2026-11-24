@@ -117,7 +117,7 @@
                                         </td>
                                         <td>{{ $row->fiscal_year }}</td>
                                         <td>{{ $row->department->title ?? '-' }}</td>
-                                        <td>{{ number_format($row->total_amount, 2) }}</td>
+                                        <td>{{ format_amount($row->total_amount) }}</td>
                                         <td>
                                             <div class="progress" style="height: 20px;">
                                                 <div class="progress-bar bg-{{ $row->utilization_color }}" 
@@ -130,8 +130,8 @@
                                                 </div>
                                             </div>
                                             <small>
-                                                Spent: {{ number_format($row->spent_amount, 2) }} / 
-                                                Remaining: {{ number_format($row->remaining_amount, 2) }}
+                                                Spent: {{ format_amount($row->spent_amount) }} / 
+                                                Remaining: {{ format_amount($row->remaining_amount) }}
                                             </small>
                                         </td>
                                         <td>{!! $row->status_badge !!}</td>

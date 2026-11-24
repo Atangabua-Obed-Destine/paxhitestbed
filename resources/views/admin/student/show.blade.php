@@ -458,16 +458,16 @@
         @if($allEnrollments->count() > 1)
         <div class="row mb-3">
             <div class="col-md-12">
-                <div class="alert alert-info d-flex align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white;">
-                    <i class="fas fa-exchange-alt me-3" style="font-size: 24px;"></i>
+                <div class="alert alert-plain d-flex align-items-center">
+                    <i class="fas fa-exchange-alt me-3" style="font-size: 20px; color: #1d4ed8;"></i>
                     <div style="flex: 1;">
-                        <h6 class="mb-1 text-white"><strong>Multi-Enrollment Student</strong></h6>
+                        <h6 class="mb-1"><strong>Multi-Enrollment Student</strong></h6>
                         <p class="mb-0" style="font-size: 13px; opacity: 0.95;">
                             This student has {{ $allEnrollments->count() }} enrollments. Select an enrollment to view all data for that specific program.
                         </p>
                     </div>
                     <div class="dropdown" style="margin-left: 15px;">
-                        <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown" style="min-width: 200px; font-weight: 500;">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" style="min-width: 200px; font-weight: 500;">
                             <i class="fas fa-graduation-cap me-2"></i>{{ $currentEnroll->matricule }}
                         </button>
                         <ul class="dropdown-menu" style="min-width: 350px;">
@@ -478,7 +478,7 @@
                                    style="padding: 12px 15px;">
                                     <div class="d-flex align-items-start">
                                         <div style="width: 40px; height: 40px; border-radius: 8px; 
-                                            background: linear-gradient(135deg, {{ $enrollment->program->academic_level == 'M' ? '#f093fb 0%, #f5576c 100%' : ($enrollment->program->academic_level == 'D' ? '#4facfe 0%, #00f2fe 100%' : '#43e97b 0%, #38f9d7 100%') }}); 
+                                            background: {{ $enrollment->program->academic_level == 'M' ? '#6d28d9' : ($enrollment->program->academic_level == 'D' ? '#0369a1' : '#15803d') }}; 
                                             display: flex; align-items: center; justify-content: center; margin-right: 12px;">
                                             <i class="fas fa-graduation-cap text-white"></i>
                                         </div>
@@ -1201,7 +1201,7 @@
                                                     <td class="at-cell-num">{{ number_format($creditsAttempted, 1) }}</td>
                                                     <td class="at-cell-num">
                                                         @if(!is_null($subjectGradePoint))
-                                                            {{ number_format($creditsEarned, 1) }}
+                                                            {{ format_amount($creditsEarned) }}
                                                         @else
                                                             <span class="at-pending">&mdash;</span>
                                                         @endif

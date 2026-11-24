@@ -10,7 +10,77 @@ use App\Traits\Auditable;
 
 class User extends Authenticatable
 {
-    use Notifiable, HasRoles, Auditable;
+    use Notifiable, Auditable;
+    use HasRoles {
+        hasPermissionTo as protected spatieHasPermissionTo;
+    }
+
+    /**
+     * Per user object: the permission names it holds and every name that exists
+     * (default guard), with the collections they were built from (see
+     * hasPermissionTo). Kept beside the model, not on it, so serialising a user
+     * never carries it; entries go when the user object does.
+     */
+    protected static ?\WeakMap $permissionIndex = null;
+
+    /**
+     * The package (spatie/laravel-permission 5) answers every check by scanning
+     * all ~800 permissions twice; the sidebar alone asks ~320 times per page,
+     * which cost 2-4 seconds on every screen. A plain permission name is
+     * answered here from a set built once; anything else - an unknown name
+     * (which must still throw), another guard, a Permission object - goes to the
+     * package unchanged. The set is rebuilt whenever the user's roles or direct
+     * permissions are reloaded, which assignRole/givePermissionTo/sync* do.
+     */
+    public function hasPermissionTo($permission, $guardName = null): bool
+    {
+        $guard = $this->getDefaultGuardName();
+        if (!is_string($permission) || ($guardName !== null && $guardName !== $guard)) {
+            return $this->spatieHasPermissionTo($permission, $guardName);
+        }
+
+        $this->loadMissing('roles', 'permissions');
+        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
+        $readAll = \Closure::bind(fn () => $this->permissions, $registrar, \Spatie\Permission\PermissionRegistrar::class);
+        if ($readAll() === null) {
+            $registrar->getPermissions(); // loads (and caches) the list
+        }
+        $all = $readAll();
+        $roles = $this->getRelation('roles');
+        $direct = $this->getRelation('permissions');
+
+        // Rebuilt when any of the three is replaced: the package reloads the user's
+        // roles/permissions after assignRole/givePermissionTo/sync*, and re-reads its
+        // list after every role or permission change. The index keeps references
+        // to the collections it was built from, so a replaced one can never share
+        // an object identity with the one held here.
+        self::$permissionIndex ??= new \WeakMap();
+        $index = self::$permissionIndex[$this] ?? null;
+        if ($index === null || $index['from'][0] !== $all || $index['from'][1] !== $roles || $index['from'][2] !== $direct) {
+            $directIds = array_flip($direct->pluck('id')->all());
+            $roleIds = array_flip($roles->pluck('id')->all());
+            $known = [];
+            $held = [];
+            foreach ($all as $p) {
+                if ($p->guard_name !== $guard) {
+                    continue;
+                }
+                $known[$p->name] = true;
+                // exactly the package's rule: held directly, or through one of the user's roles
+                if (isset($directIds[$p->id]) || $p->roles->contains(fn ($r) => isset($roleIds[$r->id]))) {
+                    $held[$p->name] = true;
+                }
+            }
+            $index = ['from' => [$all, $roles, $direct], 'known' => $known, 'held' => $held];
+            self::$permissionIndex[$this] = $index;
+        }
+
+        if (!isset($index['known'][$permission])) {
+            return $this->spatieHasPermissionTo($permission, $guardName);
+        }
+
+        return isset($index['held'][$permission]);
+    }
 
     /**
      * The attributes that are mass assignable.

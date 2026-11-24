@@ -792,7 +792,7 @@ $post = function (string $url) use ($kernel) {
 [$status, $html] = $render(url('admin/fees-credit-audit'));
 check('Super Admin can open it', $status === 200, "status $status");
 check('with both corrections offered', str_contains($html, 'btn-void-duplicates') && str_contains($html, 'btn-correct-ledger'));
-check('showing the amount posted twice', $preview->isEmpty() || str_contains($html, number_format($preview->sum('difference'), 0)));
+check('showing the amount posted twice', $preview->isEmpty() || str_contains($html, number_format($preview->sum('difference'), 0)) || str_contains($html, format_amount($preview->sum('difference'))));
 
 [, $html] = $render(url('admin/fees-student-report'));
 check('and finds it in the menu', str_contains($html, 'fees-credit-audit'));

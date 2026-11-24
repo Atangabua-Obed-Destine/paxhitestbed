@@ -59,17 +59,17 @@
                                     </tr>
                                     <tr>
                                         <th>{{ __('opening_balance') }}</th>
-                                        <td class="text-right"><strong>{{ number_format($openingBalance, 0, ',', ' ') }}</strong> FCFA</td>
+                                        <td class="text-right"><strong>{{ format_amount($openingBalance) }}</strong> FCFA</td>
                                     </tr>
                                     <tr>
                                         <th>{{ __('closing_balance') }}</th>
-                                        <td class="text-right"><strong>{{ number_format($closingBalance, 0, ',', ' ') }}</strong> FCFA</td>
+                                        <td class="text-right"><strong>{{ format_amount($closingBalance) }}</strong> FCFA</td>
                                     </tr>
                                     <tr>
                                         <th>{{ __('movement') }}</th>
                                         <td class="text-right">
                                             <span class="badge badge-{{ $closingBalance >= $openingBalance ? 'success' : 'danger' }}">
-                                                {{ number_format(abs($closingBalance - $openingBalance), 0, ',', ' ') }} FCFA
+                                                {{ format_amount(abs($closingBalance - $openingBalance)) }} FCFA
                                             </span>
                                         </td>
                                     </tr>
@@ -125,7 +125,7 @@
                                     <!-- Opening Balance Row -->
                                     <tr class="table-info">
                                         <td colspan="5" class="text-right"><strong>{{ __('opening_balance') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($openingBalance, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($openingBalance) }}</strong></td>
                                         <td class="no-print"></td>
                                     </tr>
 
@@ -154,21 +154,21 @@
                                         </td>
                                         <td class="text-right">
                                             @if($transaction->debit > 0)
-                                            {{ number_format($transaction->debit, 0, ',', ' ') }}
+                                            {{ format_amount($transaction->debit) }}
                                             @else
                                             -
                                             @endif
                                         </td>
                                         <td class="text-right">
                                             @if($transaction->credit > 0)
-                                            {{ number_format($transaction->credit, 0, ',', ' ') }}
+                                            {{ format_amount($transaction->credit) }}
                                             @else
                                             -
                                             @endif
                                         </td>
                                         <td class="text-right">
                                             <strong class="text-{{ $runningBalance >= 0 ? 'success' : 'danger' }}">
-                                                {{ number_format($runningBalance, 0, ',', ' ') }}
+                                                {{ format_amount($runningBalance) }}
                                             </strong>
                                         </td>
                                         <td class="text-center no-print">
@@ -187,7 +187,7 @@
                                     <tr class="table-success">
                                         <td colspan="5" class="text-right"><strong>{{ __('closing_balance') }}</strong></td>
                                         <td class="text-right">
-                                            <strong>{{ number_format($closingBalance, 0, ',', ' ') }}</strong>
+                                            <strong>{{ format_amount($closingBalance) }}</strong>
                                         </td>
                                         <td class="no-print"></td>
                                     </tr>
@@ -202,9 +202,9 @@
                                 <div class="alert alert-info">
                                     <strong>{{ __('summary') }}:</strong>
                                     {{ __('total_transactions') }}: {{ $transactions->count() }} | 
-                                    {{ __('total_debit') }}: {{ number_format($transactions->sum('debit'), 0, ',', ' ') }} FCFA | 
-                                    {{ __('total_credit') }}: {{ number_format($transactions->sum('credit'), 0, ',', ' ') }} FCFA | 
-                                    {{ __('net_movement') }}: {{ number_format($closingBalance - $openingBalance, 0, ',', ' ') }} FCFA
+                                    {{ __('total_debit') }}: {{ format_amount($transactions->sum('debit')) }} FCFA | 
+                                    {{ __('total_credit') }}: {{ format_amount($transactions->sum('credit')) }} FCFA | 
+                                    {{ __('net_movement') }}: {{ format_amount($closingBalance - $openingBalance) }} FCFA
                                 </div>
                             </div>
                         </div>

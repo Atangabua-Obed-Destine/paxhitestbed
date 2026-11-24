@@ -50,7 +50,7 @@
                                 </span>
                             </div>
                             
-                            <p class="text-muted small mb-0"><i class="far fa-calendar-alt me-1"></i>{{ $item->created_at->format('F j, Y \a\t g:i A') }}</p>
+                            <p class="text-muted small mb-0"><i class="far fa-calendar-alt me-1"></i>{{ $item->created_at->format('d/m/Y H:i') }}</p>
                             
                             @if($item->note)
                                 <div class="mt-3 p-3 bg-white rounded border-start border-3 border-primary text-secondary">

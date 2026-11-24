@@ -26,7 +26,7 @@
                                 <td>
                                     {{-- A reversed payment is kept on the record but no longer counts towards the instalment. --}}
                                     <strong @if($payment->isReversed()) class="text-decoration-line-through" @endif>
-                                        {{ number_format($payment->amount, 2) }} {!! $setting->currency_symbol !!}
+                                        {{ format_amount($payment->amount) }} {!! $setting->currency_symbol !!}
                                     </strong>
                                     @if($payment->isReversed())
                                         <span class="badge bg-danger">{{ __('Reversed') }}</span>
@@ -56,7 +56,7 @@
                         <tfoot>
                             <tr>
                                 <th>{{ __('total_paid') }}</th>
-                                <th><strong>{{ number_format($installment->paid_amount, 2) }} {!! $setting->currency_symbol !!}</strong></th>
+                                <th><strong>{{ format_amount($installment->paid_amount) }} {!! $setting->currency_symbol !!}</strong></th>
                                 <th colspan="3"></th>
                             </tr>
                         </tfoot>

@@ -80,6 +80,8 @@ class PaymentAccountController extends Controller
     public function create()
     {
         $data['account_types'] = PaymentAccountType::where('status', 1)->get();
+        $data['ledger_accounts'] = \App\Models\ChartOfAccount::where('account_code', 'like', '5%')->where('account_code', 'not like', '59%')
+            ->where('account_category', 'detail')->where('is_active', true)->orderBy('account_code')->get(['id', 'account_code', 'account_name']);
         
         return view('admin.payment-account.create', $data);
     }
@@ -95,6 +97,12 @@ class PaymentAccountController extends Controller
             'account_number' => 'nullable|string|max:255',
             'opening_balance' => 'required|numeric|min:0',
             'description' => 'nullable|string',
+            'chart_of_account_id' => ['nullable', 'integer', function ($attribute, $value, $fail) {
+                if (!app(\App\Services\Accounting\CashAccounts::class)->isCash($value)
+                    || \App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a cash, bank or mobile-money account (class 5).'));
+                }
+            }],
         ]);
 
         DB::beginTransaction();
@@ -106,6 +114,7 @@ class PaymentAccountController extends Controller
                 'title' => $request->title,
                 'account_number' => $request->account_number,
                 'account_type_id' => $request->account_type_id,
+                'chart_of_account_id' => $request->chart_of_account_id ?: null,
                 'opening_balance' => $opening_balance,
                 'current_balance' => $opening_balance,
                 'description' => $request->description,
@@ -157,6 +166,8 @@ class PaymentAccountController extends Controller
     {
         $data['payment_account'] = PaymentAccount::findOrFail($id);
         $data['account_types'] = PaymentAccountType::where('status', 1)->get();
+        $data['ledger_accounts'] = \App\Models\ChartOfAccount::where('account_code', 'like', '5%')->where('account_code', 'not like', '59%')
+            ->where('account_category', 'detail')->where('is_active', true)->orderBy('account_code')->get(['id', 'account_code', 'account_name']);
         
         return view('admin.payment-account.edit', $data);
     }
@@ -171,6 +182,12 @@ class PaymentAccountController extends Controller
             'account_type_id' => 'required|exists:payment_account_types,id',
             'account_number' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'chart_of_account_id' => ['nullable', 'integer', function ($attribute, $value, $fail) {
+                if (!app(\App\Services\Accounting\CashAccounts::class)->isCash($value)
+                    || \App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a cash, bank or mobile-money account (class 5).'));
+                }
+            }],
         ]);
 
         try {
@@ -180,6 +197,7 @@ class PaymentAccountController extends Controller
                 'title' => $request->title,
                 'account_number' => $request->account_number,
                 'account_type_id' => $request->account_type_id,
+                'chart_of_account_id' => $request->chart_of_account_id ?: null,
                 'description' => $request->description,
                 'status' => $request->status ?? 1,
                 'updated_by' => auth()->user()->id,

@@ -100,14 +100,14 @@
             <div class="row align-items-center">
                 <div class="col-md-4">
                     <div class="rh-label">{{ __('Currently held on behalf of others') }}</div>
-                    <div class="rh-figure">{{ number_format($total_owing, 0) }}</div>
+                    <div class="rh-figure">{{ format_amount($total_owing) }}</div>
                 </div>
                 <div class="col-md-8">
                     @if($oldest_owing)
                         <div style="font-size:.88rem;">
                             {{ __('The oldest month still undeclared is') }}
                             <strong>{{ $oldest_owing['month_label'] }}</strong>
-                            — {{ number_format($oldest_owing['outstanding'], 0) }}
+                            — {{ format_amount($oldest_owing['outstanding']) }}
                             {{ __('owed to') }} <strong>{{ $oldest_owing['account_name'] }}</strong>.
                         </div>
                         <div class="text-muted" style="font-size:.8rem; margin-top:4px;">
@@ -137,9 +137,9 @@
                     @foreach($mismatched as $m)
                         <li>
                             <strong>{{ $m['account_code'] }} {{ $m['account_name'] }}</strong>:
-                            {{ __('months total') }} {{ number_format($m['per_month'], 2) }},
-                            {{ __('ledger holds') }} {{ number_format($m['ledger'], 2) }}
-                            ({{ __('difference') }} {{ number_format($m['difference'], 2) }})
+                            {{ __('months total') }} {{ format_amount($m['per_month']) }},
+                            {{ __('ledger holds') }} {{ format_amount($m['ledger']) }}
+                            ({{ __('difference') }} {{ format_amount($m['difference']) }})
                         </li>
                     @endforeach
                 </ul>
@@ -181,12 +181,12 @@
                                             <span class="text-muted">({{ $row['account_code'] }})</span>
                                         </td>
                                         <td>{{ $row['month_label'] }}</td>
-                                        <td class="remit-num">{{ number_format($row['employee'], 0) }}</td>
-                                        <td class="remit-num">{{ number_format($row['employer'], 0) }}</td>
-                                        <td class="remit-num"><strong>{{ number_format($row['due'], 0) }}</strong></td>
-                                        <td class="remit-num">{{ $row['paid'] > 0 ? number_format($row['paid'], 0) : '—' }}</td>
+                                        <td class="remit-num">{{ format_amount($row['employee']) }}</td>
+                                        <td class="remit-num">{{ format_amount($row['employer']) }}</td>
+                                        <td class="remit-num"><strong>{{ format_amount($row['due']) }}</strong></td>
+                                        <td class="remit-num">{{ $row['paid'] > 0 ? format_amount($row['paid']) : '—' }}</td>
                                         <td class="remit-num">
-                                            <strong>{{ number_format($row['outstanding'], 0) }}</strong>
+                                            <strong>{{ format_amount($row['outstanding']) }}</strong>
                                         </td>
                                         <td>
                                             @if($row['status'] === 'undeclared')
@@ -236,9 +236,9 @@
                                                     @forelse($breakdowns[$key] ?? [] as $part)
                                                         <div class="bd-line">
                                                             <span class="bd-label">{{ $part['label'] }}</span>
-                                                            <span class="bd-n">{{ number_format($part['employee'], 0) }}</span>
-                                                            <span class="bd-n">{{ number_format($part['employer'], 0) }}</span>
-                                                            <span class="bd-n"><strong>{{ number_format($part['total'], 0) }}</strong></span>
+                                                            <span class="bd-n">{{ format_amount($part['employee']) }}</span>
+                                                            <span class="bd-n">{{ format_amount($part['employer']) }}</span>
+                                                            <span class="bd-n"><strong>{{ format_amount($part['total']) }}</strong></span>
                                                             <span class="bd-staff">{{ $part['staff_count'] }} {{ __('staff') }}</span>
                                                         </div>
                                                     @empty
@@ -294,7 +294,7 @@
                                         <td>{{ $r->payment_date ? $r->payment_date->format('d M Y') : '—' }}</td>
                                         <td>{{ $r->liabilityAccount->account_name ?? '—' }}</td>
                                         <td>{{ $r->salary_month ? $r->salary_month->format('F Y') : '—' }}</td>
-                                        <td class="remit-num">{{ number_format($r->amount, 0) }}</td>
+                                        <td class="remit-num">{{ format_amount($r->amount) }}</td>
                                         <td>{{ $r->sourceAccount->account_name ?? '—' }}</td>
                                         <td>{{ $r->reference ?: '—' }}</td>
                                         <td>{{ $r->creator->first_name ?? '—' }}</td>

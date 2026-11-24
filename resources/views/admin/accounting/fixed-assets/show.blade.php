@@ -95,19 +95,19 @@
                                             </tr>
                                             <tr>
                                                 <th>{{ __('acquisition_cost') }}</th>
-                                                <td><strong>{{ number_format($asset->acquisition_cost, 0, ',', ' ') }} FCFA</strong></td>
+                                                <td><strong>{{ format_amount($asset->acquisition_cost) }} FCFA</strong></td>
                                             </tr>
                                             <tr>
                                                 <th>{{ __('salvage_value') }}</th>
-                                                <td>{{ number_format($asset->salvage_value, 0, ',', ' ') }} FCFA</td>
+                                                <td>{{ format_amount($asset->salvage_value) }} FCFA</td>
                                             </tr>
                                             <tr>
                                                 <th>{{ __('accumulated_depreciation') }}</th>
-                                                <td class="text-danger">{{ number_format($asset->accumulated_depreciation, 0, ',', ' ') }} FCFA</td>
+                                                <td class="text-danger">{{ format_amount($asset->accumulated_depreciation) }} FCFA</td>
                                             </tr>
                                             <tr class="table-primary">
                                                 <th>{{ __('net_book_value') }}</th>
-                                                <td><strong>{{ number_format($asset->net_book_value, 0, ',', ' ') }} FCFA</strong></td>
+                                                <td><strong>{{ format_amount($asset->net_book_value) }} FCFA</strong></td>
                                             </tr>
                                             <tr>
                                                 <th>{{ __('depreciation_method') }}</th>
@@ -147,15 +147,15 @@
                                         <div class="row mt-3">
                                             <div class="col-md-4 text-center">
                                                 <small class="text-muted">{{ __('depreciable_amount') }}</small>
-                                                <h5>{{ number_format($depreciable, 0, ',', ' ') }} FCFA</h5>
+                                                <h5>{{ format_amount($depreciable) }} FCFA</h5>
                                             </div>
                                             <div class="col-md-4 text-center">
                                                 <small class="text-muted">{{ __('depreciated_amount') }}</small>
-                                                <h5 class="text-danger">{{ number_format($asset->accumulated_depreciation, 0, ',', ' ') }} FCFA</h5>
+                                                <h5 class="text-danger">{{ format_amount($asset->accumulated_depreciation) }} FCFA</h5>
                                             </div>
                                             <div class="col-md-4 text-center">
                                                 <small class="text-muted">{{ __('remaining_to_depreciate') }}</small>
-                                                <h5 class="text-success">{{ number_format($asset->net_book_value - $asset->salvage_value, 0, ',', ' ') }} FCFA</h5>
+                                                <h5 class="text-success">{{ format_amount($asset->net_book_value - $asset->salvage_value) }} FCFA</h5>
                                             </div>
                                         </div>
                                     </div>
@@ -174,7 +174,7 @@
                                             @if($asset->insurance_value)
                                             <tr>
                                                 <th>{{ __('insurance_value') }}</th>
-                                                <td>{{ number_format($asset->insurance_value, 0, ',', ' ') }} FCFA</td>
+                                                <td>{{ format_amount($asset->insurance_value) }} FCFA</td>
                                             </tr>
                                             @endif
                                             @if($asset->insurance_policy_number)
@@ -235,7 +235,7 @@
                                             </div>
                                             <div class="col-md-3">
                                                 <strong>{{ __('disposal_proceeds') }}:</strong><br>
-                                                {{ $asset->disposal_proceeds ? number_format($asset->disposal_proceeds, 0, ',', ' ') . ' FCFA' : '-' }}
+                                                {{ $asset->disposal_proceeds ? format_amount($asset->disposal_proceeds) . ' FCFA' : '-' }}
                                             </div>
                                             <div class="col-md-3">
                                                 <strong>{{ __('gain_loss') }}:</strong><br>
@@ -243,7 +243,7 @@
                                                     $gainLoss = ($asset->disposal_proceeds ?? 0) - $asset->net_book_value;
                                                 @endphp
                                                 <span class="{{ $gainLoss >= 0 ? 'text-success' : 'text-danger' }}">
-                                                    {{ number_format($gainLoss, 0, ',', ' ') }} FCFA
+                                                    {{ format_amount($gainLoss) }} FCFA
                                                 </span>
                                             </div>
                                         </div>
@@ -276,9 +276,9 @@
                                                     @foreach($asset->depreciationSchedules->take(12) as $schedule)
                                                     <tr>
                                                         <td>{{ \Carbon\Carbon::parse($schedule->depreciation_date)->format('M Y') }}</td>
-                                                        <td class="text-right">{{ number_format($schedule->depreciation_amount, 0, ',', ' ') }}</td>
-                                                        <td class="text-right">{{ number_format($schedule->accumulated_depreciation, 0, ',', ' ') }}</td>
-                                                        <td class="text-right">{{ number_format($schedule->net_book_value, 0, ',', ' ') }}</td>
+                                                        <td class="text-right">{{ format_amount($schedule->depreciation_amount) }}</td>
+                                                        <td class="text-right">{{ format_amount($schedule->accumulated_depreciation) }}</td>
+                                                        <td class="text-right">{{ format_amount($schedule->net_book_value) }}</td>
                                                         <td>
                                                             @if($schedule->is_posted)
                                                             <span class="badge badge-success">{{ __('posted') }}</span>

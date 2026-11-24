@@ -76,7 +76,7 @@
 @section('content')
 @php
     $totals = $summary['totals'];
-    $money = fn ($v) => $v == 0 ? '—' : number_format($v);
+    $money = fn ($v) => $v == 0 ? '—' : format_amount($v);
 @endphp
 
 <div class="main-body">
@@ -166,7 +166,7 @@
                                                     ? $row['balance'] <= 0
                                                     : $row['balance'] >= 0;
                                             @endphp
-                                            <span class="{{ $favourable ? 'ms-good' : 'ms-bad' }}">{{ number_format($row['balance']) }}</span>
+                                            <span class="{{ $favourable ? 'ms-good' : 'ms-bad' }}">{{ format_amount($row['balance']) }}</span>
                                         @endif
                                     </td>
                                 </tr>
@@ -196,7 +196,7 @@
                                                             ? $g['balance'] <= 0
                                                             : $g['balance'] >= 0;
                                                     @endphp
-                                                    <span class="{{ $gFav ? 'ms-good' : 'ms-bad' }}">{{ number_format($g['balance']) }}</span>
+                                                    <span class="{{ $gFav ? 'ms-good' : 'ms-bad' }}">{{ format_amount($g['balance']) }}</span>
                                                 @endif
                                             </td>
                                         </tr>
@@ -246,16 +246,16 @@
                         <div class="pc-figures">
                             <div class="pc-figure">
                                 <div class="label">{{ __('Earned') }}</div>
-                                <div class="value ms-good">{{ number_format($centre['income']) }}</div>
+                                <div class="value ms-good">{{ format_amount($centre['income']) }}</div>
                             </div>
                             <div class="pc-figure">
                                 <div class="label">{{ __('Cost') }}</div>
-                                <div class="value ms-bad">{{ number_format($centre['expenditure']) }}</div>
+                                <div class="value ms-bad">{{ format_amount($centre['expenditure']) }}</div>
                             </div>
                             <div class="pc-figure">
                                 <div class="label">{{ __('Margin') }}</div>
                                 <div class="value {{ $centre['margin'] >= 0 ? 'ms-good' : 'ms-bad' }}">
-                                    {{ number_format($centre['margin']) }}
+                                    {{ format_amount($centre['margin']) }}
                                 </div>
                             </div>
                         </div>

@@ -515,7 +515,7 @@
                                             </span>
                                             @if($row->isOverpaid() && $row->generatedCredits->isNotEmpty())
                                             <br>
-                                            <small class="text-info" title="Overpayment converted to credit"><i class="fas fa-exchange-alt"></i> {{ number_format($row->overpayment_amount, 2) }} credited</small>
+                                            <small class="text-info" title="Overpayment converted to credit"><i class="fas fa-exchange-alt"></i> {{ format_amount($row->overpayment_amount) }} credited</small>
                                             @endif
                                         </td>
                                         <td>
@@ -536,7 +536,7 @@
                                             
                                             @if($hasPendingMultiPayment)
                                             <br><span class="badge badge-warning mt-1" title="This fee has a pending multi-payment verification">
-                                                <i class="fas fa-clock"></i> Multi-Pay Pending ({{ number_format($pendingMultiAmount, 2) }} {!! $setting->currency_symbol ?? '' !!})
+                                                <i class="fas fa-clock"></i> Multi-Pay Pending ({{ format_amount($pendingMultiAmount) }} {!! $setting->currency_symbol ?? '' !!})
                                             </span>
                                             @endif
                                             

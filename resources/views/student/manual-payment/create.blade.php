@@ -327,7 +327,7 @@
                                             </tr>
                                             <tr>
                                                 <td class="text-muted py-1"><i class="fas fa-clock mr-1"></i> {{ __('Requested On') }}</td>
-                                                <td class="py-1 font-weight-bold">{{ $rr->created_at ? $rr->created_at->format('M d, Y h:i A') : '-' }}</td>
+                                                <td class="py-1 font-weight-bold">{{ $rr->created_at ? $rr->created_at->format('d/m/Y H:i') : '-' }}</td>
                                             </tr>
                                             @if($rr->resitSession || $rr->resitSemester)
                                             <tr>
@@ -394,12 +394,12 @@
                                     @if($isResitFee)
                                     <input type="number" step="0.01" class="form-control bg-light" name="amount" id="amount" value="{{ $fee->remaining_balance }}" min="{{ $fee->remaining_balance }}" max="{{ $fee->remaining_balance }}" readonly required>
                                     <small class="form-text text-danger">
-                                        <i class="fas fa-lock mr-1"></i>{{ __('Full payment required for resit fees.') }} {{ number_format($fee->remaining_balance, 2) }} {!! $setting->currency_symbol !!}
+                                        <i class="fas fa-lock mr-1"></i>{{ __('Full payment required for resit fees.') }} {{ format_amount($fee->remaining_balance) }} {!! $setting->currency_symbol !!}
                                     </small>
                                     @else
                                     <input type="number" step="0.01" class="form-control" name="amount" id="amount" value="{{ old('amount', $fee->remaining_balance) }}" min="0.01" max="{{ $fee->remaining_balance }}" required>
                                     <small class="form-text text-muted">
-                                        {{ __('msg_partial_payment_allowed') }} Max: {{ number_format($fee->remaining_balance, 2) }} {!! $setting->currency_symbol !!}
+                                        {{ __('msg_partial_payment_allowed') }} Max: {{ format_amount($fee->remaining_balance) }} {!! $setting->currency_symbol !!}
                                     </small>
                                     @endif
                                     <div class="invalid-feedback">

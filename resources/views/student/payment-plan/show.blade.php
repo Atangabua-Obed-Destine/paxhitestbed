@@ -67,7 +67,7 @@
                                             <div class="col-md-3">
                                                 <div class="card text-center">
                                                     <div class="card-block">
-                                                        <h3>{{ number_format($row->total_amount, 2) }} {!! $setting->currency_symbol !!}</h3>
+                                                        <h3>{{ format_amount($row->total_amount) }} {!! $setting->currency_symbol !!}</h3>
                                                         <p class="text-muted">{{ __('field_total_amount') }}</p>
                                                     </div>
                                                 </div>
@@ -76,7 +76,7 @@
                                             <div class="col-md-3">
                                                 <div class="card text-center bg-c-green">
                                                     <div class="card-block text-white">
-                                                        <h3>{{ number_format($row->total_paid, 2) }} {!! $setting->currency_symbol !!}</h3>
+                                                        <h3>{{ format_amount($row->total_paid) }} {!! $setting->currency_symbol !!}</h3>
                                                         <p>{{ __('field_paid') }}</p>
                                                     </div>
                                                 </div>
@@ -85,7 +85,7 @@
                                             <div class="col-md-3">
                                                 <div class="card text-center bg-c-yellow">
                                                     <div class="card-block text-white">
-                                                        <h3>{{ number_format($row->remaining_balance, 2) }} {!! $setting->currency_symbol !!}</h3>
+                                                        <h3>{{ format_amount($row->remaining_balance) }} {!! $setting->currency_symbol !!}</h3>
                                                         <p>{{ __('field_remaining') }}</p>
                                                     </div>
                                                 </div>
@@ -159,20 +159,20 @@
                                                     @foreach($row->installments as $installment)
                                                     <tr class="{{ $installment->isOverdue() ? 'table-danger' : '' }}">
                                                         <td>{{ $installment->installment_number }}</td>
-                                                        <td>{{ number_format($installment->amount, 2) }} {!! $setting->currency_symbol !!}</td>
+                                                        <td>{{ format_amount($installment->amount) }} {!! $setting->currency_symbol !!}</td>
                                                         <td>{{ date('d M Y', strtotime($installment->due_date)) }}</td>
                                                         <td class="text-success">
-                                                            <strong>{{ number_format($installment->paid_amount ?? 0, 2) }} {!! $setting->currency_symbol !!}</strong>
+                                                            <strong>{{ format_amount($installment->paid_amount ?? 0) }} {!! $setting->currency_symbol !!}</strong>
                                                         </td>
                                                         <td>
                                                             @if($installment->late_fee > 0)
-                                                            <span class="text-danger">{{ number_format($installment->late_fee, 2) }} {!! $setting->currency_symbol !!}</span>
+                                                            <span class="text-danger">{{ format_amount($installment->late_fee) }} {!! $setting->currency_symbol !!}</span>
                                                             @else
                                                             -
                                                             @endif
                                                         </td>
                                                         <td class="text-warning">
-                                                            <strong>{{ number_format($installment->remaining_balance, 2) }} {!! $setting->currency_symbol !!}</strong>
+                                                            <strong>{{ format_amount($installment->remaining_balance) }} {!! $setting->currency_symbol !!}</strong>
                                                         </td>
                                                         <td>
                                                             {!! $installment->status_badge !!}
@@ -239,9 +239,9 @@
                                                 <tfoot>
                                                     <tr>
                                                         <th colspan="3">{{ __('total') }}</th>
-                                                        <th class="text-success">{{ number_format($row->total_paid, 2) }} {!! $setting->currency_symbol !!}</th>
-                                                        <th>{{ number_format($row->installments->sum('late_fee'), 2) }} {!! $setting->currency_symbol !!}</th>
-                                                        <th class="text-warning">{{ number_format($row->remaining_balance, 2) }} {!! $setting->currency_symbol !!}</th>
+                                                        <th class="text-success">{{ format_amount($row->total_paid) }} {!! $setting->currency_symbol !!}</th>
+                                                        <th>{{ format_amount($row->installments->sum('late_fee')) }} {!! $setting->currency_symbol !!}</th>
+                                                        <th class="text-warning">{{ format_amount($row->remaining_balance) }} {!! $setting->currency_symbol !!}</th>
                                                         <th colspan="2"></th>
                                                     </tr>
                                                 </tfoot>

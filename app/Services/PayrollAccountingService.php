@@ -81,6 +81,12 @@ class PayrollAccountingService
                 $paymentAccount = $this->findPaymentAccount();
             }
 
+            // The cash side follows how the salary was paid — cash box, bank or
+            // mobile money — once the school has set a ledger account for it.
+            if ($methodAccount = app(\App\Services\Accounting\CashAccounts::class)->forPayrollMethod($payroll->payment_method)) {
+                $paymentAccount = ChartOfAccount::find($methodAccount) ?? $paymentAccount;
+            }
+
             if (!$salaryExpenseAccount || !$paymentAccount) {
                 Log::warning('PayrollAccountingService: Could not find required accounts for payroll #' . $payroll->id . 
                     '. Salary Account: ' . ($salaryExpenseAccount ? 'found' : 'missing') . 
@@ -106,13 +112,31 @@ class PayrollAccountingService
 
             DB::beginTransaction();
 
+            // Loan and advance repayments taken through this payroll. When the
+            // school has set a staff-advances account they are part of the
+            // salary cost and are credited to that account (the staff member
+            // repays what they owe); otherwise they stay what any deduction
+            // was before: a reduction of the gross, posted nowhere.
+            $advanceAccount = null;
+            $loanRepayments = 0.0;
+            $advanceAccountId = \App\Models\PayrollSetting::current()->advance_account_id;
+            if ($advanceAccountId) {
+                $advanceAccount = ChartOfAccount::find($advanceAccountId);
+                if ($advanceAccount) {
+                    $loanRepayments = round((float) $payroll->details
+                        ->where('status', 0)
+                        ->whereNotNull('staff_loan_id')
+                        ->sum('amount'), 2);
+                }
+            }
+
             // Calculate total debit (gross salary + employer contributions)
             $employerTax = $payroll->employer_tax ?? 0;
-            $totalDebitAmount = $payroll->gross_salary + $employerTax;
+            $totalDebitAmount = $payroll->gross_salary + $loanRepayments + $employerTax;
 
             // Create journal entry
             $journalEntry = JournalEntry::create([
-                'entry_number' => JournalEntry::generateEntryNumber(),
+                'entry_number' => JournalEntry::generateEntryNumber($payroll->pay_date),
                 'entry_date' => $payroll->pay_date,
                 'fiscal_year_id' => $fiscalYear->id,
                 'accounting_period_id' => $accountingPeriod->id ?? null,
@@ -136,7 +160,7 @@ class PayrollAccountingService
                 'line_number' => $lineNumber++,
                 'account_id' => $salaryExpenseAccount->id,
                 'description' => "Gross Salary - {$staffName}",
-                'debit' => $payroll->gross_salary,
+                'debit' => round((float) $payroll->gross_salary + $loanRepayments, 2),
                 'credit' => 0,
             ]);
 
@@ -250,6 +274,18 @@ class PayrollAccountingService
             }
 
             } // end of the single-lump fallback
+
+            // CREDIT: Staff advances, for loan repayments withheld from pay.
+            if ($advanceAccount && $loanRepayments > 0) {
+                JournalEntryLine::create([
+                    'journal_entry_id' => $journalEntry->id,
+                    'line_number' => $lineNumber++,
+                    'account_id' => $advanceAccount->id,
+                    'description' => "Loan / advance repayment - {$staffName}",
+                    'debit' => 0,
+                    'credit' => $loanRepayments,
+                ]);
+            }
 
             // Handle deductions (if stored in payroll_details with status = 0)
             $deductions = $payroll->details->where('status', 0);
@@ -406,7 +442,7 @@ class PayrollAccountingService
 
             // Create reversal journal entry
             $reversalEntry = JournalEntry::create([
-                'entry_number' => JournalEntry::generateEntryNumber(),
+                'entry_number' => JournalEntry::generateEntryNumber($reversalDate),
                 'entry_date' => $reversalDate,
                 'fiscal_year_id' => $reversalYear->id ?? $originalEntry->fiscal_year_id,
                 'accounting_period_id' => $reversalYear
@@ -416,6 +452,10 @@ class PayrollAccountingService
                 'description' => $description,
                 'reference_type' => 'payroll_reversal',
                 'reference_id' => $payroll->id,
+                // Which entry this cancels. Without it the original stayed
+                // "live", so paying the payroll again left two live entries
+                // for one payroll and ledger health reported money posted twice.
+                'reversed_entry_id' => $originalEntry->id,
                 'total_debit' => $originalEntry->total_credit,
                 'total_credit' => $originalEntry->total_debit,
                 'is_posted' => false,
@@ -442,6 +482,9 @@ class PayrollAccountingService
 
             // Post the reversal entry
             $reversalEntry->post($userId);
+
+            $originalEntry->is_reversed = true;
+            $originalEntry->save();
 
             DB::commit();
 

@@ -118,8 +118,8 @@
                                             <span class="badge badge-info">{{ __(strtolower($entry->journal_type)) }}</span>
                                         </td>
                                         <td>{{ $entry->description }}</td>
-                                        <td class="text-right"><strong>{{ number_format($entry->total_debit, 0, ',', ' ') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($entry->total_credit, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($entry->total_debit) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($entry->total_credit) }}</strong></td>
                                         <td>
                                             @if($entry->is_posted)
                                             <span class="badge badge-success">{{ __('posted') }}</span>

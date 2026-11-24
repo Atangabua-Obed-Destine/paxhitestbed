@@ -157,7 +157,7 @@
 @section('content')
 @php
     /** Money is shown as whole francs — nobody budgets in centimes. */
-    $money = fn ($v) => $v ? number_format($v) : '—';
+    $money = fn ($v) => $v ? format_amount($v) : '—';
 @endphp
 <div class="pcoded-content">
     <div class="pcoded-inner-content">
@@ -331,7 +331,7 @@
                             </p>
                             <ul class="mb-0 small">
                                 @foreach($unallocated as $source => $amount)
-                                    <li>{{ ucfirst($source) }}: <strong>{{ number_format($amount) }}</strong></li>
+                                    <li>{{ ucfirst($source) }}: <strong>{{ format_amount($amount) }}</strong></li>
                                 @endforeach
                             </ul>
                         </div>
@@ -366,16 +366,16 @@
                                         @foreach($reconciliation['sections'] as $s)
                                             <tr>
                                                 <td>{{ __($s['label']) }}</td>
-                                                <td class="text-end">{{ number_format($s['sheet']) }}</td>
-                                                <td class="text-end">{{ number_format($s['ledger']) }}</td>
+                                                <td class="text-end">{{ format_amount($s['sheet']) }}</td>
+                                                <td class="text-end">{{ format_amount($s['ledger']) }}</td>
                                                 {{-- A section can agree while still differing by a known,
                                                      explained amount; show that amount rather than a dash,
                                                      so a pending correction is never invisible. --}}
                                                 <td class="text-end {{ !$s['agrees'] ? 'text-danger fw-bold' : (abs($s['difference']) > 0.009 ? 'text-warning fw-bold' : 'text-success') }}">
                                                     @if(!$s['agrees'])
-                                                        {{ number_format($s['difference']) }}
+                                                        {{ format_amount($s['difference']) }}
                                                     @elseif(abs($s['difference']) > 0.009)
-                                                        {{ number_format($s['difference']) }}
+                                                        {{ format_amount($s['difference']) }}
                                                         <div class="small fw-normal">{{ __('known — see below') }}</div>
                                                     @else
                                                         —
@@ -641,7 +641,7 @@
                                                                 {{-- Part of this line has been handed to a
                                                                      department to spend; the rest is central. --}}
                                                                 <small class="d-block text-muted">
-                                                                    {{ __('of which') }} {{ number_format($delegated[$line->id]) }} {{ __('delegated') }}
+                                                                    {{ __('of which') }} {{ format_amount($delegated[$line->id]) }} {{ __('delegated') }}
                                                                 </small>
                                                                 @if($b && $delegated[$line->id] > $b)
                                                                     <small class="d-block text-danger">
@@ -659,7 +659,7 @@
                                                     <td class="num {{ $varianceClass }}"
                                                         @if($b) title="{{ $favourable ? __('Favourable') : __('Unfavourable') }}" @endif>
                                                         @if($b)
-                                                            {{ number_format($v) }}
+                                                            {{ format_amount($v) }}
                                                         @else
                                                             <span class="text-muted" title="{{ __('No budget set for this line') }}">—</span>
                                                         @endif
@@ -690,7 +690,7 @@
                                                         <td class="num">{{ $money($ga) }}</td>
                                                         <td class="num {{ $gb ? ($gv == 0 ? '' : ($gFavourable ? 'variance-good' : 'variance-bad')) : '' }}">
                                                             @if($gb)
-                                                                {{ number_format($gv) }}
+                                                                {{ format_amount($gv) }}
                                                             @else
                                                                 <span class="text-muted">—</span>
                                                             @endif

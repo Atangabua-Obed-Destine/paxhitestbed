@@ -113,7 +113,7 @@
                                     <label for="amount">{{ __('field_amount') }} ({!! $setting->currency_symbol !!}) <span class="text-danger">*</span></label>
                                     <input type="number" step="0.01" class="form-control" name="amount" id="amount" value="{{ old('amount', $installment->remaining_balance) }}" min="0.01" max="{{ $installment->remaining_balance }}" required>
                                     <small class="form-text text-muted">
-                                        {{ __('msg_partial_payment_allowed') }} - Max: {{ number_format($installment->remaining_balance, 2) }} {!! $setting->currency_symbol !!}
+                                        {{ __('msg_partial_payment_allowed') }} - Max: {{ format_amount($installment->remaining_balance) }} {!! $setting->currency_symbol !!}
                                     </small>
                                     <div class="invalid-feedback">
                                         {{ __('required_field') }} {{ __('field_amount') }}

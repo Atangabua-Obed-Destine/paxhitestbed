@@ -373,7 +373,7 @@
     <div class="report-header">
         <div class="header-right">
             <div class="report-title">STAFF TAX DISTRIBUTION REPORT</div>
-            Effective Date: {{ \Carbon\Carbon::parse($effective_date)->format('F d, Y') }}
+            Effective Date: {{ \Carbon\Carbon::parse($effective_date)->format('j F Y') }}
         </div>
     </div>
 
@@ -404,25 +404,25 @@
         <div class="kpi-card">
             <div class="kpi-card-inner bg-info">
                 <div class="kpi-label">Total Gross Salary</div>
-                <div class="kpi-value">{{ number_format($grand_totals['basic_salary'], 0) }}</div>
+                <div class="kpi-value">{{ format_amount($grand_totals['basic_salary']) }}</div>
             </div>
         </div>
         <div class="kpi-card">
             <div class="kpi-card-inner bg-danger">
                 <div class="kpi-label">Employee Tax</div>
-                <div class="kpi-value">{{ number_format($grand_totals['employee_tax_total'], 0) }}</div>
+                <div class="kpi-value">{{ format_amount($grand_totals['employee_tax_total']) }}</div>
             </div>
         </div>
         <div class="kpi-card">
             <div class="kpi-card-inner bg-warning-dark">
                 <div class="kpi-label">Employer Tax</div>
-                <div class="kpi-value">{{ number_format($grand_totals['employer_tax_total'], 0) }}</div>
+                <div class="kpi-value">{{ format_amount($grand_totals['employer_tax_total']) }}</div>
             </div>
         </div>
         <div class="kpi-card">
             <div class="kpi-card-inner bg-success">
                 <div class="kpi-label">Total Net Pay</div>
-                <div class="kpi-value">{{ number_format($grand_totals['net_salary'], 0) }}</div>
+                <div class="kpi-value">{{ format_amount($grand_totals['net_salary']) }}</div>
             </div>
         </div>
         <div class="kpi-card">
@@ -493,16 +493,16 @@
                 </td>
                 <td class="text-center" style="font-size:5.5pt;">{{ \Illuminate\Support\Str::limit($sr['user']->department->title ?? '-', 14) }}</td>
                 <td class="text-center" style="font-size:5.5pt;">{{ \Illuminate\Support\Str::limit($sr['user']->designation->title ?? '-', 14) }}</td>
-                <td class="text-right font-bold">{{ number_format($sr['basic_salary'], 0) }}</td>
+                <td class="text-right font-bold">{{ format_amount($sr['basic_salary']) }}</td>
 
                 {{-- Group taxes --}}
                 @foreach($tax_groups as $group)
                 <td class="text-right">
                     @if(isset($sr['groups'][$group->id]))
                         @php $g = $sr['groups'][$group->id]; @endphp
-                        {{ number_format($g['employee'], 0) }}
+                        {{ format_amount($g['employee']) }}
                         @if($g['employer'] > 0)
-                        <br><span class="employer-amount">+{{ number_format($g['employer'], 0) }}</span>
+                        <br><span class="employer-amount">+{{ format_amount($g['employer']) }}</span>
                         @endif
                     @else
                         0
@@ -518,9 +518,9 @@
                         @if($s['is_exempt'])
                             <span class="badge badge-success">Exempt</span>
                         @else
-                            {{ number_format($s['employee'], 0) }}
+                            {{ format_amount($s['employee']) }}
                             @if($s['employer'] > 0)
-                            <br><span class="employer-amount">+{{ number_format($s['employer'], 0) }}</span>
+                            <br><span class="employer-amount">+{{ format_amount($s['employer']) }}</span>
                             @endif
                         @endif
                     @else
@@ -530,10 +530,10 @@
                 @endforeach
 
                 {{-- Summaries --}}
-                <td class="text-right text-danger font-bold">{{ number_format($sr['employee_tax_total'], 0) }}</td>
-                <td class="text-right text-warning">{{ number_format($sr['employer_tax_total'], 0) }}</td>
-                <td class="text-right text-success font-bold">{{ number_format($sr['net_salary'], 0) }}</td>
-                <td class="text-right">{{ number_format($sr['total_cost'], 0) }}</td>
+                <td class="text-right text-danger font-bold">{{ format_amount($sr['employee_tax_total']) }}</td>
+                <td class="text-right text-warning">{{ format_amount($sr['employer_tax_total']) }}</td>
+                <td class="text-right text-success font-bold">{{ format_amount($sr['net_salary']) }}</td>
+                <td class="text-right">{{ format_amount($sr['total_cost']) }}</td>
                 <td class="text-center">
                     @php $rate = $sr['basic_salary'] > 0 ? round(($sr['employee_tax_total'] / $sr['basic_salary']) * 100, 1) : 0; @endphp
                     <span class="badge {{ $rate < 10 ? 'badge-success' : ($rate < 20 ? 'badge-warning' : 'badge-danger') }}">{{ $rate }}%</span>
@@ -545,30 +545,30 @@
             <tr>
                 <td class="text-center" colspan="2"><strong>TOTALS ({{ $staff_count }} staff)</strong></td>
                 <td colspan="2"></td>
-                <td class="text-right font-bold">{{ number_format($grand_totals['basic_salary'], 0) }}</td>
+                <td class="text-right font-bold">{{ format_amount($grand_totals['basic_salary']) }}</td>
 
                 @foreach($tax_groups as $group)
                 <td class="text-right">
-                    {{ number_format($grand_totals['groups'][$group->id]['employee'], 0) }}
+                    {{ format_amount($grand_totals['groups'][$group->id]['employee']) }}
                     @if($grand_totals['groups'][$group->id]['employer'] > 0)
-                    <br><span class="employer-amount">+{{ number_format($grand_totals['groups'][$group->id]['employer'], 0) }}</span>
+                    <br><span class="employer-amount">+{{ format_amount($grand_totals['groups'][$group->id]['employer']) }}</span>
                     @endif
                 </td>
                 @endforeach
 
                 @foreach($standalone_taxes as $tax)
                 <td class="text-right">
-                    {{ number_format($grand_totals['standalone'][$tax->id]['employee'], 0) }}
+                    {{ format_amount($grand_totals['standalone'][$tax->id]['employee']) }}
                     @if($grand_totals['standalone'][$tax->id]['employer'] > 0)
-                    <br><span class="employer-amount">+{{ number_format($grand_totals['standalone'][$tax->id]['employer'], 0) }}</span>
+                    <br><span class="employer-amount">+{{ format_amount($grand_totals['standalone'][$tax->id]['employer']) }}</span>
                     @endif
                 </td>
                 @endforeach
 
-                <td class="text-right text-danger font-bold">{{ number_format($grand_totals['employee_tax_total'], 0) }}</td>
-                <td class="text-right text-warning font-bold">{{ number_format($grand_totals['employer_tax_total'], 0) }}</td>
-                <td class="text-right text-success font-bold">{{ number_format($grand_totals['net_salary'], 0) }}</td>
-                <td class="text-right font-bold">{{ number_format($grand_totals['total_cost'], 0) }}</td>
+                <td class="text-right text-danger font-bold">{{ format_amount($grand_totals['employee_tax_total']) }}</td>
+                <td class="text-right text-warning font-bold">{{ format_amount($grand_totals['employer_tax_total']) }}</td>
+                <td class="text-right text-success font-bold">{{ format_amount($grand_totals['net_salary']) }}</td>
+                <td class="text-right font-bold">{{ format_amount($grand_totals['total_cost']) }}</td>
                 <td class="text-center"><span class="badge badge-dark">{{ $avg_effective_rate }}%</span></td>
             </tr>
         </tfoot>
@@ -618,8 +618,8 @@
             <tr>
                 <td class="text-center">{{ $index + 1 }}</td>
                 <td class="text-left">{{ $sr['user']->name }}</td>
-                <td class="text-right">{{ number_format($sr['basic_salary'], 0) }}</td>
-                <td class="text-right text-danger">{{ number_format($sr['employee_tax_total'], 0) }}</td>
+                <td class="text-right">{{ format_amount($sr['basic_salary']) }}</td>
+                <td class="text-right text-danger">{{ format_amount($sr['employee_tax_total']) }}</td>
                 <td class="text-center">
                     <span class="badge {{ $rate < 10 ? 'badge-success' : ($rate < 20 ? 'badge-warning' : 'badge-danger') }}">{{ $rate }}%</span>
                 </td>
@@ -654,8 +654,8 @@
                     <tr>
                         <td class="text-left">{{ $label }}</td>
                         <td class="text-center">{{ $band['count'] }}</td>
-                        <td class="text-right">{{ number_format($band['total_salary'], 0) }}</td>
-                        <td class="text-right">{{ number_format($band['total_tax'], 0) }}</td>
+                        <td class="text-right">{{ format_amount($band['total_salary']) }}</td>
+                        <td class="text-right">{{ format_amount($band['total_tax']) }}</td>
                         <td class="text-center">
                             @if($band['total_salary'] > 0)
                                 {{ round(($band['total_tax'] / $band['total_salary']) * 100, 1) }}%
@@ -686,9 +686,9 @@
                     <tr>
                         <td class="text-left">{{ $group->title }}</td>
                         <td class="text-center"><span class="badge badge-primary">Group</span></td>
-                        <td class="text-right">{{ number_format($grand_totals['groups'][$group->id]['employee'], 0) }}</td>
-                        <td class="text-right">{{ number_format($grand_totals['groups'][$group->id]['employer'], 0) }}</td>
-                        <td class="text-right font-bold">{{ number_format($grand_totals['groups'][$group->id]['employee'] + $grand_totals['groups'][$group->id]['employer'], 0) }}</td>
+                        <td class="text-right">{{ format_amount($grand_totals['groups'][$group->id]['employee']) }}</td>
+                        <td class="text-right">{{ format_amount($grand_totals['groups'][$group->id]['employer']) }}</td>
+                        <td class="text-right font-bold">{{ format_amount($grand_totals['groups'][$group->id]['employee'] + $grand_totals['groups'][$group->id]['employer']) }}</td>
                     </tr>
                     @endforeach
                     @foreach($standalone_taxes as $tax)
@@ -706,18 +706,18 @@
                             <span class="badge badge-warning">Standalone</span>
                             @endif
                         </td>
-                        <td class="text-right">{{ number_format($grand_totals['standalone'][$tax->id]['employee'], 0) }}</td>
-                        <td class="text-right">{{ number_format($grand_totals['standalone'][$tax->id]['employer'], 0) }}</td>
-                        <td class="text-right font-bold">{{ number_format($grand_totals['standalone'][$tax->id]['employee'] + $grand_totals['standalone'][$tax->id]['employer'], 0) }}</td>
+                        <td class="text-right">{{ format_amount($grand_totals['standalone'][$tax->id]['employee']) }}</td>
+                        <td class="text-right">{{ format_amount($grand_totals['standalone'][$tax->id]['employer']) }}</td>
+                        <td class="text-right font-bold">{{ format_amount($grand_totals['standalone'][$tax->id]['employee'] + $grand_totals['standalone'][$tax->id]['employer']) }}</td>
                     </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr>
                         <td colspan="2" class="text-left"><strong>Grand Total</strong></td>
-                        <td class="text-right text-danger font-bold">{{ number_format($grand_totals['employee_tax_total'], 0) }}</td>
-                        <td class="text-right text-warning font-bold">{{ number_format($grand_totals['employer_tax_total'], 0) }}</td>
-                        <td class="text-right font-bold">{{ number_format($grand_totals['employee_tax_total'] + $grand_totals['employer_tax_total'], 0) }}</td>
+                        <td class="text-right text-danger font-bold">{{ format_amount($grand_totals['employee_tax_total']) }}</td>
+                        <td class="text-right text-warning font-bold">{{ format_amount($grand_totals['employer_tax_total']) }}</td>
+                        <td class="text-right font-bold">{{ format_amount($grand_totals['employee_tax_total'] + $grand_totals['employer_tax_total']) }}</td>
                     </tr>
                 </tfoot>
             </table>
@@ -726,7 +726,7 @@
 
     <!-- ═══ TAX CONFIGURATION REFERENCE ═══ -->
     <div class="section-title">Tax Configuration Reference</div>
-    <div class="section-desc">Active tax rules as of {{ \Carbon\Carbon::parse($effective_date)->format('F d, Y') }}. This section documents the brackets, rates, and rules that produced the figures above.</div>
+    <div class="section-desc">Active tax rules as of {{ \Carbon\Carbon::parse($effective_date)->format('j F Y') }}. This section documents the brackets, rates, and rules that produced the figures above.</div>
 
     @foreach($tax_groups as $group)
     <div class="bracket-detail">
@@ -756,14 +756,14 @@
                 @foreach($group->brackets as $bracket)
                 <tr>
                     <td class="text-center">{{ $bracket->bracket_order }}</td>
-                    <td class="text-right">{{ number_format($bracket->min_amount, 0) }}</td>
-                    <td class="text-right">{{ number_format($bracket->max_amount, 0) }}</td>
+                    <td class="text-right">{{ format_amount($bracket->min_amount) }}</td>
+                    <td class="text-right">{{ format_amount($bracket->max_amount) }}</td>
                     <td class="text-center">{{ $bracket->tax_type == 1 ? 'Percentage' : 'Fixed' }}</td>
                     <td class="text-center">
                         @if($bracket->tax_type == 1)
                             {{ $bracket->percentange }}%
                         @else
-                            {{ number_format($bracket->fixed_amount, 0) }}
+                            {{ format_amount($bracket->fixed_amount) }}
                         @endif
                     </td>
                     <td class="text-center">
@@ -776,13 +776,13 @@
                             @if($bracket->tax_type == 1)
                                 {{ $bracket->employer_percentage }}%
                             @else
-                                {{ number_format($bracket->employer_fixed_amount, 0) }}
+                                {{ format_amount($bracket->employer_fixed_amount) }}
                             @endif
                         @else
                             -
                         @endif
                     </td>
-                    <td class="text-right">{{ number_format($bracket->max_no_taxable_amount, 0) }}</td>
+                    <td class="text-right">{{ format_amount($bracket->max_no_taxable_amount) }}</td>
                 </tr>
                 @endforeach
             </tbody>
@@ -818,14 +818,14 @@
                         <br><small style="color:#d48806;">&rarr; Calculated from: {{ $tax->dependency_label ?? '-' }}</small>
                         @endif
                     </td>
-                    <td class="text-right">{{ number_format($tax->min_amount, 0) }}</td>
-                    <td class="text-right">{{ number_format($tax->max_amount, 0) }}</td>
+                    <td class="text-right">{{ format_amount($tax->min_amount) }}</td>
+                    <td class="text-right">{{ format_amount($tax->max_amount) }}</td>
                     <td class="text-center">{{ $tax->tax_type == 1 ? 'Percentage' : 'Fixed' }}</td>
                     <td class="text-center">
                         @if($tax->tax_type == 1)
                             {{ $tax->percentange }}%
                         @else
-                            {{ number_format($tax->fixed_amount, 0) }}
+                            {{ format_amount($tax->fixed_amount) }}
                         @endif
                     </td>
                     <td class="text-center">
@@ -838,13 +838,13 @@
                             @if($tax->tax_type == 1)
                                 {{ $tax->employer_percentage }}%
                             @else
-                                {{ number_format($tax->employer_fixed_amount, 0) }}
+                                {{ format_amount($tax->employer_fixed_amount) }}
                             @endif
                         @else
                             -
                         @endif
                     </td>
-                    <td class="text-right">{{ number_format($tax->max_no_taxable_amount, 0) }}</td>
+                    <td class="text-right">{{ format_amount($tax->max_no_taxable_amount) }}</td>
                 </tr>
                 @endforeach
             </tbody>
@@ -877,14 +877,14 @@
                     @if($ex->custom_percentage)
                         {{ $ex->custom_percentage }}%
                     @elseif($ex->custom_fixed_amount)
-                        {{ number_format($ex->custom_fixed_amount, 0) }}
+                        {{ format_amount($ex->custom_fixed_amount) }}
                     @else
                         Full Exempt
                     @endif
                 </td>
                 <td class="text-center">
                     @if($ex->expires_at)
-                        {{ \Carbon\Carbon::parse($ex->expires_at)->format('M d, Y') }}
+                        {{ \Carbon\Carbon::parse($ex->expires_at)->format('j F Y') }}
                     @else
                         <span class="text-muted">No expiry</span>
                     @endif
@@ -918,10 +918,10 @@
             <tr>
                 <td class="text-center">{{ $h['label'] }}</td>
                 <td class="text-center">{{ $h['count'] }}</td>
-                <td class="text-right">{{ number_format($h['total_gross'], 0) }}</td>
-                <td class="text-right text-danger">{{ number_format($h['total_tax'], 0) }}</td>
-                <td class="text-right text-warning">{{ number_format($h['employer_tax'], 0) }}</td>
-                <td class="text-right text-success">{{ number_format($h['total_net'], 0) }}</td>
+                <td class="text-right">{{ format_amount($h['total_gross']) }}</td>
+                <td class="text-right text-danger">{{ format_amount($h['total_tax']) }}</td>
+                <td class="text-right text-warning">{{ format_amount($h['employer_tax']) }}</td>
+                <td class="text-right text-success">{{ format_amount($h['total_net']) }}</td>
                 <td class="text-center">
                     @if($h['total_gross'] > 0)
                         {{ round(($h['total_tax'] / $h['total_gross']) * 100, 1) }}%
@@ -939,7 +939,7 @@
     <div class="notes-box">
         <strong>⚠ Important Notes:</strong>
         <ul>
-            <li><strong>Estimates vs Actuals:</strong> The tax figures in this report are calculated from each staff member's current basic salary and the active tax configuration as of {{ \Carbon\Carbon::parse($effective_date)->format('F d, Y') }}. They represent estimated monthly deductions, not actual payroll amounts.</li>
+            <li><strong>Estimates vs Actuals:</strong> The tax figures in this report are calculated from each staff member's current basic salary and the active tax configuration as of {{ \Carbon\Carbon::parse($effective_date)->format('j F Y') }}. They represent estimated monthly deductions, not actual payroll amounts.</li>
             <li><strong>Scope:</strong> Only statutory taxes on basic salary are included. Allowances (transport, housing, etc.), bonuses, and other deductions are not factored into this calculation.</li>
             <li><strong>Progressive Taxes:</strong> For progressive tax groups, only the portion of salary within each bracket range is taxed at that bracket's rate.</li>
             <li><strong>Combined Cost:</strong> The "Total Cost" column represents the full cost to the institution: basic salary + employer tax contributions.</li>
@@ -950,7 +950,7 @@
     <!-- ═══ FOOTER ═══ -->
     <div class="report-footer">
         <div class="footer-left">
-            <strong>Generated on:</strong> {{ $generated_at->format('F d, Y \a\t h:i:s A') }}<br>
+            <strong>Generated on:</strong> {{ $generated_at->format('j F Y, H:i') }}<br>
             <strong>Generated by:</strong> {{ $generated_by->name ?? 'System' }}<br>
             <strong>Reference:</strong> TAX-RPT-{{ $generated_at->format('Ymd-His') }}
         </div>

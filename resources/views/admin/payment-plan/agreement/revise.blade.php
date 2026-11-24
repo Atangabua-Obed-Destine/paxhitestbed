@@ -11,7 +11,7 @@
     which, after a fee changed, is the very thing that needs fixing. Saving
     sends the agreement (back) to the Vice Chancellor, with the change listed.
 --}}
-@php $money = fn ($v) => number_format((float) $v, 2); @endphp
+@php $money = fn ($v) => format_amount((float) $v); @endphp
 
 <div class="main-body">
     <div class="page-wrapper">

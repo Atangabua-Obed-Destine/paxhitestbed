@@ -346,11 +346,11 @@
                         <table class="table table-sm mb-0">
                             <tr>
                                 <th width="40%">{{ __('Created') }}:</th>
-                                <td>{{ $row->created_at->format('M d, Y H:i') }}</td>
+                                <td>{{ $row->created_at->format('d/m/Y H:i') }}</td>
                             </tr>
                             <tr>
                                 <th>{{ __('Updated') }}:</th>
-                                <td>{{ $row->updated_at->format('M d, Y H:i') }}</td>
+                                <td>{{ $row->updated_at->format('d/m/Y H:i') }}</td>
                             </tr>
                             <tr>
                                 <th>{{ __('Status') }}:</th>

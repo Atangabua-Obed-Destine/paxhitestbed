@@ -46,7 +46,42 @@ class LetterheadService
             return '';
         }
 
-        return '<div class="letterhead">' . $html . '</div>';
+        return '<div class="letterhead">' . $this->stateBlock() . $html . '</div>';
+    }
+
+    /**
+     * The bilingual state block official Cameroonian documents carry above the
+     * school's own heading: French on the left, English on the right, the
+     * ministry and delegation beneath each. Empty unless switched on.
+     *
+     * A table, not flex: dompdf lays out tables and nothing else reliably.
+     * Never printed on headed paper (reserve-space mode), which has its own.
+     */
+    public function stateBlock(): string
+    {
+        $s = LetterheadSetting::current();
+        if (!$s->state_block || $s->mode === LetterheadSetting::MODE_RESERVE) {
+            return '';
+        }
+
+        $side = function (string $country, string $motto, ?string $ministry, ?string $delegation): string {
+            $lines = ['<strong>' . e($country) . '</strong>', '<em class="sb-motto">' . e($motto) . '</em>', '<span class="sb-star">* * * * *</span>'];
+            foreach ([$ministry, $delegation] as $line) {
+                if (trim((string) $line) !== '') {
+                    $lines[] = e(trim($line));
+                }
+            }
+
+            return implode('<br>', $lines);
+        };
+
+        $cell = 'width:50%;text-align:center;vertical-align:top;border:0;padding:0 6px;font-size:10px;line-height:1.35;text-transform:uppercase;';
+
+        return '<table class="state-block" style="width:100%;border-collapse:collapse;margin:0 0 8px;"><tr>'
+            . '<td style="' . $cell . '">' . $side('République du Cameroun', 'Paix – Travail – Patrie', $s->ministry_fr, $s->delegation_fr) . '</td>'
+            . '<td style="' . $cell . '">' . $side('Republic of Cameroon', 'Peace – Work – Fatherland', $s->ministry_en, $s->delegation_en) . '</td>'
+            . '</tr></table>'
+            . '<style>.state-block .sb-motto{text-transform:none;font-style:italic}.state-block .sb-star{letter-spacing:2px}</style>';
     }
 
     /**

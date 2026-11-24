@@ -219,7 +219,7 @@
                                     </td>
                                     <td>
                                         <small>
-                                            {{ $log->last_attempt_at->format('M d, Y H:i:s') }}<br>
+                                            {{ $log->last_attempt_at->format('d/m/Y H:i:s') }}<br>
                                             <span class="text-muted">{{ $log->last_attempt_at->diffForHumans() }}</span>
                                         </small>
                                     </td>

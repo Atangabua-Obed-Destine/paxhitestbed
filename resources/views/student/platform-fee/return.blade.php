@@ -120,7 +120,7 @@
             @endif
             <div>
                 <strong>{{ __('Amount') }}:</strong>
-                {{ number_format((float) $transaction->charged_amount, 0, '.', ',') }} {{ $transaction->currency }}
+                {{ format_amount((float) $transaction->charged_amount) }} {{ $transaction->currency }}
             </div>
             <div><strong>{{ __('Started') }}:</strong> {{ $transaction->created_at?->format('j M Y, H:i') }}</div>
         </div>

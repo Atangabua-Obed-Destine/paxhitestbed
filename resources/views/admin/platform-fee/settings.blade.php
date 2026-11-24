@@ -275,11 +275,11 @@
                                                 {{-- Recomputed as the fields change, by the same arithmetic the
                                                      server uses, so nobody has to save and guess. --}}
                                                 <div class="form-control bg-light" id="charge_preview" style="font-weight: 700;">
-                                                    {{ number_format($setting->chargeAmount()) }} {{ $setting->currency }}
+                                                    {{ format_amount($setting->chargeAmount()) }} {{ $setting->currency }}
                                                 </div>
                                                 <small class="text-muted" id="charge_preview_detail">
-                                                    fee {{ number_format((float) $setting->fee_amount) }}
-                                                    + charge {{ number_format($setting->surchargeAmount()) }}
+                                                    fee {{ format_amount((float) $setting->fee_amount) }}
+                                                    + charge {{ format_amount($setting->surchargeAmount()) }}
                                                 </small>
                                             </div>
                                         </div>
@@ -351,7 +351,7 @@
                                         {{ __('Students will be asked to dial') }}
                                         <strong><code>{{ $setting->dialCode() }}</code></strong>
                                         {{ __('for the current fee of') }}
-                                        <strong>{{ number_format($setting->fee_amount, 0) }}</strong>.
+                                        <strong>{{ format_amount($setting->fee_amount) }}</strong>.
                                     </div>
                                 @endif
                             </div>

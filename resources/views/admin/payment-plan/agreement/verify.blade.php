@@ -39,7 +39,7 @@
         <table>
             <tr><th>{{ __('Reference') }}</th><td>{{ $agreement->reference }}</td></tr>
             <tr><th>{{ __('Name') }}</th><td>{{ trim(($agreement->student->first_name ?? '') . ' ' . ($agreement->student->last_name ?? '')) }}</td></tr>
-            <tr><th>{{ __('Total under this agreement') }}</th><td>{{ $currency }} {{ number_format($agreement->total, 2) }}</td></tr>
+            <tr><th>{{ __('Total under this agreement') }}</th><td>{{ $currency }} {{ format_amount($agreement->total) }}</td></tr>
             <tr><th>{{ __('Status now') }}</th><td>{{ $agreement->status_label }}</td></tr>
             @if($agreement->isApproved())
                 <tr><th>{{ __('Approved') }}</th><td>{{ optional($agreement->approver)->name }} &middot; {{ optional($agreement->approved_at)->format('d M Y') }}</td></tr>

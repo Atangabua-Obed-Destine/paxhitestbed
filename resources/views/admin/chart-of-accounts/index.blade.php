@@ -23,45 +23,45 @@
                         <!-- Statistics Cards -->
                         <div class="row mb-3">
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['total_accounts'] }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('total_accounts') }}</p>
+                                        <h3>{{ $statistics['total_accounts'] }}</h3>
+                                        <p>{{ __('total_accounts') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-list"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['active_accounts'] }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('active_accounts') }}</p>
+                                        <h3>{{ $statistics['active_accounts'] }}</h3>
+                                        <p>{{ __('active_accounts') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-check-circle"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['detail_accounts'] }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('detail_accounts') }}</p>
+                                        <h3>{{ $statistics['detail_accounts'] }}</h3>
+                                        <p>{{ __('detail_accounts') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-file-alt"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ number_format($statistics['total_balance'], 0, ',', ' ') }} FCFA</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('total_balance') }}</p>
+                                        <h3>{{ format_amount($statistics['total_balance']) }} FCFA</h3>
+                                        <p>{{ __('total_balance') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-coins"></i>
                                     </div>
                                 </div>

@@ -86,7 +86,7 @@
                                             {{ date("Y-m-d", strtotime($row->date)) }}
                                             @endif
                                         </td>
-                                        <td>{{ number_format((float)$row->amount, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->amount) }} {!! $setting->currency_symbol !!}</td>
                                         <td>
                                             @if( $row->payment_method == 1 )
                                             {{ __('payment_method_card') }}
@@ -111,7 +111,7 @@
                                         <th></th>
                                         <th></th>
                                         <th>{{ __('field_grand_total') }}</th>
-                                        <th>{{ number_format((float)$rows->sum('amount'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('amount')) }} {!! $setting->currency_symbol !!}</th>
                                         <th></th>
                                         <th></th>
                                     </tr>

@@ -20,14 +20,14 @@
     .pipeline-step:hover { transform: translateY(-2px); }
     .pipeline-step .step-count { font-size: 22px; font-weight: 700; }
     .pipeline-step .step-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
-    .pipeline-step.ok { background: linear-gradient(135deg, #d4edda, #c3e6cb); color: #155724; }
-    .pipeline-step.fail { background: linear-gradient(135deg, #f8d7da, #f5c6cb); color: #721c24; }
+    .pipeline-step.ok { background: #e7f4ea; color: #155724; }
+    .pipeline-step.fail { background: #fbe9eb; color: #721c24; }
     .pipeline-arrow { font-size: 18px; color: #adb5bd; margin: 0 -2px; }
 
     /* ═══ Faculty accordion ═══ */
     .faculty-accordion .card { border-radius: 8px; margin-bottom: 10px; border: 1px solid #dee2e6; overflow: hidden; }
-    .faculty-accordion .card-header { cursor: pointer; background: linear-gradient(135deg, #f8f9fa, #e9ecef); transition: background 0.2s; padding: 14px 18px; }
-    .faculty-accordion .card-header:hover { background: linear-gradient(135deg, #e9ecef, #dee2e6); }
+    .faculty-accordion .card-header { cursor: pointer; background: #f8f9fa; transition: background 0.2s; padding: 14px 18px; }
+    .faculty-accordion .card-header:hover { background: #eef0f3; }
     .faculty-accordion .card-header h6 { margin: 0; font-weight: 700; font-size: 14px; }
     .faculty-stat { display: inline-block; padding: 3px 10px; border-radius: 15px; font-size: 11px; font-weight: 600; margin-left: 6px; }
 
@@ -129,37 +129,37 @@
     {{-- ═══ KPI CARDS ═══ --}}
     <div class="row mb-3">
         <div class="col-lg-2 col-md-4 col-6 mb-2">
-            <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;">
+            <div class="card kpi-card kpi-neutral text-center p-3">
                 <div class="kpi-value">{{ $kpis['total_faculties'] }}</div>
                 <div class="kpi-label">Faculties</div>
             </div>
         </div>
         <div class="col-lg-2 col-md-4 col-6 mb-2">
-            <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#11998e,#38ef7d);color:#fff;">
+            <div class="card kpi-card kpi-neutral text-center p-3">
                 <div class="kpi-value">{{ $kpis['total_programs'] }}</div>
                 <div class="kpi-label">Programs</div>
             </div>
         </div>
         <div class="col-lg-2 col-md-4 col-6 mb-2">
-            <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#36d1dc,#5b86e5);color:#fff;">
+            <div class="card kpi-card kpi-neutral text-center p-3">
                 <div class="kpi-value">{{ number_format($kpis['total_students']) }}</div>
                 <div class="kpi-label">Students</div>
             </div>
         </div>
         <div class="col-lg-2 col-md-4 col-6 mb-2">
-            <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff;">
+            <div class="card kpi-card kpi-neutral text-center p-3">
                 <div class="kpi-value">{{ $kpis['total_teachers'] }}</div>
                 <div class="kpi-label">Teachers</div>
             </div>
         </div>
         <div class="col-lg-2 col-md-4 col-6 mb-2">
-            <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,#4facfe,#00f2fe);color:#fff;">
+            <div class="card kpi-card kpi-neutral text-center p-3">
                 <div class="kpi-value">{{ $kpis['fee_coverage'] }}%</div>
                 <div class="kpi-label">Fee Coverage</div>
             </div>
         </div>
         <div class="col-lg-2 col-md-4 col-6 mb-2">
-            <div class="card kpi-card text-center p-3" style="background:linear-gradient(135deg,{{ $kpis['overall_score'] >= 80 ? '#11998e,#38ef7d' : ($kpis['overall_score'] >= 50 ? '#f7971e,#ffd200' : '#eb3349,#f45c43') }});color:#fff;">
+            <div class="card kpi-card kpi-neutral {{ $kpis['overall_score'] >= 80 ? 'kpi-good' : ($kpis['overall_score'] >= 50 ? 'kpi-warn' : 'kpi-bad') }} text-center p-3">
                 <div class="kpi-value">{{ $kpis['overall_score'] }}%</div>
                 <div class="kpi-label">Readiness</div>
             </div>

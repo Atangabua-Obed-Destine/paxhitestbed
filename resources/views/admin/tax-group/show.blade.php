@@ -167,17 +167,17 @@
                                         <td><span class="badge badge-secondary">{{ $bracket->bracket_order }}</span></td>
                                         <td>{{ $bracket->title }}</td>
                                         <td>
-                                            {{ number_format($bracket->min_amount, 2) }} - {{ number_format($bracket->max_amount, 2) }}
+                                            {{ format_amount($bracket->min_amount) }} - {{ format_amount($bracket->max_amount) }}
                                             {!! $setting->currency_symbol !!}
                                         </td>
                                         <td>
                                             @if($bracket->tax_type == 1)
                                             <span class="badge badge-info">{{ number_format($bracket->percentange, 2) }}%</span>
                                             @else
-                                            <span class="badge badge-warning">{{ number_format($bracket->fixed_amount, 2) }} {!! $setting->currency_symbol !!}</span>
+                                            <span class="badge badge-warning">{{ format_amount($bracket->fixed_amount) }} {!! $setting->currency_symbol !!}</span>
                                             @endif
                                         </td>
-                                        <td>{{ number_format($bracket->max_no_taxable_amount, 2) }}</td>
+                                        <td>{{ format_amount($bracket->max_no_taxable_amount) }}</td>
                                         <td>
                                             @if($bracket->status)
                                             <span class="badge badge-success">{{ __('status_active') }}</span>

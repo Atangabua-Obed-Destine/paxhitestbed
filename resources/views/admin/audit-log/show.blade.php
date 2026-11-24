@@ -62,7 +62,7 @@
                                     <p class="mb-0"><strong>{{ $row->description }}</strong></p>
                                 </div>
                                 <div class="col-md-4 text-right">
-                                    <h6 class="mb-1">{{ $row->created_at->format('M d, Y') }}</h6>
+                                    <h6 class="mb-1">{{ $row->created_at->format('d/m/Y') }}</h6>
                                     <p class="mb-0">{{ $row->created_at->format('h:i:s A') }}</p>
                                     <small class="text-muted">{{ $row->created_at->diffForHumans() }}</small>
                                 </div>
@@ -141,7 +141,7 @@
                                             <tr>
                                                 <th class="text-muted"><i class="far fa-calendar-alt"></i> {{ __('field_date_time') }}:</th>
                                                 <td>
-                                                    <strong>{{ $row->created_at->format('F d, Y') }}</strong><br>
+                                                    <strong>{{ $row->created_at->format('d/m/Y') }}</strong><br>
                                                     <span class="text-primary">{{ $row->created_at->format('h:i:s A') }}</span><br>
                                                     <small class="text-info"><i class="far fa-clock"></i> {{ $row->created_at->diffForHumans() }}</small>
                                                 </td>
@@ -355,9 +355,9 @@
                                                         @elseif(is_null($value) || $value === '')
                                                             <span class="text-muted font-italic">(empty)</span>
                                                         @elseif($field == 'created_at' || $field == 'deleted_at')
-                                                            <i class="far fa-calendar-alt text-muted"></i> {{ \Carbon\Carbon::parse($value)->format('M d, Y h:i A') }}
+                                                            <i class="far fa-calendar-alt text-muted"></i> {{ \Carbon\Carbon::parse($value)->format('d/m/Y H:i') }}
                                                         @elseif(is_numeric($value) && !in_array($field, ['id', 'status']))
-                                                            {{ number_format($value, 2) }}
+                                                            {{ format_amount($value) }}
                                                         @else
                                                             {{ $value }}
                                                         @endif
@@ -376,7 +376,7 @@
                             <div class="card-footer bg-light">
                                 <small class="text-muted">
                                     <i class="fas fa-exclamation-triangle text-danger"></i> 
-                                    This data was permanently deleted from the system at {{ $row->created_at->format('M d, Y h:i A') }}.
+                                    This data was permanently deleted from the system at {{ $row->created_at->format('d/m/Y H:i') }}.
                                 </small>
                             </div>
                         </div>
@@ -420,9 +420,9 @@
                                                         @elseif(is_null($value) || $value === '')
                                                             <span class="text-muted font-italic">(empty)</span>
                                                         @elseif($field == 'created_at' || $field == 'deleted_at')
-                                                            <i class="far fa-calendar-alt text-muted"></i> {{ \Carbon\Carbon::parse($value)->format('M d, Y h:i A') }}
+                                                            <i class="far fa-calendar-alt text-muted"></i> {{ \Carbon\Carbon::parse($value)->format('d/m/Y H:i') }}
                                                         @elseif(is_numeric($value) && !in_array($field, ['id', 'status']))
-                                                            {{ number_format($value, 2) }}
+                                                            {{ format_amount($value) }}
                                                         @else
                                                             {{ $value }}
                                                         @endif
@@ -441,7 +441,7 @@
                             <div class="card-footer bg-light">
                                 <small class="text-muted">
                                     <i class="fas fa-check-circle text-success"></i> 
-                                    This record was created on {{ $row->created_at->format('M d, Y h:i A') }}.
+                                    This record was created on {{ $row->created_at->format('d/m/Y H:i') }}.
                                 </small>
                             </div>
                         </div>

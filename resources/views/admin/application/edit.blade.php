@@ -668,7 +668,7 @@
                           @if($wasResubmitted)
                             <div class="mt-1">
                               <span class="badge badge-success"><i class="fas fa-check"></i> {{ __('Resubmitted') }}</span>
-                              <small class="text-muted d-block">{{ $document->resubmitted_at->format('M j, Y g:i A') }}</small>
+                              <small class="text-muted d-block">{{ $document->resubmitted_at->format('d/m/Y H:i') }}</small>
                             </div>
                           @elseif($needsResubmission)
                             <div class="mt-1">
@@ -786,9 +786,9 @@
                         {!! $row->admissionFee->status_badge !!}
                       </div>
                       <div class="text-end">
-                        <small class="d-block">Amount: <strong>{{ number_format($row->admissionFee->fee_amount, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol ?? '' !!}</strong></small>
-                        <small class="d-block">Paid: <strong>{{ number_format($row->admissionFee->paid_amount, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol ?? '' !!}</strong></small>
-                        <small class="d-block">Balance: <strong>{{ number_format($row->admissionFee->remaining_balance, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol ?? '' !!}</strong></small>
+                        <small class="d-block">Amount: <strong>{{ format_amount($row->admissionFee->fee_amount) }} {!! $setting->currency_symbol ?? '' !!}</strong></small>
+                        <small class="d-block">Paid: <strong>{{ format_amount($row->admissionFee->paid_amount) }} {!! $setting->currency_symbol ?? '' !!}</strong></small>
+                        <small class="d-block">Balance: <strong>{{ format_amount($row->admissionFee->remaining_balance) }} {!! $setting->currency_symbol ?? '' !!}</strong></small>
                       </div>
                     </div>
                   </div>

@@ -164,27 +164,30 @@
                                                 <a href="{{ route('admin.general-ledger.account', $account->id) }}">
                                                     {{ $account->account_name }}
                                                 </a>
+                                                @if($account->account_category !== 'detail' || !$account->is_active)
+                                                <span class="badge badge-warning" title="{{ __('Entries were posted to a heading or inactive account. Move them to a detail account.') }}">{{ __('heading account') }}</span>
+                                                @endif
                                                 @if($account->account_name_fr)
                                                 <br><small class="text-muted">{{ $account->account_name_fr }}</small>
                                                 @endif
                                             </td>
                                             <td class="text-right">
-                                                {{ $openingDebit > 0 ? number_format($openingDebit, 0, ',', ' ') : '-' }}
+                                                {{ $openingDebit > 0 ? format_amount($openingDebit) : '-' }}
                                             </td>
                                             <td class="text-right">
-                                                {{ $openingCredit > 0 ? number_format($openingCredit, 0, ',', ' ') : '-' }}
+                                                {{ $openingCredit > 0 ? format_amount($openingCredit) : '-' }}
                                             </td>
                                             <td class="text-right">
-                                                {{ $periodDebit > 0 ? number_format($periodDebit, 0, ',', ' ') : '-' }}
+                                                {{ $periodDebit > 0 ? format_amount($periodDebit) : '-' }}
                                             </td>
                                             <td class="text-right">
-                                                {{ $periodCredit > 0 ? number_format($periodCredit, 0, ',', ' ') : '-' }}
+                                                {{ $periodCredit > 0 ? format_amount($periodCredit) : '-' }}
                                             </td>
                                             <td class="text-right">
-                                                {{ $closingDebit > 0 ? number_format($closingDebit, 0, ',', ' ') : '-' }}
+                                                {{ $closingDebit > 0 ? format_amount($closingDebit) : '-' }}
                                             </td>
                                             <td class="text-right">
-                                                {{ $closingCredit > 0 ? number_format($closingCredit, 0, ',', ' ') : '-' }}
+                                                {{ $closingCredit > 0 ? format_amount($closingCredit) : '-' }}
                                             </td>
                                         </tr>
                                     @endforeach
@@ -192,12 +195,12 @@
                                     <!-- Grand Total Row -->
                                     <tr class="table-success">
                                         <td colspan="2" class="text-right"><strong>{{ __('total') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalOpeningDebit, 0, ',', ' ') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalOpeningCredit, 0, ',', ' ') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalPeriodDebit, 0, ',', ' ') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalPeriodCredit, 0, ',', ' ') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalClosingDebit, 0, ',', ' ') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalClosingCredit, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalOpeningDebit) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalOpeningCredit) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalPeriodDebit) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalPeriodCredit) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalClosingDebit) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalClosingCredit) }}</strong></td>
                                     </tr>
 
                                     <!-- Verification Row -->
@@ -205,19 +208,19 @@
                                         <td colspan="2" class="text-right"><strong>{{ __('difference') }}</strong></td>
                                         <td class="text-right">
                                             <span class="badge badge-{{ abs($totalOpeningDebit - $totalOpeningCredit) < 0.01 ? 'success' : 'danger' }}">
-                                                {{ number_format(abs($totalOpeningDebit - $totalOpeningCredit), 0, ',', ' ') }}
+                                                {{ format_amount(abs($totalOpeningDebit - $totalOpeningCredit)) }}
                                             </span>
                                         </td>
                                         <td></td>
                                         <td class="text-right">
                                             <span class="badge badge-{{ abs($totalPeriodDebit - $totalPeriodCredit) < 0.01 ? 'success' : 'danger' }}">
-                                                {{ number_format(abs($totalPeriodDebit - $totalPeriodCredit), 0, ',', ' ') }}
+                                                {{ format_amount(abs($totalPeriodDebit - $totalPeriodCredit)) }}
                                             </span>
                                         </td>
                                         <td></td>
                                         <td class="text-right">
                                             <span class="badge badge-{{ abs($totalClosingDebit - $totalClosingCredit) < 0.01 ? 'success' : 'danger' }}">
-                                                {{ number_format(abs($totalClosingDebit - $totalClosingCredit), 0, ',', ' ') }}
+                                                {{ format_amount(abs($totalClosingDebit - $totalClosingCredit)) }}
                                             </span>
                                         </td>
                                         <td></td>
@@ -241,7 +244,7 @@
                                 <div class="alert alert-danger">
                                     <i class="fas fa-exclamation-triangle"></i> <strong>{{ __('trial_balance_error') }}:</strong> 
                                     {{ __('debits_do_not_equal_credits') }} 
-                                    ({{ __('difference') }}: {{ number_format(abs($totalClosingDebit - $totalClosingCredit), 0, ',', ' ') }} FCFA)
+                                    ({{ __('difference') }}: {{ format_amount(abs($totalClosingDebit - $totalClosingCredit)) }} FCFA)
                                 </div>
                                 @endif
                             </div>

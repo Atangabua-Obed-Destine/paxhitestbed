@@ -337,7 +337,7 @@
                 <pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">{{ $myNote->content }}</pre>
             </div>
             <div class="mt-3 text-right">
-                <small class="text-muted">Last updated: {{ $myNote->updated_at->format('M d, Y H:i') }}</small>
+                <small class="text-muted">Last updated: {{ $myNote->updated_at->format('d/m/Y H:i') }}</small>
             </div>
         </div>
         @endif

@@ -47,14 +47,14 @@
                                 <div class="form-group">
                                     <label for="start_date">{{ __('Start Date') }}</label>
                                     <input type="date" class="form-control" id="start_date" name="start_date" 
-                                           value="{{ $startDate ?? '' }}">
+                                           value="{{ isset($statement) ? $statement['start_date'] : '' }}">
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="form-group">
                                     <label for="end_date">{{ __('End Date') }}</label>
                                     <input type="date" class="form-control" id="end_date" name="end_date" 
-                                           value="{{ $endDate ?? '' }}">
+                                           value="{{ isset($statement) ? $statement['end_date'] : '' }}">
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -96,7 +96,7 @@
                                 <h4>{{ config('app.name') }}</h4>
                                 <h5>{{ __('Cash Flow Statement') }}</h5>
                                 <p class="text-muted">
-                                    {{ __('For the Period') }} {{ $startDate ?? '' }} {{ __('to') }} {{ $endDate ?? '' }}
+                                    {{ __('For the Period') }} {{ \Carbon\Carbon::parse($statement['start_date'])->format('d M Y') }} {{ __('to') }} {{ \Carbon\Carbon::parse($statement['end_date'])->format('d M Y') }}
                                 </p>
                             </div>
 
@@ -108,11 +108,11 @@
                                 <div class="card-body">
                                     <table class="table table-sm">
                                         <tbody>
-                                            @foreach($statement['operating']['items'] ?? [] as $item)
+                                            @foreach($statement['operating_activities']['items'] ?? [] as $item)
                                             <tr>
-                                                <td style="padding-left: 20px;">{{ $item['name'] }}</td>
+                                                <td style="padding-left: 20px;">{{ $item['description'] }}</td>
                                                 <td class="text-right {{ $item['amount'] < 0 ? 'text-danger' : '' }}">
-                                                    {{ number_format($item['amount']) }}
+                                                    {{ format_amount($item['amount'], true) }}
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -120,8 +120,8 @@
                                         <tfoot class="font-weight-bold">
                                             <tr>
                                                 <td>{{ __('Net Cash from Operating Activities') }}</td>
-                                                <td class="text-right {{ ($statement['operating']['total'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                                    {{ number_format($statement['operating']['total'] ?? 0) }}
+                                                <td class="text-right {{ ($statement['operating_activities']['total'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
+                                                    {{ format_amount($statement['operating_activities']['total'] ?? 0, true) }}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -137,11 +137,11 @@
                                 <div class="card-body">
                                     <table class="table table-sm">
                                         <tbody>
-                                            @foreach($statement['investing']['items'] ?? [] as $item)
+                                            @foreach($statement['investing_activities']['items'] ?? [] as $item)
                                             <tr>
-                                                <td style="padding-left: 20px;">{{ $item['name'] }}</td>
+                                                <td style="padding-left: 20px;">{{ $item['description'] }}</td>
                                                 <td class="text-right {{ $item['amount'] < 0 ? 'text-danger' : '' }}">
-                                                    {{ number_format($item['amount']) }}
+                                                    {{ format_amount($item['amount'], true) }}
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -149,8 +149,8 @@
                                         <tfoot class="font-weight-bold">
                                             <tr>
                                                 <td>{{ __('Net Cash from Investing Activities') }}</td>
-                                                <td class="text-right {{ ($statement['investing']['total'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                                    {{ number_format($statement['investing']['total'] ?? 0) }}
+                                                <td class="text-right {{ ($statement['investing_activities']['total'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
+                                                    {{ format_amount($statement['investing_activities']['total'] ?? 0, true) }}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -166,11 +166,11 @@
                                 <div class="card-body">
                                     <table class="table table-sm">
                                         <tbody>
-                                            @foreach($statement['financing']['items'] ?? [] as $item)
+                                            @foreach($statement['financing_activities']['items'] ?? [] as $item)
                                             <tr>
-                                                <td style="padding-left: 20px;">{{ $item['name'] }}</td>
+                                                <td style="padding-left: 20px;">{{ $item['description'] }}</td>
                                                 <td class="text-right {{ $item['amount'] < 0 ? 'text-danger' : '' }}">
-                                                    {{ number_format($item['amount']) }}
+                                                    {{ format_amount($item['amount'], true) }}
                                                 </td>
                                             </tr>
                                             @endforeach
@@ -178,8 +178,8 @@
                                         <tfoot class="font-weight-bold">
                                             <tr>
                                                 <td>{{ __('Net Cash from Financing Activities') }}</td>
-                                                <td class="text-right {{ ($statement['financing']['total'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                                    {{ number_format($statement['financing']['total'] ?? 0) }}
+                                                <td class="text-right {{ ($statement['financing_activities']['total'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
+                                                    {{ format_amount($statement['financing_activities']['total'] ?? 0, true) }}
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -187,26 +187,29 @@
                                 </div>
                             </div>
 
+                            @unless($statement['is_balanced'] ?? true)
+                            <div class="alert alert-danger">{{ __('The movements do not explain the change in cash by') }} {{ format_amount(abs($statement['difference'])) }} XAF. {{ __('Check the trial balance: the ledger itself does not balance.') }}</div>
+                            @endunless
                             <!-- Summary -->
                             <div class="card bg-light">
                                 <div class="card-body">
                                     <table class="table table-borderless mb-0">
                                         <tr class="font-weight-bold">
                                             <td>{{ __('Net Increase (Decrease) in Cash') }}</td>
-                                            <td class="text-right {{ ($statement['net_change'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
-                                                {{ number_format($statement['net_change'] ?? 0) }} {{ __('XAF') }}
+                                            <td class="text-right {{ ($statement['net_change_in_cash'] ?? 0) < 0 ? 'text-danger' : 'text-success' }}">
+                                                {{ format_amount($statement['net_change_in_cash'] ?? 0) }} {{ __('XAF') }}
                                             </td>
                                         </tr>
                                         <tr>
                                             <td>{{ __('Cash at Beginning of Period') }}</td>
                                             <td class="text-right">
-                                                {{ number_format($statement['opening_cash'] ?? 0) }} {{ __('XAF') }}
+                                                {{ format_amount($statement['beginning_cash_balance'] ?? 0) }} {{ __('XAF') }}
                                             </td>
                                         </tr>
                                         <tr class="border-top font-weight-bold" style="font-size: 1.1em;">
                                             <td>{{ __('Cash at End of Period') }}</td>
                                             <td class="text-right text-primary">
-                                                {{ number_format($statement['closing_cash'] ?? 0) }} {{ __('XAF') }}
+                                                {{ format_amount($statement['ending_cash_balance'] ?? 0) }} {{ __('XAF') }}
                                             </td>
                                         </tr>
                                     </table>
@@ -230,11 +233,11 @@
 @section('scripts')
 <script>
 function exportToExcel() {
-    window.location.href = "{{ route('admin.accounting-reports.export-excel') }}?report=cash-flow&fiscal_year_id={{ $fiscalYear->id ?? '' }}&start_date={{ $startDate ?? '' }}&end_date={{ $endDate ?? '' }}";
+    window.location.href = "{{ route('admin.accounting-reports.export-excel') }}?report=cash-flow&fiscal_year_id={{ $fiscalYear->id ?? '' }}&start_date={{ $statement['start_date'] ?? '' }}&end_date={{ $statement['end_date'] ?? '' }}";
 }
 
 function exportToPdf() {
-    window.location.href = "{{ route('admin.accounting-reports.export-pdf') }}?report=cash-flow&fiscal_year_id={{ $fiscalYear->id ?? '' }}&start_date={{ $startDate ?? '' }}&end_date={{ $endDate ?? '' }}";
+    window.location.href = "{{ route('admin.accounting-reports.export-pdf') }}?report=cash-flow&fiscal_year_id={{ $fiscalYear->id ?? '' }}&start_date={{ $statement['start_date'] ?? '' }}&end_date={{ $statement['end_date'] ?? '' }}";
 }
 </script>
 @endsection

@@ -74,7 +74,7 @@
                                 <div class="card bg-success text-white">
                                     <div class="card-body">
                                         <h6 class="card-title">{{ __('total_credit') }}</h6>
-                                        <h4>{!! $setting->currency_symbol !!}{{ number_format($summary['total_credit'], 2) }}</h4>
+                                        <h4>{!! $setting->currency_symbol !!}{{ format_amount($summary['total_credit']) }}</h4>
                                         <small>{{ __('money_in') }}</small>
                                     </div>
                                 </div>
@@ -83,7 +83,7 @@
                                 <div class="card bg-danger text-white">
                                     <div class="card-body">
                                         <h6 class="card-title">{{ __('total_debit') }}</h6>
-                                        <h4>{!! $setting->currency_symbol !!}{{ number_format($summary['total_debit'], 2) }}</h4>
+                                        <h4>{!! $setting->currency_symbol !!}{{ format_amount($summary['total_debit']) }}</h4>
                                         <small>{{ __('money_out') }}</small>
                                     </div>
                                 </div>
@@ -92,7 +92,7 @@
                                 <div class="card bg-info text-white">
                                     <div class="card-body">
                                         <h6 class="card-title">{{ __('net_flow') }}</h6>
-                                        <h4>{!! $setting->currency_symbol !!}{{ number_format($summary['net_flow'], 2) }}</h4>
+                                        <h4>{!! $setting->currency_symbol !!}{{ format_amount($summary['net_flow']) }}</h4>
                                         <small>{{ __('credit_minus_debit') }}</small>
                                     </div>
                                 </div>
@@ -101,7 +101,7 @@
                                 <div class="card bg-primary text-white">
                                     <div class="card-body">
                                         <h6 class="card-title">{{ __('total_balance') }}</h6>
-                                        <h4>{!! $setting->currency_symbol !!}{{ number_format($total_balance, 2) }}</h4>
+                                        <h4>{!! $setting->currency_symbol !!}{{ format_amount($total_balance) }}</h4>
                                         <small>{{ __('all_accounts') }}</small>
                                     </div>
                                 </div>
@@ -163,20 +163,20 @@
                                         </td>
                                         <td class="text-right">
                                             @if($transaction->transaction_type == 'debit')
-                                                <span class="text-danger">{!! $setting->currency_symbol !!}{{ number_format($transaction->amount, 2) }}</span>
+                                                <span class="text-danger">{!! $setting->currency_symbol !!}{{ format_amount($transaction->amount) }}</span>
                                             @else
                                                 -
                                             @endif
                                         </td>
                                         <td class="text-right">
                                             @if($transaction->transaction_type == 'credit')
-                                                <span class="text-success">{!! $setting->currency_symbol !!}{{ number_format($transaction->amount, 2) }}</span>
+                                                <span class="text-success">{!! $setting->currency_symbol !!}{{ format_amount($transaction->amount) }}</span>
                                             @else
                                                 -
                                             @endif
                                         </td>
                                         <td class="text-right">
-                                            <strong>{!! $setting->currency_symbol !!}{{ number_format($transaction->balance_after, 2) }}</strong>
+                                            <strong>{!! $setting->currency_symbol !!}{{ format_amount($transaction->balance_after) }}</strong>
                                         </td>
                                     </tr>
                                     @empty

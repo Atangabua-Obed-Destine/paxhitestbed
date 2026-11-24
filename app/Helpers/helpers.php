@@ -256,3 +256,75 @@ if (!function_exists('upload_or')) {
         return upload_asset(trim($dir, '/') . '/' . ltrim((string) $file, '/'));
     }
 }
+
+if (!function_exists('format_amount')) {
+    /**
+     * An amount as the statements print it: no decimals, a non-breaking space
+     * between thousands ("1 234 567"), so a figure never wraps across lines.
+     *
+     * The contract edutrustshsm shares, so the two systems print alike:
+     *   - rounded half away from zero, to whole francs;
+     *   - negative as "-1 234", or "(1 234)" when $brackets is true — the form
+     *     financial statements use for a deduction or a loss;
+     *   - null as an em dash, zero as "0".
+     *
+     * CSV exports never use this: they carry raw numbers, so a spreadsheet
+     * can add them up.
+     */
+    function format_amount($value, bool $brackets = false): string
+    {
+        if ($value === null || $value === '') {
+            return "\u{2014}";
+        }
+
+        $rounded = round((float) $value);
+        $text = number_format(abs($rounded), 0, ',', "\u{00A0}");
+
+        if ($rounded < 0) {
+            return $brackets ? '(' . $text . ')' : '-' . $text;
+        }
+
+        return $text;
+    }
+}
+
+if (!function_exists('format_currency')) {
+    /**
+     * format_amount() followed by the currency symbol set under Settings,
+     * or "FCFA" when none is set.
+     */
+    function format_currency($value, bool $brackets = false): string
+    {
+        static $symbol = null;
+        if ($symbol === null) {
+            $symbol = trim((string) optional(\App\Models\Setting::first())->currency_symbol) ?: 'FCFA';
+        }
+
+        return format_amount($value, $brackets) . "\u{00A0}" . $symbol;
+    }
+}
+
+if (!function_exists('format_date')) {
+    /**
+     * A date as every screen prints it: day/month/year ("23/11/2026"), with
+     * the 24-hour time when asked ("23/11/2026 14:05"). Never the American
+     * month-first order, which a Cameroonian reader takes for the day.
+     *
+     * The contract edutrustshsm shares. Inputs keep Y-m-d; this is display only.
+     * Empty gives an em dash, like format_amount().
+     */
+    function format_date($value, bool $withTime = false): string
+    {
+        if ($value === null || $value === '') {
+            return "\u{2014}";
+        }
+
+        try {
+            $date = $value instanceof \DateTimeInterface ? \Carbon\Carbon::instance($value) : \Carbon\Carbon::parse($value);
+        } catch (\Throwable $e) {
+            return (string) $value;
+        }
+
+        return $date->format($withTime ? 'd/m/Y H:i' : 'd/m/Y');
+    }
+}

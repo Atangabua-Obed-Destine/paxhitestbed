@@ -15,8 +15,13 @@ class PayrollDetail extends Model
      * @var array
      */
     protected $fillable = [
-        'payroll_id', 'title', 'amount', 'status', 'created_by', 'updated_by',
+        'payroll_id', 'staff_loan_id', 'title', 'amount', 'is_taxable', 'status', 'created_by', 'updated_by',
     ];
+
+    public function loan()
+    {
+        return $this->belongsTo(StaffLoan::class, 'staff_loan_id');
+    }
 
     public function payroll()
     {

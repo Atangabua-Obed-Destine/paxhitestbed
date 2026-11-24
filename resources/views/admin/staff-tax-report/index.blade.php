@@ -226,7 +226,7 @@
                                 <div class="card kpi-card bg-info text-white mb-0">
                                     <div class="card-body py-2 px-3">
                                         <div class="kpi-label">Total Gross Salary</div>
-                                        <div class="kpi-value">{{ number_format($grand_totals['basic_salary'], 0) }}</div>
+                                        <div class="kpi-value">{{ format_amount($grand_totals['basic_salary']) }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -234,7 +234,7 @@
                                 <div class="card kpi-card bg-danger text-white mb-0">
                                     <div class="card-body py-2 px-3">
                                         <div class="kpi-label">Employee Tax</div>
-                                        <div class="kpi-value">{{ number_format($grand_totals['employee_tax_total'], 0) }}</div>
+                                        <div class="kpi-value">{{ format_amount($grand_totals['employee_tax_total']) }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -242,7 +242,7 @@
                                 <div class="card kpi-card bg-warning text-white mb-0">
                                     <div class="card-body py-2 px-3">
                                         <div class="kpi-label">Employer Tax</div>
-                                        <div class="kpi-value">{{ number_format($grand_totals['employer_tax_total'], 0) }}</div>
+                                        <div class="kpi-value">{{ format_amount($grand_totals['employer_tax_total']) }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -250,7 +250,7 @@
                                 <div class="card kpi-card bg-success text-white mb-0">
                                     <div class="card-body py-2 px-3">
                                         <div class="kpi-label">Total Net Pay</div>
-                                        <div class="kpi-value">{{ number_format($grand_totals['net_salary'], 0) }}</div>
+                                        <div class="kpi-value">{{ format_amount($grand_totals['net_salary']) }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -401,16 +401,16 @@
                                             <span class="badge badge-warning exempt-badge" title="Has {{ $sr['exemption_count'] }} exemption(s)">E</span>
                                             @endif
                                         </td>
-                                        <td class="sticky-col-3 text-right">{{ number_format($sr['basic_salary'], 0) }}</td>
+                                        <td class="sticky-col-3 text-right">{{ format_amount($sr['basic_salary']) }}</td>
                                         
                                         {{-- Group taxes --}}
                                         @foreach($tax_groups as $group)
                                         <td class="text-right">
                                             @if(isset($sr['groups'][$group->id]))
                                                 @php $g = $sr['groups'][$group->id]; @endphp
-                                                {{ number_format($g['employee'], 0) }}
+                                                {{ format_amount($g['employee']) }}
                                                 @if($g['employer'] > 0)
-                                                <br><span class="employer-amount" title="Employer pays">+{{ number_format($g['employer'], 0) }}</span>
+                                                <br><span class="employer-amount" title="Employer pays">+{{ format_amount($g['employer']) }}</span>
                                                 @endif
                                             @else
                                                 0
@@ -426,9 +426,9 @@
                                                 @if($s['is_exempt'])
                                                     <span class="badge badge-success exempt-badge">Exempt</span>
                                                 @else
-                                                    {{ number_format($s['employee'], 0) }}
+                                                    {{ format_amount($s['employee']) }}
                                                     @if($s['employer'] > 0)
-                                                    <br><span class="employer-amount" title="Employer pays">+{{ number_format($s['employer'], 0) }}</span>
+                                                    <br><span class="employer-amount" title="Employer pays">+{{ format_amount($s['employer']) }}</span>
                                                     @endif
                                                 @endif
                                             @else
@@ -438,10 +438,10 @@
                                         @endforeach
 
                                         {{-- Summaries --}}
-                                        <td class="text-right text-danger font-weight-bold">{{ number_format($sr['employee_tax_total'], 0) }}</td>
-                                        <td class="text-right text-warning">{{ number_format($sr['employer_tax_total'], 0) }}</td>
-                                        <td class="text-right text-success font-weight-bold">{{ number_format($sr['net_salary'], 0) }}</td>
-                                        <td class="text-right">{{ number_format($sr['total_cost'], 0) }}</td>
+                                        <td class="text-right text-danger font-weight-bold">{{ format_amount($sr['employee_tax_total']) }}</td>
+                                        <td class="text-right text-warning">{{ format_amount($sr['employer_tax_total']) }}</td>
+                                        <td class="text-right text-success font-weight-bold">{{ format_amount($sr['net_salary']) }}</td>
+                                        <td class="text-right">{{ format_amount($sr['total_cost']) }}</td>
                                         <td class="text-center">
                                             @php $rate = $sr['basic_salary'] > 0 ? round(($sr['employee_tax_total'] / $sr['basic_salary']) * 100, 1) : 0; @endphp
                                             <span class="badge {{ $rate < 10 ? 'badge-success' : ($rate < 20 ? 'badge-warning' : 'badge-danger') }}">
@@ -455,30 +455,30 @@
                                     <tr class="totals-row">
                                         <td class="sticky-col"></td>
                                         <td class="sticky-col-2">TOTALS ({{ $staff_count }} staff)</td>
-                                        <td class="sticky-col-3 text-right">{{ number_format($grand_totals['basic_salary'], 0) }}</td>
+                                        <td class="sticky-col-3 text-right">{{ format_amount($grand_totals['basic_salary']) }}</td>
                                         
                                         @foreach($tax_groups as $group)
                                         <td class="text-right">
-                                            {{ number_format($grand_totals['groups'][$group->id]['employee'], 0) }}
+                                            {{ format_amount($grand_totals['groups'][$group->id]['employee']) }}
                                             @if($grand_totals['groups'][$group->id]['employer'] > 0)
-                                            <br><span class="employer-amount">+{{ number_format($grand_totals['groups'][$group->id]['employer'], 0) }}</span>
+                                            <br><span class="employer-amount">+{{ format_amount($grand_totals['groups'][$group->id]['employer']) }}</span>
                                             @endif
                                         </td>
                                         @endforeach
                                         
                                         @foreach($standalone_taxes as $tax)
                                         <td class="text-right">
-                                            {{ number_format($grand_totals['standalone'][$tax->id]['employee'], 0) }}
+                                            {{ format_amount($grand_totals['standalone'][$tax->id]['employee']) }}
                                             @if($grand_totals['standalone'][$tax->id]['employer'] > 0)
-                                            <br><span class="employer-amount">+{{ number_format($grand_totals['standalone'][$tax->id]['employer'], 0) }}</span>
+                                            <br><span class="employer-amount">+{{ format_amount($grand_totals['standalone'][$tax->id]['employer']) }}</span>
                                             @endif
                                         </td>
                                         @endforeach
                                         
-                                        <td class="text-right text-danger">{{ number_format($grand_totals['employee_tax_total'], 0) }}</td>
-                                        <td class="text-right text-warning">{{ number_format($grand_totals['employer_tax_total'], 0) }}</td>
-                                        <td class="text-right text-success">{{ number_format($grand_totals['net_salary'], 0) }}</td>
-                                        <td class="text-right">{{ number_format($grand_totals['total_cost'], 0) }}</td>
+                                        <td class="text-right text-danger">{{ format_amount($grand_totals['employee_tax_total']) }}</td>
+                                        <td class="text-right text-warning">{{ format_amount($grand_totals['employer_tax_total']) }}</td>
+                                        <td class="text-right text-success">{{ format_amount($grand_totals['net_salary']) }}</td>
+                                        <td class="text-right">{{ format_amount($grand_totals['total_cost']) }}</td>
                                         <td class="text-center">
                                             <span class="badge badge-dark">{{ $avg_effective_rate }}%</span>
                                         </td>
@@ -516,8 +516,8 @@
                                                 <tr>
                                                     <td>{{ $label }}</td>
                                                     <td class="text-center">{{ $band['count'] }}</td>
-                                                    <td class="text-right">{{ number_format($band['total_salary'], 0) }}</td>
-                                                    <td class="text-right">{{ number_format($band['total_tax'], 0) }}</td>
+                                                    <td class="text-right">{{ format_amount($band['total_salary']) }}</td>
+                                                    <td class="text-right">{{ format_amount($band['total_tax']) }}</td>
                                                     <td class="text-center">
                                                         @if($band['total_salary'] > 0)
                                                             {{ round(($band['total_tax'] / $band['total_salary']) * 100, 1) }}%
@@ -554,9 +554,9 @@
                                                 <tr>
                                                     <td><i class="fas fa-layer-group text-primary mr-1"></i> {{ $group->title }}</td>
                                                     <td class="text-center"><span class="badge badge-primary">Group</span></td>
-                                                    <td class="text-right">{{ number_format($grand_totals['groups'][$group->id]['employee'], 0) }}</td>
-                                                    <td class="text-right">{{ number_format($grand_totals['groups'][$group->id]['employer'], 0) }}</td>
-                                                    <td class="text-right font-weight-bold">{{ number_format($grand_totals['groups'][$group->id]['employee'] + $grand_totals['groups'][$group->id]['employer'], 0) }}</td>
+                                                    <td class="text-right">{{ format_amount($grand_totals['groups'][$group->id]['employee']) }}</td>
+                                                    <td class="text-right">{{ format_amount($grand_totals['groups'][$group->id]['employer']) }}</td>
+                                                    <td class="text-right font-weight-bold">{{ format_amount($grand_totals['groups'][$group->id]['employee'] + $grand_totals['groups'][$group->id]['employer']) }}</td>
                                                 </tr>
                                                 @endforeach
                                                 @foreach($standalone_taxes as $tax)
@@ -576,18 +576,18 @@
                                                         <span class="badge badge-warning">Standalone</span>
                                                         @endif
                                                     </td>
-                                                    <td class="text-right">{{ number_format($grand_totals['standalone'][$tax->id]['employee'], 0) }}</td>
-                                                    <td class="text-right">{{ number_format($grand_totals['standalone'][$tax->id]['employer'], 0) }}</td>
-                                                    <td class="text-right font-weight-bold">{{ number_format($grand_totals['standalone'][$tax->id]['employee'] + $grand_totals['standalone'][$tax->id]['employer'], 0) }}</td>
+                                                    <td class="text-right">{{ format_amount($grand_totals['standalone'][$tax->id]['employee']) }}</td>
+                                                    <td class="text-right">{{ format_amount($grand_totals['standalone'][$tax->id]['employer']) }}</td>
+                                                    <td class="text-right font-weight-bold">{{ format_amount($grand_totals['standalone'][$tax->id]['employee'] + $grand_totals['standalone'][$tax->id]['employer']) }}</td>
                                                 </tr>
                                                 @endforeach
                                             </tbody>
                                             <tfoot>
                                                 <tr class="font-weight-bold bg-light">
                                                     <td colspan="2">Grand Total</td>
-                                                    <td class="text-right text-danger">{{ number_format($grand_totals['employee_tax_total'], 0) }}</td>
-                                                    <td class="text-right text-warning">{{ number_format($grand_totals['employer_tax_total'], 0) }}</td>
-                                                    <td class="text-right">{{ number_format($grand_totals['employee_tax_total'] + $grand_totals['employer_tax_total'], 0) }}</td>
+                                                    <td class="text-right text-danger">{{ format_amount($grand_totals['employee_tax_total']) }}</td>
+                                                    <td class="text-right text-warning">{{ format_amount($grand_totals['employer_tax_total']) }}</td>
+                                                    <td class="text-right">{{ format_amount($grand_totals['employee_tax_total'] + $grand_totals['employer_tax_total']) }}</td>
                                                 </tr>
                                             </tfoot>
                                         </table>

@@ -128,7 +128,7 @@
                                     <td>
                                         {{ $book->uploader ? $book->uploader->name : 'System' }}
                                         <br>
-                                        <small class="text-muted">{{ $book->created_at->format('F d, Y') }}</small>
+                                        <small class="text-muted">{{ $book->created_at->format('d/m/Y') }}</small>
                                     </td>
                                 </tr>
                             </table>
@@ -202,7 +202,7 @@
                                                 @endfor
                                             </td>
                                             <td>{{ Str::limit($review->review, 100) }}</td>
-                                            <td>{{ $review->created_at->format('M d, Y') }}</td>
+                                            <td>{{ $review->created_at->format('d/m/Y') }}</td>
                                             <td>
                                                 @if($review->status)
                                                     <span class="badge badge-success">Approved</span>
@@ -329,7 +329,7 @@
                                     <h6 class="timeline-title">Book Added</h6>
                                 </div>
                                 <div class="timeline-body">
-                                    <p class="text-muted mb-0">{{ $book->created_at->format('F d, Y \a\t h:i A') }}</p>
+                                    <p class="text-muted mb-0">{{ $book->created_at->format('d/m/Y H:i') }}</p>
                                 </div>
                             </div>
                         </li>

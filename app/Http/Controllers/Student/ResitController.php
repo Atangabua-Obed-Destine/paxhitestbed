@@ -745,7 +745,7 @@ class ResitController extends Controller
                 
                 // Show flash notification
                 Flasher::addSuccess(
-                    __('You have been enrolled in the resit semester to retake your failed courses!'),
+                    __('You have been enrolled in the resit semester to retake your failed courses.'),
                     __('Resit Semester Enrollment')
                 );
             }

@@ -71,6 +71,7 @@ class PaymentAccountTransferController extends Controller
 
             // Check sufficient balance in from account
             if ($from_account->current_balance < $amount) {
+                DB::rollBack();
                 Toastr::error(__('insufficient_balance_in_from_account'), __('msg_error'));
                 return redirect()->back()->withInput();
             }
@@ -133,6 +134,10 @@ class PaymentAccountTransferController extends Controller
                 'created_by' => auth()->user()->id,
             ]);
 
+            // Money moved between two of the school's accounts: the ledger
+            // follows when both are linked to (different) ledger accounts.
+            app(\App\Services\Accounting\CashAccounts::class)->postTransfer($transfer->fresh(['fromAccount', 'toAccount']));
+
             DB::commit();
 
             Toastr::success(__('transfer_successful'), __('msg_success'));
@@ -185,6 +190,9 @@ class PaymentAccountTransferController extends Controller
         try {
             $transfer = PaymentAccountTransfer::with(['fromAccount', 'toAccount'])->findOrFail($id);
             
+            // The old posting is reversed, never edited; the new one follows.
+            app(\App\Services\Accounting\CashAccounts::class)->reverseTransfer($transfer);
+
             // Get old values
             $old_from_account = $transfer->fromAccount;
             $old_to_account = $transfer->toAccount;
@@ -273,6 +281,8 @@ class PaymentAccountTransferController extends Controller
                 }
             }
 
+            app(\App\Services\Accounting\CashAccounts::class)->postTransfer($transfer->fresh(['fromAccount', 'toAccount']));
+
             DB::commit();
 
             Toastr::success(__('transfer_updated_successfully'), __('msg_success'));
@@ -324,6 +334,8 @@ class PaymentAccountTransferController extends Controller
             foreach ($transactions as $transaction) {
                 $transaction->delete();
             }
+
+            app(\App\Services\Accounting\CashAccounts::class)->reverseTransfer($transfer);
 
             // Delete transfer
             $transfer->delete();

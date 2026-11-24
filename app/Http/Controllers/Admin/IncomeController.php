@@ -114,7 +114,7 @@ class IncomeController extends Controller
                     if ($category !== []) {
                         $rows->whereIn('category_id', $category);
                     }
-        $data['rows'] = $rows->orderBy('date', 'desc')->orderBy('id', 'desc')->get();
+        $data['rows'] = $rows->with(['category', 'recordedBy', 'paymentAccount'])->orderBy('date', 'desc')->orderBy('id', 'desc')->get();
 
         // Bucketed from the rows already fetched, so the band above the table
         // costs no extra query and can never disagree with the table below it.

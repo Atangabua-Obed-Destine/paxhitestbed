@@ -17,8 +17,8 @@
                     </div>
 
                     <p><strong>{{ __('field_student') }}:</strong> {{ $row->student->first_name }} {{ $row->student->last_name }}</p>
-                    <p><strong>{{ __('field_total_amount') }}:</strong> {{ number_format($row->total_amount, 2) }} {!! $setting->currency_symbol !!}</p>
-                    <p><strong>{{ __('field_paid') }}:</strong> {{ number_format($row->total_paid, 2) }} {!! $setting->currency_symbol !!}</p>
+                    <p><strong>{{ __('field_total_amount') }}:</strong> {{ format_amount($row->total_amount) }} {!! $setting->currency_symbol !!}</p>
+                    <p><strong>{{ __('field_paid') }}:</strong> {{ format_amount($row->total_paid) }} {!! $setting->currency_symbol !!}</p>
 
                     <div class="form-group mt-3">
                         <label for="cancellation_reason" class="form-label">{{ __('field_cancellation_reason') }} <span>*</span></label>

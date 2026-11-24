@@ -17,6 +17,11 @@ class AllowanceType extends Model
     protected $fillable = [
         'title',
         'description',
+        'is_taxable',
         'status',
+    ];
+
+    protected $casts = [
+        'is_taxable' => 'boolean',
     ];
 }

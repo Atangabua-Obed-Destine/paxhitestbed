@@ -126,12 +126,12 @@
                                         <td><strong>{{ $row['budget_code'] }}</strong></td>
                                         <td>{{ $row['budget_title'] }}</td>
                                         <td>{{ $row['category'] }}</td>
-                                        <td class="text-right">{{ number_format($row['allocated'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($row['spent'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($row['committed'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($row['remaining'], 2) }}</td>
+                                        <td class="text-right">{{ format_amount($row['allocated']) }}</td>
+                                        <td class="text-right">{{ format_amount($row['spent']) }}</td>
+                                        <td class="text-right">{{ format_amount($row['committed']) }}</td>
+                                        <td class="text-right">{{ format_amount($row['remaining']) }}</td>
                                         <td class="text-right {{ $row['variance'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                            {{ number_format($row['variance'], 2) }}
+                                            {{ format_amount($row['variance']) }}
                                         </td>
                                         <td class="text-right {{ $row['variance'] >= 0 ? 'text-success' : 'text-danger' }}">
                                             {{ number_format($row['variance_percent'], 1) }}%
@@ -156,11 +156,11 @@
                                 <tfoot class="thead-light">
                                     <tr>
                                         <th colspan="3" class="text-right">{{ __('total') }}</th>
-                                        <th class="text-right">{{ number_format(collect($reportData)->sum('allocated'), 2) }}</th>
-                                        <th class="text-right">{{ number_format(collect($reportData)->sum('spent'), 2) }}</th>
-                                        <th class="text-right">{{ number_format(collect($reportData)->sum('committed'), 2) }}</th>
-                                        <th class="text-right">{{ number_format(collect($reportData)->sum('remaining'), 2) }}</th>
-                                        <th class="text-right">{{ number_format(collect($reportData)->sum('variance'), 2) }}</th>
+                                        <th class="text-right">{{ format_amount(collect($reportData)->sum('allocated')) }}</th>
+                                        <th class="text-right">{{ format_amount(collect($reportData)->sum('spent')) }}</th>
+                                        <th class="text-right">{{ format_amount(collect($reportData)->sum('committed')) }}</th>
+                                        <th class="text-right">{{ format_amount(collect($reportData)->sum('remaining')) }}</th>
+                                        <th class="text-right">{{ format_amount(collect($reportData)->sum('variance')) }}</th>
                                         <th colspan="2"></th>
                                     </tr>
                                 </tfoot>

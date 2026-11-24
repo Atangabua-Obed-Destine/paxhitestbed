@@ -135,8 +135,8 @@
                                     <tr>
                                         <td>{{ $line->account->code ?? '-' }}</td>
                                         <td>{{ $line->account->name ?? '-' }}</td>
-                                        <td class="text-right">{{ $line->debit > 0 ? number_format($line->debit) : '' }}</td>
-                                        <td class="text-right">{{ $line->credit > 0 ? number_format($line->credit) : '' }}</td>
+                                        <td class="text-right">{{ $line->debit > 0 ? format_amount($line->debit) : '' }}</td>
+                                        <td class="text-right">{{ $line->credit > 0 ? format_amount($line->credit) : '' }}</td>
                                         <td>{{ $line->description ?? '-' }}</td>
                                     </tr>
                                     @endforeach
@@ -144,8 +144,8 @@
                                 <tfoot class="font-weight-bold bg-light">
                                     <tr>
                                         <td colspan="2">{{ __('Total') }}</td>
-                                        <td class="text-right">{{ number_format($totalDebit) }}</td>
-                                        <td class="text-right">{{ number_format($totalCredit) }}</td>
+                                        <td class="text-right">{{ format_amount($totalDebit) }}</td>
+                                        <td class="text-right">{{ format_amount($totalCredit) }}</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>
@@ -174,7 +174,7 @@
                                     <tr>
                                         <td>{{ $entry->entry_date->format('Y-m-d') }}</td>
                                         <td>{{ $entry->reference_number }}</td>
-                                        <td>{{ number_format($entry->lines->sum('debit')) }}</td>
+                                        <td>{{ format_amount($entry->lines->sum('debit')) }}</td>
                                         <td>
                                             @if($entry->status === 'posted')
                                                 <span class="badge badge-success">{{ __('Posted') }}</span>

@@ -172,7 +172,7 @@
                                                                 {{ $distribution->installment->status }}
                                                             </span>
                                                         </small>
-                                                        <br><small class="text-muted">Due: {{ date('M d, Y', strtotime($distribution->installment->due_date)) }}</small>
+                                                        <br><small class="text-muted">Due: {{ date('d/m/Y', strtotime($distribution->installment->due_date)) }}</small>
                                                     @endif
                                                 </td>
                                                 <td>

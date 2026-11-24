@@ -256,7 +256,7 @@
                                 @endif
                             </td>
                             <td>
-                                <small>{{ $whitelist->created_at->format('M d, Y H:i') }}</small>
+                                <small>{{ $whitelist->created_at->format('d/m/Y H:i') }}</small>
                                 <br><small class="text-muted">{{ $whitelist->created_at->diffForHumans() }}</small>
                             </td>
                             <td class="text-center">

@@ -205,7 +205,7 @@
                                         @foreach((array) $row as $key => $value)
                                             <td class="{{ $isMoney($key) ? 'n' : '' }}">
                                                 {{ $isMoney($key) && is_numeric($value)
-                                                    ? number_format((float) $value, 2)
+                                                    ? format_amount((float) $value)
                                                     : $value }}
                                             </td>
                                         @endforeach

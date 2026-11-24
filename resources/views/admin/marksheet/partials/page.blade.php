@@ -234,7 +234,7 @@
                          issued takes the slot so the row is not left half
                          empty. --}}
                     <div class="tp-info-cell tp-info-label">Date Issued</div>
-                    <div class="tp-info-cell tp-info-value">{{ date('F d, Y') }}</div>
+                    <div class="tp-info-cell tp-info-value">{{ date('j F Y') }}</div>
                 </div>
                 @if($row->nationality)
                 <div class="tp-info-row">

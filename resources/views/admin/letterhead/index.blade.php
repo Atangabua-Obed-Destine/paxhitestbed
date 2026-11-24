@@ -74,6 +74,47 @@
 
                         <div class="card">
                             <div class="card-header">
+                                <h5>{{ __('Republic of Cameroon heading') }}</h5>
+                            </div>
+                            <div class="card-block">
+                                <p class="text-muted small">
+                                    {{ __('The bilingual block official documents carry above the school\'s own heading: République du Cameroun / Paix – Travail – Patrie on the left, Republic of Cameroon / Peace – Work – Fatherland on the right, with the ministry and delegation beneath. Leave a line empty to leave it out.') }}
+                                </p>
+                                <div class="row">
+                                    <div class="form-group col-md-12">
+                                        <div class="switch d-inline">
+                                            <input type="checkbox" id="state_block" name="state_block" value="1"
+                                                   {{ old('state_block', $row->state_block) ? 'checked' : '' }}>
+                                            <label for="state_block" class="cr"></label>
+                                        </div>
+                                        <label for="state_block">{{ __('Print it on every document') }}</label>
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label for="ministry_fr" class="form-label">{{ __('Ministry (French)') }}</label>
+                                        <input type="text" class="form-control" id="ministry_fr" name="ministry_fr" maxlength="191"
+                                               value="{{ old('ministry_fr', $row->ministry_fr) }}" placeholder="{{ __('e.g. Ministère de l\'Enseignement Supérieur') }}">
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label for="ministry_en" class="form-label">{{ __('Ministry (English)') }}</label>
+                                        <input type="text" class="form-control" id="ministry_en" name="ministry_en" maxlength="191"
+                                               value="{{ old('ministry_en', $row->ministry_en) }}" placeholder="{{ __('e.g. Ministry of Higher Education') }}">
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label for="delegation_fr" class="form-label">{{ __('Delegation or second line (French)') }}</label>
+                                        <input type="text" class="form-control" id="delegation_fr" name="delegation_fr" maxlength="191"
+                                               value="{{ old('delegation_fr', $row->delegation_fr) }}">
+                                    </div>
+                                    <div class="form-group col-md-6">
+                                        <label for="delegation_en" class="form-label">{{ __('Delegation or second line (English)') }}</label>
+                                        <input type="text" class="form-control" id="delegation_en" name="delegation_en" maxlength="191"
+                                               value="{{ old('delegation_en', $row->delegation_en) }}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
                                 <h5>{{ __('The letterhead') }}</h5>
                             </div>
                             <div class="card-block">

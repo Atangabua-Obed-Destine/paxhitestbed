@@ -72,7 +72,7 @@
                                         </td>
                                         <td class="text-right">
                                             <strong class="{{ ($closing->net_income ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ number_format($closing->net_income ?? 0, 0, ',', ' ') }} FCFA
+                                                {{ format_amount($closing->net_income ?? 0) }} FCFA
                                             </strong>
                                         </td>
                                         <td>

@@ -174,7 +174,7 @@
                                         </td>
                                         <td>{{ $row->user->first_name ?? '' }} {{ $row->user->last_name ?? '' }}</td>
                                         <td>
-                                            {{ number_format((float)$row->basic_salary, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!} / 
+                                            {{ format_amount((float)$row->basic_salary) }} {!! $setting->currency_symbol !!} / 
 
                                             @if( $row->salary_type == 1 )
                                             {{ __('salary_type_fixed') }}
@@ -182,12 +182,12 @@
                                             {{ __('salary_type_hourly') }}
                                             @endif
                                         </td>
-                                        <td>{{ number_format((float)$row->total_earning, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
-                                        <td>{{ number_format((float)$row->total_allowance, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
-                                        <td>{{ number_format((float)$row->total_deduction, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
-                                        <td>{{ number_format((float)$row->gross_salary, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
-                                        <td>{{ number_format((float)$row->tax, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
-                                        <td>{{ number_format((float)$row->net_salary, $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->total_earning) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->total_allowance) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->total_deduction) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->gross_salary) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->tax) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount((float)$row->net_salary) }} {!! $setting->currency_symbol !!}</td>
                                         <td>
                                             @if($row->status == 1)
                                             <span class="badge badge-pill badge-success">{{ __('status_paid') }}</span>
@@ -227,12 +227,12 @@
                                         <th></th>
                                         <th></th>
                                         <th>{{ __('field_grand_total') }}</th>
-                                        <th>{{ number_format((float)$rows->sum('total_earning'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum('total_allowance'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum('total_deduction'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum('gross_salary'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum('tax'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum('net_salary'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('total_earning')) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('total_allowance')) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('total_deduction')) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('gross_salary')) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('tax')) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('net_salary')) }} {!! $setting->currency_symbol !!}</th>
                                         <th></th>
                                         <th></th>
                                         <th></th>

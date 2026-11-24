@@ -252,7 +252,7 @@
                         <i class="fas fa-money-bill-wave"></i> Total Revenue Collected
                     </div>
                     <div class="revenue-amount">
-                        {!! $systemSetting->currency_symbol !!} {{ number_format($statistics['total_collected'], 2) }}
+                        {!! $systemSetting->currency_symbol !!} {{ format_amount($statistics['total_collected']) }}
                     </div>
                     <p class="mb-0" style="opacity: 0.8;">From approved platform fee payments</p>
                 </div>
@@ -273,7 +273,7 @@
                     <div class="stat-label"><i class="fas fa-mobile-alt"></i> Paid online</div>
                     <div class="stat-number">{{ $statistics['online_payments'] ?? 0 }}</div>
                     <div class="stat-label">
-                        {!! $systemSetting->currency_symbol !!} {{ number_format($statistics['online_collected'] ?? 0, 2) }}
+                        {!! $systemSetting->currency_symbol !!} {{ format_amount($statistics['online_collected'] ?? 0) }}
                         received, including the charge passed on to students
                     </div>
                 </div>
@@ -307,7 +307,7 @@
                 <div class="alert alert-light border mb-0">
                     <i class="fas fa-percent"></i>
                     The gateway kept
-                    <strong>{!! $systemSetting->currency_symbol !!} {{ number_format($statistics['gateway_commission'], 2) }}</strong>
+                    <strong>{!! $systemSetting->currency_symbol !!} {{ format_amount($statistics['gateway_commission']) }}</strong>
                     in commission across those payments. That is not school income &mdash; students were
                     charged for it on top of the fee. Run <code>php artisan fapshi:reconcile</code> to see
                     whether the configured rate matches what was actually taken.
@@ -352,7 +352,7 @@
                             <div class="session-stat-label">Rejected</div>
                         </div>
                         <div class="session-stat">
-                            <div class="session-stat-value text-success">{!! $systemSetting->currency_symbol !!} {{ number_format($session->revenue, 2) }}</div>
+                            <div class="session-stat-value text-success">{!! $systemSetting->currency_symbol !!} {{ format_amount($session->revenue) }}</div>
                             <div class="session-stat-label">Revenue</div>
                         </div>
                     </div>

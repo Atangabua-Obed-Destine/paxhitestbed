@@ -31,45 +31,45 @@
                         <!-- Statistics -->
                         <div class="row mb-3">
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['total'] ?? 0 }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('total_templates') }}</p>
+                                        <h3>{{ $statistics['total'] ?? 0 }}</h3>
+                                        <p>{{ __('total_templates') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-redo"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['active'] ?? 0 }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('active_templates') }}</p>
+                                        <h3>{{ $statistics['active'] ?? 0 }}</h3>
+                                        <p>{{ __('active_templates') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-check-circle"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ $statistics['due_today'] ?? 0 }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('due_today') }}</p>
+                                        <h3>{{ $statistics['due_today'] ?? 0 }}</h3>
+                                        <p>{{ __('due_today') }}</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-calendar-day"></i>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-3">
-                                <div class="small-box" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white;">
+                                <div class="small-box">
                                     <div class="inner">
-                                        <h3 style="color: white;">{{ number_format($statistics['monthly_total'] ?? 0, 0, ',', ' ') }}</h3>
-                                        <p style="color: rgba(255,255,255,0.9);">{{ __('monthly_total') }} (FCFA)</p>
+                                        <h3>{{ format_amount($statistics['monthly_total'] ?? 0) }}</h3>
+                                        <p>{{ __('monthly_total') }} (FCFA)</p>
                                     </div>
-                                    <div class="icon" style="color: rgba(255,255,255,0.3);">
+                                    <div class="icon">
                                         <i class="fas fa-coins"></i>
                                     </div>
                                 </div>
@@ -155,7 +155,7 @@
                                             @endif
                                         </td>
                                         <td class="text-right">
-                                            <strong>{{ number_format($entry->lines->sum('debit_amount'), 0, ',', ' ') }}</strong>
+                                            <strong>{{ format_amount($entry->lines->sum('debit_amount')) }}</strong>
                                         </td>
                                         <td class="text-center">
                                             {{ $entry->occurrences_created ?? 0 }}

@@ -74,15 +74,15 @@
                             <div class="row">
                                 <div class="col-md-4 text-center border-end">
                                     <small class="text-muted">{{ __('field_net_amount') }}</small>
-                                    <h5 class="mb-0 text-primary"><strong>{{ number_format($ppFee->total_amount ?? 0, 2) }}</strong></h5>
+                                    <h5 class="mb-0 text-primary"><strong>{{ format_amount($ppFee->total_amount ?? 0) }}</strong></h5>
                                 </div>
                                 <div class="col-md-4 text-center border-end">
                                     <small class="text-muted">{{ __('field_already_paid') }}</small>
-                                    <h5 class="mb-0 text-success">{{ number_format($ppFee->paid_amount ?? 0, 2) }}</h5>
+                                    <h5 class="mb-0 text-success">{{ format_amount($ppFee->paid_amount ?? 0) }}</h5>
                                 </div>
                                 <div class="col-md-4 text-center">
                                     <small class="text-muted">{{ __('field_remaining_balance') }}</small>
-                                    <h5 class="mb-0 text-warning"><strong>{{ number_format(max(0, $ppFee->remaining_balance ?? 0), 2) }}</strong></h5>
+                                    <h5 class="mb-0 text-warning"><strong>{{ format_amount(max(0, $ppFee->remaining_balance ?? 0)) }}</strong></h5>
                                 </div>
                             </div>
                         </div>
@@ -119,9 +119,9 @@
                                             @endif
                                         </td>
                                         <td>{{ \Carbon\Carbon::parse($ppLine->due_date)->format('d M Y') }}</td>
-                                        <td class="text-end">{{ number_format((float) $ppLine->amount + (float) ($ppLine->late_fee ?? 0), 2) }}</td>
-                                        <td class="text-end">{{ number_format((float) ($ppLine->paid_amount ?? 0), 2) }}</td>
-                                        <td class="text-end">{{ number_format((float) $ppLine->remaining_balance, 2) }}</td>
+                                        <td class="text-end">{{ format_amount((float) $ppLine->amount + (float) ($ppLine->late_fee ?? 0)) }}</td>
+                                        <td class="text-end">{{ format_amount((float) ($ppLine->paid_amount ?? 0)) }}</td>
+                                        <td class="text-end">{{ format_amount((float) $ppLine->remaining_balance) }}</td>
                                         <td>{!! $ppLine->status_badge !!}</td>
                                     </tr>
                                     @endforeach
@@ -129,7 +129,7 @@
                                 <tfoot>
                                     <tr>
                                         <th colspan="4" class="text-end">{{ __('Still to pay on the plan') }}</th>
-                                        <th class="text-end">{{ number_format($ppPlanBalance, 2) }}</th>
+                                        <th class="text-end">{{ format_amount($ppPlanBalance) }}</th>
                                         <th></th>
                                     </tr>
                                 </tfoot>
@@ -206,8 +206,8 @@
                                    value="{{ number_format($ppBalance, 2, '.', '') }}"
                                    step="0.01" min="0.01" required>
                             <small class="form-text text-muted">
-                                {{ __('This instalment') }}: {{ number_format($ppBalance, 2) }} {!! $ppCurrency !!}
-                                &middot; {{ __('whole plan') }}: {{ number_format($ppPlanBalance, 2) }} {!! $ppCurrency !!}
+                                {{ __('This instalment') }}: {{ format_amount($ppBalance) }} {!! $ppCurrency !!}
+                                &middot; {{ __('whole plan') }}: {{ format_amount($ppPlanBalance) }} {!! $ppCurrency !!}
                             </small>
                             <div class="invalid-feedback">
                                 {{ __('required_field') }} {{ __('field_amount') }}

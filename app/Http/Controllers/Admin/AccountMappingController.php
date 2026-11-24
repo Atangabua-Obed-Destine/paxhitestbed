@@ -92,8 +92,16 @@ class AccountMappingController extends Controller
             'mappings' => 'required|array',
             'mappings.*.mapping_type' => 'required|in:fee_category,income_category,expense_category,payroll,payroll_tax,payroll_staff_payable,payroll_allowance,payroll_deduction',
             'mappings.*.category_id' => 'nullable|integer',
-            'mappings.*.debit_account_id' => 'required|exists:chart_of_accounts,id',
-            'mappings.*.credit_account_id' => 'required|exists:chart_of_accounts,id',
+            'mappings.*.debit_account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
+            'mappings.*.credit_account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
             'mappings.*.budget_line_id' => 'nullable|exists:budget_lines,id',
             'mappings.*.description' => 'nullable|string',
         ]);
@@ -341,8 +349,16 @@ class AccountMappingController extends Controller
         $request->validate([
             'transaction_type' => 'required|in:fee,income,expense,payroll',
             'transaction_id' => 'required|integer',
-            'debit_account_id' => 'required|exists:chart_of_accounts,id',
-            'credit_account_id' => 'required|exists:chart_of_accounts,id',
+            'debit_account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
+            'credit_account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
             'description' => 'nullable|string',
         ]);
 
@@ -404,8 +420,16 @@ class AccountMappingController extends Controller
     public function updateMapping(Request $request, $mappingId)
     {
         $request->validate([
-            'debit_account_id' => 'required|exists:chart_of_accounts,id',
-            'credit_account_id' => 'required|exists:chart_of_accounts,id',
+            'debit_account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
+            'credit_account_id' => ['required', 'exists:chart_of_accounts,id', function ($attribute, $value, $fail) {
+                if (\App\Models\ChartOfAccount::whereKey($value)->where('account_category', '!=', 'detail')->exists()) {
+                    $fail(__('Choose a detail account. A heading only totals the accounts under it and cannot take entries of its own.'));
+                }
+            }],
             'description' => 'nullable|string',
         ]);
 
@@ -416,7 +440,8 @@ class AccountMappingController extends Controller
 
             // If journal entry exists, unpost it first
             if ($mapping->journalEntry && $mapping->journalEntry->is_posted) {
-                $mapping->journalEntry->unpost();
+                // This screen owns the posting it is replacing.
+                $mapping->journalEntry->unpost(true);
             }
 
             // Delete old journal entry if exists
@@ -531,7 +556,7 @@ class AccountMappingController extends Controller
 
         // Create journal entry
         $journalEntry = JournalEntry::create([
-            'entry_number' => JournalEntry::generateEntryNumber(),
+            'entry_number' => JournalEntry::generateEntryNumber($mapping->transaction_date),
             'entry_date' => $mapping->transaction_date,
             'fiscal_year_id' => $fiscalYear->id ?? null,
             'accounting_period_id' => $accountingPeriod->id ?? null,

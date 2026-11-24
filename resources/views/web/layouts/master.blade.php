@@ -89,11 +89,11 @@
     <link rel="stylesheet" href="{{ asset('web/css/slick.css') }}">
     <link rel="stylesheet" href="{{ asset('web/css/meanmenu.css') }}">
     <link rel="stylesheet" href="{{ asset('web/css/default.css') }}">
-    <link rel="stylesheet" href="{{ asset('web/css/style.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="{{ asset('web/css/style.css') }}?v={{ @filemtime(public_path('web/css/style.css')) }}">
     <link rel="stylesheet" href="{{ asset('web/css/responsive.css') }}">
-    <link rel="stylesheet" href="{{ asset('web/css/custom.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="{{ asset('web/css/custom.css') }}?v={{ @filemtime(public_path('web/css/custom.css')) }}">
     <!-- Resources & Downloads Styling -->
-    <link rel="stylesheet" href="{{ asset('web/css/resources-downloads.css') }}?v={{ time() }}">
+    <link rel="stylesheet" href="{{ asset('web/css/resources-downloads.css') }}?v={{ @filemtime(public_path('web/css/resources-downloads.css')) }}">
     <!-- AOS Animation Library -->
     <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css">
 

@@ -14,7 +14,7 @@
                 @forelse($timelineCollection as $item)
                     <div class="timeline-item">
                         <h6 class="mb-1">{{ $item->title ?? ($row::stageLabelMap()[$item->stage] ?? ucfirst(str_replace('_', ' ', $item->stage))) }}</h6>
-                        <small class="text-muted d-block">{{ $item->created_at->format('F j, Y g:i A') }}</small>
+                        <small class="text-muted d-block">{{ $item->created_at->format('d/m/Y H:i') }}</small>
                         <div class="mt-1">
                             <span class="badge badge-light">{{ __('Visible to applicant') }}: {{ $item->is_visible_to_applicant ? __('Yes') : __('No') }}</span>
                         </div>

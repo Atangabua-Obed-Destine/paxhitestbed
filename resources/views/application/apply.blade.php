@@ -405,7 +405,7 @@
                                     <span class="text-muted">{{ __('Last Saved') }}:</span>
                                     <span id="last-saved-time">
                                         @if($application->draft_last_saved_at)
-                                            {{ $application->draft_last_saved_at->format('M j, Y g:i A') }}
+                                            {{ $application->draft_last_saved_at->format('d/m/Y H:i') }}
                                         @else
                                             {{ __('Not saved yet') }}
                                         @endif
@@ -1530,7 +1530,7 @@
                     <small class="text-uppercase text-muted fw-bold" style="font-size:.75rem;letter-spacing:1px;">{{ __('Application fee') }}</small>
                     <div class="fs-4 fw-bold">{{ number_format($admissionFeeSettings['fee_amount'], 0) }} FCFA</div>
                     @if($admissionFee && $admissionFee->due_date)
-                        <small class="text-muted">{{ __('Due') }}: {{ \Carbon\Carbon::parse($admissionFee->due_date)->format('M j, Y') }}</small>
+                        <small class="text-muted">{{ __('Due') }}: {{ \Carbon\Carbon::parse($admissionFee->due_date)->format('d/m/Y') }}</small>
                     @endif
                 </div>
             </div>

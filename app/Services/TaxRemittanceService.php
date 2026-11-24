@@ -344,10 +344,14 @@ class TaxRemittanceService
 
             if ($original) {
                 $reversal = JournalEntry::create([
-                    'entry_number' => JournalEntry::generateEntryNumber(),
+                    'entry_number' => JournalEntry::generateEntryNumber(now()->toDateString()),
                     'entry_date' => now()->toDateString(),
-                    'fiscal_year_id' => $original->fiscal_year_id,
-                    'accounting_period_id' => $original->accounting_period_id,
+                    // Dated today, so filed in today's exercice and month — not
+                    // the ones the payment it voids was made in (a closed month
+                    // there made post() refuse the void).
+                    'fiscal_year_id' => \App\Models\FiscalYear::forDate(now()->toDateString())->id ?? $original->fiscal_year_id,
+                    'accounting_period_id' => \App\Models\FiscalYear::periodForDate(now()->toDateString())->id ?? null,
+                    'reversed_entry_id' => $original->id,
                     'journal_type' => 'remittance',
                     'description' => __('Reversal') . ': ' . $original->description,
                     'reference_type' => 'tax_remittance_reversal',
@@ -373,6 +377,7 @@ class TaxRemittanceService
                 }
 
                 $reversal->post($userId);
+                $original->update(['is_reversed' => true]);
                 $remittance->void_journal_entry_id = $reversal->id;
             }
 
@@ -405,7 +410,7 @@ class TaxRemittanceService
             ->first();
 
         $entry = JournalEntry::create([
-            'entry_number' => JournalEntry::generateEntryNumber(),
+            'entry_number' => JournalEntry::generateEntryNumber($remittance->payment_date),
             'entry_date' => $remittance->payment_date,
             'fiscal_year_id' => $fiscalYear->id,
             'accounting_period_id' => $period->id ?? null,

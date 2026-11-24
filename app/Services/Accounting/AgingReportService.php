@@ -110,6 +110,40 @@ class AgingReportService
             }
         }
 
+        $name = fn ($a) => $a['account_code'] . ' - ' . $a['account_name'];
+
+        return $this->presentable($report, $report['accounts'], fn ($a) => [
+            'customer_name' => $name($a),
+            'vendor_name' => $name($a),
+            'supplier_name' => $name($a),
+        ]);
+    }
+
+    /**
+     * The shape the aging screens and PDFs read: `summary` with one figure per
+     * age band and `details` with one row per account or student, keyed by
+     * band (current, days_31_60 ... over_120). The service built `accounts`,
+     * `students` and `bracket_N` keys instead, so every aging screen showed
+     * "no data" whatever was owed.
+     */
+    protected function presentable(array $report, array $rows, callable $names): array
+    {
+        $bands = ['current', 'days_31_60', 'days_61_90', 'days_91_120', 'over_120'];
+        $band = function (array $brackets) use ($bands) {
+            $out = [];
+            foreach ($bands as $i => $key) {
+                $out[$key] = round((float) ($brackets[$this->getBracketKey($i)] ?? 0), 2);
+            }
+            return $out;
+        };
+
+        $report['summary'] = $band($report['totals']) + ['total' => round((float) $report['grand_total'], 2)];
+        $report['details'] = array_map(
+            fn ($r) => $names($r) + $band($r['brackets']) + ['total' => round((float) $r['total'], 2)] + $r,
+            $rows
+        );
+        $report['filters'] = ($report['filters'] ?? []) + ['as_of_date' => $report['as_of_date']];
+
         return $report;
     }
 
@@ -240,7 +274,8 @@ class AgingReportService
             ->join('students', 'student_enrolls.student_id', '=', 'students.id')
             ->leftJoin('programs', 'students.program_id', '=', 'programs.id')
             ->whereDate('fees.due_date', '<=', $asOfDate)
-            ->where('fees.status', '!=', 1) // 0 = Unpaid, 1 = Paid, 2 = Cancel
+            // 0 unpaid, 2 part paid. Paid (1) and cancelled (3) owe nothing.
+            ->whereNotIn('fees.status', [1, 3])
             ->select(
                 'students.id as student_id',
                 'student_enrolls.matricule',
@@ -250,7 +285,9 @@ class AgingReportService
                 'fees.fee_amount as amount',
                 'fees.paid_amount',
                 'fees.due_date',
-                DB::raw('(fees.fee_amount - COALESCE(fees.paid_amount, 0)) as outstanding')
+                // What the fee comes to after discount and fine, less what
+                // has been paid against it.
+                DB::raw('(fees.fee_amount - COALESCE(fees.discount_amount, 0) + COALESCE(fees.fine_amount, 0) - COALESCE(fees.paid_amount, 0)) as outstanding')
             );
 
         if (!empty($filters['program_id'])) {
@@ -308,7 +345,13 @@ class AgingReportService
             }
         }
 
-        return $report;
+        $report['filters'] = array_filter([
+            'program' => !empty($filters['program_id']) ? \App\Models\Program::whereKey($filters['program_id'])->value('title') : null,
+        ]);
+
+        return $this->presentable($report, $report['students'], fn ($r) => [
+            'student_code' => $r['matricule'] ?: $r['student_id'],
+        ]);
     }
 
     /**

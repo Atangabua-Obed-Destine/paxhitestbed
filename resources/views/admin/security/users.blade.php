@@ -156,7 +156,7 @@
                                     <td>
                                         @if($user->isBlocked())
                                         <small>
-                                            <strong>{{ __('Blocked At:') }}</strong> {{ $user->blocked_at->format('M d, Y H:i') }}<br>
+                                            <strong>{{ __('Blocked At:') }}</strong> {{ $user->blocked_at->format('d/m/Y H:i') }}<br>
                                             <strong>{{ __('Reason:') }}</strong> {{ $user->block_reason }}<br>
                                             @if($user->blocker)
                                             <strong>{{ __('By:') }}</strong> {{ $user->blocker->first_name }} {{ $user->blocker->last_name }}
@@ -245,7 +245,7 @@
                                             {{ $attempt->attempts }}
                                         </span>
                                     </td>
-                                    <td>{{ $attempt->last_attempt_at->format('M d, Y H:i:s') }}</td>
+                                    <td>{{ $attempt->last_attempt_at->format('d/m/Y H:i:s') }}</td>
                                     <td><code>{{ $attempt->ip_address }}</code></td>
                                     <td>
                                         @if($attempt->isBlocked())

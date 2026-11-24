@@ -66,6 +66,22 @@
 
                                 <div class="col-md-6">
                                     <div class="form-group">
+                                        <label for="chart_of_account_id">{{ __('Ledger account') }}</label>
+                                        <select class="form-control @error('chart_of_account_id') is-invalid @enderror" id="chart_of_account_id" name="chart_of_account_id">
+                                            <option value="">{{ __('Not linked (money posts to the category mapping\'s account)') }}</option>
+                                            @foreach($ledger_accounts ?? [] as $la)
+                                            <option value="{{ $la->id }}" @selected((int) old('chart_of_account_id', $payment_account->chart_of_account_id ?? null) === (int) $la->id)>{{ $la->account_code }} - {{ $la->account_name }}</option>
+                                            @endforeach
+                                        </select>
+                                        <small class="text-muted">{{ __('Receipts, expenses, payroll and transfers through this account post to this ledger account (class 5).') }}</small>
+                                        @error('chart_of_account_id')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-group">
                                         <label for="opening_balance">{{ __('opening_balance') }}</label>
                                         <input type="number" step="0.01" class="form-control" 
                                                id="opening_balance" 

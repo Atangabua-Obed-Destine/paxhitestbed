@@ -869,6 +869,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
     // Account Mappings
     Route::get('accounting/mappings/settings', 'AccountMappingController@settings')->name('accounting.mappings.settings');
+    Route::get('accounting/cash-accounts', 'CashAccountController@index')->name('accounting.cash-accounts');
+    Route::post('accounting/cash-accounts', 'CashAccountController@update')->name('accounting.cash-accounts.update');
     Route::post('accounting/mappings/save-default', 'AccountMappingController@saveDefaultMappings')->name('accounting.mappings.save-default');
     Route::get('accounting/mappings/transactions', 'AccountMappingController@transactionsList')->name('accounting.mappings.transactions');
     Route::post('accounting/mappings/map-transaction', 'AccountMappingController@mapTransaction')->name('accounting.mappings.map-transaction');
@@ -977,12 +979,28 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('staff/staff-id-card-setting', 'StaffIdCardSettingController@store')->name('staff-id-card-setting.store');
 
     // Payroll Routes
-    Route::resource('staff/payroll', 'PayrollController');
+    // Only the actions that exist: a payroll is generated, saved and paid from
+    // its own screens. The full resource used to route show, edit, update and
+    // destroy too, which answered with an error page.
+    Route::resource('staff/payroll', 'PayrollController')->only(['index', 'store']);
+    Route::post('staff/payroll-preview', 'PayrollController@preview')->name('payroll.preview');
     Route::get('staff/payroll-generate/{id}/{month}/{year}', 'PayrollController@generate')->name('payroll.generate');
     Route::post('staff/payroll-pay/{id}', 'PayrollController@pay')->name('payroll.pay');
     Route::post('staff/payroll-unpay/{id}', 'PayrollController@unpay')->name('payroll.unpay');
     Route::get('staff/payroll-report', 'PayrollController@report')->name('payroll.report');
     Route::get('staff/payroll-print/{id}', 'PayrollController@print')->name('payroll.print');
+    Route::post('staff/payroll-approve/{id}', 'PayrollController@approve')->name('payroll.approve');
+    Route::post('staff/payroll-bulk', 'PayrollController@bulk')->name('payroll.bulk');
+    Route::get('staff/payroll-bank-file', 'PayrollController@bankFile')->name('payroll.bank-file');
+    Route::post('staff/payroll-email/{id}', 'PayrollController@emailPayslip')->name('payroll.email');
+    Route::get('staff/payroll-setting', 'PayrollSettingController@index')->name('payroll-setting.index');
+    Route::post('staff/payroll-setting', 'PayrollSettingController@update')->name('payroll-setting.update');
+    Route::get('staff/staff-loan', 'StaffLoanController@index')->name('staff-loan.index');
+    Route::post('staff/staff-loan', 'StaffLoanController@store')->name('staff-loan.store');
+    Route::post('staff/staff-loan/{id}/cancel', 'StaffLoanController@cancel')->name('staff-loan.cancel');
+    Route::get('my-payslips', 'MyPayslipController@index')->name('my-payslips.index');
+    Route::get('my-payslips/{id}', 'MyPayslipController@show')->name('my-payslips.show');
+    Route::get('my-payslips/{id}/pdf', 'MyPayslipController@pdf')->name('my-payslips.pdf');
     Route::resource('staff/pay-slip-setting', 'PaySlipSettingController');
 
 

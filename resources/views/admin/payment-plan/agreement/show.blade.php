@@ -8,7 +8,7 @@
 --}}
 @php
     $student = $agreement->student;
-    $money = fn ($v) => number_format((float) $v, 2);
+    $money = fn ($v) => format_amount((float) $v);
     $timeline = $agreement->timeline();
 @endphp
 

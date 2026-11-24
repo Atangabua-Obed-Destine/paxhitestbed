@@ -42,6 +42,11 @@ class LetterheadController extends Controller
             // Beyond about 150mm there would be no page left to print on.
             'reserve_height_mm' => ['nullable', 'integer', 'min:0', 'max:150'],
             'status' => ['nullable', 'boolean'],
+            'state_block' => ['nullable', 'boolean'],
+            'ministry_fr' => ['nullable', 'string', 'max:191'],
+            'ministry_en' => ['nullable', 'string', 'max:191'],
+            'delegation_fr' => ['nullable', 'string', 'max:191'],
+            'delegation_en' => ['nullable', 'string', 'max:191'],
         ]);
 
         $settings = LetterheadSetting::current();
@@ -50,6 +55,11 @@ class LetterheadController extends Controller
             'html' => $validated['html'] ?? null,
             'reserve_height_mm' => $validated['reserve_height_mm'] ?? 35,
             'status' => $request->boolean('status'),
+            'state_block' => $request->boolean('state_block'),
+            'ministry_fr' => $validated['ministry_fr'] ?? null,
+            'ministry_en' => $validated['ministry_en'] ?? null,
+            'delegation_fr' => $validated['delegation_fr'] ?? null,
+            'delegation_en' => $validated['delegation_en'] ?? null,
             'updated_by' => Auth::id(),
         ])->save();
 

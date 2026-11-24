@@ -245,11 +245,14 @@ class YearEndClosing extends Model
             throw new \Exception(__('fiscal_year_not_found'));
         }
 
-        // Get all revenue accounts (Class 7 in OHADA)
-        $revenueAccounts = ChartOfAccount::where('account_code', 'like', '7%')->pluck('id');
+        // Revenue: class 7, plus the income accounts of class 8 (HAO).
+        // Expenses: class 6, plus the charge accounts of class 8. HAO is part
+        // of the result, so a closing that left it out left it in the books.
+        $revenueAccounts = ChartOfAccount::where(fn ($q) => $q->where('account_code', 'like', '7%')
+            ->orWhere(fn ($h) => $h->where('account_code', 'like', '8%')->where('normal_balance', 'credit')))->pluck('id');
 
-        // Get all expense accounts (Class 6 in OHADA)
-        $expenseAccounts = ChartOfAccount::where('account_code', 'like', '6%')->pluck('id');
+        $expenseAccounts = ChartOfAccount::where(fn ($q) => $q->where('account_code', 'like', '6%')
+            ->orWhere(fn ($h) => $h->where('account_code', 'like', '8%')->where('normal_balance', 'debit')))->pluck('id');
 
         // Calculate total revenue (credits minus debits)
         $revenueCredits = JournalEntryLine::whereIn('account_id', $revenueAccounts)
@@ -304,6 +307,17 @@ class YearEndClosing extends Model
             throw new \Exception(__('complete_checklist_before_closing'));
         }
 
+        $this->assertEarlierYearsClosed();
+
+        // A year is not closed on books that are known to be wrong.
+        $health = app(\App\Services\Accounting\LedgerHealth::class);
+        $health->forget();
+        $critical = collect($health->checks())->where('state', \App\Services\Accounting\LedgerHealth::CRITICAL);
+        if ($critical->isNotEmpty()) {
+            throw new \Exception(__('The ledger has problems that must be fixed before the year can be closed: :list. See Accounting > Ledger health.',
+                ['list' => $critical->pluck('label')->implode('; ')]));
+        }
+
         $this->calculateClosingAmounts();
 
         return \Illuminate\Support\Facades\DB::transaction(function () {
@@ -312,7 +326,7 @@ class YearEndClosing extends Model
             // Create the closing journal entry as a draft, then post it via the model's
             // single posting path (validates balance + updates balances atomically).
             $journalEntry = JournalEntry::create([
-                'entry_number'        => JournalEntry::generateEntryNumber(),
+                'entry_number'        => JournalEntry::generateEntryNumber($this->closing_date),
                 'entry_date'          => $this->closing_date,
                 'reference_number'    => $this->closing_reference,
                 'description'         => __('year_end_closing_entry') . ' - ' . ($this->fiscalYear->name ?? ''),
@@ -329,9 +343,10 @@ class YearEndClosing extends Model
 
             $lineNo = 0;
 
-            // Close revenue accounts (Class 7, credit balances) → debit them to zero
+            // Close revenue accounts (class 7 and HAO income) → debit them to zero
             if ($this->total_revenue != 0) {
-                foreach (ChartOfAccount::where('account_code', 'like', '7%')->get() as $account) {
+                foreach (ChartOfAccount::where(fn ($q) => $q->where('account_code', 'like', '7%')
+                    ->orWhere(fn ($h) => $h->where('account_code', 'like', '8%')->where('normal_balance', 'credit')))->get() as $account) {
                     $balance = $this->getAccountBalance($account->id); // credits - debits
                     if ($balance != 0) {
                         JournalEntryLine::create([
@@ -354,9 +369,10 @@ class YearEndClosing extends Model
                 ]);
             }
 
-            // Close expense accounts (Class 6, debit balances) → CREDIT them to zero
+            // Close expense accounts (class 6 and HAO charges) → credit them to zero
             if ($this->total_expenses != 0) {
-                foreach (ChartOfAccount::where('account_code', 'like', '6%')->get() as $account) {
+                foreach (ChartOfAccount::where(fn ($q) => $q->where('account_code', 'like', '6%')
+                    ->orWhere(fn ($h) => $h->where('account_code', 'like', '8%')->where('normal_balance', 'debit')))->get() as $account) {
                     $balance = $this->getAccountBalance($account->id); // credits - debits (negative for expenses)
                     if ($balance != 0) {
                         JournalEntryLine::create([
@@ -444,6 +460,8 @@ class YearEndClosing extends Model
             throw new \Exception(__('only_pending_closings_can_be_approved'));
         }
 
+        $this->assertEarlierYearsClosed();
+
         $this->status = self::STATUS_COMPLETED;
         $this->completed_at = now();
         $this->approved_by = $userId ?? auth()->id();
@@ -463,21 +481,79 @@ class YearEndClosing extends Model
             throw new \Exception(__('only_completed_closings_can_be_reversed'));
         }
 
-        // Reverse the closing journal entry
-        if ($this->closingJournalEntry) {
-            $this->closingJournalEntry->reverse($reason ?? __('year_end_closing_reversal'));
+        // Newest first: reopening a year under a later closed one would change
+        // figures that later year was closed on.
+        $year = $this->fiscalYear;
+        if ($year && FiscalYear::whereDate('start_date', '>', $year->end_date)->where('is_closed', true)->exists()) {
+            throw new \Exception(__('A later fiscal year is closed. Reopen the most recent year first.'));
         }
 
-        // Reopen the fiscal year
-        $this->fiscalYear->update(['is_closed' => false]);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($reason, $year) {
+            // The year opens first: nothing can be posted into a closed year.
+            $year?->update(['is_closed' => false]);
 
-        $this->status = self::STATUS_REVERSED;
-        $this->notes = ($this->notes ? $this->notes . "\n" : '') . 
-                       __('reversed_on') . ': ' . now()->format('Y-m-d H:i:s') . 
-                       ($reason ? ' - ' . $reason : '');
-        $this->save();
+            // The closing entry is reversed, never deleted or un-posted: a
+            // mirror entry on the same date, linked to it. This used to call a
+            // JournalEntry::reverse() that does not exist, so reopening a year
+            // failed outright.
+            $original = $this->closingJournalEntry()->with('lines')->first();
+            if ($original && $original->is_posted && !$original->is_reversed) {
+                $userId = auth()->id() ?? $original->created_by;
+                $reversal = JournalEntry::create([
+                    'entry_number'        => JournalEntry::generateEntryNumber($original->entry_date),
+                    'entry_date'          => $original->entry_date,
+                    'description'         => __('Reversal of the year-end closing') . ' - ' . ($year->name ?? ''),
+                    'journal_type'        => 'closing',
+                    'reference_type'      => 'year_end_closing_reversal',
+                    'reference_id'        => $this->id,
+                    'reversed_entry_id'   => $original->id,
+                    'fiscal_year_id'      => $original->fiscal_year_id,
+                    'accounting_period_id'=> $original->accounting_period_id,
+                    'total_debit'         => $original->total_credit,
+                    'total_credit'        => $original->total_debit,
+                    'is_posted'           => false,
+                    'is_system_generated' => true,
+                    'created_by'          => $userId,
+                ]);
+                $n = 0;
+                foreach ($original->lines as $line) {
+                    JournalEntryLine::create([
+                        'journal_entry_id' => $reversal->id,
+                        'line_number'      => ++$n,
+                        'account_id'       => $line->account_id,
+                        'debit'            => $line->credit,
+                        'credit'           => $line->debit,
+                        'description'      => __('Reversal') . ': ' . $line->description,
+                    ]);
+                }
+                $reversal->post($userId);
+                $original->update(['is_reversed' => true]);
+            }
+
+            $this->status = self::STATUS_REVERSED;
+            $this->notes = ($this->notes ? $this->notes . "\n" : '') .
+                           __('reversed_on') . ': ' . now()->format('Y-m-d H:i:s') .
+                           ($reason ? ' - ' . $reason : '');
+            $this->save();
+        });
     }
 
+    /**
+     * Oldest first. A year closed while an earlier one is still open leaves
+     * that earlier year's result in classes 6 and 7 for good.
+     */
+    protected function assertEarlierYearsClosed(): void
+    {
+        $year = $this->fiscalYear;
+        if (!$year) {
+            return;
+        }
+
+        $open = FiscalYear::whereDate('end_date', '<', $year->start_date)->where('is_closed', false)->orderBy('start_date')->pluck('name');
+        if ($open->isNotEmpty()) {
+            throw new \Exception(__('Close the earlier fiscal years first: :years.', ['years' => $open->implode(', ')]));
+        }
+    }
     /**
      * Custom audit description
      */

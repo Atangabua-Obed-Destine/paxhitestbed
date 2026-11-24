@@ -127,7 +127,7 @@
             $amountInWords = ucfirst($fmt->format($whole));
         } catch (\Throwable $e) { /* noop */ }
     }
-    $amountInWords = $amountInWords ?? number_format((float)$receipt->amount, 0);
+    $amountInWords = $amountInWords ?? format_amount((float)$receipt->amount);
 
     $currency = $setting->currency_symbol ?? ($setting->currency ?? config('momo.currency', 'XAF'));
     // Public verification URL — no auth required, includes the HMAC code so scanners
@@ -173,7 +173,7 @@
 
     <div class="field">
         <div class="label">{{ __('Amount in Figures') }}:</div>
-        <div class="value">{{ $currency }} {{ number_format((float)$receipt->amount, 2) }}</div>
+        <div class="value">{{ $currency }} {{ format_amount((float)$receipt->amount) }}</div>
     </div>
 
     <div class="field">
@@ -221,7 +221,7 @@
     <div class="amount-box">
         <div>
             <div class="k">{{ __('Amount Received') }}</div>
-            <div class="v">{{ $currency }} {{ number_format((float)$receipt->amount, 2) }}</div>
+            <div class="v">{{ $currency }} {{ format_amount((float)$receipt->amount) }}</div>
         </div>
         <div>
             <span class="status {{ $statusClass }}">{{ __($statusLabel) }}</span>

@@ -30,19 +30,19 @@
                 <div class="col-md-3 mb-2">
                     <div class="aff-summary-card aff-summary-billed">
                         <div class="label">{{ __('Total Billed') }}</div>
-                        <div class="value">{{ number_format((float) ($totals->billed ?? 0), 2) }}</div>
+                        <div class="value">{{ format_amount((float) ($totals->billed ?? 0)) }}</div>
                     </div>
                 </div>
                 <div class="col-md-3 mb-2">
                     <div class="aff-summary-card aff-summary-paid">
                         <div class="label">{{ __('Total Received') }}</div>
-                        <div class="value">{{ number_format((float) ($totals->paid ?? 0), 2) }}</div>
+                        <div class="value">{{ format_amount((float) ($totals->paid ?? 0)) }}</div>
                     </div>
                 </div>
                 <div class="col-md-3 mb-2">
                     <div class="aff-summary-card aff-summary-outstanding">
                         <div class="label">{{ __('Outstanding') }}</div>
-                        <div class="value">{{ number_format(max(0, (float) ($totals->billed ?? 0) - (float) ($totals->paid ?? 0)), 2) }}</div>
+                        <div class="value">{{ format_amount(max(0, (float) ($totals->billed ?? 0) - (float) ($totals->paid ?? 0))) }}</div>
                     </div>
                 </div>
             </div>
@@ -159,9 +159,9 @@
                                             @if($app?->session) · {{ $app->session->title }} @endif
                                         </small>
                                     </td>
-                                    <td class="text-right">{{ number_format((float)$fee->fee_amount,2) }}</td>
-                                    <td class="text-right">{{ number_format((float)$fee->paid_amount,2) }}</td>
-                                    <td class="text-right"><strong>{{ number_format($balance,2) }}</strong></td>
+                                    <td class="text-right">{{ format_amount((float)$fee->fee_amount) }}</td>
+                                    <td class="text-right">{{ format_amount((float)$fee->paid_amount) }}</td>
+                                    <td class="text-right"><strong>{{ format_amount($balance) }}</strong></td>
                                     <td><span class="badge badge-{{ $st['class'] }}">{{ __($st['label']) }}</span></td>
                                     <td>
                                         @if($isEnrolled)

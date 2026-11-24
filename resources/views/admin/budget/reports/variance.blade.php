@@ -51,7 +51,7 @@
                 <div class="card {{ $summary['total_variance'] >= 0 ? 'bg-success' : 'bg-danger' }}">
                     <div class="card-body">
                         <h6 class="text-white">{{ __('total_variance') }}</h6>
-                        <h3 class="m-b-0 text-white">{{ number_format($summary['total_variance'], 2) }}</h3>
+                        <h3 class="m-b-0 text-white">{{ format_amount($summary['total_variance']) }}</h3>
                     </div>
                 </div>
             </div>
@@ -135,10 +135,10 @@
                                         <td><strong>{{ $row['budget_code'] }}</strong></td>
                                         <td>{{ $row['budget_title'] }}</td>
                                         <td>{{ $row['category'] }}</td>
-                                        <td class="text-right">{{ number_format($row['allocated'], 2) }}</td>
-                                        <td class="text-right">{{ number_format($row['spent'], 2) }}</td>
+                                        <td class="text-right">{{ format_amount($row['allocated']) }}</td>
+                                        <td class="text-right">{{ format_amount($row['spent']) }}</td>
                                         <td class="text-right {{ $row['variance'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                            <strong>{{ number_format($row['variance'], 2) }}</strong>
+                                            <strong>{{ format_amount($row['variance']) }}</strong>
                                         </td>
                                         <td class="text-right {{ $row['variance'] >= 0 ? 'text-success' : 'text-danger' }}">
                                             <strong>{{ number_format($row['variance_percent'], 1) }}%</strong>

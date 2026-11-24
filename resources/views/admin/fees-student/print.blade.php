@@ -46,7 +46,7 @@
     $inInstalments = $instalments->count() > 1 && $instalments->contains('id', $fee->id);
     $planInTable = $plan && $inInstalments;
 
-    $money = fn ($value) => number_format((float) $value, 2);
+    $money = fn ($value) => format_amount((float) $value);
     $day = fn ($date) => $date ? \Carbon\Carbon::parse($date)->format('d M Y') : '—';
 @endphp
 <!doctype html>

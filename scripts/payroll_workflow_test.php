@@ -331,8 +331,10 @@ if ($payroll) {
     if (strpos($log, "Auto-mapping failed for payroll:{$payroll->id}") !== false) {
         finding('Generating a payroll logs an ERROR every time: PayrollObserver tries to post the payroll to the ledger at creation, before it is paid, and only fails because there is no pay date yet (transaction_date cannot be null). It is the pay action that posts; the observer should not. If a pay date were ever present at creation the payroll would be posted twice.');
     }
-    finding('Allowances are not taxed: the tax is computed on the basic salary alone (' . $money($payroll->total_earning)
-        . '), while the gross paid is ' . $money($payroll->gross_salary) . '. If allowances are taxable here, that is a policy gap, not a bug in the flow.');
+    $taxedTypes = App\Models\AllowanceType::where('is_taxable', true)->pluck('title');
+    finding('Taxed on ' . $money($payroll->taxable_salary ?? $payroll->total_earning) . ' of a gross of ' . $money($payroll->gross_salary)
+        . ': allowance types set as taxable here: ' . ($taxedTypes->isEmpty() ? 'none' : $taxedTypes->implode(', '))
+        . '. Which allowances are taxable is a setting on each allowance type (Staff > Allowance Types); confirm it with the accountant.');
 }
 
 // Saving again for the same month updates the same row rather than adding one.
@@ -473,7 +475,7 @@ $response = $call('GET', '/admin/staff/payroll-report', ['month' => $month, 'yea
 $html = $response->getContent();
 check('the payroll report renders', $response->getStatusCode() === 200, 'status ' . $response->getStatusCode());
 check('and lists the staff member', strpos($html, $staff->last_name) !== false || strpos($html, $staff->first_name) !== false);
-check('with the net paid', strpos($html, number_format((float) $payroll->net_salary, 2)) !== false || strpos($html, number_format((float) $payroll->net_salary)) !== false);
+check('with the net paid', strpos($html, number_format((float) $payroll->net_salary, 2)) !== false || strpos($html, number_format((float) $payroll->net_salary)) !== false || strpos($html, format_amount((float) $payroll->net_salary)) !== false);
 
 $response = $call('GET', '/admin/report/payroll', ['month' => $month, 'year' => $year]);
 check('the salary-paid report renders', $response->getStatusCode() === 200, 'status ' . $response->getStatusCode());

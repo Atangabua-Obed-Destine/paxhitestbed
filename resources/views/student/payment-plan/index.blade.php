@@ -30,7 +30,7 @@
                         <div class="row align-items-center">
                             <div class="col-8">
                                 <h4 class="text-c-green">
-                                    {{ number_format($total_paid, 2) }}
+                                    {{ format_amount($total_paid) }}
                                     {!! $setting->currency_symbol !!}
                                 </h4>
                                 <h6 class="text-muted m-b-0">{{ __('total_paid') }}</h6>
@@ -49,7 +49,7 @@
                         <div class="row align-items-center">
                             <div class="col-8">
                                 <h4 class="text-c-yellow">
-                                    {{ number_format($total_remaining, 2) }}
+                                    {{ format_amount($total_remaining) }}
                                     {!! $setting->currency_symbol !!}
                                 </h4>
                                 <h6 class="text-muted m-b-0">{{ __('total_remaining') }}</h6>
@@ -109,15 +109,15 @@
                                             {{ $plan->fee->category->title ?? '' }}<br>
                                             <small class="text-muted">{{ $plan->fee->studentEnroll->program->title ?? '' }}</small>
                                         </td>
-                                        <td>{{ number_format($plan->total_amount, 2) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount($plan->total_amount) }} {!! $setting->currency_symbol !!}</td>
                                         <td>
                                             <span class="badge badge-info">{{ $plan->installments_count }} {{ __('installments') }}</span>
                                         </td>
                                         <td class="text-success">
-                                            <strong>{{ number_format($plan->total_paid, 2) }} {!! $setting->currency_symbol !!}</strong>
+                                            <strong>{{ format_amount($plan->total_paid) }} {!! $setting->currency_symbol !!}</strong>
                                         </td>
                                         <td class="text-danger">
-                                            <strong>{{ number_format($plan->remaining_balance, 2) }} {!! $setting->currency_symbol !!}</strong>
+                                            <strong>{{ format_amount($plan->remaining_balance) }} {!! $setting->currency_symbol !!}</strong>
                                         </td>
                                         <td>
                                             <div class="progress" style="height: 20px;">
@@ -171,7 +171,7 @@
                                     <tr>
                                         <td>#{{ $installment->installment_number }}</td>
                                         <td>{{ $installment->paymentPlan->fee->category->title ?? '' }}</td>
-                                        <td>{{ number_format($installment->amount + ($installment->late_fee ?? 0), 2) }} {!! $setting->currency_symbol !!}</td>
+                                        <td>{{ format_amount($installment->amount + ($installment->late_fee ?? 0)) }} {!! $setting->currency_symbol !!}</td>
                                         <td>{{ date('d M Y', strtotime($installment->due_date)) }}</td>
                                         <td>{!! $installment->status_badge !!}</td>
                                         <td>

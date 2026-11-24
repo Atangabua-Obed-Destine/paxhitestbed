@@ -370,146 +370,25 @@
 <body>
 
 @php
-    // ===== Tax Calculation (2-pass approach matching generate page) =====
-    $applicable_taxes = [];
-    $employer_taxes = [];
-    $group_tax_results = [];
-    $standalone_tax_results = [];
-    $total_calculated_tax = 0;
-    $total_calculated_employer_tax = 0;
+    // The taxes this payroll was actually charged, from its own itemised
+    // lines (see PayrollController::print). They are not recomputed here: a
+    // payslip is a record of what was withheld, and must not change when a
+    // rate does.
     $base_earning = (float) $row->total_earning;
     $dp = $setting->decimal_place ?? 2;
     $cs = $setting->currency_symbol ?? '';
-    
-    // --- PASS 1: Tax Groups (progressive) ---
-    if(isset($tax_groups) && $tax_groups->count() > 0) {
-        foreach($tax_groups as $group) {
-            $groupResult = $group->calculateTax($base_earning, $staff_tax_exemptions ?? collect());
-            if($groupResult['amount'] > 0) {
-                $applicable_taxes[] = [
-                    'title' => $group->title . ($group->is_progressive ? ' (Progressive)' : ''),
-                    'amount' => $groupResult['amount'],
-                    'display_info' => '',
-                    'is_shared' => false,
-                    'is_group' => true
-                ];
-                $total_calculated_tax += $groupResult['amount'];
-                $group_tax_results[$group->id] = $groupResult['amount'];
-            }
+    $applicable_taxes = [];
+    $employer_taxes = [];
+    foreach ($tax_lines as $line) {
+        $shared = $line['employee'] > 0 && $line['employer'] > 0;
+        if ($line['employee'] > 0) {
+            $applicable_taxes[] = ['title' => $line['label'], 'amount' => $line['employee'], 'display_info' => '', 'is_shared' => $shared];
+        }
+        if ($line['employer'] > 0) {
+            $employer_taxes[] = ['title' => $line['label'], 'amount' => $line['employer'], 'is_shared' => $shared];
         }
     }
-    
-    // --- PASS 1b: Standalone base taxes ---
-    $exempt_tax_ids = $row->user->exemptTaxes ? $row->user->exemptTaxes->pluck('id')->toArray() : [];
-    
-    if(isset($taxs)) {
-        foreach($taxs as $tax) {
-            if($tax->min_amount <= $base_earning && $tax->max_amount >= $base_earning) {
-                $is_exempt = in_array($tax->id, $exempt_tax_ids);
-                $employee_tax_amount = 0;
-                $employer_tax_amount = 0;
-                $tax_display_info = '';
-                $paid_by = $tax->paid_by ?? 'employee';
-                
-                if($is_exempt) {
-                    $exemption = isset($staff_tax_exemptions) ? $staff_tax_exemptions->get($tax->id) : null;
-                    if($exemption && $exemption->custom_percentage && $tax->tax_type == 1) {
-                        $taxable_amount = $base_earning - $tax->max_no_taxable_amount;
-                        $employee_tax_amount = ($taxable_amount / 100) * $exemption->custom_percentage;
-                        $tax_display_info = ' (Custom: ' . number_format($exemption->custom_percentage, 2) . '%)';
-                    } elseif($exemption && $exemption->custom_fixed_amount && $tax->tax_type == 2) {
-                        $employee_tax_amount = $exemption->custom_fixed_amount;
-                        $tax_display_info = ' (Custom)';
-                    }
-                } else {
-                    $taxable_amount = $base_earning - $tax->max_no_taxable_amount;
-                    if($paid_by == 'employee' || $paid_by == 'both') {
-                        $employee_tax_amount = ($tax->tax_type == 2) ? ($tax->fixed_amount ?? 0)
-                            : (($taxable_amount / 100) * ($tax->percentange ?? 0));
-                    }
-                    if($paid_by == 'employer' || $paid_by == 'both') {
-                        $employer_tax_amount = ($tax->tax_type == 2) ? ($tax->employer_fixed_amount ?? 0)
-                            : (($taxable_amount / 100) * ($tax->employer_percentage ?? 0));
-                    }
-                }
-                
-                if($employee_tax_amount > 0) {
-                    $applicable_taxes[] = [
-                        'title' => $tax->title ?? 'Tax',
-                        'amount' => $employee_tax_amount,
-                        'display_info' => $tax_display_info,
-                        'is_shared' => ($paid_by == 'both'),
-                        'is_group' => false
-                    ];
-                    $total_calculated_tax += $employee_tax_amount;
-                    $standalone_tax_results[$tax->id] = $employee_tax_amount;
-                }
-                if($employer_tax_amount > 0) {
-                    $employer_taxes[] = [
-                        'title' => $tax->title ?? 'Tax',
-                        'amount' => $employer_tax_amount,
-                        'is_shared' => ($paid_by == 'both')
-                    ];
-                    $total_calculated_employer_tax += $employer_tax_amount;
-                }
-            }
-        }
-    }
-    
-    // --- PASS 2: Dependent taxes ---
-    if(isset($dependent_taxs)) {
-        foreach($dependent_taxs as $dep_tax) {
-            if($dep_tax->min_amount <= $base_earning && $dep_tax->max_amount >= $base_earning) {
-                $source_amount = 0;
-                $source_type = $dep_tax->dependent_source_type ?? 'standalone';
-                $source_id = $dep_tax->dependent_on_tax_id ?? null;
-                
-                if($source_type === 'group' && $source_id && isset($group_tax_results[$source_id])) {
-                    $source_amount = $group_tax_results[$source_id];
-                } elseif($source_id && isset($standalone_tax_results[$source_id])) {
-                    $source_amount = $standalone_tax_results[$source_id];
-                }
-                
-                if($source_amount > 0) {
-                    $dep_employee_amount = 0;
-                    $dep_employer_amount = 0;
-                    $paid_by = $dep_tax->paid_by ?? 'employee';
-                    
-                    if($paid_by == 'employee' || $paid_by == 'both') {
-                        $dep_employee_amount = ($dep_tax->tax_type == 2) ? ($dep_tax->fixed_amount ?? 0)
-                            : (($source_amount / 100) * ($dep_tax->percentange ?? 0));
-                    }
-                    if($paid_by == 'employer' || $paid_by == 'both') {
-                        $dep_employer_amount = ($dep_tax->tax_type == 2) ? ($dep_tax->employer_fixed_amount ?? 0)
-                            : (($source_amount / 100) * ($dep_tax->employer_percentage ?? 0));
-                    }
-                    
-                    if($dep_employee_amount > 0) {
-                        $source_label = ($source_type === 'group' && $source_id && isset($tax_groups))
-                            ? ($tax_groups->firstWhere('id', $source_id)->title ?? 'Group')
-                            : (isset($taxs) ? ($taxs->firstWhere('id', $source_id)->title ?? 'Base Tax') : 'Base Tax');
-                        $applicable_taxes[] = [
-                            'title' => ($dep_tax->title ?? 'Dependent Tax') . ' (on ' . $source_label . ')',
-                            'amount' => $dep_employee_amount,
-                            'display_info' => '',
-                            'is_shared' => ($paid_by == 'both'),
-                            'is_group' => false
-                        ];
-                        $total_calculated_tax += $dep_employee_amount;
-                    }
-                    if($dep_employer_amount > 0) {
-                        $employer_taxes[] = [
-                            'title' => ($dep_tax->title ?? 'Dependent Tax'),
-                            'amount' => $dep_employer_amount,
-                            'is_shared' => ($paid_by == 'both')
-                        ];
-                        $total_calculated_employer_tax += $dep_employer_amount;
-                    }
-                }
-            }
-        }
-    }
-    
+
     // Totals from stored record (authoritative)
     $total_earnings = $base_earning + $row->details->where('status', 1)->sum('amount');
     $total_deductions_amount = $row->details->where('status', 0)->sum('amount');
@@ -630,12 +509,20 @@
         <div class="salary-col">
             <div class="salary-col-header">&#9650; Earnings</div>
             <div class="sal-row">
-                <div class="sal-label">Basic Salary (Total Earning)</div>
+                <div class="sal-label">
+                    @if($row->salary_type == 2 && $row->hours_worked !== null)
+                        Hours Worked ({{ rtrim(rtrim(number_format((float) $row->hours_worked, 2), '0'), '.') }} h &times; {{ number_format((float) $row->basic_salary, $dp) }})
+                    @elseif($row->paid_days !== null)
+                        Basic Salary ({{ rtrim(rtrim(number_format((float) $row->paid_days, 2), '0'), '.') }} of {{ rtrim(rtrim(number_format((float) $row->period_days, 2), '0'), '.') }} days)
+                    @else
+                        Basic Salary (Total Earning)
+                    @endif
+                </div>
                 <div class="sal-amount earn-amount">{{ number_format($base_earning, $dp) }}</div>
             </div>
             @foreach($row->details->where('status', 1) as $detail)
             <div class="sal-row">
-                <div class="sal-label">{{ $detail->title }}</div>
+                <div class="sal-label">{{ $detail->title }}@if($detail->is_taxable) <small style="color:#999;">(taxed)</small>@endif</div>
                 <div class="sal-amount earn-amount">{{ number_format((float)$detail->amount, $dp) }}</div>
             </div>
             @endforeach
@@ -667,11 +554,17 @@
             @endforeach
             @foreach($row->details->where('status', 0) as $detail)
             <div class="sal-row">
-                <div class="sal-label">{{ $detail->title }}</div>
+                <div class="sal-label">{{ $detail->title }}@if($detail->staff_loan_id) <small style="color:#999;">(repayment)</small>@endif</div>
                 <div class="sal-amount deduct-amount">{{ number_format((float)$detail->amount, $dp) }}</div>
             </div>
             @endforeach
-            @if(count($applicable_taxes) == 0 && $row->details->where('status', 0)->count() == 0)
+            @if(!$tax_lines_reconcile && $stored_tax > 0)
+            <div class="sal-row">
+                <div class="sal-label">Taxes (not itemised for this payroll)</div>
+                <div class="sal-amount deduct-amount">{{ number_format($stored_tax, $dp) }}</div>
+            </div>
+            @endif
+            @if(count($applicable_taxes) == 0 && $stored_tax <= 0 && $row->details->where('status', 0)->count() == 0)
             <div class="sal-row">
                 <div class="sal-label" style="color: #aaa; font-style: italic;">No deductions</div>
                 <div class="sal-amount">-</div>
@@ -687,12 +580,8 @@
     <!-- ===== SUMMARY ===== -->
     <div class="summary-section">
         <div class="summary-row row-gross">
-            <div class="s-label">Gross Salary (Before Deductions)</div>
-            <div class="s-value">{{ number_format($stored_gross, $dp) }} {{ $cs }}</div>
-        </div>
-        <div class="summary-row row-tax">
-            <div class="s-label">Total Tax (Employee)</div>
-            <div class="s-value">- {{ number_format($stored_tax, $dp) }} {{ $cs }}</div>
+            <div class="s-label">Total Earnings</div>
+            <div class="s-value">{{ number_format($total_earnings, $dp) }} {{ $cs }}</div>
         </div>
         @if($stored_total_deduction > 0)
         <div class="summary-row">
@@ -700,6 +589,10 @@
             <div class="s-value" style="color: #e74a3b;">- {{ number_format($stored_total_deduction, $dp) }} {{ $cs }}</div>
         </div>
         @endif
+        <div class="summary-row row-tax">
+            <div class="s-label">Total Tax (Employee){{ $row->taxable_salary !== null ? ' — on ' . number_format((float) $row->taxable_salary, $dp) : '' }}</div>
+            <div class="s-value">- {{ number_format($stored_tax, $dp) }} {{ $cs }}</div>
+        </div>
     </div>
 
     <!-- ===== NET PAY BAR ===== -->
@@ -746,7 +639,7 @@
             <div class="sig-date">Date: _______________</div>
         </div>
         <div class="sig-block">
-            <div class="sig-line">Approved By</div>
+            <div class="sig-line">Approved By{{ $row->approver ? ': ' . trim($row->approver->first_name . ' ' . $row->approver->last_name) : '' }}</div>
             <div class="sig-date">Date: _______________</div>
         </div>
         <div class="sig-block">

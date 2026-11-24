@@ -338,156 +338,38 @@
     <div class="page-wrapper">
 
         @php
-        // ===== All PHP calculations (kept at top for clean separation) =====
+        // The figures are PayrollCalculator's (see PayrollController::generate),
+        // the same class saving uses. The page only shows them; the live preview
+        // asks the server again as lines are typed.
         $paid_leave = \App\Models\Leave::paid_leave($row->id, $selected_month, $selected_year);
         $unpaid_leave = \App\Models\Leave::unpaid_leave($row->id, $selected_month, $selected_year);
 
-        $present = $attendances->where('attendance', 1)->where('user_id', $row->id)->count();
-        $absent = $attendances->where('attendance', 2)->where('user_id', $row->id)->count();
-        $leave = $attendances->where('attendance', 3)->where('user_id', $row->id)->count();
-        $holiday = $attendances->where('attendance', 4)->where('user_id', $row->id)->count();
+        $present = $attendances->where('attendance', 1)->count();
+        $absent = $attendances->where('attendance', 2)->count();
+        $leave = $attendances->where('attendance', 3)->count();
+        $holiday = $attendances->where('attendance', 4)->count();
 
         $payable_days = $present + $holiday + $paid_leave;
         $unpayable_days = $absent + $unpaid_leave;
 
-        $basic_salary = ($row->basic_salary != null && $row->basic_salary != '') ? $row->basic_salary : 0;
-        $total_earning = $basic_salary;
+        $is_hourly = $calc['salary_type'] === 2;
+        $basic_salary = $calc['basic_salary'];
+        $total_earning = $calc['total_earning'];
+        $total_allowance = $calc['total_allowance'];
+        $total_deduction = $calc['total_deduction'];
+        $gross_salary = $calc['gross_salary'];
+        $tax_amount = $calc['tax'];
+        $employer_tax_amount = $calc['employer_tax'];
+        $net_salary = $calc['net_salary'];
+        $total_cost = $calc['total_cost'];
+        $effective_rate = $calc['effective_rate'];
+        $taxable_titles = $allowance_types->where('is_taxable', true)->pluck('title')->all();
 
-        // Note: attendance does not reduce pay (policy decision). Absence/leave
-        // counts above are kept only for the attendance summary display.
-
-        $total_allowance = round($payroll->total_allowance ?? 0);
-        $bonus = round($payroll->bonus ?? 0);
-        $total_deduction = round($payroll->total_deduction ?? 0);
-        $gross_salary = round($total_earning + $total_allowance + $bonus) - round($total_deduction);
-        $tax_amount = 0;
-        $employer_tax_amount = 0;
-
-        // Store tax results for dependent tax calculation (2-pass)
-        $group_tax_results = [];
-        $standalone_tax_results = [];
-
-        if(isset($payroll) && round($total_earning) == round($payroll->total_earning)){
-            $tax_amount = round($payroll->tax ?? 0);
-            $employer_tax_amount = round($payroll->employer_tax ?? 0);
-        }
-        else{
-            // === PASS 1: Calculate base taxes (non-dependent) ===
-            if(isset($tax_groups) && $tax_groups->count() > 0){
-                foreach($tax_groups as $group){
-                    $groupResult = $group->calculateTax($total_earning, $staff_tax_exemptions);
-
-                    // Employer contribution for the SAME single applicable bracket
-                    $groupEmployerTax = 0;
-                    $appBracket = $group->applicableBracket($total_earning);
-                    if($appBracket && ($appBracket->paid_by == 'employer' || $appBracket->paid_by == 'both')
-                        && !$staff_tax_exemptions->has($appBracket->id)){
-                        $groupEmployerTax = $appBracket->calculateEmployerContribution($total_earning);
-                    }
-                    $groupResult['employer'] = $groupEmployerTax;
-
-                    $group_tax_results[$group->id] = $groupResult;
-                    $tax_amount += $groupResult['amount'];
-                    $employer_tax_amount += $groupEmployerTax;
-                }
-            }
-
-            if(isset($taxs)){
-            foreach($taxs as $tax){
-                if($tax->min_amount <= $total_earning && $tax->max_amount >= $total_earning){
-                    // Only non-expired exemptions apply (collection is pre-filtered notExpired)
-                    $is_exempt = $staff_tax_exemptions->has($tax->id);
-                    $current_employee_tax = 0;
-                    $current_employer_tax = 0;
-
-                    if($is_exempt) {
-                        $exemption = $staff_tax_exemptions->get($tax->id);
-                        if($exemption && $exemption->custom_percentage && $tax->tax_type == 1) {
-                            $taxable_amount = $total_earning - $tax->max_no_taxable_amount;
-                            $current_employee_tax = ($taxable_amount / 100) * $exemption->custom_percentage;
-                        } elseif($exemption && $exemption->custom_fixed_amount && $tax->tax_type == 2) {
-                            $current_employee_tax = $exemption->custom_fixed_amount;
-                        }
-                    } else {
-                        $taxable_amount = $total_earning - $tax->max_no_taxable_amount;
-                        $paid_by = $tax->paid_by ?? 'employee';
-                        if($paid_by == 'employee' || $paid_by == 'both') {
-                            if($tax->tax_type == 2) { $current_employee_tax = $tax->fixed_amount ?? 0; }
-                            else { $current_employee_tax = ($taxable_amount / 100) * ($tax->percentange ?? 0); }
-                        }
-                        if($paid_by == 'employer' || $paid_by == 'both') {
-                            if($tax->tax_type == 2) { $current_employer_tax = $tax->employer_fixed_amount ?? 0; }
-                            else { $current_employer_tax = ($taxable_amount / 100) * ($tax->employer_percentage ?? 0); }
-                        }
-                    }
-
-                    $standalone_tax_results[$tax->id] = [
-                        'employee' => $current_employee_tax,
-                        'employer' => $current_employer_tax,
-                    ];
-                    $tax_amount += $current_employee_tax;
-                    $employer_tax_amount += $current_employer_tax;
-                }
-            }}
-
-            // === PASS 2: Calculate dependent taxes ===
-            if(isset($dependent_taxs)){
-            foreach($dependent_taxs as $dep_tax){
-                if($dep_tax->min_amount <= $total_earning && $dep_tax->max_amount >= $total_earning){
-                    $source_amount = 0;
-                    if($dep_tax->depends_on_type === 'tax_group' && isset($group_tax_results[$dep_tax->depends_on_id])) {
-                        // Full assessed tax of the source group (employee + employer)
-                        $source_amount = ($group_tax_results[$dep_tax->depends_on_id]['amount'] ?? 0)
-                                       + ($group_tax_results[$dep_tax->depends_on_id]['employer'] ?? 0);
-                    } elseif($dep_tax->depends_on_type === 'tax_setting' && isset($standalone_tax_results[$dep_tax->depends_on_id])) {
-                        $source_result = $standalone_tax_results[$dep_tax->depends_on_id];
-                        $source_amount = $source_result['employee'] + $source_result['employer'];
-                    }
-
-                    // Only non-expired exemptions apply
-                    $is_exempt = $staff_tax_exemptions->has($dep_tax->id);
-                    $current_employee_tax = 0;
-                    $current_employer_tax = 0;
-
-                    if($is_exempt) {
-                        $exemption = $staff_tax_exemptions->get($dep_tax->id);
-                        if($exemption && $exemption->custom_percentage && $dep_tax->tax_type == 1) {
-                            $current_employee_tax = ($source_amount / 100) * $exemption->custom_percentage;
-                        } elseif($exemption && $exemption->custom_fixed_amount && $dep_tax->tax_type == 2) {
-                            $current_employee_tax = $exemption->custom_fixed_amount;
-                        }
-                    } else {
-                        $paid_by = $dep_tax->paid_by ?? 'employee';
-                        if($paid_by == 'employee' || $paid_by == 'both') {
-                            if($dep_tax->tax_type == 2) { $current_employee_tax = $dep_tax->fixed_amount ?? 0; }
-                            else { $current_employee_tax = ($source_amount / 100) * ($dep_tax->percentange ?? 0); }
-                        }
-                        if($paid_by == 'employer' || $paid_by == 'both') {
-                            if($dep_tax->tax_type == 2) { $current_employer_tax = $dep_tax->employer_fixed_amount ?? 0; }
-                            else { $current_employer_tax = ($source_amount / 100) * ($dep_tax->employer_percentage ?? 0); }
-                        }
-                    }
-
-                    $standalone_tax_results[$dep_tax->id] = [
-                        'employee' => $current_employee_tax,
-                        'employer' => $current_employer_tax,
-                        'is_dependent' => true,
-                        'source_amount' => $source_amount,
-                    ];
-                    $tax_amount += $current_employee_tax;
-                    $employer_tax_amount += $current_employer_tax;
-                }
-            }}
-        }
-
-        $net_salary = round($gross_salary - $tax_amount);
-        $total_cost = round($net_salary + $tax_amount + $employer_tax_amount);
-        $effective_rate = $total_earning > 0 ? round(($tax_amount / $total_earning) * 100, 2) : 0;
         $total_attendance = $present + $absent + $leave + $holiday;
         $attendance_pct = $total_days > 0 ? round(($payable_days / $total_days) * 100, 1) : 0;
 
-        // Staff initials for avatar
         $initials = strtoupper(substr($row->first_name ?? '', 0, 1) . substr($row->last_name ?? '', 0, 1));
+        $money = fn ($v) => format_amount((float) $v);
         @endphp
 
         <!-- [ Main Content ] start -->
@@ -602,12 +484,12 @@
                                             <div class="sal-label">{{ __('field_basic_salary') }}</div>
                                             <div class="sal-value">
                                                 @if(isset($setting->decimal_place))
-                                                {{ number_format((float)$basic_salary, $setting->decimal_place, '.', ',') }}
+                                                {{ format_amount((float)$basic_salary) }}
                                                 @else
-                                                {{ number_format((float)$basic_salary, 0, '.', ',') }}
+                                                {{ format_amount((float)$basic_salary) }}
                                                 @endif
                                             </div>
-                                            <div style="font-size: 11px; opacity: 0.7;">{!! $setting->currency_symbol !!} / {{ __('month') }}</div>
+                                            <div style="font-size: 11px; opacity: 0.7;">{!! $setting->currency_symbol !!} / {{ $is_hourly ? __('hour') : __('month') }}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -704,6 +586,13 @@
                 <input type="hidden" name="salary_month" value="{{ date("Y-m-d", strtotime($selected_year.'-'.$selected_month.'-01')) }}">
 
                 <div class="row">
+                    @if(!empty($carried_from))
+                    <div class="col-12 mb-2">
+                        <div class="alert alert-info py-2 mb-0" style="font-size: 13px;">
+                            <i class="fas fa-copy mr-1"></i> {{ __('Started from the allowances and deductions of :month. Change or remove any that do not apply this month.', ['month' => $carried_from]) }}
+                        </div>
+                    </div>
+                    @endif
                     {{-- ---- COLUMN LEFT: Allowances ---- --}}
                     <div class="col-lg-4 col-md-6 mb-3">
                         <div class="card section-card entry-card h-100">
@@ -717,16 +606,15 @@
                                 </button>
                             </div>
                             <div class="card-block">
-                                @isset($payroll)
-                                @foreach($payroll->details->where('status', 1) as $detail)
+                                @foreach($start_allowances as $detail)
                                 <div id="allowanceFormField" class="row entry-row align-items-end">
                                     <div class="form-group col-md-5 mb-1">
                                         <label for="title" class="form-label" style="font-size: 12px;">{{ __('field_title') }} <span class="text-danger">*</span></label>
                                         <select class="form-control form-control-sm" name="allowance_titles[]" required>
-                                            <option value="{{ $detail->title }}" selected>{{ $detail->title }}</option>
+                                            <option value="{{ $detail['title'] }}" selected>{{ $detail['title'] }}{{ in_array($detail['title'], $taxable_titles) ? ' · '.__('taxed') : '' }}</option>
                                             @foreach($allowance_types as $type)
-                                                @if($type->title != $detail->title)
-                                                <option value="{{ $type->title }}">{{ $type->title }}</option>
+                                                @if($type->title != $detail['title'])
+                                                <option value="{{ $type->title }}">{{ $type->title }}{{ $type->is_taxable ? ' · '.__('taxed') : '' }}</option>
                                                 @endif
                                             @endforeach
                                         </select>
@@ -734,7 +622,7 @@
                                     </div>
                                     <div class="form-group col-md-5 mb-1">
                                         <label for="allowance" class="form-label" style="font-size: 12px;">{{ __('field_amount') }} ({!! $setting->currency_symbol !!}) <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm allowance" name="allowances[]" id="allowance" value="{{ round($detail->amount) }}" data_id="add-{{ $row->id }}" onkeyup="salaryCalculator('add', {{ $row->id }})" required>
+                                        <input type="text" class="form-control form-control-sm allowance" name="allowances[]" id="allowance" value="{{ round((float) $detail['amount']) }}" data_id="add-{{ $row->id }}" onkeyup="salaryCalculator('add', {{ $row->id }})" required>
                                         <div class="invalid-feedback">{{ __('required_field') }} {{ __('field_amount') }}</div>
                                     </div>
                                     <div class="form-group col-md-2 mb-1 text-center">
@@ -742,11 +630,10 @@
                                     </div>
                                 </div>
                                 @endforeach
-                                @endisset
 
                                 <div id="newAllowance" class="clearfix"></div>
 
-                                @if(!isset($payroll) || $payroll->details->where('status', 1)->count() == 0)
+                                @if(count($start_allowances) == 0)
                                 <div class="text-center py-3 text-muted" id="noAllowancePlaceholder">
                                     <i class="fas fa-hand-holding-usd" style="font-size: 28px; opacity: 0.3;"></i>
                                     <p class="mb-0 mt-1" style="font-size: 12px;">{{ __('No allowances added yet. Click +Add to add one.') }}</p>
@@ -769,24 +656,31 @@
                                 </button>
                             </div>
                             <div class="card-block">
-                                @isset($payroll)
-                                @foreach($payroll->details->where('status', 0) as $detail)
+                                @foreach($start_deductions as $detail)
                                 <div id="deductionFormField" class="row entry-row align-items-end">
                                     <div class="form-group col-md-5 mb-1">
                                         <label for="title" class="form-label" style="font-size: 12px;">{{ __('field_title') }} <span class="text-danger">*</span></label>
+                                        @if(!empty($detail['loan_id']))
+                                        <input type="text" class="form-control form-control-sm" name="deduction_titles[]" value="{{ $detail['title'] }}" readonly title="{{ __('Loan repayment') }}">
+                                        <input type="hidden" name="deduction_loans[]" value="{{ $detail['loan_id'] }}">
+                                        @php $loanLeft = optional($open_loans->firstWhere('id', $detail['loan_id']))->available(isset($payroll) ? $payroll->id : null); @endphp
+                                        <small class="text-muted"><i class="fas fa-hand-holding-usd"></i> {{ __('Loan repayment') }}@if($loanLeft !== null) · {{ __(':left left', ['left' => format_amount($loanLeft)]) }}@endif</small>
+                                        @else
                                         <select class="form-control form-control-sm" name="deduction_titles[]" required>
-                                            <option value="{{ $detail->title }}" selected>{{ $detail->title }}</option>
+                                            <option value="{{ $detail['title'] }}" selected>{{ $detail['title'] }}</option>
                                             @foreach($deduction_types as $type)
-                                                @if($type->title != $detail->title)
+                                                @if($type->title != $detail['title'])
                                                 <option value="{{ $type->title }}">{{ $type->title }}</option>
                                                 @endif
                                             @endforeach
                                         </select>
+                                        <input type="hidden" name="deduction_loans[]" value="">
+                                        @endif
                                         <div class="invalid-feedback">{{ __('required_field') }} {{ __('field_title') }}</div>
                                     </div>
                                     <div class="form-group col-md-5 mb-1">
                                         <label for="deduction" class="form-label" style="font-size: 12px;">{{ __('field_amount') }} ({!! $setting->currency_symbol !!}) <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control form-control-sm deduction" name="deductions[]" id="deduction" value="{{ round($detail->amount) }}" data_id="add-{{ $row->id }}" onkeyup="salaryCalculator('add', {{ $row->id }})" required>
+                                        <input type="text" class="form-control form-control-sm deduction" name="deductions[]" id="deduction" value="{{ round((float) $detail['amount']) }}" data_id="add-{{ $row->id }}" onkeyup="salaryCalculator('add', {{ $row->id }})" required>
                                         <div class="invalid-feedback">{{ __('required_field') }} {{ __('field_amount') }}</div>
                                     </div>
                                     <div class="form-group col-md-2 mb-1 text-center">
@@ -794,11 +688,10 @@
                                     </div>
                                 </div>
                                 @endforeach
-                                @endisset
 
                                 <div id="newDeduction" class="clearfix"></div>
 
-                                @if(!isset($payroll) || $payroll->details->where('status', 0)->count() == 0)
+                                @if(count($start_deductions) == 0)
                                 <div class="text-center py-3 text-muted" id="noDeductionPlaceholder">
                                     <i class="fas fa-file-invoice" style="font-size: 28px; opacity: 0.3;"></i>
                                     <p class="mb-0 mt-1" style="font-size: 12px;">{{ __('No deductions added yet. Click +Add to add one.') }}</p>
@@ -828,7 +721,16 @@
                                 <div class="calc-field-group highlight-earning">
                                     <label for="total_earning"><i class="fas fa-wallet mr-1"></i>{{ __('field_total_earning') }} ({!! $setting->currency_symbol !!})</label>
                                     <input type="text" class="form-control" name="total_earning" id="total_earning" value="{{ round($total_earning, 0) }}" readonly required data_id="add-{{ $row->id }}" onkeyup="salaryCalculator('add', {{ $row->id }})">
-                                    <div class="field-desc">{{ __('Base salary before any allowances or deductions.') }}</div>
+                                    <div class="field-desc">
+                                        @if($is_hourly)
+                                            {{ __(':hours hours present this month at :rate an hour.', ['hours' => rtrim(rtrim(number_format((float) $calc['hours_worked'], 2), '0'), '.'), 'rate' => $money($basic_salary)]) }}
+                                        @else
+                                            {{ __('Base salary before any allowances or deductions.') }}
+                                        @endif
+                                    </div>
+                                    @foreach($calc['notes'] as $note)
+                                    <div class="field-desc text-warning"><i class="fas fa-exclamation-triangle"></i> {{ $note }}</div>
+                                    @endforeach
                                     <div class="invalid-feedback">{{ __('required_field') }} {{ __('field_total_earning') }}</div>
                                 </div>
 
@@ -862,220 +764,55 @@
                                 <div class="calc-field-group highlight-tax">
                                     <label for="tax"><i class="fas fa-percentage text-danger mr-1"></i>{{ __('field_employee_tax') }} ({!! $setting->currency_symbol !!})</label>
                                     <input type="text" class="form-control" name="tax" id="tax" value="{{ round($tax_amount, 0) }}" readonly required data_id="add-{{ $row->id }}" onkeyup="salaryCalculator('add', {{ $row->id }})" style="color: #e74a3b;">
-                                    <div class="field-desc">{{ __('Total employee tax deductions (groups + standalone + dependent). Effective rate:') }} <strong>{{ $effective_rate }}%</strong></div>
+                                    <div class="field-desc">{{ __('Total employee tax. Effective rate:') }} <strong id="effectiveRate">{{ $effective_rate }}%</strong></div>
                                     <div class="invalid-feedback">{{ __('required_field') }} {{ __('field_tax') }}</div>
 
-                                    {{-- Two things about this figure are not
-                                         visible from the number itself, so they are
-                                         stated rather than left to be discovered. --}}
+                                    {{-- What the tax was charged on: the basic pay plus any
+                                         allowance whose type is set as taxable. --}}
                                     <div class="field-desc text-muted">
                                         <i class="fas fa-info-circle"></i>
-                                        {{ __('Calculated on basic salary. Allowances and bonuses are paid but not taxed.') }}
+                                        <span id="taxBaseNote">{{ __('Taxed on :amount: the :basic plus taxable allowances (:taxable).', ['amount' => $money($calc['taxable_salary']), 'basic' => $is_hourly ? __('hours worked') : __('basic salary'), 'taxable' => $money($calc['taxable_allowance'])]) }}</span>
+                                        @can('allowance-type-view')
+                                        <a href="{{ route('admin.allowance-type.index') }}" target="_blank">{{ __('Which allowances are taxed?') }}</a>
+                                        @endcan
                                     </div>
 
-                                    @php
-                                        // A salary in an uncovered range is charged the
-                                        // band below it and the payslip looks normal, so
-                                        // the only way to know is to say so here.
-                                        $salary_gaps = [];
-                                        foreach($tax_groups as $g) {
-                                            $gap = $g->gapFor($total_earning);
-                                            if ($gap) { $salary_gaps[] = ['group' => $g->title] + $gap; }
-                                        }
-                                    @endphp
-
-                                    @if(count($salary_gaps) > 0)
-                                    <div class="alert alert-warning py-2 px-2 mt-2 mb-0" style="font-size: 12px;">
-                                        <strong><i class="fas fa-exclamation-triangle"></i> {{ __('This salary has no band of its own') }}</strong>
-                                        <ul class="mb-0 pl-3 mt-1">
-                                            @foreach($salary_gaps as $gap)
-                                            <li>
-                                                <strong>{{ $gap['group'] }}</strong>:
-                                                {{ number_format($total_earning) }}
-                                                @if($gap['to'])
-                                                    {{ __('falls between bands') }} ({{ number_format($gap['from']) }} – {{ number_format($gap['to']) }})
-                                                @else
-                                                    {{ __('is above the highest band') }} ({{ __('from') }} {{ number_format($gap['from']) }})
-                                                @endif
-                                                — {{ __('charged as') }} <em>{{ $gap['charged_as'] }}</em>
-                                            </li>
+                                    <div class="alert alert-danger py-2 px-2 mt-2 mb-0" id="payrollProblems" style="font-size: 12px; {{ empty($calc['problems']) ? 'display:none;' : '' }}">
+                                        <strong><i class="fas fa-exclamation-triangle"></i> {{ __('This payroll cannot be saved yet') }}</strong>
+                                        <ul class="mb-0 pl-3 mt-1" id="payrollProblemList">
+                                            @foreach($calc['problems'] as $problem)
+                                            <li>{{ $problem }}</li>
                                             @endforeach
                                         </ul>
                                     </div>
-                                    @endif
 
-                                    {{-- Tax Breakdown Panel --}}
+                                    {{-- Tax Breakdown Panel: the server's own itemised lines --}}
                                     <div class="tax-breakdown-panel" id="taxBreakdownPanel">
-
-                                        {{-- === Tax Groups === --}}
-                                        @if(isset($tax_groups) && $tax_groups->count() > 0)
-                                        <div class="tax-section-title"><i class="fas fa-layer-group mr-1"></i> {{ __('Tax Groups') }}</div>
-                                        @foreach($tax_groups as $group)
-                                            @php $groupResult = $group->calculateTax($total_earning, $staff_tax_exemptions); @endphp
-                                            @if($groupResult['amount'] > 0 || count($groupResult['breakdown']) > 0)
-                                            <div class="tax-item">
-                                                <div class="tax-icon"><i class="fas fa-layer-group text-primary"></i></div>
-                                                <div class="tax-info">
-                                                    <div class="tax-name">
-                                                        {{ $group->title }}
-                                                        @if($group->is_progressive)
-                                                        <span class="badge badge-info" style="font-size: 10px;">{{ __('progressive') }}</span>
-                                                        @endif
-                                                    </div>
-                                                    @foreach($groupResult['breakdown'] as $bracket)
-                                                    <div class="tax-detail">
-                                                        @if($bracket['is_exempt'])
-                                                            @if($bracket['custom_rate'])
-                                                            <i class="fas fa-user-tag text-warning"></i> {{ $bracket['title'] }}: <span class="text-warning">{{ $bracket['rate'] }}</span>
-                                                            @else
-                                                            <i class="fas fa-shield-alt text-success"></i> {{ $bracket['title'] }}: <span class="text-success">{{ __('fully_exempt') }}</span>
-                                                            @endif
-                                                        @else
-                                                        <i class="fas fa-caret-right"></i> {{ $bracket['title'] }}: {{ $bracket['rate'] }} = {{ number_format($bracket['tax_amount'], 2) }} {!! $setting->currency_symbol !!}
-                                                        @endif
-                                                        <span class="text-muted">({{ $bracket['range'] }})</span>
-                                                    </div>
-                                                    @endforeach
-                                                </div>
-                                                <div class="tax-amount text-danger">{{ number_format($groupResult['amount'], 0) }} {!! $setting->currency_symbol !!}</div>
+                                        @forelse($calc['tax_lines'] as $line)
+                                        <div class="tax-item">
+                                            <div class="tax-icon"><i class="fas fa-receipt text-secondary"></i></div>
+                                            <div class="tax-info">
+                                                <div class="tax-name">{{ $line['label'] }}</div>
+                                                @if($line['employer'] > 0)
+                                                <div class="tax-detail">{{ __('Staff') }} {{ $money($line['employee']) }} · {{ __('Employer') }} {{ $money($line['employer']) }}</div>
+                                                @endif
                                             </div>
-                                            @endif
-                                        @endforeach
-                                        @endif
-
-                                        {{-- === Standalone Taxes === --}}
-                                        @if(isset($taxs) && collect($taxs)->filter(fn($t) => $t->min_amount <= $total_earning && $t->max_amount >= $total_earning)->count() > 0)
-                                        <div class="tax-section-title mt-2"><i class="fas fa-receipt mr-1"></i> {{ __('Standalone Taxes') }}</div>
-                                        @foreach($taxs as $tax)
-                                            @if($tax->min_amount <= $total_earning && $tax->max_amount >= $total_earning)
-                                            @php
-                                            $is_exempt = $row->exemptTaxes->contains('id', $tax->id);
-                                            $exemption = $staff_tax_exemptions->get($tax->id);
-                                            $has_custom_tax = false;
-                                            $custom_tax_display = '';
-                                            $paid_by = $tax->paid_by ?? 'employee';
-
-                                            if($is_exempt && $exemption) {
-                                                if($exemption->custom_percentage && $tax->tax_type == 1) {
-                                                    $has_custom_tax = true;
-                                                    $custom_tax_display = number_format($exemption->custom_percentage, 2) . '% (' . __('custom_rate') . ')';
-                                                } elseif($exemption->custom_fixed_amount && $tax->tax_type == 2) {
-                                                    $has_custom_tax = true;
-                                                    $custom_tax_display = number_format($exemption->custom_fixed_amount, $setting->decimal_place ?? 2, '.', '') . ' ' . $setting->currency_symbol . ' (' . __('custom_rate') . ')';
-                                                }
-                                            }
-                                            $st_result = $standalone_tax_results[$tax->id] ?? ['employee' => 0, 'employer' => 0];
-                                            $st_total = $st_result['employee'] + $st_result['employer'];
-                                            @endphp
-                                            <div class="tax-item">
-                                                <div class="tax-icon">
-                                                    @if($has_custom_tax)
-                                                    <i class="fas fa-user-tag text-warning"></i>
-                                                    @elseif($is_exempt)
-                                                    <i class="fas fa-shield-alt text-success"></i>
-                                                    @else
-                                                    <i class="fas fa-receipt text-secondary"></i>
-                                                    @endif
-                                                </div>
-                                                <div class="tax-info">
-                                                    <div class="tax-name">
-                                                        {{ $tax->title ?? 'Tax' }}
-                                                        @if($paid_by == 'both')
-                                                        <span class="badge badge-success" style="font-size: 10px;"><i class="fas fa-handshake"></i> {{ __('shared') }}</span>
-                                                        @elseif($paid_by == 'employer')
-                                                        <span class="badge badge-primary" style="font-size: 10px;"><i class="fas fa-building"></i> {{ __('employer_only') }}</span>
-                                                        @endif
-                                                    </div>
-                                                    <div class="tax-detail">
-                                                        @if($has_custom_tax)
-                                                            <span class="text-warning">{{ $custom_tax_display }}</span>
-                                                        @elseif($is_exempt)
-                                                            <span class="text-success">{{ __('fully_exempt') }}</span>
-                                                        @else
-                                                            @if($tax->tax_type == 2)
-                                                            {{ __('Fixed') }}: {{ number_format((float)$tax->fixed_amount, 2) }} {!! $setting->currency_symbol !!}
-                                                            @else
-                                                            {{ __('Rate') }}: {{ number_format($tax->percentange, 2) }}%
-                                                            @endif
-                                                            @if($paid_by == 'both')
-                                                            &middot; {{ __('employer') }}: {{ $tax->tax_type == 2 ? number_format((float)$tax->employer_fixed_amount, 2) . ' ' . $setting->currency_symbol : number_format($tax->employer_percentage, 2) . '%' }}
-                                                            @endif
-                                                        @endif
-                                                        <span class="text-muted d-block" style="font-size: 10px;">
-                                                            {{ __('field_range') }}: {{ number_format((float)$tax->min_amount, 0) }} - {{ number_format((float)$tax->max_amount, 0) }} {!! $setting->currency_symbol !!}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div class="tax-amount {{ $is_exempt && !$has_custom_tax ? 'text-success' : 'text-danger' }}">
-                                                    @if($is_exempt && !$has_custom_tax)
-                                                        0
-                                                    @else
-                                                        {{ number_format($st_total, 0) }}
-                                                    @endif
-                                                    {!! $setting->currency_symbol !!}
-                                                </div>
-                                            </div>
-                                            @endif
-                                        @endforeach
-                                        @endif
-
-                                        {{-- === Dependent Taxes === --}}
-                                        @if(isset($dependent_taxs) && $dependent_taxs->count() > 0)
-                                        @php $has_applicable_deps = $dependent_taxs->filter(fn($d) => $d->min_amount <= $total_earning && $d->max_amount >= $total_earning)->count() > 0; @endphp
-                                        @if($has_applicable_deps)
-                                        <div class="tax-section-title mt-2"><i class="fas fa-link mr-1"></i> {{ __('Dependent Taxes') }}</div>
-                                        @foreach($dependent_taxs as $dep_tax)
-                                            @if($dep_tax->min_amount <= $total_earning && $dep_tax->max_amount >= $total_earning)
-                                            @php
-                                            $dep_is_exempt = $row->exemptTaxes->contains('id', $dep_tax->id);
-                                            $dep_result = $standalone_tax_results[$dep_tax->id] ?? null;
-                                            $dep_source_amount = $dep_result['source_amount'] ?? 0;
-                                            $dep_employee_tax = $dep_result['employee'] ?? 0;
-                                            $dep_employer_tax = $dep_result['employer'] ?? 0;
-                                            $dep_source_label = $dep_tax->dependency_label ?? __('unknown');
-                                            @endphp
-                                            <div class="tax-item">
-                                                <div class="tax-icon"><i class="fas fa-link text-warning"></i></div>
-                                                <div class="tax-info">
-                                                    <div class="tax-name">
-                                                        {{ $dep_tax->title ?? 'Tax' }}
-                                                        <span class="badge badge-warning" style="font-size: 10px;">{{ __('dependent') }}</span>
-                                                    </div>
-                                                    <div class="tax-detail">
-                                                        @if($dep_is_exempt)
-                                                            <span class="text-success">{{ __('fully_exempt') }}</span>
-                                                        @else
-                                                            @if($dep_tax->tax_type == 1)
-                                                            {{ number_format($dep_tax->percentange, 2) }}%
-                                                            @else
-                                                            {{ number_format($dep_tax->fixed_amount, 2) }} {!! $setting->currency_symbol !!}
-                                                            @endif
-                                                            {{ __('of') }} <strong>{{ $dep_source_label }}</strong>
-                                                        @endif
-                                                        <span class="text-muted d-block" style="font-size: 10px;">
-                                                            <i class="fas fa-caret-right"></i> {{ __('source_tax_output') }}: {{ number_format($dep_source_amount, 0) }} {!! $setting->currency_symbol !!}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div class="tax-amount text-danger">{{ number_format($dep_employee_tax + $dep_employer_tax, 0) }} {!! $setting->currency_symbol !!}</div>
-                                            </div>
-                                            @endif
-                                        @endforeach
-                                        @endif
-                                        @endif
+                                            <div class="tax-amount text-danger">{{ $money($line['employee']) }} {!! $setting->currency_symbol !!}</div>
+                                        </div>
+                                        @empty
+                                        <p class="text-muted text-center mb-0" style="font-size:12px"><i class="fas fa-info-circle"></i> {{ __('No tax applies to this pay.') }}</p>
+                                        @endforelse
                                     </div>
                                 </div>
 
                                 {{-- Employer Tax --}}
                                 <input type="hidden" name="employer_tax" id="employer_tax" value="{{ round($employer_tax_amount, 0) }}" data_id="add-{{ $row->id }}">
 
-                                @if($employer_tax_amount > 0)
-                                <div class="calc-field-group highlight-employer">
+                                <div class="calc-field-group highlight-employer" id="employerTaxGroup" style="{{ $employer_tax_amount > 0 ? '' : 'display:none;' }}">
                                     <label for="employer_tax_display"><i class="fas fa-building text-warning mr-1"></i>{{ __('field_employer_tax') }} ({!! $setting->currency_symbol !!})</label>
                                     <input type="text" class="form-control" id="employer_tax_display" value="{{ round($employer_tax_amount, 0) }}" readonly data_id="add-{{ $row->id }}" style="color: #d48806;">
                                     <div class="field-desc">{{ __('Tax contributions borne by the institution. Not deducted from staff salary.') }}</div>
                                 </div>
-                                @endif
 
                                 <hr class="my-2" style="border-style: dashed;">
 
@@ -1090,17 +827,15 @@
                                 {{-- Total Cost --}}
                                 <input type="hidden" name="total_cost" id="total_cost" value="{{ round($total_cost, 0) }}" data_id="add-{{ $row->id }}">
 
-                                @if($employer_tax_amount > 0)
-                                <div class="calc-field-group highlight-cost">
+                                <div class="calc-field-group highlight-cost" id="totalCostGroup" style="{{ $employer_tax_amount > 0 ? '' : 'display:none;' }}">
                                     <label for="total_cost_display"><i class="fas fa-university mr-1"></i>{{ __('field_total_cost') }} ({!! $setting->currency_symbol !!})</label>
                                     <input type="text" class="form-control" id="total_cost_display" value="{{ round($total_cost, 0) }}" readonly data_id="add-{{ $row->id }}" style="color: #5a5c69; font-size: 18px;">
                                     <div class="field-desc">{{ __('Total institutional cost: Net Salary + Employee Tax + Employer Tax.') }}</div>
                                 </div>
-                                @endif
 
                                 {{-- Submit --}}
                                 <div class="mt-3">
-                                    <button type="button" id="btnShowConfirmModal" class="btn btn-success btn-block" style="padding: 10px; font-size: 15px; font-weight: 600;">
+                                    <button type="button" id="btnShowConfirmModal" {{ empty($calc['problems']) ? '' : 'disabled' }} class="btn btn-success btn-block" style="padding: 10px; font-size: 15px; font-weight: 600;">
                                         <i class="fas fa-check-circle mr-1"></i> {{ __('btn_save') }} {{ $title }}
                                     </button>
                                 </div>
@@ -1202,36 +937,36 @@
                     <div class="row align-items-center">
                         <div class="col text-center" style="border-right: 1px solid rgba(255,255,255,0.1);">
                             <div class="summary-item">
-                                <div class="sum-label">{{ __('field_basic_salary') }}</div>
-                                <div class="sum-value text-info-light">{{ number_format($basic_salary, 0) }}</div>
+                                <div class="sum-label">{{ __('field_total_earning') }}</div>
+                                <div class="sum-value text-info-light">{{ format_amount($total_earning) }}</div>
                             </div>
                         </div>
                         <div class="col-auto summary-arrow"><i class="fas fa-plus"></i></div>
                         <div class="col text-center" style="border-right: 1px solid rgba(255,255,255,0.1);">
                             <div class="summary-item">
                                 <div class="sum-label">{{ __('field_total_allowance') }}</div>
-                                <div class="sum-value text-success-light" id="summaryAllowance">{{ number_format($total_allowance, 0) }}</div>
+                                <div class="sum-value text-success-light" id="summaryAllowance">{{ format_amount($total_allowance) }}</div>
                             </div>
                         </div>
                         <div class="col-auto summary-arrow"><i class="fas fa-minus"></i></div>
                         <div class="col text-center" style="border-right: 1px solid rgba(255,255,255,0.1);">
                             <div class="summary-item">
                                 <div class="sum-label">{{ __('field_total_deduction') }}</div>
-                                <div class="sum-value text-danger-light" id="summaryDeduction">{{ number_format($total_deduction, 0) }}</div>
+                                <div class="sum-value text-danger-light" id="summaryDeduction">{{ format_amount($total_deduction) }}</div>
                             </div>
                         </div>
                         <div class="col-auto summary-arrow"><i class="fas fa-minus"></i></div>
                         <div class="col text-center" style="border-right: 1px solid rgba(255,255,255,0.1);">
                             <div class="summary-item">
                                 <div class="sum-label">{{ __('field_employee_tax') }}</div>
-                                <div class="sum-value text-danger-light" id="summaryTax">{{ number_format($tax_amount, 0) }}</div>
+                                <div class="sum-value text-danger-light" id="summaryTax">{{ format_amount($tax_amount) }}</div>
                             </div>
                         </div>
                         <div class="col-auto summary-arrow"><i class="fas fa-equals"></i></div>
                         <div class="col text-center">
                             <div class="summary-item">
                                 <div class="sum-label">{{ __('field_net_salary') }}</div>
-                                <div class="sum-value text-success-light" style="font-size: 22px;" id="summaryNet">{{ number_format($net_salary, 0) }}</div>
+                                <div class="sum-value text-success-light" style="font-size: 22px;" id="summaryNet">{{ format_amount($net_salary) }}</div>
                             </div>
                         </div>
                         @if($employer_tax_amount > 0)
@@ -1241,7 +976,7 @@
                         <div class="col text-center">
                             <div class="summary-item">
                                 <div class="sum-label">{{ __('field_total_cost') }}</div>
-                                <div class="sum-value text-warning-light" id="summaryCost">{{ number_format($total_cost, 0) }}</div>
+                                <div class="sum-value text-warning-light" id="summaryCost">{{ format_amount($total_cost) }}</div>
                             </div>
                         </div>
                         @endif
@@ -1269,7 +1004,7 @@
             html += '<div class="form-group col-md-5 mb-1"><label class="form-label" style="font-size: 12px;">{{ __('field_title') }} <span class="text-danger">*</span></label><select class="form-control form-control-sm" name="allowance_titles[]" required>';
             html += '<option value="">{{ __('select') }}</option>';
             @foreach($allowance_types as $type)
-            html += '<option value="{{ $type->title }}">{{ $type->title }}</option>';
+            html += '<option value="{{ $type->title }}">{{ $type->title }}{{ $type->is_taxable ? ' · '.__('taxed') : '' }}</option>';
             @endforeach
             html += '</select><div class="invalid-feedback">{{ __('required_field') }} {{ __('field_title') }}</div></div>';
             html += '<div class="form-group col-md-5 mb-1"><label class="form-label" style="font-size: 12px;">{{ __('field_amount') }} ({!! $setting->currency_symbol !!}) <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm allowance" name="allowances[]" value="" data_id="add-{{ $row->id }}" onkeyup="salaryCalculator(\'add\', {{ $row->id }})" required><div class="invalid-feedback">{{ __('required_field') }} {{ __('field_amount') }}</div></div>';
@@ -1299,7 +1034,7 @@
             @foreach($deduction_types as $type)
             html += '<option value="{{ $type->title }}">{{ $type->title }}</option>';
             @endforeach
-            html += '</select><div class="invalid-feedback">{{ __('required_field') }} {{ __('field_title') }}</div></div>';
+            html += '</select><input type="hidden" name="deduction_loans[]" value=""><div class="invalid-feedback">{{ __('required_field') }} {{ __('field_title') }}</div></div>';
             html += '<div class="form-group col-md-5 mb-1"><label class="form-label" style="font-size: 12px;">{{ __('field_amount') }} ({!! $setting->currency_symbol !!}) <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm deduction" name="deductions[]" value="" data_id="add-{{ $row->id }}" onkeyup="salaryCalculator(\'add\', {{ $row->id }})" required><div class="invalid-feedback">{{ __('required_field') }} {{ __('field_amount') }}</div></div>';
             html += '<div class="form-group col-md-2 mb-1 text-center"><button id="removeDeduction" type="button" class="btn btn-outline-danger btn-sm btn-icon" title="{{ __('Remove') }}"><i class="fas fa-trash-alt"></i></button></div>';
             html += '</div>';
@@ -1318,385 +1053,86 @@
 
     <script type="text/javascript">
     "use strict";
+    // The figures come from the server (PayrollController::preview), which
+    // uses the same calculator as saving. The page used to carry its own copy
+    // of the tax rules in JavaScript; two engines could disagree, and the
+    // server trusted whatever this one posted.
+    var payrollPreviewTimer = null;
+    var payrollPreviewRequest = null;
+
     function salaryCalculator(type, id) {
-
-        // Cal Allowance Sum
-        var allowance_sum = 0;
-        $("#allowanceFormField .allowance, #newAllowance .allowance").each(function () {
-          var get_allowance_value = $(this).val();
-          if ($.isNumeric(get_allowance_value)) {
-            allowance_sum += parseFloat(get_allowance_value);
-          }
-        });
-
-        // Cal Deduction Sum
-        var deduction_sum = 0;
-        $("#deductionFormField .deduction, #newDeduction .deduction").each(function () {
-          var get_deduction_value = $(this).val();
-          if ($.isNumeric(get_deduction_value)) {
-            deduction_sum += parseFloat(get_deduction_value);
-          }
-        });
-
-      // Get Data
-      var total_earning = $("input[name='total_earning'][data_id='"+type+"-"+id+"']").val();
-      var total_allowance = $("input[name='total_allowance'][data_id='"+type+"-"+id+"']").val();
-      var total_deduction = $("input[name='total_deduction'][data_id='"+type+"-"+id+"']").val();
-      var gross_salary = $("input[name='gross_salary'][data_id='"+type+"-"+id+"']").val();
-      var tax_amount = $("input[name='tax'][data_id='"+type+"-"+id+"']").val();
-      var net_salary = $("input[name='net_salary'][data_id='"+type+"-"+id+"']").val();
-
-      // Valid Data
-      if (isNaN(allowance_sum)) allowance_sum = 0;
-      if (isNaN(deduction_sum)) deduction_sum = 0;
-
-      // Total Gross
-      var total_gross = (parseFloat(total_earning) + parseFloat(allowance_sum)) - parseFloat(deduction_sum);
-
-        // Calculate Tax (based on total_earning only)
-        @php
-        // Prepare tax groups for JavaScript
-        $js_tax_groups = [];
-        if(isset($tax_groups)){
-            foreach($tax_groups as $group){
-                $brackets = [];
-                foreach($group->brackets as $bracket){
-                    $brackets[] = [
-                        'id' => $bracket->id,
-                        'title' => $bracket->title,
-                        'min_amount' => $bracket->min_amount,
-                        'max_amount' => $bracket->max_amount,
-                        'tax_type' => $bracket->tax_type,
-                        'percentange' => $bracket->percentange,
-                        'fixed_amount' => $bracket->fixed_amount,
-                        'max_no_taxable_amount' => $bracket->max_no_taxable_amount,
-                        'paid_by' => $bracket->paid_by ?? 'employee',
-                        'employer_percentage' => $bracket->employer_percentage,
-                        'employer_fixed_amount' => $bracket->employer_fixed_amount,
-                    ];
-                }
-                $js_tax_groups[] = [
-                    'id' => $group->id,
-                    'title' => $group->title,
-                    'is_progressive' => $group->is_progressive,
-                    'brackets' => $brackets,
-                ];
-            }
-        }
-
-        if(isset($taxs)){
-        foreach($taxs as $key =>$value){
-            $taxs[$key] = json_decode(json_encode($value));
-        }
-        }
-        // Prepare dependent taxes for JavaScript
-        $js_dependent_taxs = [];
-        if(isset($dependent_taxs)){
-            foreach($dependent_taxs as $dep_tax){
-                $js_dependent_taxs[] = [
-                    'id' => $dep_tax->id,
-                    'title' => $dep_tax->title,
-                    'min_amount' => $dep_tax->min_amount,
-                    'max_amount' => $dep_tax->max_amount,
-                    'tax_type' => $dep_tax->tax_type,
-                    'percentange' => $dep_tax->percentange,
-                    'fixed_amount' => $dep_tax->fixed_amount,
-                    'employer_percentage' => $dep_tax->employer_percentage,
-                    'employer_fixed_amount' => $dep_tax->employer_fixed_amount,
-                    'paid_by' => $dep_tax->paid_by ?? 'employee',
-                    'max_no_taxable_amount' => $dep_tax->max_no_taxable_amount,
-                    'depends_on_type' => $dep_tax->depends_on_type,
-                    'depends_on_id' => $dep_tax->depends_on_id,
-                    'dependency_label' => $dep_tax->dependency_label ?? 'source tax',
-                ];
-            }
-        }
-        // Only non-expired exemptions apply (staff_tax_exemptions is pre-filtered notExpired)
-        $exempt_tax_ids = $staff_tax_exemptions->keys()->map(fn($k) => (int) $k)->toArray();
-        // Get exemption details with custom tax values
-        $exemption_details = [];
-        foreach($staff_tax_exemptions as $tax_id => $exemption) {
-            $exemption_details[$tax_id] = [
-                'custom_percentage' => $exemption->custom_percentage,
-                'custom_fixed_amount' => $exemption->custom_fixed_amount
-            ];
-        }
-        @endphp
-
-        var tax_groups = <?php echo json_encode($js_tax_groups); ?>;
-        var taxs = <?php echo json_encode($taxs ?? []); ?>;
-        var dependent_taxs = <?php echo json_encode($js_dependent_taxs ?? []); ?>;
-        var exempt_tax_ids = <?php echo json_encode($exempt_tax_ids); ?>;
-        var exemption_details = <?php echo json_encode($exemption_details); ?>;
-
-        var i, j;
-        var tax_info_html = '';
-        var total_tax_amount = 0;
-        var total_employer_tax = 0;
-
-        // Track results for dependent tax source lookup (2-pass)
-        var group_tax_results = {};
-        var standalone_tax_results = {};
-
-        // === PASS 1: Calculate base taxes (non-dependent) ===
-
-        // Calculate tax from Tax Groups (progressive)
-        var has_group_taxes = false;
-        for (i = 0; i < tax_groups.length; ++i) {
-            var group = tax_groups[i];
-            var group_tax = 0;
-            var group_employer_tax = 0;
-            var group_breakdown = [];
-
-            // Step lookup: single applicable bracket = highest min_amount <= earning
-            var sel = null;
-            for (j = 0; j < group.brackets.length; ++j) {
-                var b = group.brackets[j];
-                if(parseFloat(total_earning) >= parseFloat(b.min_amount)) {
-                    if(sel === null || parseFloat(b.min_amount) >= parseFloat(sel.min_amount)) {
-                        sel = b;
-                    }
-                }
-            }
-
-            if(sel !== null) {
-                var bracket = sel;
-                var is_exempt = exempt_tax_ids.includes(bracket.id);
-                var has_custom_tax = exemption_details.hasOwnProperty(bracket.id);
-                var taxable_amount = Math.max(0, parseFloat(total_earning) - parseFloat(bracket.max_no_taxable_amount || 0));
-                var bracket_tax = 0;
-
-                if(is_exempt && has_custom_tax) {
-                    if(bracket.tax_type == 2 && exemption_details[bracket.id].custom_fixed_amount) {
-                        bracket_tax = parseFloat(exemption_details[bracket.id].custom_fixed_amount);
-                    } else if(bracket.tax_type == 1 && exemption_details[bracket.id].custom_percentage) {
-                        bracket_tax = (taxable_amount / 100) * parseFloat(exemption_details[bracket.id].custom_percentage);
-                    }
-                } else if(!is_exempt) {
-                    if(bracket.tax_type == 2) {
-                        bracket_tax = parseFloat(bracket.fixed_amount);
-                    } else {
-                        bracket_tax = (taxable_amount / 100) * parseFloat(bracket.percentange);
-                    }
-                    // Employer contribution for the same single bracket
-                    var g_paid_by = bracket.paid_by || 'employee';
-                    if(g_paid_by == 'employer' || g_paid_by == 'both') {
-                        if(bracket.tax_type == 2) {
-                            group_employer_tax = parseFloat(bracket.employer_fixed_amount || 0);
-                        } else {
-                            group_employer_tax = (taxable_amount / 100) * parseFloat(bracket.employer_percentage || 0);
-                        }
-                    }
-                }
-
-                group_tax = bracket_tax;
-                if(bracket_tax > 0 || is_exempt) {
-                    group_breakdown.push({
-                        title: bracket.title,
-                        tax: bracket_tax,
-                        is_exempt: is_exempt
-                    });
-                }
-            }
-
-            total_tax_amount += group_tax;
-            total_employer_tax += group_employer_tax;
-            group_tax_results[group.id] = { amount: group_tax, employer: group_employer_tax };
-
-            if(group_breakdown.length > 0) {
-                if(!has_group_taxes) {
-                    tax_info_html += '<div class="tax-section-title"><i class="fas fa-layer-group mr-1"></i> Tax Groups</div>';
-                    has_group_taxes = true;
-                }
-                tax_info_html += '<div class="tax-item"><div class="tax-icon"><i class="fas fa-layer-group text-primary"></i></div>';
-                tax_info_html += '<div class="tax-info"><div class="tax-name">' + group.title;
-                if(group.is_progressive) {
-                    tax_info_html += ' <span class="badge badge-info" style="font-size:10px">progressive</span>';
-                }
-                tax_info_html += '</div></div>';
-                tax_info_html += '<div class="tax-amount text-danger">' + group_tax.toFixed(0) + ' {!! $setting->currency_symbol !!}</div></div>';
-            }
-        }
-
-        // Calculate tax from standalone brackets
-        var has_standalone_taxes = false;
-        for (i = 0; i < taxs.length; ++i) {
-            if(taxs[i]['min_amount'] <= parseFloat(total_earning) && taxs[i]['max_amount'] >= parseFloat(total_earning)){
-
-                if(!has_standalone_taxes) {
-                    tax_info_html += '<div class="tax-section-title mt-2"><i class="fas fa-receipt mr-1"></i> Standalone Taxes</div>';
-                    has_standalone_taxes = true;
-                }
-
-                var is_exempt = exempt_tax_ids.includes(taxs[i]['id']);
-                var has_custom_tax = exemption_details.hasOwnProperty(taxs[i]['id']);
-                var taxable_amount = parseFloat(total_earning) - taxs[i]['max_no_taxable_amount'];
-                var paid_by = taxs[i]['paid_by'] || 'employee';
-
-                var current_employee_tax = 0;
-                var current_employer_tax = 0;
-                var tax_display = '';
-                var tax_icon = '<i class="fas fa-receipt text-secondary"></i>';
-
-                if(is_exempt && has_custom_tax) {
-                    tax_icon = '<i class="fas fa-user-tag text-warning"></i>';
-                    if(taxs[i]['tax_type'] == 2 && exemption_details[taxs[i]['id']].custom_fixed_amount) {
-                        current_employee_tax = parseFloat(exemption_details[taxs[i]['id']].custom_fixed_amount);
-                        tax_display = '<span class="text-warning">Custom: ' + current_employee_tax.toFixed(2) + ' {!! $setting->currency_symbol !!}</span>';
-                    } else if(taxs[i]['tax_type'] == 1 && exemption_details[taxs[i]['id']].custom_percentage) {
-                        var custom_pct = parseFloat(exemption_details[taxs[i]['id']].custom_percentage);
-                        current_employee_tax = (taxable_amount / 100) * custom_pct;
-                        tax_display = '<span class="text-warning">Custom: ' + custom_pct.toFixed(2) + '%</span>';
-                    } else {
-                        current_employee_tax = 0;
-                        tax_display = '<span class="text-success">Fully Exempt</span>';
-                    }
-                } else if(is_exempt) {
-                    tax_icon = '<i class="fas fa-shield-alt text-success"></i>';
-                    current_employee_tax = 0;
-                    tax_display = '<span class="text-success">Fully Exempt</span>';
-                } else {
-                    if(paid_by == 'employee' || paid_by == 'both') {
-                        if(taxs[i]['tax_type'] == 2) {
-                            current_employee_tax = parseFloat(taxs[i]['fixed_amount'] || 0);
-                        } else {
-                            current_employee_tax = (taxable_amount / 100) * parseFloat(taxs[i]['percentange'] || 0);
-                        }
-                    }
-                    if(paid_by == 'employer' || paid_by == 'both') {
-                        if(taxs[i]['tax_type'] == 2) {
-                            current_employer_tax = parseFloat(taxs[i]['employer_fixed_amount'] || 0);
-                        } else {
-                            current_employer_tax = (taxable_amount / 100) * parseFloat(taxs[i]['employer_percentage'] || 0);
-                        }
-                    }
-                    if(taxs[i]['tax_type'] == 2) {
-                        tax_display = 'Fixed: ' + current_employee_tax.toFixed(2) + ' {!! $setting->currency_symbol !!}';
-                    } else {
-                        tax_display = 'Rate: ' + parseFloat(taxs[i]['percentange']).toFixed(2) + '%';
-                    }
-                    if(paid_by == 'both') {
-                        tax_display += ' <span class="badge badge-success" style="font-size:10px"><i class="fas fa-handshake"></i> Shared</span>';
-                    }
-                }
-
-                var tax_title = taxs[i]['title'] ? taxs[i]['title'] : 'Tax';
-                var item_total = current_employee_tax + current_employer_tax;
-                tax_info_html += '<div class="tax-item"><div class="tax-icon">' + tax_icon + '</div>';
-                tax_info_html += '<div class="tax-info"><div class="tax-name">' + tax_title + '</div>';
-                tax_info_html += '<div class="tax-detail">' + tax_display + '</div></div>';
-                tax_info_html += '<div class="tax-amount ' + (is_exempt && !has_custom_tax ? 'text-success' : 'text-danger') + '">' + item_total.toFixed(0) + ' {!! $setting->currency_symbol !!}</div></div>';
-
-                standalone_tax_results[taxs[i]['id']] = {
-                    employee: current_employee_tax,
-                    employer: current_employer_tax
-                };
-
-                total_tax_amount += current_employee_tax;
-                total_employer_tax += current_employer_tax;
-            }
-        }
-
-        // === PASS 2: Calculate dependent taxes ===
-        var has_dependent_taxes = false;
-        for (i = 0; i < dependent_taxs.length; ++i) {
-            var dep = dependent_taxs[i];
-
-            if(parseFloat(dep.min_amount) > parseFloat(total_earning) || parseFloat(dep.max_amount) < parseFloat(total_earning)) {
-                continue;
-            }
-
-            if(!has_dependent_taxes) {
-                tax_info_html += '<div class="tax-section-title mt-2"><i class="fas fa-link mr-1"></i> Dependent Taxes</div>';
-                has_dependent_taxes = true;
-            }
-
-            var source_amount = 0;
-            if(dep.depends_on_type === 'tax_group' && group_tax_results.hasOwnProperty(dep.depends_on_id)) {
-                source_amount = group_tax_results[dep.depends_on_id].amount + (group_tax_results[dep.depends_on_id].employer || 0);
-            } else if(dep.depends_on_type === 'tax_setting' && standalone_tax_results.hasOwnProperty(dep.depends_on_id)) {
-                var src = standalone_tax_results[dep.depends_on_id];
-                source_amount = src.employee + src.employer;
-            }
-
-            var is_exempt = exempt_tax_ids.includes(dep.id);
-            var has_custom_tax = exemption_details.hasOwnProperty(dep.id);
-            var dep_employee_tax = 0;
-            var dep_employer_tax = 0;
-            var dep_display = '';
-
-            if(is_exempt && has_custom_tax) {
-                if(dep.tax_type == 2 && exemption_details[dep.id].custom_fixed_amount) {
-                    dep_employee_tax = parseFloat(exemption_details[dep.id].custom_fixed_amount);
-                } else if(dep.tax_type == 1 && exemption_details[dep.id].custom_percentage) {
-                    dep_employee_tax = (source_amount / 100) * parseFloat(exemption_details[dep.id].custom_percentage);
-                }
-                dep_display = '<span class="text-warning">Custom rate</span>';
-            } else if(is_exempt) {
-                dep_display = '<span class="text-success">Fully Exempt</span>';
-            } else {
-                var dep_paid_by = dep.paid_by || 'employee';
-                if(dep_paid_by == 'employee' || dep_paid_by == 'both') {
-                    if(dep.tax_type == 2) { dep_employee_tax = parseFloat(dep.fixed_amount || 0); }
-                    else { dep_employee_tax = (source_amount / 100) * parseFloat(dep.percentange || 0); }
-                }
-                if(dep_paid_by == 'employer' || dep_paid_by == 'both') {
-                    if(dep.tax_type == 2) { dep_employer_tax = parseFloat(dep.employer_fixed_amount || 0); }
-                    else { dep_employer_tax = (source_amount / 100) * parseFloat(dep.employer_percentage || 0); }
-                }
-                var dep_rate_display = dep.tax_type == 1 ? parseFloat(dep.percentange || 0).toFixed(2) + '%' : parseFloat(dep.fixed_amount || 0).toFixed(2) + ' {!! $setting->currency_symbol !!}';
-                dep_display = dep_rate_display + ' of <strong>' + dep.dependency_label + '</strong>';
-            }
-
-            var dep_total = dep_employee_tax + dep_employer_tax;
-            tax_info_html += '<div class="tax-item"><div class="tax-icon"><i class="fas fa-link text-warning"></i></div>';
-            tax_info_html += '<div class="tax-info"><div class="tax-name">' + dep.title + ' <span class="badge badge-warning" style="font-size:10px">dependent</span></div>';
-            tax_info_html += '<div class="tax-detail">' + dep_display;
-            tax_info_html += '<span class="text-muted d-block" style="font-size:10px"><i class="fas fa-caret-right"></i> Source output: ' + source_amount.toFixed(0) + ' {!! $setting->currency_symbol !!}</span>';
-            tax_info_html += '</div></div>';
-            tax_info_html += '<div class="tax-amount text-danger">' + dep_total.toFixed(0) + ' {!! $setting->currency_symbol !!}</div></div>';
-
-            standalone_tax_results[dep.id] = { employee: dep_employee_tax, employer: dep_employer_tax };
-            total_tax_amount += dep_employee_tax;
-            total_employer_tax += dep_employer_tax;
-        }
-
-        // Set the total tax amount
-        tax_amount = total_tax_amount;
-
-        // Update tax breakdown panel
-        var panel = $('#taxBreakdownPanel');
-        panel.html(tax_info_html || '<p class="text-muted text-center mb-0" style="font-size:12px"><i class="fas fa-info-circle"></i> No applicable taxes for current salary.</p>');
-
-      // Net Total
-      var net_total = parseFloat(total_gross) - parseFloat(tax_amount);
-
-      // Total Cost
-      var total_cost = parseFloat(net_total) + parseFloat(tax_amount) + parseFloat(total_employer_tax);
-
-      // Effective rate
-      var eff_rate = parseFloat(total_earning) > 0 ? ((tax_amount / parseFloat(total_earning)) * 100).toFixed(2) : '0.00';
-
-      // Update form fields (Math.round to match PHP round() and the tax report)
-      $("input[name='total_allowance'][data_id='"+type+"-"+id+"']").val(Math.round(allowance_sum));
-      $("input[name='total_deduction'][data_id='"+type+"-"+id+"']").val(Math.round(deduction_sum));
-      $("input[name='gross_salary'][data_id='"+type+"-"+id+"']").val(Math.round(total_gross));
-      $("input[name='tax'][data_id='"+type+"-"+id+"']").val(Math.round(tax_amount));
-      $("input[name='employer_tax'][data_id='"+type+"-"+id+"']").val(Math.round(total_employer_tax));
-      $("input[name='net_salary'][data_id='"+type+"-"+id+"']").val(Math.round(net_total));
-      $("input[name='total_cost'][data_id='"+type+"-"+id+"']").val(Math.round(total_cost));
-
-      // Update display fields if they exist
-      $("input[id='employer_tax_display'][data_id='"+type+"-"+id+"']").val(Math.round(total_employer_tax));
-      $("input[id='total_cost_display'][data_id='"+type+"-"+id+"']").val(Math.round(total_cost));
-
-      // Update summary footer
-      $('#summaryAllowance').text(Math.round(allowance_sum).toLocaleString());
-      $('#summaryDeduction').text(Math.round(deduction_sum).toLocaleString());
-      $('#summaryTax').text(Math.round(tax_amount).toLocaleString());
-      $('#summaryNet').text(Math.round(net_total).toLocaleString());
-      $('#summaryCost').text(Math.round(total_cost).toLocaleString());
+        clearTimeout(payrollPreviewTimer);
+        payrollPreviewTimer = setTimeout(function () { payrollPreview(type, id); }, 250);
     }
+
+    function payrollPreview(type, id) {
+        var $form = $('form.needs-validation');
+        var data = $form.find('input[name="_token"], input[name="user_id"], input[name="salary_month"], select[name="allowance_titles[]"], input[name="allowances[]"], select[name="deduction_titles[]"], input[name="deduction_titles[]"], input[name="deduction_loans[]"], input[name="deductions[]"]').serialize();
+
+        if (payrollPreviewRequest) { payrollPreviewRequest.abort(); }
+        $('#btnShowConfirmModal').prop('disabled', true);
+
+        payrollPreviewRequest = $.ajax({
+            url: '{{ route($route.'.preview') }}',
+            method: 'POST',
+            data: data,
+            dataType: 'json'
+        }).done(function (c) {
+            var cs = ' {!! $setting->currency_symbol !!}';
+            var fmt = function (v) { return Math.round(parseFloat(v) || 0).toLocaleString(); };
+            var set = function (name, v) { $("input[name='" + name + "'][data_id='" + type + "-" + id + "']").val(Math.round(parseFloat(v) || 0)); };
+            var esc = function (t) { return $('<div>').text(t).html(); };
+
+            set('total_earning', c.total_earning);
+            set('total_allowance', c.total_allowance);
+            set('total_deduction', c.total_deduction);
+            set('gross_salary', c.gross_salary);
+            set('tax', c.tax);
+            set('employer_tax', c.employer_tax);
+            set('net_salary', c.net_salary);
+            set('total_cost', c.total_cost);
+            $('#employer_tax_display').val(Math.round(c.employer_tax));
+            $('#total_cost_display').val(Math.round(c.total_cost));
+            $('#employerTaxGroup, #totalCostGroup').toggle(c.employer_tax > 0);
+            $('#effectiveRate').text(c.effective_rate + '%');
+            $('#taxBaseNote').text(@json(__('Taxed on :amount: the :basic plus taxable allowances (:taxable).'))
+                .replace(':amount', fmt(c.taxable_salary))
+                .replace(':basic', @json($is_hourly ? __('hours worked') : __('basic salary')))
+                .replace(':taxable', fmt(c.taxable_allowance)));
+
+            var html = '';
+            $.each(c.tax_lines, function (_, l) {
+                html += '<div class="tax-item"><div class="tax-icon"><i class="fas fa-receipt text-secondary"></i></div>';
+                html += '<div class="tax-info"><div class="tax-name">' + esc(l.label) + '</div>';
+                if (l.employer > 0) {
+                    html += '<div class="tax-detail">' + @json(__('Staff')) + ' ' + fmt(l.employee) + ' · ' + @json(__('Employer')) + ' ' + fmt(l.employer) + '</div>';
+                }
+                html += '</div><div class="tax-amount text-danger">' + fmt(l.employee) + cs + '</div></div>';
+            });
+            $('#taxBreakdownPanel').html(html || '<p class="text-muted text-center mb-0" style="font-size:12px"><i class="fas fa-info-circle"></i> ' + esc(@json(__('No tax applies to this pay.'))) + '</p>');
+
+            var problems = '';
+            $.each(c.problems, function (_, p) { problems += '<li>' + esc(p) + '</li>'; });
+            $('#payrollProblemList').html(problems);
+            $('#payrollProblems').toggle(c.problems.length > 0);
+            $('#btnShowConfirmModal').prop('disabled', c.problems.length > 0);
+
+            $('#summaryAllowance').text(fmt(c.total_allowance));
+            $('#summaryDeduction').text(fmt(c.total_deduction));
+            $('#summaryTax').text(fmt(c.tax));
+            $('#summaryNet').text(fmt(c.net_salary));
+            $('#summaryCost').text(fmt(c.total_cost));
+        }).fail(function (xhr, status) {
+            if (status === 'abort') { return; }
+            $('#payrollProblemList').html('<li>' + $('<div>').text(@json(__('The figures could not be worked out. Check the connection and press Recalculate.'))).html() + '</li>');
+            $('#payrollProblems').show();
+        });
+    }
+
+    // Choosing a different allowance can change what is taxed.
+    $(document).on('change', 'select[name="allowance_titles[]"], select[name="deduction_titles[]"]', function () {
+        salaryCalculator('add', {{ $row->id }});
+    });
 
     // ===== Confirmation Modal Logic =====
     $(document).ready(function() {

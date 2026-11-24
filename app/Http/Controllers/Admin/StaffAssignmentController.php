@@ -138,7 +138,7 @@ class StaffAssignmentController extends Controller
             
             DB::commit();
             
-            $message = __('Staff assignments created successfully!');
+            $message = __('Staff assignments created.');
             if ($hasClassRoutine) {
                 $message .= ' ' . __('Note: This staff has existing class routines which will now be restricted to assigned areas only.');
             }
@@ -248,7 +248,7 @@ class StaffAssignmentController extends Controller
             
             DB::commit();
             
-            return redirect()->route('admin.staff-assignment.index')->with('success', __('Staff assignments updated successfully!'));
+            return redirect()->route('admin.staff-assignment.index')->with('success', __('Staff assignments updated.'));
             
         } catch (\Exception $e) {
             DB::rollBack();
@@ -269,7 +269,7 @@ class StaffAssignmentController extends Controller
             
             StaffAssignment::where('user_id', $userId)->delete();
             
-            $message = __('Staff assignments removed successfully!');
+            $message = __('Staff assignments removed.');
             if ($hasClassRoutine) {
                 $message .= ' ' . __('Note: This staff will now have default role-based access to all areas.');
             }

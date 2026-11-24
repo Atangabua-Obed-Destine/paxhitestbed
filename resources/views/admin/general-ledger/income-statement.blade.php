@@ -56,6 +56,7 @@
                                     </div>
                                     <div class="form-group mr-3">
                                         <div class="custom-control custom-switch">
+                                            <input type="hidden" name="use_journal_entries" value="0">
                                             <input type="checkbox" class="custom-control-input" id="use_journal_entries" name="use_journal_entries" value="1" {{ $useJournalEntries ? 'checked' : '' }}>
                                             <label class="custom-control-label" for="use_journal_entries">
                                                 <i class="fas fa-book"></i> {{ __('use_accounting_view') }}
@@ -95,7 +96,7 @@
                                     <!-- A. STUDENT FEES REVENUE -->
                                     <tr class="bg-light">
                                         <td><strong>A. {{ __('student_fees_revenue') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($studentFeesRevenue, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($studentFeesRevenue) }}</strong></td>
                                     </tr>
                                     
                                     @if($feesByCategory->isNotEmpty())
@@ -105,7 +106,7 @@
                                                 <i class="fas fa-angle-right text-muted"></i> 
                                                 {{ $feeCategory->category_name }}
                                             </td>
-                                            <td class="text-right">{{ number_format($feeCategory->total, 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($feeCategory->total) }}</td>
                                         </tr>
                                         @endforeach
                                     @else
@@ -121,7 +122,7 @@
                                     <!-- B. OTHER INCOME -->
                                     <tr class="bg-light">
                                         <td><strong>B. {{ __('other_income') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($otherIncomeTotal, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($otherIncomeTotal) }}</strong></td>
                                     </tr>
                                     
                                     @if($incomeByCategory->isNotEmpty())
@@ -131,7 +132,7 @@
                                                 <i class="fas fa-angle-right text-muted"></i> 
                                                 {{ $income->category_name }}
                                             </td>
-                                            <td class="text-right">{{ number_format($income->total, 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($income->total) }}</td>
                                         </tr>
                                         @endforeach
                                     @else
@@ -145,7 +146,7 @@
                                     <!-- TOTAL REVENUE -->
                                     <tr class="table-success" style="font-size: 15px;">
                                         <td><strong><i class="fas fa-equals"></i> {{ __('total_revenue') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalRevenue, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalRevenue) }}</strong></td>
                                     </tr>
                                     
                                     <tr><td colspan="2" class="p-2 bg-white"></td></tr> <!-- Spacer -->
@@ -165,7 +166,7 @@
                                     <!-- C. OPERATING EXPENSES -->
                                     <tr class="bg-light">
                                         <td><strong>C. {{ __('operating_expenses') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($operatingExpensesTotal, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($operatingExpensesTotal) }}</strong></td>
                                     </tr>
                                     
                                     @if($expensesByCategory->isNotEmpty())
@@ -175,7 +176,7 @@
                                                 <i class="fas fa-angle-right text-muted"></i> 
                                                 {{ $expense->category_name }}
                                             </td>
-                                            <td class="text-right">{{ number_format($expense->total, 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($expense->total) }}</td>
                                         </tr>
                                         @endforeach
                                     @else
@@ -191,54 +192,44 @@
                                     <!-- D. PAYROLL & SALARIES -->
                                     <tr class="bg-light">
                                         <td><strong>D. {{ __('staff_salaries_payroll') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($payrollTotal, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($payrollTotal) }}</strong></td>
                                     </tr>
                                     
                                     @if($payrollBreakdown && $payrollBreakdown->staff_count > 0)
                                         <tr>
                                             <td class="pl-4">
-                                                <i class="fas fa-angle-right text-muted"></i> 
-                                                {{ __('basic_salaries') }} 
+                                                <i class="fas fa-angle-right text-muted"></i>
+                                                {{ __('Pay after deductions') }}
                                                 <small class="text-muted">({{ $payrollBreakdown->staff_count }} {{ __('staff') }})</small>
                                             </td>
-                                            <td class="text-right">{{ number_format($payrollBreakdown->total_basic_salary, 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($payrollBreakdown->total_gross) }}</td>
                                         </tr>
-                                        @if($payrollBreakdown->total_allowances > 0)
+                                        @if($payrollBreakdown->total_loan_repayments > 0)
                                         <tr>
                                             <td class="pl-4">
-                                                <i class="fas fa-angle-right text-muted"></i> 
-                                                {{ __('allowances') }}
+                                                <i class="fas fa-angle-right text-muted"></i>
+                                                {{ __('Loan and advance repayments taken from pay') }}
                                             </td>
-                                            <td class="text-right">{{ number_format($payrollBreakdown->total_allowances, 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($payrollBreakdown->total_loan_repayments) }}</td>
                                         </tr>
                                         @endif
-                                        @if($payrollBreakdown->total_bonuses > 0)
+                                        @if($payrollBreakdown->total_employer > 0)
                                         <tr>
                                             <td class="pl-4">
-                                                <i class="fas fa-angle-right text-muted"></i> 
-                                                {{ __('bonuses') }}
+                                                <i class="fas fa-angle-right text-muted"></i>
+                                                {{ __('Employer contributions') }}
                                             </td>
-                                            <td class="text-right">{{ number_format($payrollBreakdown->total_bonuses, 0, ',', ' ') }}</td>
+                                            <td class="text-right">{{ format_amount($payrollBreakdown->total_employer) }}</td>
                                         </tr>
                                         @endif
-                                        @if($payrollBreakdown->total_deductions > 0)
                                         <tr>
-                                            <td class="pl-4 text-success">
-                                                <i class="fas fa-minus-circle"></i> 
-                                                {{ __('deductions') }}
+                                            <td class="pl-4" colspan="2">
+                                                <small class="text-muted">
+                                                    {{ __('Of which tax withheld') }}: {{ format_amount($payrollBreakdown->total_tax) }}
+                                                    &middot; {{ __('net paid to staff') }}: {{ format_amount($payrollBreakdown->total_net_salary) }}
+                                                </small>
                                             </td>
-                                            <td class="text-right text-success">({{ number_format($payrollBreakdown->total_deductions, 0, ',', ' ') }})</td>
                                         </tr>
-                                        @endif
-                                        @if($payrollBreakdown->total_tax > 0)
-                                        <tr>
-                                            <td class="pl-4 text-success">
-                                                <i class="fas fa-minus-circle"></i> 
-                                                {{ __('taxes') }}
-                                            </td>
-                                            <td class="text-right text-success">({{ number_format($payrollBreakdown->total_tax, 0, ',', ' ') }})</td>
-                                        </tr>
-                                        @endif
                                     @else
                                         <tr>
                                             <td colspan="2" class="text-center text-muted pl-4">
@@ -246,11 +237,32 @@
                                             </td>
                                         </tr>
                                     @endif
-                                    
+
+                                    <!-- E. DEPRECIATION -->
+                                    <tr class="bg-light">
+                                        <td>
+                                            <strong>E. {{ __('Depreciation and provisions') }}</strong>
+                                            <small class="text-muted d-block">{{ __('From the ledger (accounts 68 and 69): no module records them.') }}</small>
+                                        </td>
+                                        <td class="text-right"><strong>{{ format_amount($depreciationTotal) }}</strong></td>
+                                    </tr>
+
+                                    @if($capitalExpenditure > 0)
+                                    <tr>
+                                        <td colspan="2" class="text-muted">
+                                            <small>
+                                                <i class="fas fa-info-circle"></i>
+                                                {{ __('Equipment and buildings bought in this period') }}: {{ format_amount($capitalExpenditure) }}
+                                                &mdash; {{ __('an asset on the balance sheet, not an expense, so it is not in the total.') }}
+                                            </small>
+                                        </td>
+                                    </tr>
+                                    @endif
+
                                     <!-- TOTAL EXPENSES -->
                                     <tr class="table-danger" style="font-size: 15px;">
                                         <td><strong><i class="fas fa-equals"></i> {{ __('total_expenses') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($totalExpenses, 0, ',', ' ') }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($totalExpenses) }}</strong></td>
                                     </tr>
                                     
                                     <tr><td colspan="2" class="p-2 bg-white"></td></tr> <!-- Spacer -->
@@ -275,7 +287,7 @@
                                         </td>
                                         <td class="text-right">
                                             <strong class="{{ $grossProfit >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ number_format($grossProfit, 0, ',', ' ') }}
+                                                {{ format_amount($grossProfit) }}
                                             </strong>
                                         </td>
                                     </tr>
@@ -295,7 +307,7 @@
                                         </td>
                                         <td class="text-right">
                                             <strong class="{{ $operatingProfit >= 0 ? 'text-success' : 'text-danger' }}">
-                                                {{ number_format($operatingProfit, 0, ',', ' ') }}
+                                                {{ format_amount($operatingProfit) }}
                                             </strong>
                                         </td>
                                     </tr>
@@ -316,7 +328,7 @@
                                         </td>
                                         <td class="text-right">
                                             <strong style="font-size: 1.3em;">
-                                                {{ number_format(abs($netProfit), 0, ',', ' ') }}
+                                                {{ format_amount(abs($netProfit)) }}
                                             </strong>
                                         </td>
                                     </tr>
@@ -336,12 +348,12 @@
                                                     {{ __('total_revenue') }}
                                                 </h6>
                                                 <h3 class="mb-0" style="font-weight: 700; color: #28a745;">
-                                                    {{ number_format($totalRevenue, 0, ',', ' ') }}
+                                                    {{ format_amount($totalRevenue) }}
                                                     <small class="text-muted" style="font-size: 14px;">FCFA</small>
                                                 </h3>
                                                 <small class="text-muted">
                                                     <i class="fas fa-graduation-cap"></i> 
-                                                    {{ __('fees') }}: {{ number_format($studentFeesRevenue, 0, ',', ' ') }}
+                                                    {{ __('fees') }}: {{ format_amount($studentFeesRevenue) }}
                                                 </small>
                                             </div>
                                             <div class="text-success" style="font-size: 40px; opacity: 0.3;">
@@ -362,12 +374,12 @@
                                                     {{ __('total_expenses') }}
                                                 </h6>
                                                 <h3 class="mb-0" style="font-weight: 700; color: #dc3545;">
-                                                    {{ number_format($totalExpenses, 0, ',', ' ') }}
+                                                    {{ format_amount($totalExpenses) }}
                                                     <small class="text-muted" style="font-size: 14px;">FCFA</small>
                                                 </h3>
                                                 <small class="text-muted">
                                                     <i class="fas fa-users"></i> 
-                                                    {{ __('payroll') }}: {{ number_format($payrollTotal, 0, ',', ' ') }}
+                                                    {{ __('payroll') }}: {{ format_amount($payrollTotal) }}
                                                 </small>
                                             </div>
                                             <div class="text-danger" style="font-size: 40px; opacity: 0.3;">
@@ -392,7 +404,7 @@
                                                     @endif
                                                 </h6>
                                                 <h3 class="mb-0" style="font-weight: 700; color: {{ $netProfit >= 0 ? '#007bff' : '#ffc107' }};">
-                                                    {{ number_format(abs($netProfit), 0, ',', ' ') }}
+                                                    {{ format_amount(abs($netProfit)) }}
                                                     <small class="text-muted" style="font-size: 14px;">FCFA</small>
                                                 </h3>
                                                 <small class="text-muted">
@@ -455,7 +467,7 @@
                                         <table class="table table-sm">
                                             <tr>
                                                 <td>{{ __('operating_expenses') }}</td>
-                                                <td class="text-right">{{ number_format($operatingExpensesTotal, 0, ',', ' ') }}</td>
+                                                <td class="text-right">{{ format_amount($operatingExpensesTotal) }}</td>
                                                 <td class="text-right">
                                                     <span class="badge badge-info">
                                                         {{ $totalExpenses > 0 ? number_format(($operatingExpensesTotal / $totalExpenses) * 100, 1) : 0 }}%
@@ -464,7 +476,7 @@
                                             </tr>
                                             <tr>
                                                 <td>{{ __('payroll_expenses') }}</td>
-                                                <td class="text-right">{{ number_format($payrollTotal, 0, ',', ' ') }}</td>
+                                                <td class="text-right">{{ format_amount($payrollTotal) }}</td>
                                                 <td class="text-right">
                                                     <span class="badge badge-warning">
                                                         {{ $totalExpenses > 0 ? number_format(($payrollTotal / $totalExpenses) * 100, 1) : 0 }}%

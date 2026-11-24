@@ -233,7 +233,7 @@
                                             @endif
                                         </td>
                                         <td>
-                                            {{ number_format(min((float)$row->paid_amount, (float)$row->total_amount), 0) }} / {{ number_format($row->total_amount, 0) }}
+                                            {{ format_amount(min((float)$row->paid_amount, (float)$row->total_amount)) }} / {{ format_amount($row->total_amount) }}
                                         </td>
                                         <td>
                                             @if($row->first_installment_fee && $row->first_installment_fee->paymentPlan)

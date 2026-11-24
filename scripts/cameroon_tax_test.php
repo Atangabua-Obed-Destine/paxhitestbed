@@ -48,6 +48,8 @@ use Illuminate\Support\Facades\DB;
 
 $passed = 0;
 $failed = 0;
+// Paid payrolls carry their own tax lines; this run must add none.
+$taxLinesAtStart = DB::table('payroll_tax_lines')->count();
 
 function section(string $title): void
 {
@@ -295,21 +297,26 @@ $source = file_get_contents($base . '/app/Http/Controllers/Admin/PayrollControll
 check('the stored tax is not the posted one',
     !preg_match("/'tax'\s*=>\s*\\\$request->tax/", $source),
     "store() still writes \$request->tax");
-check('store() recomputes it',
-    preg_match('/function store.*?authoritativeTax\(/s', $source) === 1);
-check('update() recomputes it too',
-    preg_match('/function update.*?authoritativeTax\(/s', $source) === 1);
+check('store() works every figure out with the calculator',
+    preg_match('/function store.*?PayrollCalculator::class\)->calculate\(/s', $source) === 1);
+check('there is no update() left that could save around it',
+    !preg_match('/public function update\(/', $source));
 check('a figure that disagrees is refused',
-    str_contains($source, 'does not match the configured rates'));
+    str_contains($source, 'do not match the staff record and the configured rates'));
 // Exercised rather than grepped: the figure this returns is what goes into the
 // books, and a month with no income tax in force must raise rather than come
 // back as zero. An undated group from an earlier setup answers for every
 // month, so this is also the check that the refusal looks at the income tax
 // specifically instead of at "any group at all".
-$authority = new ReflectionMethod(App\Http\Controllers\Admin\PayrollController::class, 'authoritativeTax');
-$authority->setAccessible(true);
-$controller = (new ReflectionClass(App\Http\Controllers\Admin\PayrollController::class))
-    ->newInstanceWithoutConstructor();
+// The calculator is the one place a payroll's tax is decided (see
+// App\Services\PayrollCalculator); taxFor() is its tax on its own.
+$authority = new class {
+    public function invoke($unused, int $userId, float $salary, string $month): array
+    {
+        return app(App\Services\PayrollCalculator::class)->taxFor($userId, $salary, $month);
+    }
+};
+$controller = null;
 
 $earliest = TaxSetting::where('tax_group_id', GROUP_PIT)->where('status', 1)->min('effective_from');
 $beforeRates = Carbon::parse($earliest)->subMonth()->startOfMonth()->toDateString();
@@ -387,12 +394,16 @@ $afterRestore = $authority->invoke($controller,
 
 check('and the charge is back to what it was',
     abs($afterRestore['employee'] - 21005) < 1, number_format($afterRestore['employee'], 2));
+// Saving moved to PayrollWriter, shared by the payroll page and bulk
+// generation: store() must go through it, and it must itemise the tax.
+$writer = file_get_contents(__DIR__ . '/../app/Services/PayrollWriter.php');
 check('the breakdown is written with the payroll',
-    preg_match('/function store.*?->record\(\$payroll\)/s', $source) === 1);
+    preg_match('/function store.*?PayrollWriter::class\)->save\(/s', $source) === 1
+    && preg_match('/function save.*?->record\(\$payroll\)/s', $writer) === 1);
 check('a paid payroll cannot be edited',
     str_contains($source, 'has been paid and can no longer be edited'));
 check('a failure in store() rolls back',
-    preg_match('/catch\(\\\\Throwable \$e\)\{\s*.*?DB::rollBack\(\)/s', $source) === 1);
+    preg_match('/catch\s*\(\\\\Throwable \$e\)\s*\{\s*.*?DB::rollBack\(\)/s', $source) === 1);
 
 // ---------------------------------------------------------------------------
 section('A payroll and its itemisation agree');
@@ -559,6 +570,10 @@ try {
     DB::table('payroll_tax_lines')->delete();
     DB::table('tax_settings')->delete();
     DB::table('tax_groups')->delete();
+    // A fresh install has paid nobody yet. The seeder rightly refuses to touch
+    // the taxes of a school that has paid payrolls, so those are set back to
+    // unpaid here too (rolled back below).
+    DB::table('payrolls')->where('status', 1)->update(['status' => 0]);
 
     (new Database\Seeders\TaxSettingSeeder())->run();
 
@@ -629,6 +644,10 @@ section('A school whose groups were made by hand is adopted, not duplicated');
 DB::beginTransaction();
 
 try {
+    // Before any payroll was paid: the seeder leaves a school with payroll
+    // history alone, so that is cleared here too (rolled back below).
+    DB::table('payroll_tax_lines')->delete();
+    DB::table('payrolls')->where('status', 1)->update(['status' => 0]);
     DB::table('tax_settings')->delete();
     DB::table('tax_groups')->delete();
 
@@ -743,8 +762,8 @@ check('the brackets are intact after the rollback',
 // ---------------------------------------------------------------------------
 section('Nothing was left behind');
 
-check('no stray payroll tax lines', DB::table('payroll_tax_lines')->count() === 0,
-    DB::table('payroll_tax_lines')->count() . ' rows');
+check('no stray payroll tax lines', DB::table('payroll_tax_lines')->count() === $taxLinesAtStart,
+    DB::table('payroll_tax_lines')->count() . ' rows, ' . $taxLinesAtStart . ' at the start');
 check('the staff count is unchanged',
     App\User::where('status', '1')->where('basic_salary', '>', 0)->count() === $staff->count());
 

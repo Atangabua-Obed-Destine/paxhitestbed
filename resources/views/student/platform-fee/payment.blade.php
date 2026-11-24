@@ -627,9 +627,9 @@
                 <p>Amount Payable</p>
                 <h2>
                     @if(isset($systemSetting->decimal_place))
-                    {{ number_format($platformSetting->fee_amount, $systemSetting->decimal_place, '.', ',') }}
+                    {{ format_amount($platformSetting->fee_amount) }}
                     @else
-                    {{ number_format($platformSetting->fee_amount, 2, '.', ',') }}
+                    {{ format_amount($platformSetting->fee_amount) }}
                     @endif
                     {!! $systemSetting->currency_symbol !!}
                 </h2>
@@ -699,14 +699,14 @@
                 <div class="info-item">
                     <div class="info-item-label">{{ __('Platform access fee') }}</div>
                     <div class="info-item-value">
-                        {{ number_format((float) $platformSetting->fee_amount, 0, '.', ',') }}
+                        {{ format_amount((float) $platformSetting->fee_amount) }}
                         {{ $platformSetting->currency }}
                     </div>
                 </div>
                 <div class="info-item">
                     <div class="info-item-label">{{ __('Mobile money charge') }}</div>
                     <div class="info-item-value">
-                        {{ number_format($platformSetting->surchargeAmount(), 0, '.', ',') }}
+                        {{ format_amount($platformSetting->surchargeAmount()) }}
                         {{ $platformSetting->currency }}
                     </div>
                 </div>
@@ -714,7 +714,7 @@
                     <div class="info-item-label">{{ __('Total to pay') }}</div>
                     <div class="info-item-value">
                         <strong style="font-size: 17px; color: #667eea;">
-                            {{ number_format($platformSetting->chargeAmount(), 0, '.', ',') }}
+                            {{ format_amount($platformSetting->chargeAmount()) }}
                             {{ $platformSetting->currency }}
                         </strong>
                     </div>
@@ -726,7 +726,7 @@
                 <button type="submit" class="btn btn-primary-custom w-100">
                     <i class="fas fa-lock"></i>
                     {{ __('Pay') }}
-                    {{ number_format($platformSetting->chargeAmount(), 0, '.', ',') }}
+                    {{ format_amount($platformSetting->chargeAmount()) }}
                     {{ $platformSetting->currency }}
                     {{ __('securely') }}
                 </button>
@@ -762,7 +762,7 @@
                         <a href="{{ $platformSetting->dialLink() }}" class="btn-dial" data-no-loading>
                             <i class="fas fa-phone-alt"></i>
                             {{ __('Pay') }}
-                            {{ number_format($platformSetting->fee_amount, 0, '.', ',') }}
+                            {{ format_amount($platformSetting->fee_amount) }}
                             {!! $systemSetting->currency_symbol !!}
                             {{ __('now') }}
                         </a>
@@ -862,15 +862,15 @@
                 <div class="info-grid">
                     <div class="info-item">
                         <div class="info-item-label">Payment Date</div>
-                        <div class="info-item-value">{{ date('F j, Y', strtotime($payment->payment_date)) }}</div>
+                        <div class="info-item-value">{{ date('d/m/Y', strtotime($payment->payment_date)) }}</div>
                     </div>
                     <div class="info-item">
                         <div class="info-item-label">Amount Paid</div>
                         <div class="info-item-value">
                             @if(isset($systemSetting->decimal_place))
-                            {{ number_format($payment->paid_amount, $systemSetting->decimal_place, '.', ',') }}
+                            {{ format_amount($payment->paid_amount) }}
                             @else
-                            {{ number_format($payment->paid_amount, 2, '.', ',') }}
+                            {{ format_amount($payment->paid_amount) }}
                             @endif
                             {!! $systemSetting->currency_symbol !!}
                         </div>

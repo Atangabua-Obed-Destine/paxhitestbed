@@ -98,7 +98,7 @@
         </tbody>
     </table>
     @else
-    {{ __('Barcode value too large to print!') }}
+    {{ __('The barcode value is too long to print.') }}
     @endif
   </div>
 </div>

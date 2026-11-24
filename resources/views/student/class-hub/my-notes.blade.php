@@ -192,10 +192,10 @@
                     </div>
                     <div class="note-date">
                         <i class="fas fa-calendar-alt mr-1"></i>
-                        Class Date: {{ $note->classSession->date ? $note->classSession->date->format('M d, Y') : 'N/A' }}
+                        Class Date: {{ $note->classSession->date ? $note->classSession->date->format('d/m/Y') : 'N/A' }}
                         &bull;
                         <i class="fas fa-clock mr-1"></i>
-                        Note Updated: {{ $note->updated_at->format('M d, Y H:i') }}
+                        Note Updated: {{ $note->updated_at->format('d/m/Y H:i') }}
                     </div>
                     @if($note->classSession->topic_covered)
                     <div class="mt-2">

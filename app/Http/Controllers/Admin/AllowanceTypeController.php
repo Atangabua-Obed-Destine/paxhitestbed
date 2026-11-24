@@ -57,12 +57,14 @@ class AllowanceTypeController extends Controller
         $request->validate([
             'title' => 'required|max:191|unique:allowance_types,title',
             'description' => 'nullable',
+            'is_taxable' => 'nullable|boolean',
         ]);
 
         // Insert Data
         $allowanceType = new AllowanceType;
         $allowanceType->title = $request->title;
         $allowanceType->description = $request->description;
+        $allowanceType->is_taxable = $request->boolean('is_taxable');
         $allowanceType->status = $request->status;
         $allowanceType->save();
 
@@ -80,12 +82,14 @@ class AllowanceTypeController extends Controller
         $request->validate([
             'title' => 'required|max:191|unique:allowance_types,title,'.$id,
             'description' => 'nullable',
+            'is_taxable' => 'nullable|boolean',
         ]);
 
         // Update Data
         $allowanceType = AllowanceType::findOrFail($id);
         $allowanceType->title = $request->title;
         $allowanceType->description = $request->description;
+        $allowanceType->is_taxable = $request->boolean('is_taxable');
         $allowanceType->status = $request->status;
         $allowanceType->save();
 

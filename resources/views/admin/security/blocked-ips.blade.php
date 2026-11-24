@@ -134,45 +134,45 @@
         <!-- Stats Cards -->
         <div class="row">
             <div class="col-md-4 col-sm-6">
-                <div class="card" style="background: linear-gradient(135deg, #f56954 0%, #e74c3c 100%); color: white; border: none; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); border-radius: 10px;">
+                <div class="card stat-tile stat-danger">
                     <div class="card-block text-center" style="padding: 25px 20px;">
-                        <div style="font-size: 48px; font-weight: bold; margin-bottom: 10px;">
+                        <div class="stat-figure">
                             {{ $failedAttempts->where('blocked_until', '>', now())->count() }}
                         </div>
-                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 5px;">
+                        <div class="stat-label">
                             {{ __('Currently Blocked') }}
                         </div>
-                        <div style="font-size: 13px; opacity: 0.9;">
+                        <div class="stat-note">
                             <i class="fas fa-ban"></i> {{ __('Active Blocks') }}
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-4 col-sm-6">
-                <div class="card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3); border-radius: 10px;">
+                <div class="card stat-tile stat-warning">
                     <div class="card-block text-center" style="padding: 25px 20px;">
-                        <div style="font-size: 48px; font-weight: bold; margin-bottom: 10px;">
+                        <div class="stat-figure">
                             {{ $failedAttempts->where('attempts', '>', 0)->count() }}
                         </div>
-                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 5px;">
+                        <div class="stat-label">
                             {{ __('Failed Attempts') }}
                         </div>
-                        <div style="font-size: 13px; opacity: 0.9;">
+                        <div class="stat-note">
                             <i class="fas fa-exclamation-triangle"></i> {{ __('Security Warnings') }}
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-4 col-sm-12">
-                <div class="card" style="background: linear-gradient(135deg, #00c0ef 0%, #3498db 100%); color: white; border: none; box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3); border-radius: 10px;">
+                <div class="card stat-tile stat-info">
                     <div class="card-block text-center" style="padding: 25px 20px;">
-                        <div style="font-size: 48px; font-weight: bold; margin-bottom: 10px;">
+                        <div class="stat-figure">
                             {{ $failedAttempts->where('blocked_until', '<=', now())->where('blocked_until', '!=', null)->count() }}
                         </div>
-                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 5px;">
+                        <div class="stat-label">
                             {{ __('Expired Blocks') }}
                         </div>
-                        <div style="font-size: 13px; opacity: 0.9;">
+                        <div class="stat-note">
                             <i class="fas fa-clock"></i> {{ __('Historical Data') }}
                         </div>
                     </div>

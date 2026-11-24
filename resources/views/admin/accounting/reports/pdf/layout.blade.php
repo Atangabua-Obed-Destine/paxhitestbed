@@ -237,7 +237,7 @@
 
         <div class="report-header">
             <div class="report-title">@yield('report_title')</div>
-            <div class="report-date">{{ __('Generated on') }}: {{ now()->format('F d, Y H:i') }}</div>
+            <div class="report-date">{{ __('Generated on') }}: {{ now()->format('j F Y, H:i') }}</div>
         </div>
         
         @yield('content')

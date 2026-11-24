@@ -623,7 +623,7 @@
             <div class="col-12 col-md">
                 <div class="eso-stat range">
                     <div class="stat-number is-text">
-                        {{ $statistics['earliest_date'] ? \Carbon\Carbon::parse($statistics['earliest_date'])->format('M j') : 'N/A' }} - {{ $statistics['latest_date'] ? \Carbon\Carbon::parse($statistics['latest_date'])->format('M j, Y') : 'N/A' }}
+                        {{ $statistics['earliest_date'] ? \Carbon\Carbon::parse($statistics['earliest_date'])->format('M j') : 'N/A' }} - {{ $statistics['latest_date'] ? \Carbon\Carbon::parse($statistics['latest_date'])->format('j F Y') : 'N/A' }}
                     </div>
                     <div class="stat-label">Period</div>
                 </div>
@@ -648,7 +648,7 @@
                         @endif
                     </div>
                     <div class="print-meta">
-                        Generated: {{ now()->format('F j, Y - g:i A') }} | 
+                        Generated: {{ now()->format('j F Y, H:i') }} | 
                         Total: {{ $statistics['total_exams'] }} exams over {{ $statistics['total_days'] }} days
                     </div>
                 </div>
@@ -710,7 +710,7 @@
                                 <td class="date-cell {{ $isFirstOfDate ? '' : 'date-repeat' }}">
                                     @if($isFirstOfDate)
                                         <span class="date-day">{{ $dateObj->format('D') }}</span>
-                                        <span class="date-full">{{ $dateObj->format('M j, Y') }}</span>
+                                        <span class="date-full">{{ $dateObj->format('j F Y') }}</span>
                                         @if($isToday)
                                             <span class="today-badge">TODAY</span>
                                         @endif

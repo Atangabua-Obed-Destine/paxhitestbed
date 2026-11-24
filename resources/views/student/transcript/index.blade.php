@@ -101,7 +101,7 @@
                     @endif
                     <div class="transcript-student-field">
                         <span class="transcript-field-label">Date Printed</span>
-                        <span class="transcript-field-value">{{ date('F d, Y') }}</span>
+                        <span class="transcript-field-value">{{ date('j F Y') }}</span>
                     </div>
                 </div>
             </div>
@@ -571,7 +571,7 @@
                     official purposes. For an official transcript, please contact the Academic Registry.</p>
                 </div>
                 <div class="transcript-footer-right">
-                    <p class="transcript-footer-generated">Generated: {{ date('F d, Y \a\t h:i A') }}</p>
+                    <p class="transcript-footer-generated">Generated: {{ date('j F Y, H:i') }}</p>
                     <p class="transcript-footer-system">{{ institution_code() }} Student Portal</p>
                 </div>
             </div>

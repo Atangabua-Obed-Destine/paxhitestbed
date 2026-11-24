@@ -145,10 +145,11 @@ class GeneralLedgerController extends Controller
             ->orderBy('account_code')
             ->get();
         
-        // Add balance for each account
-        $data['accounts']->transform(function($account) use ($startDate, $endDate) {
-            // Only calculate for detail accounts
-            if ($account->account_category == 'detail') {
+        // Add balance for each account that can carry money: a detail
+        // account, or a heading that was posted to anyway.
+        $carriesMoney = $this->reportableAccounts()->pluck('id')->flip();
+        $data['accounts']->transform(function($account) use ($startDate, $endDate, $carriesMoney) {
+            if ($account->account_category == 'detail' || isset($carriesMoney[$account->id])) {
                 $account->opening_balance = $startDate ? $this->calculateOpeningBalance($account->id, $startDate) : $account->opening_balance;
                 $account->total_debit = $this->calculatePeriodDebit($account->id, $startDate, $endDate);
                 $account->total_credit = $this->calculatePeriodCredit($account->id, $startDate, $endDate);
@@ -179,9 +180,8 @@ class GeneralLedgerController extends Controller
         $data['startDate'] = $startDate;
         $data['endDate'] = $endDate;
         
-        // Get all detail accounts with balances
-        $data['accounts'] = ChartOfAccount::where('account_category', 'detail')
-            ->where('is_active', true)
+        // Every account that carries money (see reportableAccounts()).
+        $data['accounts'] = $this->reportableAccounts()
             ->orderBy('account_code')
             ->get();
         
@@ -206,6 +206,29 @@ class GeneralLedgerController extends Controller
         $data['fiscalYears'] = FiscalYear::orderBy('start_date', 'desc')->get();
         
         return view('admin.general-ledger.trial-balance', $data);
+    }
+
+    /**
+     * Active detail accounts, plus any other account that carries money.
+     *
+     * The reports read only active detail accounts, so money posted to a
+     * heading (110,700 sat on "24 Materiel" on this system) or to an account
+     * later retired dropped out of the trial balance and the balance sheet and
+     * put both out of balance. Leaving an account out of a report does not
+     * take its money out of the books.
+     */
+    private function reportableAccounts()
+    {
+        $posted = JournalEntryLine::query()
+            ->whereHas('journalEntry', fn ($q) => $q->where('is_posted', true))
+            ->distinct()
+            ->pluck('account_id');
+
+        return ChartOfAccount::query()->where(function ($q) use ($posted) {
+            $q->where(fn ($d) => $d->where('account_category', 'detail')->where('is_active', true))
+                ->orWhereIn('id', $posted)
+                ->orWhere('opening_balance', '!=', 0);
+        });
     }
 
     /**
@@ -239,11 +262,14 @@ class GeneralLedgerController extends Controller
     /**
      * Calculate period debit for an account
      */
-    private function calculatePeriodDebit($accountId, $startDate = null, $endDate = null)
+    private function calculatePeriodDebit($accountId, $startDate = null, $endDate = null, bool $excludeClosing = false)
     {
         $query = JournalEntryLine::where('account_id', $accountId)
-            ->whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+            ->whereHas('journalEntry', function($q) use ($startDate, $endDate, $excludeClosing) {
                 $q->where('is_posted', true);
+                if ($excludeClosing) {
+                    $q->where('journal_type', '!=', 'closing');
+                }
                 if ($startDate) {
                     $q->where('entry_date', '>=', $startDate);
                 }
@@ -258,11 +284,14 @@ class GeneralLedgerController extends Controller
     /**
      * Calculate period credit for an account
      */
-    private function calculatePeriodCredit($accountId, $startDate = null, $endDate = null)
+    private function calculatePeriodCredit($accountId, $startDate = null, $endDate = null, bool $excludeClosing = false)
     {
         $query = JournalEntryLine::where('account_id', $accountId)
-            ->whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+            ->whereHas('journalEntry', function($q) use ($startDate, $endDate, $excludeClosing) {
                 $q->where('is_posted', true);
+                if ($excludeClosing) {
+                    $q->where('journal_type', '!=', 'closing');
+                }
                 if ($startDate) {
                     $q->where('entry_date', '>=', $startDate);
                 }
@@ -279,11 +308,14 @@ class GeneralLedgerController extends Controller
      */
     public function exportAccountPDF(Request $request, $accountId)
     {
-        // This would use PDF generation - implementation depends on your PDF library
-        // For now, returning a message
-        return response()->json([
-            'message' => 'PDF export will be implemented with your PDF library'
-        ]);
+        // The same figures as the account screen, on paper.
+        $data = $this->account($request, $accountId)->getData();
+        $data['endDate'] = $data['endDate'] ?? null;
+
+        $pdf = PDF::loadView('admin.general-ledger.account-pdf', $data);
+        $pdf->setPaper('A4', 'landscape');
+
+        return $pdf->download('ledger-' . $data['account']->account_code . '-' . date('Y-m-d') . '.pdf');
     }
 
     /**
@@ -291,10 +323,40 @@ class GeneralLedgerController extends Controller
      */
     public function exportTrialBalanceExcel(Request $request)
     {
-        // This would use Excel export - implementation depends on your Excel library
-        return response()->json([
-            'message' => 'Excel export will be implemented with Maatwebsite\Excel'
-        ]);
+        // Read from the trial balance screen itself, so the file and the
+        // screen cannot differ.
+        $accounts = $this->trialBalance($request)->getData()['accounts'];
+
+        $rows = [['Code', 'Account', 'Opening debit', 'Opening credit', 'Period debit', 'Period credit', 'Closing debit', 'Closing credit']];
+        $totals = array_fill(0, 6, 0.0);
+        foreach ($accounts as $a) {
+            $sign = $a->normal_balance === 'debit' ? 1 : -1;
+            $opening = $sign * (float) $a->opening_balance;
+            $closing = $opening + $a->period_debit - $a->period_credit;
+            $line = [max($opening, 0), max(-$opening, 0), (float) $a->period_debit, (float) $a->period_credit, max($closing, 0), max(-$closing, 0)];
+            foreach ($line as $i => $v) {
+                $totals[$i] += $v;
+            }
+            $rows[] = array_merge([$a->account_code, $a->account_name], array_map(fn ($v) => round($v, 2) + 0.0, $line));
+        }
+        $rows[] = array_merge(['', 'Total'], array_map(fn ($v) => round($v, 2) + 0.0, $totals));
+
+        return $this->csvDownload('trial-balance-' . ($request->end_date ?: date('Y-m-d')) . '.csv', $rows);
+    }
+
+    /**
+     * A CSV file Excel opens directly: UTF-8 with a byte-order mark.
+     */
+    private function csvDownload(string $filename, array $rows)
+    {
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            foreach ($rows as $row) {
+                fputcsv($out, $row);
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     /**
@@ -302,71 +364,15 @@ class GeneralLedgerController extends Controller
      */
     public function balanceSheet(Request $request)
     {
-        $data['title'] = __('balance_sheet');
-        
-        // Get date range
         $asOfDate = $request->input('as_of_date', date('Y-m-d'));
         $comparativeDate = $request->input('comparative_date');
-        
+
+        $data = $this->getBalanceSheetData($asOfDate, $comparativeDate);
+        $data['title'] = __('balance_sheet');
         $data['asOfDate'] = $asOfDate;
         $data['comparativeDate'] = $comparativeDate;
-        
-        // ASSETS (ACTIF)
-        // Class 2: Fixed Assets (Immobilisations)
-        $data['fixedAssets'] = $this->getClassBalances(2, $asOfDate);
-        $data['fixedAssets_comparative'] = $comparativeDate ? $this->getClassBalances(2, $comparativeDate) : [];
-        
-        // Class 3: Inventory & Stocks
-        $data['inventory'] = $this->getClassBalances(3, $asOfDate);
-        $data['inventory_comparative'] = $comparativeDate ? $this->getClassBalances(3, $comparativeDate) : [];
-        
-        // Class 4: Receivables (Créances)
-        $data['receivables'] = $this->getClassBalances(4, $asOfDate, true); // Only debit accounts
-        $data['receivables_comparative'] = $comparativeDate ? $this->getClassBalances(4, $comparativeDate, true) : [];
-        
-        // Class 5: Cash & Banks
-        $data['cashAndBanks'] = $this->getClassBalances(5, $asOfDate);
-        $data['cashAndBanks_comparative'] = $comparativeDate ? $this->getClassBalances(5, $comparativeDate) : [];
-        
-        // LIABILITIES & EQUITY (PASSIF)
-        // Class 1: Capital & Equity (Capitaux Propres)
-        $data['equity'] = $this->getClassBalances(1, $asOfDate);
-        $data['equity_comparative'] = $comparativeDate ? $this->getClassBalances(1, $comparativeDate) : [];
-        
-        // Class 4: Payables (Dettes)
-        $data['payables'] = $this->getClassBalances(4, $asOfDate, false, true); // Only credit accounts
-        $data['payables_comparative'] = $comparativeDate ? $this->getClassBalances(4, $comparativeDate, false, true) : [];
-        
-        // Calculate totals
-        $data['totalAssets'] = $this->calculateTotal([
-            $data['fixedAssets'],
-            $data['inventory'],
-            $data['receivables'],
-            $data['cashAndBanks']
-        ]);
-        
-        $data['totalLiabilities'] = $this->calculateTotal([
-            $data['equity'],
-            $data['payables']
-        ]);
-        
-        if ($comparativeDate) {
-            $data['totalAssets_comparative'] = $this->calculateTotal([
-                $data['fixedAssets_comparative'],
-                $data['inventory_comparative'],
-                $data['receivables_comparative'],
-                $data['cashAndBanks_comparative']
-            ]);
-            
-            $data['totalLiabilities_comparative'] = $this->calculateTotal([
-                $data['equity_comparative'],
-                $data['payables_comparative']
-            ]);
-        }
-        
-        // Get fiscal years for filter
         $data['fiscalYears'] = FiscalYear::orderBy('start_date', 'desc')->get();
-        
+
         return view('admin.general-ledger.balance-sheet', $data);
     }
 
@@ -382,8 +388,11 @@ class GeneralLedgerController extends Controller
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date', date('Y-m-d'));
         
-        // Check if user wants to use journal entries (accounting view) or operational data
-        $useJournalEntries = $request->input('use_journal_entries', false);
+        // The books (posted journal entries) are the default: they are what the
+        // balance sheet and the trial balance read, so the three agree. The
+        // module summary below is kept for a by-module view of the same money
+        // and is asked for with use_journal_entries=0.
+        $useJournalEntries = $request->input('use_journal_entries', '1') !== '0';
         
         $data['startDate'] = $startDate;
         $data['endDate'] = $endDate;
@@ -516,17 +525,28 @@ class GeneralLedgerController extends Controller
         // =================================================================
         
         // 1. OPERATING EXPENSES (from expenses table)
-        // Get all approved expenses
+        //
+        // A category posted to a class-2 account is a purchase of equipment or
+        // buildings: it is an asset on the balance sheet, not an expense of the
+        // year, and is shown apart rather than in the total.
+        $capitalCategoryIds = \App\Models\DefaultAccountMapping::where('mapping_type', 'expense_category')
+            ->whereHas('debitAccount', fn ($q) => $q->where('account_code', 'like', '2%'))
+            ->pluck('category_id')
+            ->filter()
+            ->all();
+
         $expensesQuery = Expense::where('status', 1)
             ->where('date', '<=', $endDate);
         if ($startDate) {
             $expensesQuery->where('date', '>=', $startDate);
         }
-        $data['operatingExpensesTotal'] = $expensesQuery->sum('amount');
+        $data['capitalExpenditure'] = (float) (clone $expensesQuery)->whereIn('category_id', $capitalCategoryIds ?: [0])->sum('amount');
+        $data['operatingExpensesTotal'] = $expensesQuery->whereNotIn('category_id', $capitalCategoryIds ?: [0])->sum('amount');
         
         // Breakdown by expense category
         // Show ALL active expense categories (including those with zero expenses)
         $data['expensesByCategory'] = \App\Models\ExpenseCategory::where('expense_categories.status', 1)
+            ->whereNotIn('expense_categories.id', $capitalCategoryIds ?: [0])
             ->leftJoin('expenses', function($join) use ($startDate, $endDate) {
                 $join->on('expense_categories.id', '=', 'expenses.category_id')
                     ->where('expenses.status', 1)
@@ -541,33 +561,52 @@ class GeneralLedgerController extends Controller
             ->get();
         
         // 2. PAYROLL & SALARIES (from payrolls table)
-        // Get all staff salary payments
-        $payrollsQuery = Payroll::whereNotNull('pay_date')
-            ->where('pay_date', '<=', $endDate);
-        if ($startDate) {
-            $payrollsQuery->where('pay_date', '>=', $startDate);
-        }
-        $data['payrollTotal'] = $payrollsQuery->sum('net_salary');
-        
-        // Payroll details breakdown
-        $data['payrollBreakdown'] = Payroll::whereNotNull('pay_date')
+        //
+        // The salary cost, as the ledger records it: pay after deductions, plus
+        // advance repayments when they are booked to the advances account,
+        // plus the employer's contributions. Net pay alone left out the tax
+        // and CNPS withheld, which the school also pays, and counted payrolls
+        // whose payment had been reversed.
+        $paidPayrolls = Payroll::where('status', 1)
+            ->whereNotNull('pay_date')
             ->where('pay_date', '<=', $endDate)
-            ->when($startDate, function($q) use ($startDate) {
-                return $q->where('pay_date', '>=', $startDate);
-            })
+            ->when($startDate, fn ($q) => $q->where('pay_date', '>=', $startDate));
+
+        $loanRepayments = 0.0;
+        if (\App\Models\PayrollSetting::current()->advance_account_id) {
+            $loanRepayments = (float) \App\Models\PayrollDetail::whereIn('payroll_id', (clone $paidPayrolls)->select('id'))
+                ->where('status', 0)
+                ->whereNotNull('staff_loan_id')
+                ->sum('amount');
+        }
+
+        $data['payrollBreakdown'] = (clone $paidPayrolls)
             ->selectRaw('
                 COUNT(*) as staff_count,
-                SUM(basic_salary) as total_basic_salary,
-                SUM(total_allowance) as total_allowances,
-                SUM(bonus) as total_bonuses,
-                SUM(total_deduction) as total_deductions,
-                SUM(tax) as total_tax,
-                SUM(net_salary) as total_net_salary
+                COALESCE(SUM(gross_salary), 0) as total_gross,
+                COALESCE(SUM(employer_tax), 0) as total_employer,
+                COALESCE(SUM(tax), 0) as total_tax,
+                COALESCE(SUM(net_salary), 0) as total_net_salary
             ')
             ->first();
-        
+        $data['payrollBreakdown']->total_loan_repayments = round($loanRepayments, 2);
+        $data['payrollTotal'] = round((float) $data['payrollBreakdown']->total_gross
+            + (float) $data['payrollBreakdown']->total_employer + $loanRepayments, 2);
+
+        // 3. DEPRECIATION AND PROVISIONS (classes 68 and 69, from the ledger):
+        // no module records them, but they are an expense of the year.
+        $data['depreciationTotal'] = round((float) JournalEntryLine::query()
+            ->whereIn('account_id', ChartOfAccount::where('account_code', 'like', '68%')->orWhere('account_code', 'like', '69%')->pluck('id'))
+            ->whereHas('journalEntry', function ($q) use ($startDate, $endDate) {
+                $q->where('is_posted', true)->where('journal_type', '!=', 'closing')->where('entry_date', '<=', $endDate);
+                if ($startDate) {
+                    $q->where('entry_date', '>=', $startDate);
+                }
+            })
+            ->sum(\Illuminate\Support\Facades\DB::raw('debit - credit')), 2);
+
         // TOTAL EXPENSES
-        $data['totalExpenses'] = $data['operatingExpensesTotal'] + $data['payrollTotal'];
+        $data['totalExpenses'] = $data['operatingExpensesTotal'] + $data['payrollTotal'] + $data['depreciationTotal'];
         
         // =================================================================
         // FINANCIAL METRICS & CALCULATIONS
@@ -612,9 +651,8 @@ class GeneralLedgerController extends Controller
         $endDate = $data['endDate'];
         
         // Get all REVENUE accounts (Class 7 in OHADA)
-        $revenueAccountsQuery = ChartOfAccount::where('class_number', 7)
-            ->where('is_active', true)
-            ->where('account_category', 'detail');
+        $revenueAccountsQuery = $this->reportableAccounts()
+            ->where('class_number', 7);
         
         $revenueAccounts = $revenueAccountsQuery->get();
         
@@ -625,7 +663,10 @@ class GeneralLedgerController extends Controller
         foreach ($revenueAccounts as $account) {
             // Get credits minus debits for revenue accounts (normal balance is credit)
             $credits = JournalEntryLine::whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+                    // The year-end closing brings 6, 7 and 8 back to
+                    // zero; counted here it would empty every closed year.
                     $q->where('is_posted', true)
+                      ->where('journal_type', '!=', 'closing')
                       ->where('entry_date', '<=', $endDate);
                     if ($startDate) {
                         $q->where('entry_date', '>=', $startDate);
@@ -635,7 +676,10 @@ class GeneralLedgerController extends Controller
                 ->sum('credit');
             
             $debits = JournalEntryLine::whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+                    // The year-end closing brings 6, 7 and 8 back to
+                    // zero; counted here it would empty every closed year.
                     $q->where('is_posted', true)
+                      ->where('journal_type', '!=', 'closing')
                       ->where('entry_date', '<=', $endDate);
                     if ($startDate) {
                         $q->where('entry_date', '>=', $startDate);
@@ -657,9 +701,8 @@ class GeneralLedgerController extends Controller
         }
         
         // Get all EXPENSE accounts (Class 6 in OHADA)
-        $expenseAccountsQuery = ChartOfAccount::where('class_number', 6)
-            ->where('is_active', true)
-            ->where('account_category', 'detail');
+        $expenseAccountsQuery = $this->reportableAccounts()
+            ->where('class_number', 6);
         
         $expenseAccounts = $expenseAccountsQuery->get();
         
@@ -670,7 +713,10 @@ class GeneralLedgerController extends Controller
         foreach ($expenseAccounts as $account) {
             // Get debits minus credits for expense accounts (normal balance is debit)
             $debits = JournalEntryLine::whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+                    // The year-end closing brings 6, 7 and 8 back to
+                    // zero; counted here it would empty every closed year.
                     $q->where('is_posted', true)
+                      ->where('journal_type', '!=', 'closing')
                       ->where('entry_date', '<=', $endDate);
                     if ($startDate) {
                         $q->where('entry_date', '>=', $startDate);
@@ -680,7 +726,10 @@ class GeneralLedgerController extends Controller
                 ->sum('debit');
             
             $credits = JournalEntryLine::whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+                    // The year-end closing brings 6, 7 and 8 back to
+                    // zero; counted here it would empty every closed year.
                     $q->where('is_posted', true)
+                      ->where('journal_type', '!=', 'closing')
                       ->where('entry_date', '<=', $endDate);
                     if ($startDate) {
                         $q->where('entry_date', '>=', $startDate);
@@ -702,9 +751,8 @@ class GeneralLedgerController extends Controller
         }
         
         // Get OTHER RESULTS accounts (Class 8 in OHADA)
-        $otherResultsAccountsQuery = ChartOfAccount::where('class_number', 8)
-            ->where('is_active', true)
-            ->where('account_category', 'detail');
+        $otherResultsAccountsQuery = $this->reportableAccounts()
+            ->where('class_number', 8);
         
         $otherResultsAccounts = $otherResultsAccountsQuery->get();
         
@@ -713,7 +761,10 @@ class GeneralLedgerController extends Controller
         
         foreach ($otherResultsAccounts as $account) {
             $debits = JournalEntryLine::whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+                    // The year-end closing brings 6, 7 and 8 back to
+                    // zero; counted here it would empty every closed year.
                     $q->where('is_posted', true)
+                      ->where('journal_type', '!=', 'closing')
                       ->where('entry_date', '<=', $endDate);
                     if ($startDate) {
                         $q->where('entry_date', '>=', $startDate);
@@ -723,7 +774,10 @@ class GeneralLedgerController extends Controller
                 ->sum('debit');
             
             $credits = JournalEntryLine::whereHas('journalEntry', function($q) use ($startDate, $endDate) {
+                    // The year-end closing brings 6, 7 and 8 back to
+                    // zero; counted here it would empty every closed year.
                     $q->where('is_posted', true)
+                      ->where('journal_type', '!=', 'closing')
                       ->where('entry_date', '<=', $endDate);
                     if ($startDate) {
                         $q->where('entry_date', '>=', $startDate);
@@ -775,9 +829,8 @@ class GeneralLedgerController extends Controller
      */
     private function getClassBalances($classNumber, $asOfDate, $debitOnly = false, $creditOnly = false, $startDate = null)
     {
-        $query = ChartOfAccount::where('account_code', 'LIKE', $classNumber . '%')
-            ->where('account_category', 'detail')
-            ->where('is_active', true);
+        $query = $this->reportableAccounts()
+            ->where('account_code', 'LIKE', $classNumber . '%');
         
         if ($debitOnly) {
             $query->where('normal_balance', 'debit');
@@ -793,8 +846,8 @@ class GeneralLedgerController extends Controller
         $accounts->transform(function($account) use ($asOfDate, $startDate) {
             if ($startDate) {
                 // For income statement - period activity only
-                $account->period_debit = $this->calculatePeriodDebit($account->id, $startDate, $asOfDate);
-                $account->period_credit = $this->calculatePeriodCredit($account->id, $startDate, $asOfDate);
+                $account->period_debit = $this->calculatePeriodDebit($account->id, $startDate, $asOfDate, true);
+                $account->period_credit = $this->calculatePeriodCredit($account->id, $startDate, $asOfDate, true);
                 
                 if ($account->normal_balance === 'debit') {
                     $account->balance = $account->period_debit - $account->period_credit;
@@ -823,9 +876,8 @@ class GeneralLedgerController extends Controller
         $breakdown = [];
         
         // Get all accounts
-        $accounts = ChartOfAccount::where('account_code', 'LIKE', $classNumber . '%')
-            ->where('account_category', 'detail')
-            ->where('is_active', true)
+        $accounts = $this->reportableAccounts()
+            ->where('account_code', 'LIKE', $classNumber . '%')
             ->orderBy('account_code')
             ->get();
         
@@ -840,8 +892,8 @@ class GeneralLedgerController extends Controller
                 ];
             }
             
-            $debit = $this->calculatePeriodDebit($account->id, $startDate, $endDate);
-            $credit = $this->calculatePeriodCredit($account->id, $startDate, $endDate);
+            $debit = $this->calculatePeriodDebit($account->id, $startDate, $endDate, true);
+            $credit = $this->calculatePeriodCredit($account->id, $startDate, $endDate, true);
             
             if ($account->normal_balance === 'debit') {
                 $balance = $debit - $credit;
@@ -901,10 +953,40 @@ class GeneralLedgerController extends Controller
      */
     public function exportBalanceSheetExcel(Request $request)
     {
-        // Implementation with Maatwebsite\Excel
-        return response()->json([
-            'message' => 'Excel export functionality - use Maatwebsite\Excel package'
-        ]);
+        $asOfDate = $request->input('as_of_date', date('Y-m-d'));
+        $comparativeDate = $request->input('comparative_date');
+        $d = $this->getBalanceSheetData($asOfDate, $comparativeDate);
+        $cmp = $d['comparative'];
+
+        $head = ['Side', 'Section', 'Code', 'Account', $asOfDate];
+        if ($cmp) {
+            $head[] = $comparativeDate;
+        }
+        $rows = [$head];
+        $add = function ($side, $section, $code, $name, $amount, $cmpAmount = null) use (&$rows, $cmp) {
+            $row = [$side, $section, $code, $name, round((float) $amount, 2)];
+            if ($cmp) {
+                $row[] = round((float) $cmpAmount, 2);
+            }
+            $rows[] = $row;
+        };
+        $sections = ['Actif' => ['fixedAssets' => 'Fixed assets', 'inventory' => 'Inventory', 'receivables' => 'Receivables', 'cashAndBanks' => 'Cash and banks'],
+            'Passif' => ['equity' => 'Equity', 'financialDebts' => 'Borrowings and provisions', 'payables' => 'Payables', 'treasuryLiabilities' => 'Bank overdrafts']];
+        foreach ($sections as $side => $list) {
+            foreach ($list as $key => $label) {
+                foreach ($d[$key] as $a) {
+                    $add($side, $label, $a->account_code, $a->account_name, $a->balance, $cmp ? ($cmp[$key]->firstWhere('id', $a->id)->balance ?? 0) : null);
+                }
+                if ($key === 'equity') {
+                    $add($side, $label, '', 'Report a nouveau (earlier results not closed)', $d['priorResult'], $cmp['priorResult'] ?? null);
+                    $add($side, $label, '', 'Result for the year', $d['yearResult'], $cmp['yearResult'] ?? null);
+                }
+            }
+        }
+        $add('Actif', '', '', 'Total assets', $d['totalAssets'], $cmp['totalAssets'] ?? null);
+        $add('Passif', '', '', 'Total liabilities and equity', $d['totalLiabilities'], $cmp['totalLiabilities'] ?? null);
+
+        return $this->csvDownload('balance-sheet-' . $asOfDate . '.csv', $rows);
     }
 
     /**
@@ -931,10 +1013,25 @@ class GeneralLedgerController extends Controller
      */
     public function exportIncomeStatementExcel(Request $request)
     {
-        // Implementation with Maatwebsite\Excel
-        return response()->json([
-            'message' => 'Excel export functionality - use Maatwebsite\Excel package'
-        ]);
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date', date('Y-m-d'));
+        $d = $this->getIncomeStatementData($startDate, $endDate);
+
+        $rows = [['Section', 'Code', 'Account', 'Amount']];
+        foreach ($d['revenue'] as $a) {
+            $rows[] = ['Revenue (class 7)', $a->account_code, $a->account_name, round($a->balance, 2)];
+        }
+        $rows[] = ['Revenue (class 7)', '', 'Total revenue', round($d['totalRevenue'], 2)];
+        foreach ($d['expenses'] as $a) {
+            $rows[] = ['Expenses (class 6)', $a->account_code, $a->account_name, round($a->balance, 2)];
+        }
+        $rows[] = ['Expenses (class 6)', '', 'Total expenses', round($d['totalExpenses'], 2)];
+        foreach ($d['otherResults'] as $a) {
+            $rows[] = ['Other results (class 8)', $a->account_code, $a->account_name, round($a->normal_balance === 'debit' ? -$a->balance : $a->balance, 2)];
+        }
+        $rows[] = ['', '', 'Net result', round($d['netProfit'], 2)];
+
+        return $this->csvDownload('income-statement-' . $endDate . '.csv', $rows);
     }
 
     /**
@@ -942,52 +1039,11 @@ class GeneralLedgerController extends Controller
      */
     private function getBalanceSheetData($asOfDate, $comparativeDate = null)
     {
-        $data = [];
-        
-        // Assets
-        $data['fixedAssets'] = $this->getClassBalances(2, $asOfDate);
-        $data['inventory'] = $this->getClassBalances(3, $asOfDate);
-        $data['receivables'] = $this->getClassBalances(4, $asOfDate, true);
-        $data['cashAndBanks'] = $this->getClassBalances(5, $asOfDate);
-        
-        // Liabilities & Equity
-        $data['equity'] = $this->getClassBalances(1, $asOfDate);
-        $data['payables'] = $this->getClassBalances(4, $asOfDate, false, true);
-        
-        // Calculate totals
-        $data['totalAssets'] = $this->calculateTotal([
-            $data['fixedAssets'],
-            $data['inventory'],
-            $data['receivables'],
-            $data['cashAndBanks']
-        ]);
-        
-        $data['totalLiabilities'] = $this->calculateTotal([
-            $data['equity'],
-            $data['payables']
-        ]);
-        
-        if ($comparativeDate) {
-            $data['fixedAssets_comparative'] = $this->getClassBalances(2, $comparativeDate);
-            $data['inventory_comparative'] = $this->getClassBalances(3, $comparativeDate);
-            $data['receivables_comparative'] = $this->getClassBalances(4, $comparativeDate, true);
-            $data['cashAndBanks_comparative'] = $this->getClassBalances(5, $comparativeDate);
-            $data['equity_comparative'] = $this->getClassBalances(1, $comparativeDate);
-            $data['payables_comparative'] = $this->getClassBalances(4, $comparativeDate, false, true);
-            
-            $data['totalAssets_comparative'] = $this->calculateTotal([
-                $data['fixedAssets_comparative'],
-                $data['inventory_comparative'],
-                $data['receivables_comparative'],
-                $data['cashAndBanks_comparative']
-            ]);
-            
-            $data['totalLiabilities_comparative'] = $this->calculateTotal([
-                $data['equity_comparative'],
-                $data['payables_comparative']
-            ]);
-        }
-        
+        $statements = app(\App\Services\Accounting\FinancialStatements::class);
+
+        $data = $statements->balanceSheet($asOfDate);
+        $data['comparative'] = $comparativeDate ? $statements->balanceSheet($comparativeDate) : null;
+
         return $data;
     }
 
@@ -1004,7 +1060,7 @@ class GeneralLedgerController extends Controller
         
         $data['totalExpenses'] = $this->calculateTotal([$data['expenses']]);
         $data['totalRevenue'] = $this->calculateTotal([$data['revenue']]);
-        $data['totalOtherResults'] = $this->calculateTotal([$data['otherResults']]);
+        $data['totalOtherResults'] = round($data['otherResults']->sum(fn ($a) => $a->normal_balance === 'debit' ? -$a->balance : $a->balance), 2);
         
         $data['netProfit'] = $data['totalRevenue'] + $data['totalOtherResults'] - $data['totalExpenses'];
         

@@ -3,7 +3,7 @@
 @section('content')
 
 @php
-    $money = fn ($amount) => number_format((float) $amount, 0);
+    $money = fn ($amount) => format_amount((float) $amount);
     $canCorrect = auth()->user()->can('fee-credit-audit-correct');
     $voidable = (float) $duplicates->sum('voidable');
     $alreadySpent = (float) $duplicates->sum('already_spent');

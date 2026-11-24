@@ -40,7 +40,9 @@ class ExpenseObserver
      */
     public function updated(Expense $expense): void
     {
-        if ($expense->wasChanged(['amount', 'category_id', 'date'])) {
+        // The payment method and account decide which cash, bank or wallet
+        // account the money posts to (CashAccounts), so changing either moves it.
+        if ($expense->wasChanged(['amount', 'category_id', 'date', 'payment_method', 'payment_account_id'])) {
             $this->autoMapService->remap('expense', $expense->id, $expense->category_id, $this->payload($expense));
         }
     }

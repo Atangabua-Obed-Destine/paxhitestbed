@@ -103,19 +103,19 @@
     <div class="tiles fc-tiles">
         <div class="tile">
             <div class="label">{{ __('Billed this year') }}</div>
-            <div class="value">{{ number_format($st['billed'] + $ap['billed']) }}</div>
+            <div class="value">{{ format_amount($st['billed'] + $ap['billed']) }}</div>
             <div class="note">{{ __('Fees assigned between :from and :to, after discounts and including fines.', [
                 'from' => \Carbon\Carbon::parse($c['window']['from'])->format('j M Y'),
                 'to' => \Carbon\Carbon::parse($c['window']['to'])->format('j M Y')]) }}</div>
         </div>
         <div class="tile in">
             <div class="label">{{ __('Collected') }}</div>
-            <div class="value">{{ number_format($st['collected'] + $ap['collected']) }}</div>
+            <div class="value">{{ format_amount($st['collected'] + $ap['collected']) }}</div>
             <div class="note">{{ __('Received and still belonging to these fees. Credit moved to settle another fee is counted there, not twice.') }}</div>
         </div>
         <div class="tile {{ $st['outstanding'] > 0 ? 'deficit' : '' }}">
             <div class="label">{{ __('Still outstanding') }}</div>
-            <div class="value">{{ number_format($st['outstanding'] + $ap['outstanding']) }}</div>
+            <div class="value">{{ format_amount($st['outstanding'] + $ap['outstanding']) }}</div>
             <div class="note">
                 {{ __('What this year\'s billing has yet to bring in.') }}
                 @if($owing > 0)
@@ -134,7 +134,7 @@
                 @if($ap['total'] > 0)
                     <br><span class="fc-aside">{{ __('Applicants, counted apart: :rate% of :billed across :n.', [
                         'rate' => number_format($ap['rate'], 1),
-                        'billed' => number_format($ap['billed']),
+                        'billed' => format_amount($ap['billed']),
                         'n' => $ap['total']]) }}</span>
                 @endif
             </div>
@@ -175,9 +175,9 @@
                     <td class="rank-num"><span class="fc-dot s-full"></span>{{ number_format($row['full']) }}</td>
                     <td class="rank-num"><span class="fc-dot s-part"></span>{{ number_format($row['part']) }}</td>
                     <td class="rank-num"><span class="fc-dot s-none"></span>{{ number_format($row['none']) }}</td>
-                    <td class="rank-num">{{ number_format($row['billed']) }}</td>
-                    <td class="rank-num">{{ number_format($row['collected']) }}</td>
-                    <td class="rank-num">{{ number_format($row['outstanding']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['billed']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['collected']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['outstanding']) }}</td>
                     <td>
                         <div class="rank-track">
                             <div class="rank-bar {{ $row['rate'] >= 90 ? 'fc-b-full' : ($row['rate'] >= 50 ? 'fc-b-part' : 'fc-b-none') }}"
@@ -200,10 +200,10 @@
     <div class="fc-note">
         <i class="fas fa-filter"></i>
         <div>
-            <strong>{{ __('Not counted above: :amount', ['amount' => number_format($c['scope']['excluded']['billed'])]) }}</strong>
+            <strong>{{ __('Not counted above: :amount', ['amount' => format_amount($c['scope']['excluded']['billed'])]) }}</strong>
             {{ trans_choice('across :count other fee|across :count other fees', $c['scope']['excluded']['fees'], ['count' => $c['scope']['excluded']['fees']]) }}
             — {{ __('resit fees, admission fees and anything else that is not an instalment, of which :owed is still owed.', [
-                'owed' => number_format($c['scope']['excluded']['owed'])]) }}
+                'owed' => format_amount($c['scope']['excluded']['owed'])]) }}
             <span class="fc-aside">{{ __('They are broken out in full under "Collection by fee" below. A student who has settled a small resit fee but neither instalment belongs in "paid nothing at all", which is why they are kept out of the counts.') }}</span>
         </div>
     </div>
@@ -215,7 +215,7 @@
     <div class="fc-note fc-note-warn">
         <i class="fas fa-history"></i>
         <div>
-            <strong>{{ __('Owed from earlier years: :amount', ['amount' => number_format($c['arrears']['amount'])]) }}</strong>
+            <strong>{{ __('Owed from earlier years: :amount', ['amount' => format_amount($c['arrears']['amount'])]) }}</strong>
             {{ trans_choice('across :count person|across :count people', $c['arrears']['people'], ['count' => $c['arrears']['people']]) }}{{ $c['arrears']['oldest'] ? ', ' . __('oldest assigned :date', ['date' => \Carbon\Carbon::parse($c['arrears']['oldest'])->format('j M Y')]) : '' }}.
             <span class="fc-aside">{{ __('Not in the figures above, which cover this year\'s billing only — but it is money the institution is still owed.') }}</span>
         </div>
@@ -227,7 +227,7 @@
         <i class="fas fa-file-signature"></i>
         <div>
             {{ trans_choice(':count student is on an agreed payment plan|:count students are on agreed payment plans', $c['plans']['people'], ['count' => $c['plans']['people']]) }}
-            ({{ number_format($c['plans']['amount']) }}).
+            ({{ format_amount($c['plans']['amount']) }}).
             <span class="fc-aside">{{ __('They appear as partly paid above, which is what they are — but they are working to a schedule rather than simply behind.') }}</span>
         </div>
     </div>
@@ -296,15 +296,15 @@
     <div class="tiles fc-tiles">
         <div class="tile">
             <div class="label">{{ __('Billed this year') }}</div>
-            <div class="value">{{ number_format($ad['billed']) }}</div>
+            <div class="value">{{ format_amount($ad['billed']) }}</div>
         </div>
         <div class="tile in">
             <div class="label">{{ __('Collected') }}</div>
-            <div class="value">{{ number_format($ad['collected']) }}</div>
+            <div class="value">{{ format_amount($ad['collected']) }}</div>
         </div>
         <div class="tile {{ $ad['outstanding'] > 0 ? 'deficit' : '' }}">
             <div class="label">{{ __('Still outstanding') }}</div>
-            <div class="value">{{ number_format($ad['outstanding']) }}</div>
+            <div class="value">{{ format_amount($ad['outstanding']) }}</div>
         </div>
         <div class="tile">
             <div class="label">{{ __('Collection rate, admissions') }}</div>
@@ -358,9 +358,9 @@
             @foreach($c['by_month'] as $m)
                 <tr>
                     <td>{{ $m['label'] }}</td>
-                    <td class="n">{{ number_format($m['cash']) }}</td>
-                    <td class="n">{{ number_format($m['cumulative']) }}</td>
-                    <td class="n">{{ number_format($m['all_cash']) }}</td>
+                    <td class="n">{{ format_amount($m['cash']) }}</td>
+                    <td class="n">{{ format_amount($m['cumulative']) }}</td>
+                    <td class="n">{{ format_amount($m['all_cash']) }}</td>
                 </tr>
             @endforeach
             </tbody>
@@ -425,9 +425,9 @@
                     <td class="rank-num"><span class="fc-dot s-full"></span>{{ number_format($row['full']) }}</td>
                     <td class="rank-num"><span class="fc-dot s-part"></span>{{ number_format($row['part']) }}</td>
                     <td class="rank-num"><span class="fc-dot s-none"></span>{{ number_format($row['none']) }}</td>
-                    <td class="rank-num">{{ number_format($row['due']) }}</td>
-                    <td class="rank-num">{{ number_format($row['collected']) }}</td>
-                    <td class="rank-num">{{ number_format($row['owed']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['due']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['collected']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['owed']) }}</td>
                     <td>
                         <div class="rank-track">
                             <div class="rank-bar {{ $row['rate'] >= 90 ? 'fc-b-full' : ($row['rate'] >= 50 ? 'fc-b-part' : 'fc-b-none') }}"
@@ -488,9 +488,9 @@
                         @endif
                     </td>
                     <td class="rank-num">{{ number_format($row['fees']) }}</td>
-                    <td class="rank-num">{{ number_format($row['due']) }}</td>
-                    <td class="rank-num">{{ number_format($row['collected']) }}</td>
-                    <td class="rank-num">{{ number_format($row['owed']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['due']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['collected']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['owed']) }}</td>
                     <td>
                         <div class="rank-track">
                             <div class="rank-bar {{ $row['rate'] >= 90 ? 'fc-b-full' : ($row['rate'] >= 50 ? 'fc-b-part' : 'fc-b-none') }}"
@@ -547,9 +547,9 @@
                         </div>
                     </td>
                     <td>{{ $row['programme'] ?: '—' }}</td>
-                    <td class="rank-num">{{ number_format($row['due']) }}</td>
-                    <td class="rank-num">{{ number_format($row['paid']) }}</td>
-                    <td class="rank-num"><strong>{{ number_format($row['owed']) }}</strong></td>
+                    <td class="rank-num">{{ format_amount($row['due']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['paid']) }}</td>
+                    <td class="rank-num"><strong>{{ format_amount($row['owed']) }}</strong></td>
                     <td class="rank-num">{{ number_format($row['share'], 1) }}%</td>
                 </tr>
             @endforeach
@@ -603,8 +603,8 @@
                     <td class="rank-num">#{{ $row['id'] }}</td>
                     <td>{{ $row['category'] }}</td>
                     <td>{{ $row['assign_date'] ? \Carbon\Carbon::parse($row['assign_date'])->format('j M Y') : '—' }}</td>
-                    <td class="rank-num">{{ number_format($row['due']) }}</td>
-                    <td class="rank-num">{{ number_format($row['owed']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['due']) }}</td>
+                    <td class="rank-num">{{ format_amount($row['owed']) }}</td>
                     <td class="fc-aside">
                         @if($row['reason'] === 'missing_enrolment')
                             {{ __('Its enrolment (:id) no longer exists.', ['id' => $row['enroll_id']]) }}
@@ -620,7 +620,7 @@
     <div class="viz-read">
         <div>
             <h6>{{ __('Why it matters') }}</h6>
-            <p>{{ __('A fee with no person cannot be chased, cannot be receipted and cannot appear on anybody\'s statement, yet :amount of it is still outstanding. It is also a sign that an enrolment was deleted while its fees were left behind.', ['amount' => number_format($c['unattributed']['owed'])]) }}</p>
+            <p>{{ __('A fee with no person cannot be chased, cannot be receipted and cannot appear on anybody\'s statement, yet :amount of it is still outstanding. It is also a sign that an enrolment was deleted while its fees were left behind.', ['amount' => format_amount($c['unattributed']['owed'])]) }}</p>
         </div>
         <div>
             <h6>{{ __('What to do with it') }}</h6>

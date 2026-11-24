@@ -197,10 +197,10 @@
                                                 <tr>
                                                     <td colspan="{{ $entry->is_posted ? 3 : 3 }}" class="text-right"><strong>{{ __('total') }}:</strong></td>
                                                     <td class="text-right">
-                                                        <strong id="total-debit">{{ number_format($entry->total_debit, 0, ',', ' ') }}</strong> FCFA
+                                                        <strong id="total-debit">{{ format_amount($entry->total_debit) }}</strong> FCFA
                                                     </td>
                                                     <td class="text-right">
-                                                        <strong id="total-credit">{{ number_format($entry->total_credit, 0, ',', ' ') }}</strong> FCFA
+                                                        <strong id="total-credit">{{ format_amount($entry->total_credit) }}</strong> FCFA
                                                     </td>
                                                     @if(!$entry->is_posted)
                                                     <td></td>

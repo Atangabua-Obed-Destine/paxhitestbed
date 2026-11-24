@@ -1,0 +1,7 @@
+# Third-party libraries and fonts never change in place (a new version arrives
+# under a new path), so browsers may keep them for 30 days instead of asking
+# again on every page. Only where the server has mod_expires.
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 30 days"
+</IfModule>

@@ -161,7 +161,7 @@
                     
                     @if($students_with_all_grades == $total_students && $total_students > 0)
                         <div class="alert alert-success">
-                            <i class="fas fa-check-circle"></i> <strong>{{ __('Excellent!') }}</strong> 
+                            <i class="fas fa-check-circle"></i> <strong>{{ __('Ready.') }}</strong> 
                             {{ __('All students have complete grades for all subjects') }}
                         </div>
                     @elseif($students_without_grades > 0)

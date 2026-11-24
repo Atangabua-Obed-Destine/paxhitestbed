@@ -51,8 +51,8 @@
                                             <span class="badge badge-info">{{ ucfirst($entry->journal_type) }}</span>
                                         </td>
                                         <td>{{ \Str::limit($entry->description, 40) }}</td>
-                                        <td class="text-right">{{ number_format($entry->total_debit, 2) }}</td>
-                                        <td class="text-right">{{ number_format($entry->total_credit, 2) }}</td>
+                                        <td class="text-right">{{ format_amount($entry->total_debit) }}</td>
+                                        <td class="text-right">{{ format_amount($entry->total_credit) }}</td>
                                         <td>
                                             <small>{{ $entry->deleted_at->format('d M Y H:i') }}</small>
                                         </td>
@@ -88,8 +88,8 @@
                                 <tfoot>
                                     <tr>
                                         <th colspan="4" class="text-right">{{ __('total') }}:</th>
-                                        <th class="text-right">{{ number_format($entries->sum('total_debit'), 2) }}</th>
-                                        <th class="text-right">{{ number_format($entries->sum('total_credit'), 2) }}</th>
+                                        <th class="text-right">{{ format_amount($entries->sum('total_debit')) }}</th>
+                                        <th class="text-right">{{ format_amount($entries->sum('total_credit')) }}</th>
                                         <th colspan="2"></th>
                                     </tr>
                                 </tfoot>

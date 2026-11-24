@@ -53,7 +53,9 @@ class IncomeObserver
      */
     public function updated(Income $income): void
     {
-        if ($income->wasChanged(['amount', 'category_id', 'date'])) {
+        // The payment method and account decide which cash, bank or wallet
+        // account the money posts to (CashAccounts), so changing either moves it.
+        if ($income->wasChanged(['amount', 'category_id', 'date', 'payment_method', 'payment_account_id'])) {
             $this->autoMapService->remap('income', $income->id, $income->category_id, $this->payload($income));
         }
     }

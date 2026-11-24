@@ -29,7 +29,7 @@
                         <div class="row align-items-center m-b-25">
                             <div class="col">
                                 <h6 class="m-b-5 text-white">{{ __('total_budget') }}</h6>
-                                <h3 class="m-b-0 text-white">{{ number_format($kpis['total_budget'], 2) }}</h3>
+                                <h3 class="m-b-0 text-white">{{ format_amount($kpis['total_budget']) }}</h3>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-wallet text-white f-28"></i>
@@ -46,7 +46,7 @@
                         <div class="row align-items-center m-b-25">
                             <div class="col">
                                 <h6 class="m-b-5 text-white">{{ __('allocated') }}</h6>
-                                <h3 class="m-b-0 text-white">{{ number_format($kpis['total_allocated'], 2) }}</h3>
+                                <h3 class="m-b-0 text-white">{{ format_amount($kpis['total_allocated']) }}</h3>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-clipboard-list text-white f-28"></i>
@@ -63,7 +63,7 @@
                         <div class="row align-items-center m-b-25">
                             <div class="col">
                                 <h6 class="m-b-5 text-white">{{ __('spent') }}</h6>
-                                <h3 class="m-b-0 text-white">{{ number_format($kpis['total_spent'], 2) }}</h3>
+                                <h3 class="m-b-0 text-white">{{ format_amount($kpis['total_spent']) }}</h3>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-money-bill-wave text-white f-28"></i>
@@ -80,7 +80,7 @@
                         <div class="row align-items-center m-b-25">
                             <div class="col">
                                 <h6 class="m-b-5 text-white">{{ __('remaining') }}</h6>
-                                <h3 class="m-b-0 text-white">{{ number_format($kpis['total_remaining'], 2) }}</h3>
+                                <h3 class="m-b-0 text-white">{{ format_amount($kpis['total_remaining']) }}</h3>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-piggy-bank text-white f-28"></i>
@@ -120,11 +120,11 @@
                             </div>
                             <div class="col-md-3">
                                 <h6 class="text-muted">{{ __('Budgeted spending') }}</h6>
-                                <h4>{{ number_format($annualBudget->total_amount) }}</h4>
+                                <h4>{{ format_amount($annualBudget->total_amount) }}</h4>
                             </div>
                             <div class="col-md-3">
                                 <h6 class="text-muted">{{ __('Actual spending') }}</h6>
-                                <h4>{{ number_format($annualBudget->spent_amount) }}</h4>
+                                <h4>{{ format_amount($annualBudget->spent_amount) }}</h4>
                             </div>
                             <div class="col-md-3">
                                 <h6 class="text-muted">{{ __('field_utilization') }}</h6>
@@ -243,9 +243,9 @@
                                                 {{ ucfirst(str_replace('_', ' ', $budget->type)) }}
                                             </span>
                                         </td>
-                                        <td>{{ number_format($budget->total_amount, 2) }}</td>
-                                        <td>{{ number_format($budget->spent_amount, 2) }}</td>
-                                        <td>{{ number_format($budget->remaining_amount, 2) }}</td>
+                                        <td>{{ format_amount($budget->total_amount) }}</td>
+                                        <td>{{ format_amount($budget->spent_amount) }}</td>
+                                        <td>{{ format_amount($budget->remaining_amount) }}</td>
                                         <td>
                                             @php
                                                 $utilization = $budget->total_amount > 0 ? ($budget->spent_amount / $budget->total_amount) * 100 : 0;

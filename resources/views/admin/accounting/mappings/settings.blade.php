@@ -2,6 +2,12 @@
 @section('title', 'Account Mapping Settings')
 
 @section('content')
+@php
+    // Each option used to search the whole mapping list (up to three times) to
+    // decide whether it is the selected one: ~30,000 searches per page. Indexed
+    // once here; groupBy()->first() keeps "the first mapping for the category".
+    $mappingByCategory = collect($existingMappings)->map(fn ($rows) => $rows->groupBy('category_id')->map->first()->all())->all();
+@endphp
 <style>
     .mapping-card {
         border-left: 4px solid #007bff;
@@ -136,9 +142,7 @@
                                                     <option value="">{{ __('select_account') }}</option>
                                                     @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}"
-                                                        @if(isset($existingMappings['fee_category']) && 
-                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first() && 
-                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first()->debit_account_id == $account->id) 
+                                                        @if((($mappingByCategory['fee_category'][$category->id] ?? null)?->debit_account_id) == $account->id) 
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
@@ -153,9 +157,7 @@
                                                     <option value="">{{ __('select_account') }}</option>
                                                     @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}"
-                                                        @if(isset($existingMappings['fee_category']) && 
-                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first() && 
-                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first()->credit_account_id == $account->id) 
+                                                        @if((($mappingByCategory['fee_category'][$category->id] ?? null)?->credit_account_id) == $account->id) 
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
@@ -170,9 +172,7 @@
                                                     <option value="">{{ __('Not on the sheet') }}</option>
                                                     @foreach($budgetLines as $line)
                                                     <option value="{{ $line->id }}"
-                                                        @if(isset($existingMappings['fee_category']) &&
-                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first() &&
-                                                            $existingMappings['fee_category']->where('category_id', $category->id)->first()->budget_line_id == $line->id)
+                                                        @if((($mappingByCategory['fee_category'][$category->id] ?? null)?->budget_line_id) == $line->id)
                                                             selected
                                                         @endif>
                                                         {{ $line->code }} - {{ $line->name }}
@@ -230,9 +230,7 @@
                                                     <option value="">{{ __('select_account') }}</option>
                                                     @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}"
-                                                        @if(isset($existingMappings['income_category']) && 
-                                                            $existingMappings['income_category']->where('category_id', $category->id)->first() && 
-                                                            $existingMappings['income_category']->where('category_id', $category->id)->first()->debit_account_id == $account->id) 
+                                                        @if((($mappingByCategory['income_category'][$category->id] ?? null)?->debit_account_id) == $account->id) 
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
@@ -247,9 +245,7 @@
                                                     <option value="">{{ __('select_account') }}</option>
                                                     @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}"
-                                                        @if(isset($existingMappings['income_category']) && 
-                                                            $existingMappings['income_category']->where('category_id', $category->id)->first() && 
-                                                            $existingMappings['income_category']->where('category_id', $category->id)->first()->credit_account_id == $account->id) 
+                                                        @if((($mappingByCategory['income_category'][$category->id] ?? null)?->credit_account_id) == $account->id) 
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
@@ -264,9 +260,7 @@
                                                     <option value="">{{ __('Not on the sheet') }}</option>
                                                     @foreach($budgetLines as $line)
                                                     <option value="{{ $line->id }}"
-                                                        @if(isset($existingMappings['income_category']) &&
-                                                            $existingMappings['income_category']->where('category_id', $category->id)->first() &&
-                                                            $existingMappings['income_category']->where('category_id', $category->id)->first()->budget_line_id == $line->id)
+                                                        @if((($mappingByCategory['income_category'][$category->id] ?? null)?->budget_line_id) == $line->id)
                                                             selected
                                                         @endif>
                                                         {{ $line->code }} - {{ $line->name }}
@@ -324,9 +318,7 @@
                                                     <option value="">{{ __('select_account') }}</option>
                                                     @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}"
-                                                        @if(isset($existingMappings['expense_category']) && 
-                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first() && 
-                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first()->debit_account_id == $account->id) 
+                                                        @if((($mappingByCategory['expense_category'][$category->id] ?? null)?->debit_account_id) == $account->id) 
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
@@ -341,9 +333,7 @@
                                                     <option value="">{{ __('select_account') }}</option>
                                                     @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}"
-                                                        @if(isset($existingMappings['expense_category']) && 
-                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first() && 
-                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first()->credit_account_id == $account->id) 
+                                                        @if((($mappingByCategory['expense_category'][$category->id] ?? null)?->credit_account_id) == $account->id) 
                                                             selected 
                                                         @endif>
                                                         {{ $account->account_code }} - {{ $account->account_name }}
@@ -358,9 +348,7 @@
                                                     <option value="">{{ __('Not on the sheet') }}</option>
                                                     @foreach($budgetLines as $line)
                                                     <option value="{{ $line->id }}"
-                                                        @if(isset($existingMappings['expense_category']) &&
-                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first() &&
-                                                            $existingMappings['expense_category']->where('category_id', $category->id)->first()->budget_line_id == $line->id)
+                                                        @if((($mappingByCategory['expense_category'][$category->id] ?? null)?->budget_line_id) == $line->id)
                                                             selected
                                                         @endif>
                                                         {{ $line->code }} - {{ $line->name }}

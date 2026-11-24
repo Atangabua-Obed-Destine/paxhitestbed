@@ -46,7 +46,7 @@
                             <div class="row">
                                 <div class="col-md-3 text-center border-end">
                                     <small class="text-muted">{{ __('field_fee_amount') }}</small>
-                                    <h5 class="mb-0">{{ number_format($row->fee_amount ?? 0, 2) }}</h5>
+                                    <h5 class="mb-0">{{ format_amount($row->fee_amount ?? 0) }}</h5>
                                 </div>
                                 <div class="col-md-3 text-center border-end">
                                     <small class="text-muted">{{ __('field_discount') }}</small>
@@ -54,11 +54,11 @@
                                 </div>
                                 <div class="col-md-3 text-center border-end">
                                     <small class="text-muted">{{ __('field_fine_amount') }}</small>
-                                    <h5 class="mb-0 text-danger">+{{ number_format($row->fine_amount ?? 0, 2) }}</h5>
+                                    <h5 class="mb-0 text-danger">+{{ format_amount($row->fine_amount ?? 0) }}</h5>
                                 </div>
                                 <div class="col-md-3 text-center">
                                     <small class="text-muted">{{ __('field_net_amount') }}</small>
-                                    <h5 class="mb-0 text-primary"><strong>{{ number_format($row->total_amount ?? 0, 2) }}</strong></h5>
+                                    <h5 class="mb-0 text-primary"><strong>{{ format_amount($row->total_amount ?? 0) }}</strong></h5>
                                 </div>
                             </div>
                             @if($row->status == 2 || $row->paid_amount > 0)
@@ -71,19 +71,19 @@
                                          read as a double payment: one fee showed
                                          "already paid 300,000" against a 150,000 charge
                                          with nothing outstanding. --}}
-                                    <h5 class="mb-0 text-success">{{ number_format($row->net_paid_amount, 2) }}</h5>
+                                    <h5 class="mb-0 text-success">{{ format_amount($row->net_paid_amount) }}</h5>
                                     @if(abs(($row->paid_amount ?? 0) - $row->net_paid_amount) > 0.005)
                                         <small class="text-muted d-block">
                                             {{ __('of :gross received; :moved moved to another fee', [
-                                                'gross' => number_format($row->paid_amount ?? 0, 2),
-                                                'moved' => number_format(($row->paid_amount ?? 0) - $row->net_paid_amount, 2),
+                                                'gross' => format_amount($row->paid_amount ?? 0),
+                                                'moved' => format_amount(($row->paid_amount ?? 0) - $row->net_paid_amount),
                                             ]) }}
                                         </small>
                                     @endif
                                 </div>
                                 <div class="col-md-6 text-center">
                                     <small class="text-muted">{{ __('field_remaining_balance') }}</small>
-                                    <h5 class="mb-0 text-warning"><strong>{{ number_format(max(0, $row->remaining_balance ?? 0), 2) }}</strong></h5>
+                                    <h5 class="mb-0 text-warning"><strong>{{ format_amount(max(0, $row->remaining_balance ?? 0)) }}</strong></h5>
                                 </div>
                             </div>
                             @endif
@@ -272,7 +272,7 @@
                                 <div class="col-md-6">
                                     <small class="text-muted"><i class="fas fa-hashtag mr-1"></i>{{ __('Request') }} #:</small>
                                     <strong>{{ $rr->id }}</strong>
-                                    <small class="text-muted ml-2">{{ $rr->created_at ? $rr->created_at->format('M d, Y') : '' }}</small>
+                                    <small class="text-muted ml-2">{{ $rr->created_at ? $rr->created_at->format('d/m/Y') : '' }}</small>
                                 </div>
                             </div>
                             @if($rr->resitSession || $rr->resitSemester)
@@ -378,7 +378,7 @@
                             @else
                             <input type="number" step="0.01" min="0.01" class="form-control" name="paid_amount" id="payment_amount-{{ $row->id }}" value="{{ round(max(0, $row->remaining_balance ?? 0), 2) }}" required>
                             <small class="form-text text-muted" id="payment-hint-{{ $row->id }}">
-                                {{ __('balance_due') }}: {{ number_format(max(0, $row->remaining_balance ?? 0), 2) }} {!! $setting->currency_symbol !!}
+                                {{ __('balance_due') }}: {{ format_amount(max(0, $row->remaining_balance ?? 0)) }} {!! $setting->currency_symbol !!}
                             </small>
                             @endif
                         </div>

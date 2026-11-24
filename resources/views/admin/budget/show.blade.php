@@ -113,7 +113,7 @@
                             </tr>
                             <tr>
                                 <th>{{ __('field_period') }}:</th>
-                                <td>{{ date('M d, Y', strtotime($row->start_date)) }} - {{ date('M d, Y', strtotime($row->end_date)) }}</td>
+                                <td>{{ date('d/m/Y', strtotime($row->start_date)) }} - {{ date('d/m/Y', strtotime($row->end_date)) }}</td>
                             </tr>
                             <tr>
                                 <th>{{ __('field_status') }}:</th>
@@ -162,8 +162,8 @@
                                     <tr>
                                         <td>{{ $child->title }}</td>
                                         <td>{{ optional($child->department)->title ?? '—' }}</td>
-                                        <td class="text-right">{{ number_format($child->total_amount) }}</td>
-                                        <td class="text-right">{{ number_format($child->spent_amount) }}</td>
+                                        <td class="text-right">{{ format_amount($child->total_amount) }}</td>
+                                        <td class="text-right">{{ format_amount($child->spent_amount) }}</td>
                                         <td><span class="badge badge-secondary">{{ ucfirst(str_replace('_', ' ', $child->status)) }}</span></td>
                                         <td class="text-right">
                                             <a href="{{ route('admin.budget.show', $child->id) }}" class="btn btn-sm btn-outline-primary">{{ __('Open') }}</a>
@@ -172,8 +172,8 @@
                                     @endforeach
                                     <tr>
                                         <td colspan="2"><strong>{{ __('Total delegated') }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($row->children->sum('total_amount')) }}</strong></td>
-                                        <td class="text-right"><strong>{{ number_format($row->children->sum('spent_amount')) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($row->children->sum('total_amount')) }}</strong></td>
+                                        <td class="text-right"><strong>{{ format_amount($row->children->sum('spent_amount')) }}</strong></td>
                                         <td colspan="2"></td>
                                     </tr>
                                 </tbody>
@@ -239,9 +239,9 @@
                                             <span class="badge badge-dark">Sem 2</span>
                                             @endif
                                         </td>
-                                        <td>{{ number_format($allocation->allocated_amount, 2) }}</td>
-                                        <td>{{ number_format($allocation->spent_amount, 2) }}</td>
-                                        <td>{{ number_format($allocation->remaining_amount, 2) }}</td>
+                                        <td>{{ format_amount($allocation->allocated_amount) }}</td>
+                                        <td>{{ format_amount($allocation->spent_amount) }}</td>
+                                        <td>{{ format_amount($allocation->remaining_amount) }}</td>
                                         <td>
                                             <div class="progress" style="height: 20px;">
                                                 <div class="progress-bar bg-{{ $allocation->status_color }}" 
@@ -262,9 +262,9 @@
                                 <tfoot>
                                     <tr class="table-active">
                                         <th colspan="3">{{ __('text_total') }}</th>
-                                        <th>{{ number_format($row->allocated_amount, 2) }}</th>
-                                        <th>{{ number_format($row->spent_amount, 2) }}</th>
-                                        <th>{{ number_format($row->remaining_amount, 2) }}</th>
+                                        <th>{{ format_amount($row->allocated_amount) }}</th>
+                                        <th>{{ format_amount($row->spent_amount) }}</th>
+                                        <th>{{ format_amount($row->remaining_amount) }}</th>
                                         <th></th>
                                     </tr>
                                 </tfoot>
@@ -285,19 +285,19 @@
                     <div class="card-block">
                         <div class="mb-3">
                             <h6 class="text-muted">{{ __('field_total_amount') }}</h6>
-                            <h4 class="text-primary">{{ number_format($row->total_amount, 2) }}</h4>
+                            <h4 class="text-primary">{{ format_amount($row->total_amount) }}</h4>
                         </div>
                         <div class="mb-3">
                             <h6 class="text-muted">{{ __('field_allocated_amount') }}</h6>
-                            <h4 class="text-info">{{ number_format($row->allocated_amount, 2) }}</h4>
+                            <h4 class="text-info">{{ format_amount($row->allocated_amount) }}</h4>
                         </div>
                         <div class="mb-3">
                             <h6 class="text-muted">{{ __('field_spent_amount') }}</h6>
-                            <h4 class="text-warning">{{ number_format($row->spent_amount, 2) }}</h4>
+                            <h4 class="text-warning">{{ format_amount($row->spent_amount) }}</h4>
                         </div>
                         <div class="mb-3">
                             <h6 class="text-muted">{{ __('field_remaining_amount') }}</h6>
-                            <h4 class="text-success">{{ number_format($row->remaining_amount, 2) }}</h4>
+                            <h4 class="text-success">{{ format_amount($row->remaining_amount) }}</h4>
                         </div>
                         <div class="mb-3">
                             <h6 class="text-muted">{{ __('field_utilization') }}</h6>

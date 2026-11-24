@@ -62,9 +62,9 @@
                         <h6 class="text-white">{{ __('total_credit_amount') }}</h6>
                         <h3 class="text-white">
                             @if(isset($setting->decimal_place))
-                            {{ number_format((float)($stats['total_amount'] ?? 0), $setting->decimal_place, '.', ',') }}
+                            {{ format_amount((float)($stats['total_amount'] ?? 0)) }}
                             @else
-                            {{ number_format((float)($stats['total_amount'] ?? 0), 2, '.', ',') }}
+                            {{ format_amount((float)($stats['total_amount'] ?? 0)) }}
                             @endif
                             {{ $setting->currency ?? 'GHS' }}
                         </h3>
@@ -158,12 +158,12 @@
                                             @endif
                                         </td>
                                         <td>
-                                            {{ number_format($credit->original_amount, $setting->decimal_place ?? 2) }}
+                                            {{ format_amount($credit->original_amount) }}
                                             {{ $setting->currency ?? 'GHS' }}
                                         </td>
                                         <td>
                                             <span class="{{ $credit->remaining_amount > 0 ? 'text-success font-weight-bold' : 'text-muted' }}">
-                                                {{ number_format($credit->remaining_amount, $setting->decimal_place ?? 2) }}
+                                                {{ format_amount($credit->remaining_amount) }}
                                                 {{ $setting->currency ?? 'GHS' }}
                                             </span>
                                         </td>
@@ -211,7 +211,7 @@
                                                     @break
                                             @endswitch
                                         </td>
-                                        <td>{{ $credit->created_at->format('M d, Y H:i') }}</td>
+                                        <td>{{ $credit->created_at->format('d/m/Y H:i') }}</td>
                                         <td>
                                             <a href="{{ route('admin.student-credits.show', $credit->id) }}" 
                                                class="btn btn-sm btn-info" title="{{ __('view_details') }}">

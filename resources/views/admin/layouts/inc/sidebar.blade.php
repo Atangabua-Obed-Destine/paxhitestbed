@@ -11,6 +11,15 @@
         </li>
         @endcan
 
+        @if(\App\Models\PayrollSetting::current()->staff_payslips_enabled && auth()->check() && auth()->user()->salary_type)
+        <li class="nav-item {{ Request::is('admin/my-payslips*') ? 'active' : '' }}">
+            <a href="{{ route('admin.my-payslips.index') }}" class="nav-link">
+                <span class="pcoded-micon"><i class="fas fa-file-invoice-dollar"></i></span>
+                <span class="pcoded-mtext">{{ __('My Payslips') }}</span>
+            </a>
+        </li>
+        @endif
+
         @canany(['application-create', 'application-view', 'applicant-view', 'student-create', 'student-view', 'student-import', 'student-password-print', 'student-password-change', 'student-card', 'student-transfer-in-create', 'student-transfer-in-view', 'student-transfer-out-create', 'student-transfer-out-view', 'status-type-create', 'status-type-view', 'id-card-setting-view', 'student-form-a2-view', 'student-form-a3-view', 'student-exam-code-view'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/admission*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
@@ -666,7 +675,7 @@
         </li>
         @endcanany
 
-        @canany(['user-create', 'user-view', 'user-password-print', 'user-password-change', 'staff-note-create', 'staff-note-view', 'payroll-view', 'payroll-action', 'payroll-print', 'payroll-report', 'work-shift-type-create', 'work-shift-type-view', 'designation-create', 'designation-view', 'department-create', 'department-view', 'tax-setting-create', 'tax-setting-view', 'pay-slip-setting-view', 'staff-assignment-index', 'staff-assignment-create', 'staff-assignment-edit', 'staff-assignment-delete'])
+        @canany(['user-create', 'user-view', 'user-password-print', 'user-password-change', 'staff-note-create', 'staff-note-view', 'payroll-view', 'payroll-action', 'payroll-print', 'payroll-report', 'staff-loan-view', 'payroll-setting', 'work-shift-type-create', 'work-shift-type-view', 'designation-create', 'designation-view', 'department-create', 'department-view', 'tax-setting-create', 'tax-setting-view', 'pay-slip-setting-view', 'staff-assignment-index', 'staff-assignment-create', 'staff-assignment-edit', 'staff-assignment-delete'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/staff*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
                 <span class="pcoded-micon"><i class="fas fa-users-cog"></i></span>
@@ -701,6 +710,10 @@
                 <li class="{{ Request::is('admin/staff/payroll-report*') ? 'active' : '' }}"><a href="{{ route('admin.payroll.report') }}" class="">{{ trans_choice('module_payroll_report', 2) }}</a></li>
                 @endcanany
 
+                @can('staff-loan-view')
+                <li class="{{ Request::is('admin/staff/staff-loan*') ? 'active' : '' }}"><a href="{{ route('admin.staff-loan.index') }}" class="">{{ __('Loans and Advances') }}</a></li>
+                @endcan
+
                 @canany(['work-shift-type-create', 'work-shift-type-view'])
                 <li class="{{ Request::is('admin/staff/work-shift-type*') ? 'active' : '' }}"><a href="{{ route('admin.work-shift-type.index') }}" class="">{{ trans_choice('module_work_shift_type', 2) }}</a></li>
                 @endcanany
@@ -721,8 +734,8 @@
                 <li class="{{ Request::is('admin/staff/deduction-type*') ? 'active' : '' }}"><a href="{{ route('admin.deduction-type.index') }}" class="">{{ trans_choice('module_deduction_type', 2) }}</a></li>
                 @endcanany
 
-                @canany(['tax-setting-create', 'tax-setting-view', 'pay-slip-setting-view', 'tax-remittance-view'])
-                <li class="nav-item pcoded-hasmenu {{ Request::is('admin/staff/tax-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-group*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/pay-slip-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-report*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-remittance*') ? 'pcoded-trigger active' : '' }}">
+                @canany(['tax-setting-create', 'tax-setting-view', 'pay-slip-setting-view', 'tax-remittance-view', 'payroll-setting'])
+                <li class="nav-item pcoded-hasmenu {{ Request::is('admin/staff/tax-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-group*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/pay-slip-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/payroll-setting*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-report*') ? 'pcoded-trigger active' : '' }} {{ Request::is('admin/staff/tax-remittance*') ? 'pcoded-trigger active' : '' }}">
                     <a href="#!" class="nav-link">
                         <span class="pcoded-mtext">{{ trans_choice('module_setting', 2) }}</span>
                     </a>
@@ -746,6 +759,10 @@
 
                         @can('pay-slip-setting-view')
                         <li class="{{ Request::is('admin/staff/pay-slip-setting*') ? 'active' : '' }}"><a href="{{ route('admin.pay-slip-setting.index') }}" class="">{{ trans_choice('module_pay_slip_setting', 1) }}</a></li>
+                        @endcan
+
+                        @can('payroll-setting')
+                        <li class="{{ Request::is('admin/staff/payroll-setting*') ? 'active' : '' }}"><a href="{{ route('admin.payroll-setting.index') }}" class="">{{ __('Payroll Settings') }}</a></li>
                         @endcan
                     </ul>
                 </li>
@@ -1019,6 +1036,7 @@
                     <ul class="pcoded-submenu">
                         @can('transaction-mapping-settings')
                         <li><a href="{{ route('admin.accounting.mappings.settings') }}"><i class="fas fa-cog"></i> {{ __('mapping_settings') }}</a></li>
+                        <li><a href="{{ route('admin.accounting.cash-accounts') }}"><i class="fas fa-university"></i> {{ __('Cash and bank in the ledger') }}</a></li>
                         @endcan
                         @can('transaction-mapping-view')
                         <li><a href="{{ route('admin.accounting.mappings.transactions') }}"><i class="fas fa-list"></i> {{ __('view_transactions') }}</a></li>

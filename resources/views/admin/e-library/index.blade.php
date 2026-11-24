@@ -84,7 +84,7 @@
                     <!-- Statistics Cards -->
                     <div class="row mb-4">
                         <div class="col-md-3">
-                            <div class="card bg-primary text-white">
+                            <div class="card stat-tile stat-primary">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div>
@@ -97,7 +97,7 @@
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="card bg-success text-white">
+                            <div class="card stat-tile stat-success">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div>
@@ -110,7 +110,7 @@
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="card bg-info text-white">
+                            <div class="card stat-tile stat-info">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div>
@@ -123,14 +123,14 @@
                             </div>
                         </div>
                         <div class="col-md-3">
-                            <div class="card" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+                            <div class="card stat-tile stat-warning">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div>
-                                            <h6 class="mb-0 text-white" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">Downloads</h6>
-                                            <h3 class="mb-0 text-white" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">{{ $books->sum('downloads_count') }}</h3>
+                                            <h6 class="mb-0 text-white">Downloads</h6>
+                                            <h3 class="mb-0 text-white">{{ $books->sum('downloads_count') }}</h3>
                                         </div>
-                                        <i class="mdi mdi-download mdi-36px text-white" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.3);"></i>
+                                        <i class="mdi mdi-download mdi-36px text-white"></i>
                                     </div>
                                 </div>
                             </div>

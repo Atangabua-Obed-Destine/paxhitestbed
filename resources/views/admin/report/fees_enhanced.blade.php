@@ -80,9 +80,9 @@
                         <h6 class="text-white">{{ __('total_amount_due') }}</h6>
                         <h3 class="text-white">
                             @if(isset($setting->decimal_place))
-                            {{ number_format((float)$stats['total_amount_due'], $setting->decimal_place, '.', ',') }} 
+                            {{ format_amount((float)$stats['total_amount_due']) }} 
                             @else
-                            {{ number_format((float)$stats['total_amount_due'], 2, '.', ',') }} 
+                            {{ format_amount((float)$stats['total_amount_due']) }} 
                             @endif 
                             {!! $setting->currency_symbol !!}
                         </h3>
@@ -96,9 +96,9 @@
                         <h6 class="text-white">{{ __('total_collected') }}</h6>
                         <h3 class="text-white">
                             @if(isset($setting->decimal_place))
-                            {{ number_format((float)$stats['total_paid'], $setting->decimal_place, '.', ',') }} 
+                            {{ format_amount((float)$stats['total_paid']) }} 
                             @else
-                            {{ number_format((float)$stats['total_paid'], 2, '.', ',') }} 
+                            {{ format_amount((float)$stats['total_paid']) }} 
                             @endif 
                             {!! $setting->currency_symbol !!}
                         </h3>
@@ -112,9 +112,9 @@
                         <h6 class="text-white">{{ __('outstanding_balance') }}</h6>
                         <h3 class="text-white">
                             @if(isset($setting->decimal_place))
-                            {{ number_format((float)$stats['total_remaining'], $setting->decimal_place, '.', ',') }} 
+                            {{ format_amount((float)$stats['total_remaining']) }} 
                             @else
-                            {{ number_format((float)$stats['total_remaining'], 2, '.', ',') }} 
+                            {{ format_amount((float)$stats['total_remaining']) }} 
                             @endif 
                             {!! $setting->currency_symbol !!}
                         </h3>
@@ -308,11 +308,11 @@
                                         <th></th>
                                         <th></th>
                                         <th>{{ __('field_grand_total') }}</th>
-                                        <th>{{ number_format((float)$rows->sum('fee_amount'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('fee_amount')) }} {!! $setting->currency_symbol !!}</th>
                                         <th>{{ number_format((float)$rows->sum('discount_amount'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum('fine_amount'), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum(function($row){ return $row->total_amount; }), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
-                                        <th>{{ number_format((float)$rows->sum(function($row){ return $row->remaining_balance; }), $setting->decimal_place ?? 2) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum('fine_amount')) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum(function($row){ return $row->total_amount; })) }} {!! $setting->currency_symbol !!}</th>
+                                        <th>{{ format_amount((float)$rows->sum(function($row){ return $row->remaining_balance; })) }} {!! $setting->currency_symbol !!}</th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
