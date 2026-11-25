@@ -71,7 +71,7 @@ class ClassRoutineController extends Controller
         // "FIRST SEMESTER - Year 1" are both FIRST SEMESTER). The semesters
         // picker lists that type's semesters; several can be printed at once.
         $semesters = Semester::where('status', '1')->orderBy('year')->orderBy('id')->get();
-        $typeOf = fn ($s) => strtoupper(trim(preg_replace('/\s*-\s*(Year\s*\d+|Y\s*\d+)\s*$/i', '', (string) $s->title)));
+        $typeOf = fn ($s) => $s->type_name;   // see Semester::getTypeNameAttribute
         $types = $semesters->sortBy('id')->map($typeOf)->unique()->values();
 
         $chosen = collect((array) $request->semester)->filter()->map(fn ($id) => (int) $id)->values();

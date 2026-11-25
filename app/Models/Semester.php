@@ -112,4 +112,21 @@ class Semester extends Model
         
         return "Semester {$event}: {$title} (Year: {$year}, {$type}), Resit: {$isResit}, Status: {$status}";
     }
+
+    /**
+     * The semester's type: its name without the year — "FIRST SEMESTER - Year 1"
+     * and "FIRST SEMESTER - Year 2" are both FIRST SEMESTER; "FIRST RESIT
+     * SEMESTER - Y2" is FIRST RESIT SEMESTER. Screens that cover a whole term
+     * pick a type, then any of its semesters.
+     */
+    public function getTypeNameAttribute(): string
+    {
+        return strtoupper(trim(preg_replace('/\s*-\s*(Year\s*\d+|Y\s*\d+)\s*$/i', '', (string) $this->title)));
+    }
+
+    /** The types in use, in the order their first semester was created. */
+    public static function typeNames(): \Illuminate\Support\Collection
+    {
+        return static::where('status', 1)->orderBy('id')->get()->map(fn ($s) => $s->type_name)->unique()->values();
+    }
 }

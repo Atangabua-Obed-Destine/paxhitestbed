@@ -508,6 +508,16 @@
                                 </div>
                                 
                                 <div class="form-group col-md-2">
+                                    <label for="semester_type"><i class="fas fa-calendar-alt"></i> {{ __('Semester type') }}</label>
+                                    <select class="form-control" name="semester_type" id="semester_type">
+                                        <option value="0">{{ __('All') }}</option>
+                                        @foreach($semester_types as $t)
+                                        <option value="{{ $t }}" {{ $selected_semester_type === $t ? 'selected' : '' }}>{{ ucwords(strtolower($t)) }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="form-group col-md-2">
                                     <label for="semester_year"><i class="fas fa-layer-group"></i> {{ __('field_year') }}</label>
                                     <select class="form-control" name="semester_year" id="semester_year">
                                         <option value="0">{{ __('All') }}</option>
@@ -520,11 +530,10 @@
                                 </div>
                                 
                                 <div class="form-group col-md-3">
-                                    <label for="semester"><i class="fas fa-bookmark"></i> {{ __('field_semester') }}</label>
-                                    <select class="form-control" name="semester" id="semester">
-                                        <option value="0">{{ __('All') }}</option>
-                                        @foreach($semesters as $sem)
-                                        <option value="{{ $sem->id }}" {{ $selected_semester == $sem->id ? 'selected' : '' }}>
+                                    <label for="semester"><i class="fas fa-bookmark"></i> {{ __('field_semester') }} <span class="text-muted fw-normal">({{ __('one or more') }})</span></label>
+                                    <select class="form-control" name="semester[]" id="semester" multiple data-placeholder="{{ __('All of the type') }}">
+                                        @foreach($all_semesters as $sem)
+                                        <option value="{{ $sem->id }}" data-type="{{ $sem->type_name }}" data-year="{{ $sem->year }}" {{ in_array((int) $sem->id, $selected_semesters, true) ? 'selected' : '' }}>
                                             {{ $sem->title }}
                                         </option>
                                         @endforeach
@@ -643,8 +652,14 @@
                         @endphp
                         {{ $selectedSessionObj->title ?? 'All Sessions' }} | 
                         {{ $selectedTypeObj->title ?? 'All Types' }}
+                        @if($selected_semester_type && $selected_semester_type != '0')
+                            | {{ ucwords(strtolower($selected_semester_type)) }}
+                        @endif
                         @if($selected_semester_year && $selected_semester_year != '0')
                             | Year {{ $selected_semester_year }}
+                        @endif
+                        @if($selected_semesters)
+                            | {{ $all_semesters->whereIn('id', $selected_semesters)->pluck('title')->implode(', ') }}
                         @endif
                     </div>
                     <div class="print-meta">
@@ -810,9 +825,8 @@ $(document).ready(function() {
     $session.on('change', function() {
         const sessionId = $(this).val();
         
-        // Reset dependent dropdowns
+        // Reset the year list (the semesters list is filtered below)
         $semesterYear.html('<option value="0">{{ __("All") }}</option>');
-        $semester.html('<option value="0">{{ __("All") }}</option>');
         
         if (!sessionId) return;
         
@@ -826,24 +840,28 @@ $(document).ready(function() {
         });
     });
     
-    // When semester year changes, fetch semesters
-    $semesterYear.on('change', function() {
-        const sessionId = $session.val();
-        const year = $(this).val();
-        
-        $semester.html('<option value="0">{{ __("All") }}</option>');
-        
-        if (!sessionId || year == '0') return;
-        
-        // Fetch semesters for this session and year
-        $.get('{{ url("admin/ajax/session-year-semesters") }}/' + sessionId + '/' + year, function(data) {
-            if (data.semesters && data.semesters.length > 0) {
-                data.semesters.forEach(function(sem) {
-                    $semester.append('<option value="' + sem.id + '">' + sem.title + '</option>');
-                });
+    // The semesters list shows the chosen type's (and year's) semesters.
+    // Choosing a type ticks all of them; leaving it empty also means all.
+    const $type = $('#semester_type');
+    const allSemesters = $semester.find('option').map(function () {
+        return { id: this.value, text: $.trim($(this).text()), type: $(this).data('type'), year: String($(this).data('year')) };
+    }).get();
+    let picked = ($semester.val() || []);
+    function fillSemesters(selectAll) {
+        const t = $type.val(), y = $semesterYear.val();
+        $semester.empty();
+        allSemesters.forEach(function (o) {
+            if ((t === '0' || o.type === t) && (y === '0' || o.year === y)) {
+                const on = selectAll ? t !== '0' : picked.indexOf(o.id) !== -1;
+                $semester.append(new Option(o.text, o.id, on, on));
             }
         });
-    });
+        $semester.trigger('change');
+    }
+    if ($.fn.select2) { $semester.select2({ placeholder: $semester.data('placeholder'), width: '100%' }); }
+    fillSemesters(false);
+    $type.on('change', function () { picked = []; fillSemesters(true); });
+    $semesterYear.on('change', function () { picked = $semester.val() || []; fillSemesters(false); });
     
     // When faculty changes, fetch programs
     $faculty.on('change', function() {

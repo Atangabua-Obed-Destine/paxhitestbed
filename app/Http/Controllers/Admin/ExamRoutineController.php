@@ -775,7 +775,13 @@ class ExamRoutineController extends Controller
         // Selected values
         $data['selected_session'] = $session = $request->session ?? ($currentSession->id ?? '0');
         $data['selected_semester_year'] = $semesterYear = $request->semester_year ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
+        // Semester type (First Semester, Second Semester, …) and any number of
+        // its semesters: one exam period covers Year 1 and Year 2 together.
+        $data['selected_semester_type'] = $semesterType = $request->semester_type ? strtoupper($request->semester_type) : '0';
+        $data['selected_semesters'] = $chosenSemesters = collect((array) $request->semester)->filter(fn ($v) => (int) $v > 0)->map(fn ($v) => (int) $v)->values()->all();
+        $data['selected_semester'] = $semester = $chosenSemesters[0] ?? '0';
+        $data['semester_types'] = Semester::typeNames();
+        $data['all_semesters'] = Semester::where('status', 1)->orderBy('year')->orderBy('id')->get();
         $data['selected_exam_type'] = $examType = $request->exam_type ?? ($defaultExamType->id ?? '0');
         $data['selected_faculty'] = $faculty = $request->faculty ?? '0';
         $data['selected_program'] = $program = $request->program ?? '0';
@@ -837,8 +843,10 @@ class ExamRoutineController extends Controller
                 });
             }
             
-            if (!empty($semester) && $semester != '0') {
-                $query->where('semester_id', $semester);
+            if ($chosenSemesters) {
+                $query->whereIn('semester_id', $chosenSemesters);
+            } elseif ($semesterType !== '0') {
+                $query->whereIn('semester_id', $data['all_semesters']->filter(fn ($s) => $s->type_name === $semesterType)->pluck('id'));
             }
 
             if (!empty($faculty) && $faculty != '0') {
