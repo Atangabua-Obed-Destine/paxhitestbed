@@ -54,6 +54,33 @@ class ClassRoutineController extends Controller
         // Printing and exporting both produce a document that leaves the
         // screen, so they sit behind the same permission.
         $this->middleware('permission:'.$this->access.'-print', ['only' => ['print','export']]);
+        $this->middleware('permission:'.$this->access.'-view|'.$this->access.'-print', ['only' => ['document']]);
+    }
+
+    /**
+     * The timetable as the school prints it: one sheet per specialty (the
+     * programmes sharing one week together), days down the side, time slots
+     * across, the school's breaks laid in. See TimetableDocument.
+     */
+    public function document(Request $request)
+    {
+        $session = $request->session ? Session::find($request->session) : Session::where('current', '1')->first();
+        $semester = $request->semester ? Semester::find($request->semester) : null;
+
+        return view($this->view.'.document', [
+            'title' => __('Timetables') . ($semester ? ' — ' . $semester->title : ''),
+            'controls' => true,
+            'action' => route('admin.class-routine.document'),
+            'back' => route('admin.class-routine.index'),
+            'sessions' => Session::where('status', '1')->orderBy('id', 'desc')->get(),
+            'semesters' => Semester::where('status', '1')->orderBy('year')->orderBy('id')->get(),
+            'programs' => Program::where('status', '1')->orderBy('title')->get(),
+            'session' => $session,
+            'semester' => $semester,
+            'sheets' => ($session && $semester)
+                ? (new \App\Services\Academic\TimetableDocument())->sheets($session, $semester, $request->program ? (int) $request->program : null)
+                : [],
+        ]);
     }
 
     /**
@@ -233,7 +260,7 @@ class ClassRoutineController extends Controller
         if ($rows->isEmpty()) {
             return [
                 'timetable' => $timetable,
-                'grid' => $timetable->grid($rows),
+                'grid' => $timetable->withBreaks($timetable->grid($rows), $rows),
                 'conflicts' => [],
                 'summary' => $timetable->summary($rows),
             ];
@@ -254,7 +281,7 @@ class ClassRoutineController extends Controller
 
         return [
             'timetable' => $timetable,
-            'grid' => $timetable->grid($rows),
+            'grid' => $timetable->withBreaks($timetable->grid($rows), $rows),
             'conflicts' => $conflicts,
             'summary' => $timetable->summary($rows, $conflicts),
         ];

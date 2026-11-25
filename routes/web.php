@@ -500,6 +500,10 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     // read only, so they sit behind the view permission rather than create.
     Route::get('routine/class-routine-overview', 'ClassRoutineController@overview')->name('class-routine.overview');
     Route::get('routine/class-routine-export', 'ClassRoutineController@export')->name('class-routine.export');
+    Route::get('routine/class-routine-document', 'ClassRoutineController@document')->name('class-routine.document');
+    Route::get('routine/timetable-break', 'TimetableBreakController@index')->name('timetable-break.index');
+    Route::post('routine/timetable-break', 'TimetableBreakController@store')->name('timetable-break.store');
+    Route::delete('routine/timetable-break/{timetableBreak}', 'TimetableBreakController@destroy')->name('timetable-break.destroy');
     Route::resource('routine/exam-routine', 'ExamRoutineController');
     Route::get('routine/exam-routine-joint', 'ExamRoutineController@jointCreate')->name('exam-routine.joint');
     Route::post('routine/exam-routine-joint', 'ExamRoutineController@jointStore')->name('exam-routine.joint.store');
@@ -1549,6 +1553,7 @@ Route::middleware(['auth:student', 'XSS'])->prefix('student')->name('student.')-
 
     // Class Routine Routes
     Route::get('class-routine', 'ClassRoutineController@index')->name('class-routine.index');
+    Route::get('class-routine/document', 'ClassRoutineController@document')->name('class-routine.document');
 
     // Attendance Report
     Route::get('attendance', 'AttendanceController@index')->name('attendance.index');

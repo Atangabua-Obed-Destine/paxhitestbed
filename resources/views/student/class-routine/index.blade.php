@@ -83,6 +83,9 @@
 
     /* The agenda: a time rail, then the class. */
     .tt-item { display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--tt-line); }
+    .tt-break .tt-body { background:#f1f3f6; border-left-color:#c3c9d4 !important; color:#5b6577; }
+    .tt-break .tt-subject { font-weight:600; text-transform:uppercase; letter-spacing:.04em; font-size:.8rem; }
+    .tt-chip-break { background:#eef0f4 !important; border-left:3px solid #c3c9d4 !important; color:#5b6577; }
     .tt-item:last-child { border-bottom:0; }
     .tt-rail { flex:0 0 76px; text-align:right; }
     .tt-rail .tt-from { font-weight:700; color:var(--tt-ink); font-size:.92rem; white-space:nowrap; }
@@ -248,7 +251,19 @@
                             @endif
                         </div>
 
-                        @forelse($byDay[$number] ?? [] as $row)
+                        @forelse(($byDay[$number] ?? collect())->isEmpty() ? [] : ($agendaByDay[$number] ?? []) as $row)
+                            @if(!empty($row->is_break))
+                            <div class="tt-item tt-break">
+                                <div class="tt-rail">
+                                    <div class="tt-from">{{ $fmt($row->start_time) }}</div>
+                                    <div class="tt-to">{{ $fmt($row->end_time) }}</div>
+                                </div>
+                                <div class="tt-body">
+                                    <div class="tt-subject"><i class="fas fa-mug-hot"></i> {{ $row->title }}</div>
+                                </div>
+                            </div>
+                            @continue
+                            @endif
                             @php
                                 $minutes = $minutesOf($row);
                                 $colour = $colourOf($row);
@@ -296,8 +311,11 @@
 
         {{-- The full week, for a wide screen and for printing. --}}
         <div class="card tt-week mt-3">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">{{ __('Full week') }}</h5>
+                <a class="btn btn-sm btn-primary" href="{{ route('student.class-routine.document') }}" target="_blank" rel="noopener">
+                    <i class="fas fa-print"></i> {{ __('Print my timetable') }}
+                </a>
             </div>
             <div class="card-block">
                 <table>
@@ -312,7 +330,14 @@
                         <tr>
                             @foreach($days as $number => $label)
                                 <td>
-                                    @forelse($byDay[$number] ?? [] as $row)
+                                    @forelse(($byDay[$number] ?? collect())->isEmpty() ? [] : ($agendaByDay[$number] ?? []) as $row)
+                                        @if(!empty($row->is_break))
+                                        <div class="tt-chip tt-chip-break">
+                                            <div class="c">{{ $row->title }}</div>
+                                            <div class="t">{{ $fmt($row->start_time) }} &ndash; {{ $fmt($row->end_time) }}</div>
+                                        </div>
+                                        @continue
+                                        @endif
                                         <div class="tt-chip" style="border-left-color:{{ $colourOf($row) }}">
                                             <div class="c">{{ optional($row->subject)->code }}</div>
                                             <div class="t">{{ $fmt($row->start_time) }} &ndash; {{ $fmt($row->end_time) }}</div>

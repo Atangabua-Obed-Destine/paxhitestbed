@@ -57,7 +57,7 @@ class TimetableSheet extends TimetableSheetBase
         $rows[] = [''];
 
         // The grid.
-        $grid = $timetable->grid($this->entry['rows']);
+        $grid = $timetable->withBreaks($timetable->grid($this->entry['rows']), $this->entry['rows']);
 
         $header = [__('Time')];
 
@@ -72,7 +72,9 @@ class TimetableSheet extends TimetableSheetBase
             $line = [$timetable->clock($band['start']) . "\n" . $timetable->clock($band['end'])];
 
             foreach (array_keys($grid['days']) as $day) {
-                $line[] = $this->cell($band['cells'][$day], $timetable, $conflicts);
+                $line[] = isset($band['break'])
+                    ? (in_array($day, $band['break']['days'], true) ? $band['break']['title'] : '')
+                    : $this->cell($band['cells'][$day], $timetable, $conflicts);
             }
 
             $rows[] = $line;

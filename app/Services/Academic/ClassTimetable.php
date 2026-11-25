@@ -97,6 +97,34 @@ class ClassTimetable
     }
 
     /**
+     * The grid with the school's breaks (TimetableBreak) laid in as their own
+     * rows, in time order. A break row names the days it falls on — only days
+     * these classes meet — and has no classes in it.
+     */
+    public function withBreaks(array $grid, Collection $rows): array
+    {
+        $byDay = \App\Models\TimetableBreak::forClasses($rows);
+        $breaks = [];
+        foreach ($byDay as $day => $list) {
+            foreach ($list as $b) {
+                $breaks[$b->id] ??= ['start' => $b->start_time, 'end' => $b->end_time, 'title' => $b->title, 'days' => []];
+                $breaks[$b->id]['days'][] = (int) $day;
+            }
+        }
+        foreach ($breaks as $b) {
+            $grid['bands'][] = [
+                'start' => $b['start'],
+                'end' => $b['end'],
+                'cells' => array_map(fn () => collect(), self::DAYS),
+                'break' => ['title' => $b['title'], 'days' => $b['days']],
+            ];
+        }
+        usort($grid['bands'], fn ($a, $b) => strcmp((string) $a['start'], (string) $b['start']));
+
+        return $grid;
+    }
+
+    /**
      * The first start of each band, in order.
      *
      * A new band opens as soon as a start is more than TOLERANCE past the one

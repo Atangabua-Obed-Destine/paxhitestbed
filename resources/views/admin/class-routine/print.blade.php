@@ -116,6 +116,9 @@
 
     /* Keep a class, a row, a table from being cut in half by a page break. */
     tr, .cls, table.list { break-inside: avoid; page-break-inside: avoid; }
+    /* A school-wide break (midday break, Holy Mass, club activities). */
+    table.grid td.brk { background: #ececec; text-align: center; vertical-align: middle;
+        font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-size: 9px; }
     thead { display: table-header-group; }
 
     .toolbar { text-align: center; padding: 8px; background: #f4f4f4; }
@@ -225,6 +228,12 @@
                     <small>{{ $timetable->clock($band['end']) }}</small>
                 </td>
                 @foreach(array_keys($grid['days']) as $num)
+                @if(isset($band['break']))
+                <td class="{{ in_array($num, $band['break']['days'], true) ? 'brk' : '' }}">
+                    @if(in_array($num, $band['break']['days'], true)){{ $band['break']['title'] }}@endif
+                </td>
+                @continue
+                @endif
                 <td>
                     @foreach($band['cells'][$num] as $row)
                     @php $flags = $conflicts[$row->id] ?? []; @endphp

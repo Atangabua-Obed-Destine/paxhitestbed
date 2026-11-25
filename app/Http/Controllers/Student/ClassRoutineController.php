@@ -106,6 +106,16 @@ class ClassRoutineController extends Controller
                 ->values())
             ->all();
 
+        // Each day's classes with the school's breaks (midday break, Holy
+        // Mass, club activities) laid in between, for the day list and the
+        // week table. byDay stays classes only: "now", colours and counts
+        // read it.
+        $breaks = \App\Models\TimetableBreak::forClasses($data['rows']);
+        $data['agendaByDay'] = collect(static::DAYS)->map(fn ($label, $number) => collect($data['byDay'][$number] ?? [])
+            ->concat($breaks[$number] ?? [])
+            ->sortBy(fn ($r) => (string) $r->start_time)
+            ->values());
+
         $data['nowNext'] = static::nowAndNext($data['rows'], $data['today']);
 
         // The earliest and latest the week runs, for the day summaries.
@@ -161,4 +171,34 @@ class ClassRoutineController extends Controller
             'done' => !$current && !$next,
         ];
     }
+
+    /**
+     * The student's timetable as the school prints it (days down the side,
+     * breaks laid in), with every programme that shares the week named on it.
+     */
+    public function document()
+    {
+        $student_id = Auth::guard('student')->user()->id;
+        $enroll = null;
+        if ($selected = session('selected_enrollment_id')) {
+            $enroll = StudentEnroll::where('id', $selected)->where('student_id', $student_id)->first();
+        }
+        if (!$enroll && ($current = Session::where('status', '1')->where('current', '1')->first())) {
+            $enroll = StudentEnroll::where('student_id', $student_id)->where('session_id', $current->id)->orderBy('id', 'desc')->first();
+        }
+        $sheets = [];
+        if ($enroll && $enroll->session && $enroll->semester) {
+            $sheets = (new \App\Services\Academic\TimetableDocument())->sheets($enroll->session, $enroll->semester, (int) $enroll->program_id, (int) $enroll->section_id);
+        }
+
+        return view('admin.class-routine.document', [
+            'title' => __('My timetable'),
+            'controls' => false,
+            'back' => route('student.class-routine.index'),
+            'session' => optional($enroll)->session,
+            'semester' => optional($enroll)->semester,
+            'sheets' => $sheets,
+        ]);
+    }
+
 }

@@ -45,6 +45,7 @@
 }
 .ctt-time small { display: block; font-weight: 400; color: #8a97a4; }
 .ctt-empty { background: #fcfdfe; }
+.ctt-break { background: #f1f3f6; color: #5b6577; text-align: center; vertical-align: middle !important; font-weight: 700; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
 
 /* A class ----------------------------------------------------------------- */
 .ctt-class {
@@ -288,6 +289,12 @@
                                             <small>{{ $timetable->clock($band['end']) }}</small>
                                         </td>
                                         @foreach(array_keys($grid['days']) as $num)
+                                        @if(isset($band['break']))
+                                        <td class="{{ in_array($num, $band['break']['days'], true) ? 'ctt-break' : 'ctt-empty' }}">
+                                            @if(in_array($num, $band['break']['days'], true)){{ $band['break']['title'] }}@endif
+                                        </td>
+                                        @continue
+                                        @endif
                                         @php $cell = $band['cells'][$num]; @endphp
                                         <td class="{{ $cell->isEmpty() ? 'ctt-empty' : '' }}">
                                             @foreach($cell as $row)
