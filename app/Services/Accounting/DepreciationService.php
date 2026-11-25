@@ -57,6 +57,20 @@ class DepreciationService
 
         foreach ($assets as $asset) {
             try {
+                // Already charged (or waiting to be posted) for this month:
+                // running the calculation twice must not charge twice.
+                $existing = DepreciationSchedule::where('fixed_asset_id', $asset->id)
+                    ->whereDate('depreciation_date', $date->copy()->endOfMonth()->toDateString())->first();
+                if ($existing && $existing->status !== DepreciationSchedule::STATUS_REVERSED) {
+                    if ($autoPost && $existing->status === DepreciationSchedule::STATUS_PENDING) {
+                        $existing->post(auth()->id());
+                        $results['posted']++;
+                    } else {
+                        $results['skipped']++;
+                    }
+                    continue;
+                }
+
                 // Check if depreciation is due for this asset
                 if (!$asset->isDepreciationDue($date)) {
                     $results['skipped']++;
@@ -72,7 +86,7 @@ class DepreciationService
                 }
 
                 // Create depreciation schedule record
-                $schedule = $this->createDepreciationSchedule($asset, $amount, $date, $fiscalYear, $accountingPeriod);
+                $schedule = $this->createDepreciationSchedule($asset, $amount, $date->copy(), $fiscalYear, $accountingPeriod, $existing);
                 $results['schedules'][] = $schedule;
                 $results['processed']++;
 
@@ -112,9 +126,10 @@ class DepreciationService
         float $amount,
         Carbon $date,
         FiscalYear $fiscalYear,
-        ?AccountingPeriod $accountingPeriod = null
+        ?AccountingPeriod $accountingPeriod = null,
+        ?DepreciationSchedule $reversed = null
     ): DepreciationSchedule {
-        return DepreciationSchedule::create([
+        $values = [
             'fixed_asset_id' => $asset->id,
             'depreciation_date' => $date->endOfMonth(),
             'depreciation_amount' => $amount,
@@ -126,7 +141,17 @@ class DepreciationService
             'accounting_period_id' => $accountingPeriod?->id,
             'status' => DepreciationSchedule::STATUS_PENDING,
             'created_by' => auth()->id(),
-        ]);
+        ];
+
+        // A month whose charge was reversed is charged again on the same row
+        // (one row per asset per month is a unique key).
+        if ($reversed) {
+            $reversed->fill($values + ['journal_entry_id' => null, 'posted_at' => null, 'posted_by' => null])->save();
+
+            return $reversed;
+        }
+
+        return DepreciationSchedule::create($values);
     }
 
     /**
@@ -255,7 +280,7 @@ class DepreciationService
      * @param string|null $reason
      * @return JournalEntry
      */
-    public function disposeAsset(FixedAsset $asset, $disposalDate, float $disposalValue, ?string $reason = null)
+    public function disposeAsset(FixedAsset $asset, $disposalDate, float $disposalValue, ?string $reason = null, ?int $paymentAccountId = null)
     {
         $disposalDate = Carbon::parse($disposalDate);
         $category = $asset->category;
@@ -264,91 +289,78 @@ class DepreciationService
             throw new Exception(__('asset_accounts_not_configured'));
         }
 
-        // Calculate gain or loss on disposal
-        $gainLoss = $disposalValue - $asset->book_value;
-
         DB::beginTransaction();
         try {
             // Create disposal journal entry
+            // A real entry: numbered, in the year and month of the disposal
+            // date, posted once its lines are in (it had columns journal
+            // entries do not have, and no number, so it could not be saved).
             $journalEntry = JournalEntry::create([
-                'entry_date' => $disposalDate,
+                'entry_number' => JournalEntry::generateEntryNumber($disposalDate->toDateString()),
+                'entry_date' => $disposalDate->toDateString(),
                 'reference_number' => 'DISP-' . $asset->asset_code,
                 'description' => __('disposal_of_asset') . ' ' . $asset->name . ($reason ? ' - ' . $reason : ''),
-                'source_type' => 'asset_disposal',
-                'source_id' => $asset->id,
-                // The disposal date decides the year, not today's.
+                'reference_type' => 'asset_disposal',
+                'reference_id' => $asset->id,
+                'journal_type' => 'adjustment',
                 'fiscal_year_id' => FiscalYear::forDate($disposalDate)?->id,
                 'accounting_period_id' => FiscalYear::periodForDate($disposalDate)?->id,
-                'status' => 'posted',
+                'total_debit' => 0,
+                'total_credit' => 0,
+                'is_posted' => false,
+                'is_system_generated' => true,
                 'created_by' => auth()->id(),
             ]);
 
-            // Debit: Accumulated Depreciation (remove)
-            if ($asset->accumulated_depreciation > 0) {
+            // The lines, numbered. Proceeds go to the cash box or bank they
+            // were paid into; the difference against book value is a gain
+            // (82) or a loss (81). Every line must find its account, or the
+            // entry would not balance: say which one is missing.
+            $lines = [];
+            $accumulated = round((float) $asset->accumulated_depreciation, 2);
+            if ($accumulated > 0) {
+                $lines[] = [$category->accumulated_depreciation_account_id, $accumulated, 0, __('Accumulated depreciation removed')];
+            }
+            if ($disposalValue > 0) {
+                $cashAccountId = app(\App\Services\Accounting\CashAccounts::class)->forPaymentAccount($paymentAccountId)
+                    ?? \App\Models\AccountingSetting::getValue('default_cash_account_id');
+                if (!$cashAccountId) {
+                    throw new Exception(__('Choose the cash box or bank the proceeds were paid into.'));
+                }
+                $lines[] = [(int) $cashAccountId, round($disposalValue, 2), 0, __('Disposal proceeds')];
+            }
+            $lines[] = [$category->asset_account_id, 0, round((float) $asset->acquisition_cost, 2), __('Asset removed at cost')];
+
+            $gainLoss = round($disposalValue - ((float) $asset->acquisition_cost - $accumulated), 2);
+            if ($gainLoss != 0) {
+                $code = $gainLoss > 0 ? '82%' : '81%';
+                $accountId = \App\Models\ChartOfAccount::where('account_code', 'like', $code)->where('account_category', 'detail')->orderBy('account_code')->value('id');
+                if (!$accountId) {
+                    throw new Exception(__('No account :code in the chart for the :what on disposal.', [
+                        'code' => rtrim($code, '%'), 'what' => $gainLoss > 0 ? __('gain') : __('loss')]));
+                }
+                $lines[] = $gainLoss > 0
+                    ? [$accountId, 0, $gainLoss, __('Gain on disposal')]
+                    : [$accountId, abs($gainLoss), 0, __('Loss on disposal')];
+            }
+
+            foreach ($lines as $i => [$accountId, $debit, $credit, $text]) {
                 JournalEntryLine::create([
                     'journal_entry_id' => $journalEntry->id,
-                    'account_id' => $category->accumulated_depreciation_account_id,
-                    'debit' => $asset->accumulated_depreciation,
-                    'credit' => 0,
-                    'description' => __('remove_accumulated_depreciation'),
+                    'line_number' => $i + 1,
+                    'account_id' => $accountId,
+                    'debit' => $debit,
+                    'credit' => $credit,
+                    'description' => $text . ' — ' . $asset->name,
                 ]);
             }
 
-            // Debit: Cash/Bank if disposal value > 0
-            if ($disposalValue > 0) {
-                // Get cash account from settings or use suspense
-                $cashAccountId = \App\Models\AccountingSetting::getValue('default_cash_account_id') 
-                    ?? \App\Models\ChartOfAccount::where('code', 'like', '52%')->first()?->id;
-                
-                if ($cashAccountId) {
-                    JournalEntryLine::create([
-                        'journal_entry_id' => $journalEntry->id,
-                        'account_id' => $cashAccountId,
-                        'debit' => $disposalValue,
-                        'credit' => 0,
-                        'description' => __('disposal_proceeds'),
-                    ]);
-                }
-            }
-
-            // Credit: Asset Account (remove asset at cost)
-            JournalEntryLine::create([
-                'journal_entry_id' => $journalEntry->id,
-                'account_id' => $category->asset_account_id,
-                'debit' => 0,
-                'credit' => $asset->acquisition_cost,
-                'description' => __('remove_asset_at_cost'),
-            ]);
-
-            // Record gain or loss
-            if ($gainLoss != 0) {
-                // Get gain/loss accounts (OHADA Class 8 accounts)
-                if ($gainLoss > 0) {
-                    // Gain on disposal - Credit to income
-                    $gainAccountId = \App\Models\ChartOfAccount::where('code', 'like', '82%')->first()?->id;
-                    if ($gainAccountId) {
-                        JournalEntryLine::create([
-                            'journal_entry_id' => $journalEntry->id,
-                            'account_id' => $gainAccountId,
-                            'debit' => 0,
-                            'credit' => $gainLoss,
-                            'description' => __('gain_on_disposal'),
-                        ]);
-                    }
-                } else {
-                    // Loss on disposal - Debit to expense
-                    $lossAccountId = \App\Models\ChartOfAccount::where('code', 'like', '81%')->first()?->id;
-                    if ($lossAccountId) {
-                        JournalEntryLine::create([
-                            'journal_entry_id' => $journalEntry->id,
-                            'account_id' => $lossAccountId,
-                            'debit' => abs($gainLoss),
-                            'credit' => 0,
-                            'description' => __('loss_on_disposal'),
-                        ]);
-                    }
-                }
-            }
+            // Totals from the lines, then post: post() refuses an unbalanced entry.
+            $journalEntry->load('lines');
+            $journalEntry->total_debit = round((float) $journalEntry->lines->sum('debit'), 2);
+            $journalEntry->total_credit = round((float) $journalEntry->lines->sum('credit'), 2);
+            $journalEntry->save();
+            $journalEntry->post(auth()->id());
 
             // Update asset record
             $asset->dispose($disposalDate, $disposalValue, $reason, $journalEntry->id);

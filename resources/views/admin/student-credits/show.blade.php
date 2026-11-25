@@ -441,7 +441,7 @@
                 <h5 class="modal-title">{{ __('process_refund') }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('cancel') }}"></button>
             </div>
-            <form action="{{ route('admin.student-credits.process-refund', $credit->id) }}" method="POST">
+            <form data-review="{{ __('I have checked the amount, the account it is paid from and the ledger entry, and confirm this refund.') }}" data-review-label="{{ __('Refund and post') }}" action="{{ route('admin.student-credits.process-refund', $credit->id) }}" method="POST">
                 @csrf
                 <div class="modal-body">
                     <div class="alert alert-info">
@@ -487,7 +487,7 @@
                 <h5 class="modal-title">{{ __('apply_credit_to_fee') }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('cancel') }}"></button>
             </div>
-            <form action="{{ route('admin.student-credits.apply-to-fee', $credit->id) }}" method="POST">
+            <form data-review="{{ __('I have checked the fee and the amount of credit used, and confirm it.') }}" data-review-label="{{ __('Use the credit') }}" action="{{ route('admin.student-credits.apply-to-fee', $credit->id) }}" method="POST">
                 @csrf
                 <div class="modal-body">
                     <div class="alert alert-info mb-3">

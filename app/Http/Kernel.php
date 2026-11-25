@@ -42,6 +42,8 @@ class Kernel extends HttpKernel
             \App\Http\Middleware\Localization::class,
             \App\Http\Middleware\IsUserBanned::class,
             \App\Http\Middleware\UpdateLastSeen::class,
+            // Actions that post money must come through the review dialog.
+            \App\Http\Middleware\RequireReview::class,
         ],
 
         'api' => [

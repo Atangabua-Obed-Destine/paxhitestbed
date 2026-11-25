@@ -237,7 +237,7 @@
         </li>
         @endcanany
 
-        @canany(['faculty-create', 'faculty-view', 'program-create', 'program-view', 'batch-create', 'batch-view', 'session-create', 'session-view', 'semester-create', 'semester-view', 'section-create', 'section-view', 'class-room-create', 'class-room-view', 'subject-create', 'subject-view', 'enroll-subject-create', 'enroll-subject-view', 'sector-create', 'sector-view'])
+        @canany(['faculty-create', 'faculty-view', 'program-create', 'program-view', 'batch-create', 'batch-view', 'session-create', 'session-view', 'semester-create', 'semester-view', 'section-create', 'section-view', 'class-room-create', 'class-room-view', 'subject-create', 'subject-view', 'course-group-create', 'course-group-view', 'enroll-subject-create', 'enroll-subject-view', 'sector-create', 'sector-view'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/academic*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
                 <span class="pcoded-micon"><i class="fab fa-accusoft"></i></span>
@@ -290,6 +290,10 @@
                 
                 @canany(['subject-create', 'subject-view'])
                 <li class="{{ Request::is('admin/academic/subject*') ? 'active' : '' }}"><a href="{{ route('admin.subject.index') }}" class="">{{ trans_choice('module_subject', 2) }}</a></li>
+                @endcanany
+
+                @canany(['course-group-create', 'course-group-view'])
+                <li class="{{ Request::is('admin/academic/course-group*') ? 'active' : '' }}"><a href="{{ route('admin.course-group.index') }}" class="">{{ __('Course groups') }}</a></li>
                 @endcanany
 
                 @canany(['enroll-subject-create', 'enroll-subject-view'])
@@ -823,7 +827,7 @@
         </li>
         @endcanany
 
-        @canany(['income-create', 'income-view', 'income-category-create', 'income-category-view', 'expense-create', 'expense-view', 'expense-category-create', 'expense-category-view', 'outcome-view'])
+        @canany(['income-create', 'income-view', 'income-category-create', 'income-category-view', 'expense-create', 'expense-view', 'expense-category-create', 'expense-category-view', 'outcome-view', 'supplier-bill-view', 'supplier-payment-view'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/account*') && !Request::is('admin/chart-of-accounts*') && !Request::is('admin/accounting*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
                 <span class="pcoded-micon"><i class="fas fa-credit-card"></i></span>
@@ -846,6 +850,18 @@
                 <li class="{{ Request::is('admin/account/expense-category*') ? 'active' : '' }}"><a href="{{ route('admin.expense-category.index') }}" class="">{{ trans_choice('module_expense_category', 2) }}</a></li>
                 @endcanany
                 
+                @can('supplier-bill-view')
+                <li class="{{ Request::is('admin/account/supplier-bills*') && !Request::is('admin/account/supplier-bills/aging*') ? 'active' : '' }}"><a href="{{ route('admin.supplier-bill.index') }}" class="">{{ __('Supplier Bills') }}</a></li>
+                @endcan
+
+                @can('supplier-payment-view')
+                <li class="{{ Request::is('admin/account/supplier-payments*') ? 'active' : '' }}"><a href="{{ route('admin.supplier-payment.index') }}" class="">{{ __('Supplier Payments') }}</a></li>
+                @endcan
+
+                @can('supplier-bill-view')
+                <li class="{{ Request::is('admin/account/supplier-bills/aging*') ? 'active' : '' }}"><a href="{{ route('admin.supplier-bill.aging') }}" class="">{{ __('Payables Aging') }}</a></li>
+                @endcan
+
                 @can('outcome-view')
                 <li class="{{ Request::is('admin/account/outcome*') ? 'active' : '' }}"><a href="{{ route('admin.outcome.index') }}" class="">{{ trans_choice('module_outcome_calculation', 2) }}</a></li>
                 @endcan
@@ -1102,6 +1118,7 @@
                     <ul class="pcoded-submenu">
                         @can('accounting-report-view')
                         <li><a href="{{ route('admin.accounting-reports.index') }}"><i class="fas fa-home"></i> {{ __('Reports Dashboard') }}</a></li>
+                        <li><a href="{{ route('admin.accounting-reports.financial-health') }}"><i class="fas fa-heartbeat"></i> {{ __('Financial health') }}</a></li>
                         @endcan
                         @can('accounting-report-receivables')
                         <li><a href="{{ route('admin.accounting-reports.receivables-aging') }}"><i class="fas fa-file-invoice-dollar"></i> {{ __('Receivables Aging') }}</a></li>

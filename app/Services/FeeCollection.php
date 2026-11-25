@@ -802,17 +802,16 @@ class FeeCollection
      */
     protected function byMonth(Budget $budget, string $from, string $to): array
     {
-        $cash = Fee::cashReceivedSql('f');
-
-        $monthly = fn (?array $categories) => DB::table('fees as f')
+        // Cash on the day it came in (FeeLedgerPosting::cashEventsSql), as
+        // the daybook and the ledger date it.
+        $monthly = fn (?array $categories) => DB::table(DB::raw('(' . \App\Services\FeeLedgerPosting::cashEventsSql() . ') as ev'))
+            ->join('fees as f', 'f.id', '=', 'ev.fee_id')
             ->where('f.status', '<>', self::CANCELLED)
-            ->where('f.paid_amount', '>', 0)
-            ->whereNotNull('f.pay_date')
-            ->whereDate('f.pay_date', '>=', $from)
-            ->whereDate('f.pay_date', '<=', $to)
+            ->whereDate('ev.event_date', '>=', $from)
+            ->whereDate('ev.event_date', '<=', $to)
             ->when($categories !== null, fn ($q) => $q->whereIn('f.category_id', $categories))
             ->groupBy('bucket')
-            ->selectRaw("DATE_FORMAT(f.pay_date, '%Y-%m') as bucket, SUM({$cash}) as cash")
+            ->selectRaw("DATE_FORMAT(ev.event_date, '%Y-%m') as bucket, SUM(ev.amount) as cash")
             ->pluck('cash', 'bucket');
 
         // Two series, and both are needed. The instalment one is what this

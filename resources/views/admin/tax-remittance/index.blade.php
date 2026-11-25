@@ -311,8 +311,9 @@
                                                         unconfirmed one.
                                                     --}}
                                                     <form action="{{ route('admin.tax-remittance.void', $r->id) }}" method="POST"
-                                                          class="js-confirm d-inline"
-                                                          data-confirm="{{ __('This will reverse the payment in the ledger and the month will show as owed again. Continue?') }}">
+                                                          class="d-inline"
+                                                          data-review="{{ __('I understand this reverses the payment in the ledger and the month will show as owed again.') }}"
+                                                          data-review-label="{{ __('Void and reverse') }}" data-review-class="btn-danger">
                                                         @csrf
                                                         <button class="btn btn-outline-danger btn-sm">{{ __('Void') }}</button>
                                                     </form>
@@ -340,7 +341,9 @@
 @can('tax-remittance-create')
 <div class="modal fade" id="recordRemittance" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
-        <form action="{{ route('admin.tax-remittance.store') }}" method="POST">
+        <form action="{{ route('admin.tax-remittance.store') }}" method="POST"
+              data-review="{{ __('I have checked the amount against the declaration, the account it is paid from and the ledger entry, and confirm this payment.') }}"
+              data-review-label="{{ __('Record and post') }}">
             @csrf
             <div class="modal-content">
                 <div class="modal-header">

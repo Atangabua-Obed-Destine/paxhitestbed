@@ -62,6 +62,22 @@
                         </div>
 
                         <div class="form-group col-md-4">
+                            <label for="tax_number">{{ __('Tax number (NIU)') }}</label>
+                            <input type="text" class="form-control" name="tax_number" id="tax_number" maxlength="64" value="{{ $row->tax_number }}">
+                        </div>
+
+                        <div class="form-group col-md-4">
+                            <label for="payment_terms_days">{{ __('Payment terms (days)') }}</label>
+                            <input type="number" min="0" max="365" class="form-control" name="payment_terms_days" id="payment_terms_days" value="{{ $row->payment_terms_days }}">
+                            <small class="text-muted">{{ __('Days from a bill to its due date. Empty: due on the bill date.') }}</small>
+                        </div>
+
+                        <div class="form-group col-md-4">
+                            <label for="bank_details">{{ __('Bank details') }}</label>
+                            <input type="text" class="form-control" name="bank_details" id="bank_details" maxlength="255" value="{{ $row->bank_details }}">
+                        </div>
+
+                        <div class="form-group col-md-4">
                             <label for="contact_person" class="form-label">{{ __('field_contact_person') }} <span>*</span></label>
                             <input type="text" class="form-control" name="contact_person" id="contact_person" value="{{ $row->contact_person }}" required>
 

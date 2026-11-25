@@ -39,7 +39,17 @@ class DefaultBudgetMappingSeeder extends Seeder
     public function run(): void
     {
         $lines = BudgetLine::pluck('id', 'code');
-        $accounts = ChartOfAccount::pluck('id', 'account_code');
+        // The maps below use the school's original account numbers; read each
+        // through the code it has on this install (standard SYSCOHADA once the
+        // chart is renumbered), so "626 telecom" finds telecom, now 628.
+        $byCode = ChartOfAccount::pluck('id', 'account_code');
+        $accounts = new class ($byCode) implements \ArrayAccess {
+            public function __construct(private $byCode) {}
+            public function offsetExists($code): bool { return isset($this->byCode[\App\Console\Commands\ChartSyscohada::current((string) $code)]); }
+            public function offsetGet($code): mixed { return $this->byCode[\App\Console\Commands\ChartSyscohada::current((string) $code)] ?? null; }
+            public function offsetSet($code, $value): void {}
+            public function offsetUnset($code): void {}
+        };
         $cash = $accounts[self::CASH_ACCOUNT] ?? null;
 
         if (!$cash) {

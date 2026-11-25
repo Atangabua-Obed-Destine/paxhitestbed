@@ -280,11 +280,10 @@ class LedgerSyncService
                 // payment_plan_payment, so it comes off what the fee posts —
                 // the same arithmetic FeeLedgerPosting uses, so this screen
                 // offers exactly what posting would write.
-                $postable = round(
-                    (float) $row->cash_received_amount
-                        - app(FeeLedgerPosting::class)->paidThroughPlans($row),
-                    2
-                );
+                $posting = app(FeeLedgerPosting::class);
+                $postable = round((float) $row->cash_received_amount - $posting->paidThroughPlans($row), 2);
+                // Earlier receipts post on their own days; the fee carries the rest.
+                $postable = round($postable - array_sum(array_column($posting->desiredParts($row, $postable), 'amount')), 2);
 
                 // Settled with credit carried over from another fee, or paid
                 // through a plan: that money was posted when it arrived — on the

@@ -284,10 +284,9 @@ class FixedAsset extends Model
             return Carbon::parse($this->depreciation_start_date)->lte($date);
         }
 
-        $lastDepreciation = Carbon::parse($this->last_depreciation_date);
-        $nextDepreciationDue = $lastDepreciation->copy()->addMonth();
-        
-        return $nextDepreciationDue->lte($date);
+        // Due once per calendar month: the month after the last one charged.
+        // (addMonth() on 31 January lands on 3 March and skipped February.)
+        return Carbon::parse($this->last_depreciation_date)->startOfMonth()->addMonthNoOverflow()->lte(Carbon::parse($date));
     }
 
     /**

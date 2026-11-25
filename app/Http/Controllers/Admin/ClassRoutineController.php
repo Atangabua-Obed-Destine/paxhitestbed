@@ -847,8 +847,9 @@ class ClassRoutineController extends Controller
         // Get all sections
         $data['sections'] = Section::where('status', '1')->orderBy('title', 'asc')->get();
 
-        // Get all subjects
-        $data['subjects'] = Subject::where('status', '1')->orderBy('code', 'asc')->get();
+        // Get all subjects (with their course group: a grouped course gives
+        // each programme its own code of the group)
+        $data['subjects'] = Subject::where('status', '1')->with('courseGroup.subjects')->orderBy('code', 'asc')->get();
 
         // Get all rooms
         $data['rooms'] = ClassRoom::where('status', '1')->orderBy('title', 'asc')->get();
@@ -939,6 +940,19 @@ class ClassRoutineController extends Controller
                         continue;
                     }
 
+                    // A course in a course group: this programme gets the
+                    // group's course it takes (AGE118H for AGE, MGT1101H for
+                    // ACC), so each keeps its own code and transcript while the
+                    // lecture stays one class. A programme that takes none of
+                    // them gets the course chosen.
+                    $courseId = (int) $subject;
+                    if ($groupId = \App\Services\Academic\CourseGroups::groupOf((int) $subject)) {
+                        $own = \App\Services\Academic\CourseGroups::courseForProgramme($groupId, (int) $program);
+                        if ($own) {
+                            $courseId = (int) $own->id;
+                        }
+                    }
+
                     // Check if this exact routine already exists for this program
                     $exists = ClassRoutine::where('session_id', $session)
                         ->where('program_id', $program)
@@ -956,7 +970,7 @@ class ClassRoutineController extends Controller
 
                     // Create the routine for this program
                     $classRoutine = new ClassRoutine;
-                    $classRoutine->subject_id = $subject;
+                    $classRoutine->subject_id = $courseId;
                     $classRoutine->teacher_id = $teacher;
                     $classRoutine->room_id = $room;
                     $classRoutine->session_id = $session;

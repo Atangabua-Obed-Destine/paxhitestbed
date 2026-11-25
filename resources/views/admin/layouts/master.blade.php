@@ -276,6 +276,11 @@
                     @yield('content')
                     <!-- End Content-->
 
+                    {{-- The review dialog any money-posting form opens (rendered once a page). --}}
+                    @auth('web')
+                    @include('admin.supplier-bill.partials.review-modal')
+                    @endauth
+
                 </div>
             </div>
         </div>

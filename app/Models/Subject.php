@@ -17,6 +17,17 @@ class Subject extends Model
         'title', 'code', 'credit_hour', 'subject_type', 'class_type', 'total_marks', 'passing_marks', 'description', 'status',
     ];
 
+    /**
+     * The course group this course belongs to, if any: the same course taught
+     * to other programmes under their own codes. Set from the course group
+     * screen only (not fillable), so a course form can never move a course
+     * into a group without the group's checks.
+     */
+    public function courseGroup()
+    {
+        return $this->belongsTo(CourseGroup::class, 'course_group_id');
+    }
+
     public function programs()
     {
         return $this->belongsToMany(Program::class, 'program_subject', 'subject_id', 'program_id');

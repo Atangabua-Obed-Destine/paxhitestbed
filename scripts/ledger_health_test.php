@@ -90,7 +90,8 @@ foreach ([
     ok('it runs the ' . $key . ' check', in_array($key, $keys, true));
 }
 
-check('eighteen checks in all', 18, count($baseline));
+// Eighteen, plus the 411 tie-out once fees are on accrual.
+check('eighteen checks in all (nineteen on accrual)', App\Services\Accounting\FeeAccrual::enabled() ? 19 : 18, count($baseline));
 
 // The findings that are real on this database, as regression anchors.
 // The four tuition incomes this used to find (20,254,000 in categories with
@@ -129,7 +130,11 @@ try {
  */
 $drift = find($baseline, 'amount_drift');
 
-ok('there are amount differences to explain', $drift['count'] > 0);
+// Since fees are compared with the cash they received less plan instalments
+// (what FeeLedgerPosting posts), credit brought in from another fee no longer
+// reads as a difference, and once fees:credit-audit has corrected the ledger
+// there is none left to explain.
+ok('no fee is posted at an amount other than the cash it received', $drift['count'] === 0);
 
 foreach ($drift['rows'] as $row) {
     check('difference #' . $row->id . ' is on a fee', 'fee', $row->kind);
@@ -173,7 +178,7 @@ check('no transaction has two live entries', 'ok', find($baseline, 'entry_duplic
 
 echo "\n=== 2. severity is a property of the fault, not of the count ===\n";
 
-check('an amount difference is a warning', 'warning', find($baseline, 'amount_drift')['state']);
+check('with nothing differing, the amount check reads ok', 'ok', find($baseline, 'amount_drift')['state']);
 ok('a passing check offers no action', find($baseline, 'date_drift')['action'] === null);
 
 echo "\n=== 3. the verdict reflects the worst finding ===\n";

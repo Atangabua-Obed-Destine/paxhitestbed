@@ -279,10 +279,10 @@
                         <input type="text" class="form-control form-control-sm" name="lines[${lineCounter}][description]">
                     </td>
                     <td>
-                        <input type="number" step="1" class="form-control form-control-sm debit-input" name="lines[${lineCounter}][debit_amount]" value="0" min="0">
+                        <input type="number" step="1" class="form-control form-control-sm debit-input" name="lines[${lineCounter}][debit]" value="0" min="0">
                     </td>
                     <td>
-                        <input type="number" step="1" class="form-control form-control-sm credit-input" name="lines[${lineCounter}][credit_amount]" value="0" min="0">
+                        <input type="number" step="1" class="form-control form-control-sm credit-input" name="lines[${lineCounter}][credit]" value="0" min="0">
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-danger btn-xs remove-line-btn">

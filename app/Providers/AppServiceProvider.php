@@ -58,6 +58,11 @@ class AppServiceProvider extends ServiceProvider
         Expense::observe(ExpenseObserver::class);
         Payroll::observe(PayrollObserver::class);
         PaymentPlanPayment::observe(PaymentPlanPaymentObserver::class);
+        // Overpayments held on account 419 until used or refunded.
+        \App\Models\StudentCredit::observe(\App\Observers\StudentCreditObserver::class);
+        \App\Models\CreditApplication::observe(\App\Observers\StudentCreditObserver::class);
+        // Receipts date the cash: earlier receipts post on their own days.
+        \App\Models\PaymentReceipt::observe(\App\Observers\PaymentReceiptObserver::class);
 
         // Closes a resit request once its paper has been sat and marked, so a
         // spent resit stops reading as one still to come.

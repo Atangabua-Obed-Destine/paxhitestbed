@@ -24,8 +24,8 @@ class FiscalYearController extends Controller
         $this->middleware('permission:accounting-period-create', ['only' => ['create', 'store', 'generatePeriods']]);
         $this->middleware('permission:accounting-period-edit', ['only' => ['edit', 'update']]);
         $this->middleware('permission:accounting-period-delete', ['only' => ['destroy']]);
-        $this->middleware('permission:accounting-period-close', ['only' => ['closePeriod']]);
-        $this->middleware('permission:accounting-period-reopen', ['only' => ['reopenPeriod']]);
+        $this->middleware('permission:accounting-period-close', ['only' => ['closePeriod', 'previewClosePeriod']]);
+        $this->middleware('permission:accounting-period-reopen', ['only' => ['reopenPeriod', 'previewReopenPeriod']]);
     }
 
     /**
@@ -88,7 +88,8 @@ class FiscalYearController extends Controller
             ]);
 
             // Automatically create accounting periods (monthly)
-            if ($request->has('create_periods')) {
+            // The form sends generate_periods (yes/no); create_periods is kept for older callers.
+            if ($request->boolean('generate_periods') || $request->has('create_periods')) {
                 $this->createMonthlyPeriods($fiscalYear);
             }
 
@@ -445,5 +446,88 @@ class FiscalYearController extends Controller
         }
         
         return redirect()->route('admin.fiscal-years.show', $id);
+    }
+
+    /**
+     * Delete a fiscal year that has no journal entries and is not closed,
+     * with its months. A year with entries is history and stays.
+     */
+    public function destroy($id)
+    {
+        $fiscalYear = FiscalYear::findOrFail($id);
+
+        if ($fiscalYear->is_closed) {
+            Toastr::error(__('A closed fiscal year cannot be deleted.'), __('msg_error'));
+        } elseif (JournalEntry::withTrashed()->where('fiscal_year_id', $fiscalYear->id)->exists()) {
+            Toastr::error(__('This fiscal year has journal entries, so it cannot be deleted.'), __('msg_error'));
+        } else {
+            DB::transaction(function () use ($fiscalYear) {
+                AccountingPeriod::where('fiscal_year_id', $fiscalYear->id)->delete();
+                $fiscalYear->delete();
+            });
+            Toastr::success(__('Fiscal year deleted.'), __('msg_success'));
+        }
+
+        return redirect()->route('admin.fiscal-years.index');
+    }
+
+    /* ---- One month: close and reopen, through the review dialog ---------- */
+
+    public function previewClosePeriod($id)
+    {
+        $period = AccountingPeriod::findOrFail($id);
+
+        return view('admin.supplier-bill.partials.preview', [
+            'p' => app(\App\Services\Accounting\PeriodControls::class)->previewClose($period, Auth::id()),
+        ]);
+    }
+
+    public function closePeriod(Request $request, $id)
+    {
+        $period = AccountingPeriod::findOrFail($id);
+
+        if (!$request->boolean('reviewed')) {
+            Toastr::error(__('Review it first: open the review, check the details and tick the confirmation box.'), __('msg_error'));
+
+            return redirect()->route('admin.fiscal-years.show', $period->fiscal_year_id);
+        }
+
+        try {
+            app(\App\Services\Accounting\PeriodControls::class)->closeMonth($period, Auth::id(), $request->input('closing_note'));
+            Toastr::success(__(':month is closed. Nothing more can be posted into it.', ['month' => $period->name]), __('msg_success'));
+        } catch (\RuntimeException $e) {
+            Toastr::error($e->getMessage(), __('msg_error'));
+        }
+
+        return redirect()->route('admin.fiscal-years.show', $period->fiscal_year_id);
+    }
+
+    public function previewReopenPeriod($id)
+    {
+        $period = AccountingPeriod::findOrFail($id);
+
+        return view('admin.supplier-bill.partials.preview', [
+            'p' => app(\App\Services\Accounting\PeriodControls::class)->previewReopen($period, Auth::id()),
+        ]);
+    }
+
+    public function reopenPeriod(Request $request, $id)
+    {
+        $period = AccountingPeriod::findOrFail($id);
+
+        if (!$request->boolean('reviewed')) {
+            Toastr::error(__('Review it first: open the review, check the details and tick the confirmation box.'), __('msg_error'));
+
+            return redirect()->route('admin.fiscal-years.show', $period->fiscal_year_id);
+        }
+
+        try {
+            app(\App\Services\Accounting\PeriodControls::class)->reopenMonth($period, Auth::id(), (string) $request->input('void_reason'));
+            Toastr::success(__(':month is open again.', ['month' => $period->name]), __('msg_success'));
+        } catch (\RuntimeException $e) {
+            Toastr::error($e->getMessage(), __('msg_error'));
+        }
+
+        return redirect()->route('admin.fiscal-years.show', $period->fiscal_year_id);
     }
 }

@@ -680,12 +680,22 @@ class ExamRoutineController extends Controller
         DB::beginTransaction();
         try {
             foreach ($request->programs as $programId) {
+                // A course in a course group: each programme sits the paper
+                // under its own code of the group (see ClassRoutineController).
+                $courseId = (int) $request->subject;
+                if ($groupId = \App\Services\Academic\CourseGroups::groupOf((int) $request->subject)) {
+                    $own = \App\Services\Academic\CourseGroups::courseForProgramme($groupId, (int) $programId);
+                    if ($own) {
+                        $courseId = (int) $own->id;
+                    }
+                }
+
                 // Check if this exact routine already exists
                 $exists = ExamRoutine::where('program_id', $programId)
                     ->where('session_id', $request->session)
                     ->where('semester_id', $request->semester)
                     ->where('section_id', $request->section)
-                    ->where('subject_id', $request->subject)
+                    ->where('subject_id', $courseId)
                     ->where('exam_type_id', $request->type)
                     ->exists();
 
@@ -702,7 +712,7 @@ class ExamRoutineController extends Controller
                 $examRoutine->session_id = $request->session;
                 $examRoutine->semester_id = $request->semester;
                 $examRoutine->section_id = $request->section;
-                $examRoutine->subject_id = $request->subject;
+                $examRoutine->subject_id = $courseId;
                 $examRoutine->exam_type_id = $request->type;
                 $examRoutine->date = $request->date;
                 $examRoutine->start_time = $request->start_time;

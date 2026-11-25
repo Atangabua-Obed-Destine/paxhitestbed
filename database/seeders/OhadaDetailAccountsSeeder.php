@@ -29,7 +29,8 @@ class OhadaDetailAccountsSeeder extends Seeder
 
     public function run(): void
     {
-        foreach ($this->accounts() as [$code, $name, $nameFr, $parentCode, $type, $normal]) {
+        // Standard SYSCOHADA numbering: see App\Console\Commands\ChartSyscohada.
+        foreach (\App\Console\Commands\ChartSyscohada::seederTuples($this->accounts()) as [$code, $name, $nameFr, $parentCode, $type, $normal]) {
             $parent = ChartOfAccount::where('account_code', $parentCode)->first();
 
             if (!$parent) {

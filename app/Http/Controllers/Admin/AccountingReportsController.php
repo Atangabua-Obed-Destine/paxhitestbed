@@ -633,4 +633,18 @@ class AccountingReportsController extends Controller
             return back()->with('error', __('error_exporting_report'));
         }
     }
+
+    /**
+     * Financial health: the first figures an accountant and a board look at,
+     * from the books, each with a plain verdict. See FinancialHealth.
+     */
+    public function financialHealth(Request $request)
+    {
+        $request->validate(['as_of' => 'nullable|date']);
+
+        return view('admin.accounting.reports.financial-health', [
+            'title' => __('Financial health'),
+            'h' => app(\App\Services\Accounting\FinancialHealth::class)->summary($request->input('as_of')),
+        ]);
+    }
 }

@@ -34,20 +34,31 @@ check('every journal entry balances on its own', $unbalanced === 0, $unbalanced 
 // Derived, not frozen: new transactions post themselves as they are recorded,
 // and a corrected one adds a reversal. A hardcoded total goes stale the first
 // time someone takes a fee payment.
-$postable = DB::table('expenses')->count()
-    + DB::table('incomes')->count()
-    + DB::table('fees')->where('paid_amount', '>', 0)->count();
-// Correcting a transaction leaves three rows, not one: the original stays, a
-// reversal cancels it, and the new figure is posted. That is the point of a
-// ledger — history is added to, never rewritten.
-$reversals = DB::table('journal_entries')->where('reference_type', 'like', '%_reversal')->count();
-$entries = DB::table('journal_entries')->count();
-check('an entry exists for every transaction, plus a reversal and repost for each correction',
-    $entries === $postable + (2 * $reversals),
-    $entries . ' entries for ' . $postable . ' transactions and ' . $reversals . ' corrections');
+//
+// Counted per automatically posted source (fees, incomes, expenses, payment
+// plan instalments, payrolls): each standing posting is one active mapping,
+// and every correction adds a reversal. So entries of a source = its active
+// mappings + its reversed mappings x 2 (original kept, reversal added). A fee
+// settled entirely by credit, or an unpaid one, rightly has no entry, so the
+// count is of mappings, not of source rows.
+$sources = ['fee', 'income', 'expense', 'payment_plan_payment', 'payroll'];
+$standing = DB::table('transaction_mappings')->whereIn('transaction_type', $sources)->where('status', 'active')->count();
+$sourceEntries = DB::table('journal_entries')->whereIn('reference_type', $sources)->whereNull('deleted_at')->count();
+$sourceReversals = DB::table('journal_entries')->whereIn('reference_type', array_map(fn ($t) => $t . '_reversal', $sources))->whereNull('deleted_at')->count();
+check('each source posting stands once, and each correction is an original plus its reversal',
+    $sourceEntries === $standing + $sourceReversals,
+    $sourceEntries . ' entries, ' . $standing . ' standing, ' . $sourceReversals . ' reversals');
+$unmapped = DB::table('fees')->where('paid_amount', '>', 0)->whereNotNull('pay_date')
+    // What the fee's own entry carries once its earlier receipts are posted on their days.
+    ->whereRaw(App\Services\FeeLedgerPosting::remainderSql('fees') . ' > 0.009')
+    ->whereNotExists(fn ($q) => $q->from('transaction_mappings as tm')->whereColumn('tm.transaction_id', 'fees.id')
+        ->where('tm.transaction_type', 'fee')->where('tm.status', 'active'))
+    ->count();
+check('every fee that received cash has a standing posting', $unmapped === 0, $unmapped . ' without');
 
-check('every entry is posted',
-    DB::table('journal_entries')->where('is_posted', false)->count() === 0);
+// A test entry that was soft-deleted unposted is out of the books.
+check('every entry in the books is posted',
+    DB::table('journal_entries')->whereNull('deleted_at')->where('is_posted', false)->count() === 0);
 
 $lineless = DB::table('journal_entries as j')
     ->leftJoin('journal_entry_lines as l', 'l.journal_entry_id', '=', 'j.id')
@@ -56,21 +67,31 @@ check('no entry is missing its lines', $lineless === 0, $lineless . ' empty');
 
 // ---- reconciliation to source -------------------------------------------
 $expenseSource = round((float) DB::table('expenses')->sum('amount'), 2);
-$expensePosted = round((float) DB::table('journal_entries')->where('reference_type', 'expense')->sum('total_debit'), 2);
+// Net of reversals: a corrected record is reversed and posted again, and
+// only the standing posting should equal it.
+$netPosted = fn (string $type) => round((float) DB::table('journal_entries')->where('reference_type', $type)->whereNull('deleted_at')->sum('total_debit')
+    - (float) DB::table('journal_entries')->where('reference_type', $type . '_reversal')->whereNull('deleted_at')->sum('total_debit'), 2);
+$expenseSource = round((float) DB::table('expenses')->where('status', 1)->sum('amount'), 2);
+$expensePosted = $netPosted('expense');
 check('posted expenditure equals the expense records',
     abs($expenseSource - $expensePosted) < 0.01,
     number_format($expensePosted) . ' vs ' . number_format($expenseSource));
 
 $incomeSource = round((float) DB::table('incomes')->sum('amount'), 2);
-$incomePosted = round((float) DB::table('journal_entries')->where('reference_type', 'income')->sum('total_debit'), 2);
+$incomeSource = round((float) DB::table('incomes')->where('status', 1)->sum('amount'), 2);
+$incomePosted = $netPosted('income');
 check('posted income equals the income records',
     abs($incomeSource - $incomePosted) < 0.01,
     number_format($incomePosted) . ' vs ' . number_format($incomeSource));
 
-$feeSource = round((float) DB::table('fees')->where('paid_amount', '>', 0)->sum('paid_amount'), 2);
-$feePosted = round((float) DB::table('journal_entries')->where('reference_type', 'fee')->sum('total_debit'), 2)
-    - round((float) DB::table('journal_entries')->where('reference_type', 'fee_reversal')->sum('total_debit'), 2);
-check('posted fee receipts equal the fee records',
+// A fee posts the cash it received (credit brought in from another fee is not
+// cash), less instalments a payment plan posts on its own.
+$feeSource = round((float) DB::table('fees')->where('paid_amount', '>', 0)->whereNotNull('pay_date')
+    ->sum(DB::raw(App\Models\Fee::cashReceivedSql('fees'))), 2)
+    - round((float) DB::table('payment_plan_payments')->where('status', '!=', 'reversed')->sum('amount'), 2);
+// The fee's own entries, and its earlier receipts posted on their own days.
+$feePosted = $netPosted('fee') + $netPosted('fee_receipt');
+check('posted fee receipts equal the cash the fees received',
     abs($feeSource - $feePosted) < 0.01,
     number_format($feePosted) . ' vs ' . number_format($feeSource));
 
@@ -125,7 +146,14 @@ check('entries are spread across both fiscal years', $byYear->count() === 2, $by
 // ---- postings land only on real, postable accounts ----------------------
 $toHeading = DB::table('journal_entry_lines as l')
     ->join('chart_of_accounts as c', 'c.id', '=', 'l.account_id')
-    ->where('c.account_category', 'heading')->count();
+    ->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+    ->whereNull('e.deleted_at')
+    ->where('c.account_category', 'heading')
+    // An entry posted to a heading and since reversed (with its reversal) no
+    // longer stands; only a standing posting on a heading is a fault.
+    ->where('e.is_reversed', 0)
+    ->whereNull('e.reversed_entry_id')
+    ->count();
 check('nothing posted to a summary account', $toHeading === 0, $toHeading . ' lines');
 
 $orphanAccount = DB::table('journal_entry_lines')

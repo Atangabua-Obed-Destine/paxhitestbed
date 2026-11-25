@@ -12,7 +12,7 @@
                         <h3 class="card-title">{{ __('recurring_entries') }} ({{ __('ecritures_recurrentes') }})</h3>
                         <div class="card-tools">
                             @can('recurring-entries-process')
-                            <form action="{{ route('admin.recurring-entries.process-all') }}" method="POST" class="d-inline">
+                            <form data-review="{{ __('I have checked every entry due and confirm posting them.') }}" data-review-label="{{ __('Post them') }}" action="{{ route('admin.recurring-entries.process-all') }}" method="POST" class="d-inline">
                                 @csrf
                                 <button type="submit" class="btn btn-success btn-sm mr-2" onclick="return confirm('{{ __('confirm_process_all') }}')">
                                     <i class="fas fa-play"></i> {{ __('process_all_due') }}
@@ -155,7 +155,7 @@
                                             @endif
                                         </td>
                                         <td class="text-right">
-                                            <strong>{{ format_amount($entry->lines->sum('debit_amount')) }}</strong>
+                                            <strong>{{ format_amount($entry->lines->sum('debit')) }}</strong>
                                         </td>
                                         <td class="text-center">
                                             {{ $entry->occurrences_created ?? 0 }}
@@ -187,7 +187,7 @@
                                             
                                             @can('recurring-entries-process')
                                             @if($entry->status == 'active')
-                                            <form action="{{ route('admin.recurring-entries.process', $entry->id) }}" method="POST" style="display: inline-block;">
+                                            <form data-review="{{ __('I have checked this entry and its date, and confirm posting it.') }}" data-review-label="{{ __('Post it') }}" action="{{ route('admin.recurring-entries.process', $entry->id) }}" method="POST" style="display: inline-block;">
                                                 @csrf
                                                 <button type="submit" class="btn btn-success btn-xs" title="{{ __('process_now') }}" onclick="return confirm('{{ __('confirm_process') }}')">
                                                     <i class="fas fa-play"></i>

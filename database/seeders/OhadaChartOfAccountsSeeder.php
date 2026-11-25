@@ -82,6 +82,13 @@ class OhadaChartOfAccountsSeeder extends Seeder
 
     private function getOhadaAccounts()
     {
+        // Written in the school's original numbering; standardised to SYSCOHADA
+        // here (App\Console\Commands\ChartSyscohada), with the headings it adds.
+        return \App\Console\Commands\ChartSyscohada::seederRows($this->originalAccounts());
+    }
+
+    private function originalAccounts(): array
+    {
         return [
             // CLASS 1: Capital/Equity
             ['account_code' => '1', 'account_name' => 'Capital Accounts', 'account_name_fr' => 'Comptes de Capitaux', 'class_number' => 1, 'account_type' => 'equity', 'account_category' => 'heading', 'normal_balance' => 'credit', 'is_system' => true, 'parent_id' => null],

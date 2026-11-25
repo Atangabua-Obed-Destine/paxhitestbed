@@ -74,31 +74,13 @@
                         <!-- Summary Cards -->
                         <div class="row mb-4">
                             <div class="col-md-4">
-                                <div class="info-box bg-info">
-                                    <span class="info-box-icon"><i class="fas fa-building"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">{{ __('total_acquisition_cost') }}</span>
-                                        <span class="info-box-number">{{ format_amount($totals['acquisition_cost'] ?? 0) }} FCFA</span>
-                                    </div>
-                                </div>
+                                <div class="card text-white bg-info mb-0"><div class="card-body py-3 d-flex align-items-center"><i class="fas fa-building fa-2x mr-3 me-3" style="opacity:.8"></i><div><div class="small">{{ __('total_acquisition_cost') }}</div><div class="h5 mb-0" style="font-variant-numeric:tabular-nums">{{ format_amount($totals['acquisition_cost'] ?? 0) }} FCFA</div></div></div></div>
                             </div>
                             <div class="col-md-4">
-                                <div class="info-box bg-warning">
-                                    <span class="info-box-icon"><i class="fas fa-chart-line"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">{{ __('accumulated_depreciation') }}</span>
-                                        <span class="info-box-number">{{ format_amount($totals['accumulated_depreciation'] ?? 0) }} FCFA</span>
-                                    </div>
-                                </div>
+                                <div class="card text-white bg-warning mb-0"><div class="card-body py-3 d-flex align-items-center"><i class="fas fa-chart-line fa-2x mr-3 me-3" style="opacity:.8"></i><div><div class="small">{{ __('accumulated_depreciation') }}</div><div class="h5 mb-0" style="font-variant-numeric:tabular-nums">{{ format_amount($totals['accumulated_depreciation'] ?? 0) }} FCFA</div></div></div></div>
                             </div>
                             <div class="col-md-4">
-                                <div class="info-box bg-success">
-                                    <span class="info-box-icon"><i class="fas fa-balance-scale"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">{{ __('net_book_value') }}</span>
-                                        <span class="info-box-number">{{ format_amount($totals['book_value'] ?? 0) }} FCFA</span>
-                                    </div>
-                                </div>
+                                <div class="card text-white bg-success mb-0"><div class="card-body py-3 d-flex align-items-center"><i class="fas fa-balance-scale fa-2x mr-3 me-3" style="opacity:.8"></i><div><div class="small">{{ __('net_book_value') }}</div><div class="h5 mb-0" style="font-variant-numeric:tabular-nums">{{ format_amount($totals['book_value'] ?? 0) }} FCFA</div></div></div></div>
                             </div>
                         </div>
 

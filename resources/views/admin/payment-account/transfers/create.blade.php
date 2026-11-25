@@ -17,7 +17,9 @@
                         </div>
                     </div>
                     <!-- /.card-header -->
-                    <form action="{{ route('admin.payment-account-transfer.store') }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('admin.payment-account-transfer.store') }}" method="POST" enctype="multipart/form-data"
+                          data-review="{{ __('I have checked the accounts, the amount and the ledger entry, and confirm this transfer.') }}"
+                          data-review-label="{{ __('Transfer and post') }}">
                         @csrf
                         <div class="card-body">
                             <div class="alert alert-info">

@@ -111,7 +111,7 @@ function payOnePayroll(PayrollTaxBreakdownService $breakdown, App\User $admin): 
     return ['payroll' => $payroll, 'entry' => $entry];
 }
 
-$state = ChartOfAccount::where('account_code', '443')->first();
+$state = ChartOfAccount::where('account_code', \App\Console\Commands\ChartSyscohada::current('443'))->first();
 $social = ChartOfAccount::where('account_code', '431')->first();
 $bank = ChartOfAccount::where('account_code', '521')->first();
 
@@ -598,6 +598,7 @@ if (!$plain) {
             $countBefore = TaxRemittance::count();
 
             $post = Illuminate\Http\Request::create('/admin/staff/tax-remittance', 'POST', [
+                'reviewed' => 1,
                 '_token' => app('session.store')->token(),
                 'liability_account_id' => $payable['account_id'],
                 'salary_month' => $payable['month'],

@@ -50,6 +50,11 @@ $call = function (string $method, string $path, array $data = []) use ($kernel) 
     if ($method !== 'GET') {
         $data['_token'] = csrf_token();
     }
+    // Money-posting screens go through the review dialog (RequireReview);
+    // these steps act as if it had been confirmed.
+    if ($method !== 'GET' && !array_key_exists('reviewed', $data)) {
+        $data['reviewed'] = 1;
+    }
     $request = Request::create($path, $method, $data);
     $request->setLaravelSession(app('session.store'));
     $request->headers->set('referer', 'http://localhost/admin/dashboard');
@@ -59,6 +64,18 @@ $call = function (string $method, string $path, array $data = []) use ($kernel) 
 $errors = fn () => session('errors') ? implode(' | ', session('errors')->all()) : '';
 
 $acct = DB::table('chart_of_accounts')->pluck('id', 'account_code');
+// Old codes also find their renumbered account (53 -> 552, 40 -> 401...), so
+// this test reads the same on either side of accounts:syscohada. 12 is not
+// aliased: the test uses it as retained earnings, which the new 12 is.
+$acct = $acct->all();
+foreach (\App\Console\Commands\ChartSyscohada::MOVES as [$from, , $to]) {
+    if ($from !== '12' && isset($acct[$to]) && \App\Console\Commands\ChartSyscohada::current($from) === $to) {
+        $acct[$from] = $acct[$to];
+    }
+}
+$acct = collect($acct);
+$MM = \App\Console\Commands\ChartSyscohada::current('53'); // mobile money: 552 on the standard chart
+
 $codeOf = DB::table('chart_of_accounts')->pluck('account_code', 'id');
 $today = date('Y-m-d');
 
@@ -116,14 +133,14 @@ try {
     check('a default that is not a cash account is refused', (int) App\Models\LedgerCashSetting::current()->cash_account_id === (int) $acct['571']);
 
     section('3. Incomes and expenses (current method numbers: 1 cash, 2 bank, 3/4 mobile money)');
-    foreach ([[1, '571'], [2, '521'], [3, '53'], [4, '53']] as [$method, $code]) {
+    foreach ([[1, '571'], [2, '521'], [3, $MM], [4, $MM]] as [$method, $code]) {
         $call('POST', '/admin/account/income', ['category' => 2, 'title' => 'TEST income m' . $method, 'amount' => 1000, 'date' => $today, 'payment_method' => $method]);
         $row = App\Models\Income::where('title', 'TEST income m' . $method)->latest('id')->first();
         check("income paid by method $method posts to $code", $row && $cashSide('income', $row->id) === "$code Dr", $row ? $cashSide('income', $row->id) : $errors());
     }
     $call('POST', '/admin/account/income', ['category' => 2, 'title' => 'TEST income via wallet', 'amount' => 1000, 'date' => $today, 'payment_method' => 1, 'payment_account_id' => $wallet->id]);
     $viaWallet = App\Models\Income::where('title', 'TEST income via wallet')->latest('id')->first();
-    check('a payment account named on the income wins over its method (wallet → 53)', $cashSide('income', $viaWallet->id) === '53 Dr', $cashSide('income', $viaWallet->id));
+    check("a payment account named on the income wins over its method (wallet → $MM)", $cashSide('income', $viaWallet->id) === "$MM Dr", $cashSide('income', $viaWallet->id));
     foreach ([[1, '571'], [2, '521']] as [$method, $code]) {
         $call('POST', '/admin/account/expense', ['category' => 2, 'title' => 'TEST expense m' . $method, 'amount' => 700, 'date' => $today, 'payment_method' => $method]);
         $row = App\Models\Expense::where('title', 'TEST expense m' . $method)->latest('id')->first();
@@ -143,7 +160,7 @@ try {
     section('4. Fees (older method numbers: 1/2 cash, 3 MTN, 4 bank)');
     $enroll = App\Models\StudentEnroll::whereHas('student', fn ($q) => $q->where('student_id', 'E2E-STU-01'))->first()
         ?? App\Models\StudentEnroll::where('status', 1)->first();
-    foreach ([[4, '521'], [3, '53'], [2, '571']] as [$method, $code]) {
+    foreach ([[4, '521'], [3, $MM], [2, '571']] as [$method, $code]) {
         $before = (int) DB::table('fees')->max('id');
         $call('POST', '/admin/fees-student-quick-assign', ['student' => $enroll->id, 'category' => 5, 'amount' => 5000, 'type' => 1, 'assign_date' => $today, 'due_date' => $today]);
         $fee = App\Models\Fee::where('id', '>', $before)->first();
@@ -190,7 +207,7 @@ try {
 
     section('7. The books beside the ledger');
     $cmp = app(App\Services\Accounting\CashAccounts::class)->comparison();
-    check('the comparison lists each linked ledger account', $cmp->pluck('account_code')->map(fn ($c) => (string) $c)->sort(fn ($a, $b) => strcmp($a, $b))->values()->all() === ['521', '53', '571'], $cmp->pluck('account_code')->implode(','));
+    check('the comparison lists each linked ledger account', $cmp->pluck('account_code')->map(fn ($c) => (string) $c)->sort(fn ($a, $b) => strcmp($a, $b))->values()->all() === collect(['521', $MM, '571'])->sort(fn ($a, $b) => strcmp($a, $b))->values()->all(), $cmp->pluck('account_code')->implode(','));
     check('and the page shows it', str_contains((string) $call('GET', '/admin/accounting/cash-accounts')->getContent(), 'Books beside the ledger'));
 
     section('8. The ledger still balances');

@@ -69,6 +69,16 @@ class LedgerHealth
     ];
 
     /**
+     * SQL for what a fee's own posting should carry (see FeeLedgerPosting::resync):
+     * its cash less plan instalments, less the earlier receipts posted on
+     * their own days.
+     */
+    public static function feePostableSql(string $alias): string
+    {
+        return \App\Services\FeeLedgerPosting::remainderSql($alias);
+    }
+
+    /**
      * Every check, worst first.
      *
      * @return array<int, array{
@@ -443,10 +453,20 @@ class LedgerHealth
                 ->pluck('reference_id')
                 ->all();
 
+            // What the source should post. For a fee that is the cash it
+            // received, less instalments a payment plan posts on its own
+            // (FeeLedgerPosting) — not paid_amount, which also counts credit
+            // brought in from another fee. A fee settled wholly by credit
+            // rightly has no entry, and must not be reported as missing one.
+            $amountOf = fn (string $alias) => $type === 'fee'
+                ? self::feePostableSql($alias)
+                : $alias . '.' . $meta['amount'];
+
             $unposted = DB::table($meta['table'])
                 ->whereNotIn('id', $posted ?: [0])
                 ->when($meta['should_post'], fn ($q) => $q->whereRaw($meta['should_post']))
-                ->select('id', DB::raw("{$meta['amount']} as amount"), DB::raw("{$meta['date']} as date"),
+                ->when($type === 'fee', fn ($q) => $q->whereNotNull('pay_date')->whereRaw($amountOf($meta['table']) . ' > 0.009'))
+                ->select('id', DB::raw($amountOf($meta['table']) . ' as amount'), DB::raw("{$meta['date']} as date"),
                     DB::raw("'{$type}' as kind"))
                 ->get();
 
@@ -475,9 +495,9 @@ class LedgerHealth
                 ->where('j.reference_type', $type)
                 ->where('j.is_reversed', 0)
                 ->whereNull('j.deleted_at')
-                ->whereRaw("ABS({$entryAmount} - s.{$meta['amount']}) > 0.009")
+                ->whereRaw("ABS({$entryAmount} - " . $amountOf('s') . ') > 0.009')
                 ->select('j.id', 'j.reference_id', 'j.total_debit',
-                    DB::raw("s.{$meta['amount']} as source_amount"), DB::raw("'{$type}' as kind"))
+                    DB::raw($amountOf('s') . ' as source_amount'), DB::raw("'{$type}' as kind"))
                 ->get();
 
             $amountDrift = array_merge($amountDrift, $amounts->all());
@@ -501,6 +521,17 @@ class LedgerHealth
             'The ledger and the transaction disagree about how much money moved.',
             'For fees this is usually credit applied from another fee rather than cash: run php artisan fees:credit-audit.',
             $amountDrift, self::WARNING);
+
+        // Fees on accrual: 411 must hold exactly what the fee records say
+        // students owe; 419 exactly the credit not yet used.
+        if (FeeAccrual::enabled()) {
+            $owed = app(FeeAccrual::class)->tieOut();
+            $out[] = $this->check('receivable_tieout', 'Agreement', 'What students owe (411) differs from the fee records',
+                $owed['agrees'] ? 0 : 1, abs($owed['difference']),
+                sprintf('411 holds %s; the fees say %s is owed.', format_amount($owed['ledger']), format_amount($owed['expected'])),
+                'Run php artisan fees:accrual --enable to bring every fee\'s billing into line.',
+                [], self::CRITICAL);
+        }
 
         return $out;
     }

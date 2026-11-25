@@ -141,7 +141,7 @@ echo "\n== The accounts that other accounts depend on ==\n";
 // Each of these was missing while its counterpart already existed, so the
 // counterpart had nothing to work against.
 $pairs = [
-    ['683', '245', 'vehicle depreciation has a vehicle asset to depreciate'],
+    [\App\Console\Commands\ChartSyscohada::current('683'), '245', 'vehicle depreciation has a vehicle asset to depreciate'],
     ['79', '691', 'a provision can be released as well as raised'],
 ];
 

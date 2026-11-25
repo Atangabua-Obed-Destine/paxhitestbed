@@ -78,6 +78,13 @@ class TransactionAutoMapService
             [$debitAccountId, $creditAccountId] = app(\App\Services\Accounting\CashAccounts::class)
                 ->apply((int) $defaultMapping->debit_account_id, (int) $defaultMapping->credit_account_id, $transactionType, (int) $transactionId);
 
+            // Fees on accrual: a billed fee's income was posted when it was
+            // assigned (FeeAccrual), so the cash it receives settles what the
+            // student owed (411) rather than earning income a second time.
+            if ($settles = \App\Services\Accounting\FeeAccrual::settlementAccountFor($transactionType, (int) $transactionId)) {
+                $creditAccountId = $settles;
+            }
+
             $mapping = TransactionMapping::updateOrCreate(
                 [
                     'transaction_type' => $transactionType,
@@ -325,23 +332,32 @@ class TransactionAutoMapService
          * fixes by creating the year. A wrong answer here is worse than none:
          * null is visible, and a misfiled entry is not.
          */
-        $fiscalYear = FiscalYear::forDate($mapping->transaction_date);
+        $entryDate = \Carbon\Carbon::parse($mapping->transaction_date)->toDateString();
+        $fiscalYear = FiscalYear::forDate($entryDate);
+        $accountingPeriod = FiscalYear::periodForDate($entryDate);
 
-        $accountingPeriod = $fiscalYear
-            ? AccountingPeriod::where('is_closed', false)
-                ->where('fiscal_year_id', $fiscalYear->id)
-                ->whereDate('start_date', '<=', $mapping->transaction_date)
-                ->whereDate('end_date', '>=', $mapping->transaction_date)
-                ->first()
-            : null;
+        // A closed month or year has been reported and must not change. This
+        // used to look only for an OPEN period, so a payment dated in a closed
+        // month was posted anyway, with no period at all — straight through the
+        // lock. Like a reversal (reversalPlacement), it now lands today instead:
+        // a late record of an old event is a new event in the books.
+        if (($fiscalYear && $fiscalYear->is_closed) || ($accountingPeriod && $accountingPeriod->is_closed)) {
+            $entryDate = now()->toDateString();
+            $fiscalYear = FiscalYear::forDate($entryDate);
+            $accountingPeriod = FiscalYear::periodForDate($entryDate);
+
+            if (($fiscalYear && $fiscalYear->is_closed) || ($accountingPeriod && $accountingPeriod->is_closed)) {
+                throw new \RuntimeException('Both the transaction date and today fall in a closed period; nothing was posted.');
+            }
+        }
 
         // Generate entry number
-        $entryNumber = JournalEntry::generateEntryNumber($mapping->transaction_date);
+        $entryNumber = JournalEntry::generateEntryNumber($entryDate);
 
         // Create journal entry
         $journalEntry = JournalEntry::create([
             'entry_number' => $entryNumber,
-            'entry_date' => $mapping->transaction_date,
+            'entry_date' => $entryDate,
             'fiscal_year_id' => $fiscalYear->id ?? null,
             'accounting_period_id' => $accountingPeriod->id ?? null,
             'journal_type' => 'general',

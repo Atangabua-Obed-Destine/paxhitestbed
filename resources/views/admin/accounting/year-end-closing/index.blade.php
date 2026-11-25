@@ -113,7 +113,7 @@
                                             @endif
                                             
                                             @if($closing->status == 'in_progress' && $percentage == 100)
-                                            <form action="{{ route('admin.year-end-closing.generate-entries', $closing->id) }}" method="POST" style="display: inline-block;">
+                                            <form data-review="{{ __('I have checked the closing entries: the year\'s income and expenses are closed to the result.') }}" data-review-label="{{ __('Generate the entries') }}" action="{{ route('admin.year-end-closing.generate-entries', $closing->id) }}" method="POST" style="display: inline-block;">
                                                 @csrf
                                                 <button type="submit" class="btn btn-success btn-xs" title="{{ __('generate_closing_entries') }}" onclick="return confirm('{{ __('confirm_generate_entries') }}')">
                                                     <i class="fas fa-cogs"></i>
@@ -125,7 +125,7 @@
                                             
                                             @if($closing->status == 'pending_approval')
                                             @can('year-end-closing-approve')
-                                            <form action="{{ route('admin.year-end-closing.approve', $closing->id) }}" method="POST" style="display: inline-block;">
+                                            <form data-review="{{ __('I have checked the closing entries and confirm the year can be closed. Nothing more can be posted into it.') }}" data-review-label="{{ __('Approve the closing') }}" data-review-class="btn-danger" action="{{ route('admin.year-end-closing.approve', $closing->id) }}" method="POST" style="display: inline-block;">
                                                 @csrf
                                                 <button type="submit" class="btn btn-success btn-xs" title="{{ __('approve') }}" onclick="return confirm('{{ __('confirm_approve_closing') }}')">
                                                     <i class="fas fa-check"></i>
@@ -136,7 +136,7 @@
                                             
                                             @if($closing->status == 'approved')
                                             @can('year-end-closing-reverse')
-                                            <form action="{{ route('admin.year-end-closing.reverse', $closing->id) }}" method="POST" style="display: inline-block;">
+                                            <form data-review="{{ __('I understand this reverses the year-end closing and reopens the year.') }}" data-review-label="{{ __('Reverse the closing') }}" data-review-class="btn-danger" action="{{ route('admin.year-end-closing.reverse', $closing->id) }}" method="POST" style="display: inline-block;">
                                                 @csrf
                                                 <button type="submit" class="btn btn-danger btn-xs" title="{{ __('reverse') }}" onclick="return confirm('{{ __('confirm_reverse_closing') }}')">
                                                     <i class="fas fa-undo"></i>

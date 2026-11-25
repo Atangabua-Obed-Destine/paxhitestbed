@@ -160,7 +160,7 @@ $account = $find->invoke($service);
 check('an account is found', $account !== null);
 check('it is not the VAT account', $account && $account->account_code !== '441',
     $account->account_code ?? 'null');
-check('it is a withholding account', $account && $account->account_code === '443',
+check('it is a withholding account', $account && $account->account_code === \App\Console\Commands\ChartSyscohada::current('443'),
     ($account->account_code ?? '?') . ' ' . ($account->account_name ?? ''));
 check('it is a class 4 liability', $account && $account->class_number == 4
     && $account->account_type === 'liability');
@@ -366,7 +366,7 @@ try {
             return round($row->c - $row->d, 2);
         };
 
-        $state = $credited('443');
+        $state = $credited(\App\Console\Commands\ChartSyscohada::current('443'));
         $social = $credited('431');
 
         check('the State is credited its withholdings', $state > 0, number_format($state, 2));

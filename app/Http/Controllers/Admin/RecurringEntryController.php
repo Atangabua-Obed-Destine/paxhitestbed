@@ -36,6 +36,11 @@ class RecurringEntryController extends Controller
         try {
             $query = RecurringJournalEntry::with(['lines', 'creator']);
 
+            // The screen filters by status: active, paused or expired.
+            if ($request->filled('status')) {
+                $request->merge(['is_active' => $request->status === 'active' ? '1' : '0']);
+            }
+
             if ($request->filled('is_active')) {
                 $query->where('is_active', $request->boolean('is_active'));
             }
@@ -60,7 +65,10 @@ class RecurringEntryController extends Controller
             // Get upcoming entries
             $upcoming = $this->recurringService->getUpcoming(7);
 
-            return view('admin.accounting.recurring-entries.index', compact('entries', 'summary', 'upcoming'));
+            // The screen's cards read $statistics.
+            $statistics = $summary + ['monthly_total' => $summary['total_monthly_amount'] ?? 0];
+
+            return view('admin.accounting.recurring-entries.index', compact('entries', 'summary', 'upcoming', 'statistics'));
         } catch (Exception $e) {
             Log::error('Error loading recurring entries', ['exception' => $e->getMessage()]);
             return back()->with('error', __('error_loading_entries'));
@@ -90,6 +98,12 @@ class RecurringEntryController extends Controller
      */
     public function store(Request $request)
     {
+        // The forms name the fields template_name and total_occurrences.
+        $request->merge(array_filter([
+            'name' => $request->input('name', $request->input('template_name')),
+            'occurrences' => $request->input('occurrences', $request->input('total_occurrences')),
+        ], fn ($v) => $v !== null && $v !== ''));
+
         $request->validate([
             'name' => 'required|string|max:255',
             'frequency' => 'required|in:daily,weekly,biweekly,monthly,quarterly,semiannually,annually',
@@ -152,6 +166,12 @@ class RecurringEntryController extends Controller
      */
     public function update(Request $request, RecurringJournalEntry $recurringEntry)
     {
+        // The forms name the fields template_name and total_occurrences.
+        $request->merge(array_filter([
+            'name' => $request->input('name', $request->input('template_name')),
+            'occurrences' => $request->input('occurrences', $request->input('total_occurrences')),
+        ], fn ($v) => $v !== null && $v !== ''));
+
         $request->validate([
             'name' => 'required|string|max:255',
             'frequency' => 'required|in:daily,weekly,biweekly,monthly,quarterly,semiannually,annually',
@@ -259,24 +279,34 @@ class RecurringEntryController extends Controller
         try {
             $journalEntry = $this->recurringService->processEntry($recurringEntry, $request->date);
 
-            if ($journalEntry) {
-                return response()->json([
-                    'success' => true,
-                    'message' => __('entry_processed_successfully'),
-                    'journal_entry' => $journalEntry,
-                ]);
+            if ($request->expectsJson()) {
+                return $journalEntry
+                    ? response()->json(['success' => true, 'message' => __('entry_processed_successfully'), 'journal_entry' => $journalEntry])
+                    : response()->json(['success' => false, 'message' => __('entry_not_due_for_processing')], 400);
             }
 
-            return response()->json([
-                'success' => false,
-                'message' => __('entry_not_due_for_processing'),
-            ], 400);
+            // The screens submit an ordinary form: answer with the screen.
+            if ($journalEntry) {
+                \Flasher\Laravel\Facade\Flasher::addSuccess(__('Entry :number written for :date.', [
+                    'number' => $journalEntry->entry_number, 'date' => $journalEntry->entry_date->format('j F Y'),
+                ]) . ' ' . ($journalEntry->is_posted ? __('It is posted.') : __('Check and post it from Journal Entries.')), __('msg_success'));
+
+                return redirect()->route('admin.journal-entries.show', $journalEntry->id);
+            }
+
+            \Flasher\Laravel\Facade\Flasher::addError(__('This entry is not due yet.'), __('msg_error'));
+
+            return redirect()->route('admin.recurring-entries.show', $recurringEntry);
         } catch (Exception $e) {
             Log::error('Error processing recurring entry', ['id' => $recurringEntry->id, 'exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_processing_entry') . ': ' . $e->getMessage(),
-            ], 500);
+
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => __('error_processing_entry') . ': ' . $e->getMessage()], 500);
+            }
+
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage(), __('msg_error'));
+
+            return redirect()->route('admin.recurring-entries.show', $recurringEntry);
         }
     }
 
@@ -288,11 +318,18 @@ class RecurringEntryController extends Controller
         try {
             $results = $this->recurringService->processDueEntries($request->date);
 
-            return response()->json([
-                'success' => true,
-                'message' => __('entries_processed_successfully'),
-                'data' => $results,
-            ]);
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => __('entries_processed_successfully'), 'data' => $results]);
+            }
+
+            // The screen submits an ordinary form: say what happened.
+            \Flasher\Laravel\Facade\Flasher::addSuccess(trans_choice('{0} Nothing was due.|{1} One entry written.|[2,*] :count entries written.',
+                $results['created'], ['count' => $results['created']]), __('msg_success'));
+            foreach ($results['errors'] as $error) {
+                \Flasher\Laravel\Facade\Flasher::addError(is_array($error) ? implode(': ', array_filter($error, 'is_string')) : (string) $error, __('msg_error'));
+            }
+
+            return redirect()->route('admin.recurring-entries.index');
         } catch (Exception $e) {
             Log::error('Error processing recurring entries', ['exception' => $e->getMessage()]);
             return response()->json([

@@ -1,222 +1,121 @@
 @extends('admin.layouts.master')
-@section('title', __('bank_reconciliation'))
-
+@section('title', $title)
 @section('content')
-<!-- Main content -->
-<section class="content">
-    <div class="container-fluid">
+
+@include('admin.supplier-bill.partials.style')
+
+<div class="main-body">
+    <div class="page-wrapper">
         <div class="row">
-            <div class="col-md-12">
+            <div class="col-sm-12">
                 <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">{{ __('bank_reconciliation') }} ({{ __('rapprochement_bancaire') }})</h3>
-                        <div class="card-tools">
-                            @can('bank-reconciliation-create')
-                            <a href="{{ route('admin.bank-reconciliation.create') }}" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus"></i> {{ __('new_reconciliation') }}
-                            </a>
-                            @endcan
-                        </div>
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:10px">
+                        <h5 class="mb-0">{{ __('Bank reconciliation') }} <span class="ap-muted">({{ __('rapprochement bancaire') }})</span></h5>
+                        @can('bank-reconciliation-create')
+                        <a href="{{ route('admin.bank-reconciliation.create') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> {{ __('New reconciliation') }}</a>
+                        @endcan
                     </div>
-                    <!-- /.card-header -->
-                    <div class="card-body">
-                        <!-- Statistics -->
-                        <div class="row mb-3">
-                            <div class="col-md-3">
-                                <div class="small-box">
-                                    <div class="inner">
-                                        <h3>{{ $statistics['total'] ?? 0 }}</h3>
-                                        <p>{{ __('total_reconciliations') }}</p>
-                                    </div>
-                                    <div class="icon">
-                                        <i class="fas fa-tasks"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="small-box">
-                                    <div class="inner">
-                                        <h3>{{ $statistics['in_progress'] ?? 0 }}</h3>
-                                        <p>{{ __('in_progress') }}</p>
-                                    </div>
-                                    <div class="icon">
-                                        <i class="fas fa-spinner"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="small-box">
-                                    <div class="inner">
-                                        <h3>{{ $statistics['completed'] ?? 0 }}</h3>
-                                        <p>{{ __('completed') }}</p>
-                                    </div>
-                                    <div class="icon">
-                                        <i class="fas fa-check-circle"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="small-box">
-                                    <div class="inner">
-                                        <h3>{{ format_amount($statistics['unreconciled_amount'] ?? 0) }}</h3>
-                                        <p>{{ __('unreconciled_amount') }} (FCFA)</p>
-                                    </div>
-                                    <div class="icon">
-                                        <i class="fas fa-exclamation-triangle"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="card-block">
+                        <p class="ap-muted mb-3">{{ __('Each month, match every bank, cash and mobile money account against its statement. A completed reconciliation is where the next one starts.') }}</p>
 
-                        <!-- Filters -->
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <form action="{{ route('admin.bank-reconciliation.index') }}" method="GET">
-                                    <div class="row">
-                                        <div class="col-md-3">
-                                            <div class="form-group">
-                                                <label for="bank_account_id">{{ __('bank_account') }}</label>
-                                                <select name="bank_account_id" id="bank_account_id" class="form-control form-control-sm">
-                                                    <option value="">{{ __('all') }}</option>
-                                                    @foreach($bankAccounts as $account)
-                                                    <option value="{{ $account->id }}" {{ request('bank_account_id') == $account->id ? 'selected' : '' }}>
-                                                        {{ $account->account_code }} - {{ $account->account_name }}
-                                                    </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <label for="status">{{ __('status_title') }}</label>
-                                                <select name="status" id="status" class="form-control form-control-sm">
-                                                    <option value="">{{ __('all') }}</option>
-                                                    <option value="draft" {{ request('status') == 'draft' ? 'selected' : '' }}>{{ __('draft') }}</option>
-                                                    <option value="in_progress" {{ request('status') == 'in_progress' ? 'selected' : '' }}>{{ __('in_progress') }}</option>
-                                                    <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>{{ __('completed') }}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <label for="month">{{ __('month') }}</label>
-                                                <input type="month" name="month" id="month" class="form-control form-control-sm" value="{{ request('month') }}">
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2">
-                                            <div class="form-group">
-                                                <label>&nbsp;</label>
-                                                <button type="submit" class="btn btn-primary btn-sm btn-block">
-                                                    <i class="fas fa-filter"></i> {{ __('filter') }}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <!-- Reconciliations Table -->
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-hover">
+                        <h6 class="mb-2">{{ __('Accounts') }}</h6>
+                        <div class="table-responsive mb-4">
+                            <table class="table table-sm ap-table">
                                 <thead>
                                     <tr>
-                                        <th width="5%">{{ __('sl') }}</th>
-                                        <th>{{ __('bank_account') }}</th>
-                                        <th width="10%">{{ __('statement_date') }}</th>
-                                        <th width="12%" class="text-right">{{ __('statement_balance') }}</th>
-                                        <th width="12%" class="text-right">{{ __('book_balance') }}</th>
-                                        <th width="12%" class="text-right">{{ __('difference') }}</th>
-                                        <th width="8%">{{ __('status_title') }}</th>
-                                        <th width="12%">{{ __('action') }}</th>
+                                        <th>{{ __('Account') }}</th>
+                                        <th class="ap-num">{{ __('Balance in the books today') }}</th>
+                                        <th>{{ __('Reconciled to') }}</th>
+                                        <th class="ap-num">{{ __('Statement balance then') }}</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @forelse($reconciliations as $key => $reconciliation)
+                                    @foreach($accounts as $a)
+                                    @php $l = $last[$a->id]; @endphp
                                     <tr>
-                                        <td>{{ $reconciliations->firstItem() + $key }}</td>
-                                        <td>
-                                            <strong>{{ $reconciliation->bankAccount->account_code ?? 'N/A' }}</strong>
-                                            <br><small>{{ $reconciliation->bankAccount->account_name ?? '' }}</small>
-                                        </td>
-                                        <td>{{ \Carbon\Carbon::parse($reconciliation->statement_date)->format('d M Y') }}</td>
-                                        <td class="text-right">{{ format_amount($reconciliation->statement_ending_balance) }}</td>
-                                        <td class="text-right">{{ format_amount($reconciliation->book_balance) }}</td>
+                                        <td>{{ $a->account_code }} {{ $a->account_name }}</td>
+                                        <td class="ap-num">{{ format_amount($l['book']) }}</td>
+                                        <td>@if($l['last']){{ format_date($l['last']->statement_date) }}@else<span class="ap-chip unpaid">{{ __('Never reconciled') }}</span>@endif</td>
+                                        <td class="ap-num">{{ $l['last'] ? format_amount($l['last']->statement_closing_balance) : '—' }}</td>
                                         <td class="text-right">
-                                            @php
-                                                $diff = $reconciliation->statement_ending_balance - $reconciliation->adjusted_book_balance;
-                                            @endphp
-                                            <span class="{{ abs($diff) < 1 ? 'text-success' : 'text-danger' }}">
-                                                {{ format_amount($diff) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            @if($reconciliation->status == 'completed')
-                                            <span class="badge badge-success">{{ __('completed') }}</span>
-                                            @elseif($reconciliation->status == 'in_progress')
-                                            <span class="badge badge-warning">{{ __('in_progress') }}</span>
-                                            @else
-                                            <span class="badge badge-secondary">{{ __('draft') }}</span>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @can('bank-reconciliation-view')
-                                            <a href="{{ route('admin.bank-reconciliation.show', $reconciliation->id) }}" class="btn btn-info btn-xs" title="{{ __('view') }}">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
+                                            @can('bank-reconciliation-create')
+                                            <a href="{{ route('admin.bank-reconciliation.create', ['account_id' => $a->id]) }}" class="btn btn-sm btn-outline-primary">{{ __('Reconcile') }}</a>
                                             @endcan
-                                            
-                                            @if($reconciliation->status != 'completed')
-                                            @can('bank-reconciliation-edit')
-                                            <a href="{{ route('admin.bank-reconciliation.edit', $reconciliation->id) }}" class="btn btn-primary btn-xs" title="{{ __('edit') }}">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            @endcan
-                                            
-                                            @can('bank-reconciliation-complete')
-                                            <form action="{{ route('admin.bank-reconciliation.complete', $reconciliation->id) }}" method="POST" style="display: inline-block;">
-                                                @csrf
-                                                <button type="submit" class="btn btn-success btn-xs" title="{{ __('complete') }}" onclick="return confirm('{{ __('confirm_complete_reconciliation') }}')">
-                                                    <i class="fas fa-check"></i>
-                                                </button>
-                                            </form>
-                                            @endcan
-                                            
-                                            @can('bank-reconciliation-delete')
-                                            <form action="{{ route('admin.bank-reconciliation.destroy', $reconciliation->id) }}" method="POST" style="display: inline-block;">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('{{ __('are_you_sure') }}')" title="{{ __('delete') }}">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </form>
-                                            @endcan
-                                            @endif
                                         </td>
                                     </tr>
-                                    @empty
-                                    <tr>
-                                        <td colspan="8" class="text-center">{{ __('no_data_found') }}</td>
-                                    </tr>
-                                    @endforelse
+                                    @endforeach
                                 </tbody>
                             </table>
                         </div>
 
-                        <!-- Pagination -->
-                        <div class="mt-3">
-                            {{ $reconciliations->appends(request()->query())->links() }}
+                        <h6 class="mb-2">{{ __('Reconciliations') }}</h6>
+                        <form method="get" class="ap-filters mb-3">
+                            <div class="form-group">
+                                <label for="account_id">{{ __('Account') }}</label>
+                                <select name="account_id" id="account_id" class="form-control">
+                                    <option value="">{{ __('All accounts') }}</option>
+                                    @foreach($accounts as $a)
+                                    <option value="{{ $a->id }}" @selected(request('account_id') == $a->id)>{{ $a->account_code }} {{ $a->account_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="status">{{ __('Status') }}</label>
+                                <select name="status" id="status" class="form-control">
+                                    <option value="">{{ __('All') }}</option>
+                                    <option value="in_progress" @selected(request('status') === 'in_progress')>{{ __('In progress') }}</option>
+                                    <option value="completed" @selected(request('status') === 'completed')>{{ __('Completed') }}</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-info"><i class="fas fa-filter"></i> {{ __('Filter') }}</button>
+                            </div>
+                        </form>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped ap-table">
+                                <thead>
+                                    <tr>
+                                        <th>{{ __('Account') }}</th>
+                                        <th>{{ __('Statement date') }}</th>
+                                        <th>{{ __('Reference') }}</th>
+                                        <th class="ap-num">{{ __('Statement balance') }}</th>
+                                        <th class="ap-num">{{ __('Balance in the books') }}</th>
+                                        <th class="ap-num">{{ __('Difference') }}</th>
+                                        <th>{{ __('Status') }}</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($rows as $r)
+                                    <tr>
+                                        <td>{{ $r->chartOfAccount->account_code ?? '' }} {{ $r->chartOfAccount->account_name ?? '' }}</td>
+                                        <td>{{ format_date($r->statement_date) }}</td>
+                                        <td>{{ $r->statement_reference ?: '—' }}</td>
+                                        <td class="ap-num">{{ format_amount($r->statement_closing_balance) }}</td>
+                                        <td class="ap-num">{{ format_amount($r->book_balance) }}</td>
+                                        <td class="ap-num">{{ format_amount($r->difference) }}</td>
+                                        <td>
+                                            @if(in_array($r->status, ['completed', 'approved']))
+                                                <span class="ap-chip paid">{{ __('Completed') }}</span>
+                                            @else
+                                                <span class="ap-chip part_paid">{{ __('In progress') }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="text-right"><a href="{{ route('admin.bank-reconciliation.show', $r->id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye"></i></a></td>
+                                    </tr>
+                                    @empty
+                                    <tr><td colspan="8" class="ap-muted">{{ __('No reconciliation yet.') }}</td></tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
                         </div>
+                        {{ $rows->links() }}
                     </div>
-                    <!-- /.card-body -->
                 </div>
-                <!-- /.card -->
             </div>
-            <!-- /.col -->
         </div>
-        <!-- /.row -->
     </div>
-    <!-- /.container-fluid -->
-</section>
-<!-- /.content -->
+</div>
 @endsection

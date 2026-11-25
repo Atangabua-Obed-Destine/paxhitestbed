@@ -12,6 +12,7 @@ class BankReconciliationItem extends Model
     protected $fillable = [
         'bank_reconciliation_id',
         'item_type',
+        'category_id',
         'reference_number',
         'transaction_date',
         'description',

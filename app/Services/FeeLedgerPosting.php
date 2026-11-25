@@ -4,10 +4,17 @@ namespace App\Services;
 
 use App\Models\DefaultAccountMapping;
 use App\Models\Fee;
+use App\Models\FiscalYear;
+use App\Models\JournalEntry;
+use App\Models\JournalEntryLine;
+use App\Services\Accounting\CashAccounts;
+use App\Services\Accounting\FeeAccrual;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Keeps a fee's ledger posting equal to the cash the fee actually received.
+ * Keeps a fee's ledger postings equal to the cash the fee actually received,
+ * each part on the day it came in.
  *
  * Fees used to be posted at paid_amount. When an overpaid fee's excess was
  * applied to another fee as student credit, that second fee's paid_amount grew
@@ -18,13 +25,24 @@ use Illuminate\Support\Facades\DB;
  * A fee is now posted at its cash received (Fee::cash_received_amount). Credit
  * brought in from another fee is not cash; money transferred out of a fee was.
  *
- * Every change goes through TransactionAutoMapService, so the ledger keeps its
- * usual audit trail: the old entry is reversed, never deleted, and a reversal
- * lands in the original month while that period is open, or today once it is
- * closed.
+ * And by date. A fee has one pay_date, which every payment overwrites, so one
+ * entry for all its cash put October's money in December. Now the cash its
+ * approved receipts show arriving before pay_date is posted on those days,
+ * into the accounts those receipts name, as "parts" (fee_cash_parts); the
+ * fee's own entry carries the rest on pay_date. Receipts on the pay_date
+ * itself stay in the fee's own entry, so an ordinary payment makes no extra
+ * entries, and the order in which a payment saves the fee and its receipt
+ * changes nothing.
+ *
+ * Every change goes through TransactionAutoMapService or a reversal, so the
+ * ledger keeps its usual audit trail: the old entry is reversed, never
+ * deleted, and a reversal lands in the original month while that period is
+ * open, or today once it is closed.
  */
 class FeeLedgerPosting
 {
+    use Accounting\Concerns\PostsJournalEntries;
+
     public const UNCHANGED = 'unchanged';
     public const POSTED = 'posted';
     public const REPOSTED = 'reposted';
@@ -32,9 +50,92 @@ class FeeLedgerPosting
     public const NO_MAPPING = 'no_mapping';
     public const SKIPPED = 'skipped';
 
+    /** Journal reference types of the earlier-dated parts. */
+    public const PART_TYPES = ['fee_receipt', 'fee_receipt_reversal'];
+
     public function __construct(protected TransactionAutoMapService $autoMap)
     {
     }
+
+    /* ===================================================================
+     |  The rule, as SQL, for every report that needs it
+     |===================================================================*/
+
+    /** SQL: what a fee's postings carry in all — its cash received less plan instalments. */
+    public static function postableSql(string $alias = 'fees'): string
+    {
+        return '(' . Fee::cashReceivedSql($alias)
+            . ' - (SELECT COALESCE(SUM(ppp.amount), 0) FROM payment_plan_payments ppp'
+            . ' JOIN payment_plan_installments ppi ON ppi.id = ppp.installment_id'
+            . ' JOIN payment_plans pp ON pp.id = ppi.payment_plan_id'
+            . ' WHERE pp.fee_id = ' . $alias . ".id AND ppp.status != 'reversed'))";
+    }
+
+    /**
+     * SQL condition: receipt `pr` of fee `$alias` is posted on its own day.
+     * Approved, dated before the fee's pay_date, and inside a fiscal year: a
+     * receipt from before the books began has no month to post into, so it
+     * stays with the fee's own entry.
+     */
+    public static function splitReceiptCondition(string $alias = 'fees'): string
+    {
+        return "pr.verification_status = 'approved' AND {$alias}.pay_date IS NOT NULL AND pr.payment_date < {$alias}.pay_date"
+            . ' AND EXISTS (SELECT 1 FROM fiscal_years fy WHERE pr.payment_date BETWEEN fy.start_date AND fy.end_date)';
+    }
+
+    /** SQL: cash its approved receipts show arriving before its pay_date (inside the books). */
+    public static function priorSql(string $alias = 'fees'): string
+    {
+        return "(SELECT COALESCE(SUM(pr.amount), 0) FROM payment_receipts pr WHERE pr.fee_id = {$alias}.id AND "
+            . self::splitReceiptCondition($alias) . ')';
+    }
+
+    /**
+     * SQL: what the fee's own entry carries, on its pay_date: the postable
+     * amount less the earlier-dated parts. When receipts claim more than the
+     * fee received (a transfer out after the fact), nothing is split off and
+     * the fee's entry carries it all, as before.
+     */
+    public static function remainderSql(string $alias = 'fees'): string
+    {
+        $postable = self::postableSql($alias);
+        $prior = self::priorSql($alias);
+
+        return "({$postable} - CASE WHEN {$prior} <= {$postable} + 0.005 THEN {$prior} ELSE 0 END)";
+    }
+
+    /** SQL: the earlier-dated parts that are split off (0 when they would exceed the fee's cash). */
+    public static function splitPriorSql(string $alias = 'fees'): string
+    {
+        $postable = self::postableSql($alias);
+        $prior = self::priorSql($alias);
+
+        return "(CASE WHEN {$prior} <= {$postable} + 0.005 THEN {$prior} ELSE 0 END)";
+    }
+
+    /**
+     * SQL for a derived table of fee cash events (fee_id, event_date, amount):
+     * each fee's earlier receipts on their own days, and the rest of its cash
+     * received on its pay_date. The ledger posts exactly this split, so the
+     * budget sheet, the daybook and the fee collection chart read it too and
+     * agree with the ledger month by month.
+     */
+    public static function cashEventsSql(): string
+    {
+        $cash = Fee::cashReceivedSql('f');
+        $split = self::splitPriorSql('f');
+
+        return "SELECT f.id AS fee_id, f.pay_date AS event_date, ({$cash} - {$split}) AS amount"
+            . " FROM fees f WHERE f.paid_amount > 0 AND f.pay_date IS NOT NULL"
+            . " UNION ALL"
+            . " SELECT pr.fee_id, pr.payment_date AS event_date, pr.amount FROM payment_receipts pr"
+            . " JOIN fees f ON f.id = pr.fee_id"
+            . " WHERE f.paid_amount > 0 AND " . self::splitReceiptCondition('f') . " AND {$split} > 0";
+    }
+
+    /* ===================================================================
+     |  Posting
+     |===================================================================*/
 
     /**
      * What this fee's payment plans have taken from the student.
@@ -61,7 +162,7 @@ class FeeLedgerPosting
         return round((float) $total, 2);
     }
 
-    /** What the fee's active posting carries, or null when it has none. */
+    /** What the fee's own (pay_date) posting carries, or null when it has none. */
     public function postedAmount(Fee $fee): ?float
     {
         $total = DB::table('transaction_mappings as tm')
@@ -75,10 +176,61 @@ class FeeLedgerPosting
     }
 
     /**
-     * Bring the fee's posting into line with its cash received.
+     * The earlier-dated parts the fee's receipts call for, one per day and
+     * account. Empty when nothing came in before pay_date, when the receipts
+     * claim more than the fee received, or when the category has no mapping.
      *
-     * @param bool $force repost even when the amount already matches — for a
-     *                    changed category or date, which move the entry
+     * @return array<string, array{date:string, debit:int, credit:int, amount:float}>
+     */
+    public function desiredParts(Fee $fee, float $postable): array
+    {
+        if (empty($fee->pay_date) || $postable <= 0.009) {
+            return [];
+        }
+
+        $receipts = DB::table('payment_receipts as pr')
+            ->join('fees', 'fees.id', '=', 'pr.fee_id')
+            ->where('pr.fee_id', $fee->id)
+            ->whereRaw(self::splitReceiptCondition('fees'))
+            ->orderBy('pr.payment_date')->orderBy('pr.id')
+            ->get(['pr.payment_date', 'pr.amount', 'pr.payment_method', 'pr.payment_account_id']);
+
+        if ($receipts->isEmpty() || (float) $receipts->sum('amount') > $postable + 0.005) {
+            return [];
+        }
+
+        $mapping = DefaultAccountMapping::where('mapping_type', 'fee_category')
+            ->where('category_id', $fee->category_id)->where('status', 'active')->first();
+        if (!$mapping) {
+            return [];
+        }
+
+        $credit = FeeAccrual::settlementAccountFor('fee', (int) $fee->id) ?: (int) $mapping->credit_account_id;
+        $cash = app(CashAccounts::class);
+        $parts = [];
+
+        foreach ($receipts as $r) {
+            $debit = ($r->payment_account_id ? $cash->forPaymentAccount($r->payment_account_id) : null)
+                ?: ($r->payment_method ? $cash->forCurrentMethod((int) $r->payment_method) : null)
+                ?: (int) $mapping->debit_account_id;
+            $date = substr((string) $r->payment_date, 0, 10);
+            $key = $date . '|' . $debit . '|' . $credit;
+            $parts[$key] = [
+                'date' => $date,
+                'debit' => (int) $debit,
+                'credit' => (int) $credit,
+                'amount' => round(($parts[$key]['amount'] ?? 0) + (float) $r->amount, 2),
+            ];
+        }
+
+        return $parts;
+    }
+
+    /**
+     * Bring the fee's postings into line with its cash received, part by part.
+     *
+     * @param bool $force repost the pay_date entry even when the amount already
+     *                    matches — for a changed category, date or account
      *
      * @return string one of the class constants
      * @throws \RuntimeException when a repost fails; the reversal is undone with it
@@ -87,19 +239,26 @@ class FeeLedgerPosting
     {
         // Money taken through a payment plan is posted instalment by instalment,
         // so only what the fee took directly is left for the fee to post.
-        //
-        // This used to be a flat skip whenever the fee carried a plan link, which
-        // was wrong at both ends: a fee whose plan was cancelled and which was
-        // then paid directly stayed unposted for good, and a fee whose plan had
-        // completed lost the protection entirely — the link is cleared on
-        // completion, so its whole amount became postable on top of the
-        // instalments. Subtracting is true in every one of those states, and
-        // needs no link to work.
-        $cash = round($fee->cash_received_amount - $this->paidThroughPlans($fee), 2);
+        $postable = round($fee->cash_received_amount - $this->paidThroughPlans($fee), 2);
+
+        return DB::transaction(function () use ($fee, $postable, $userId, $force) {
+            $parts = $this->desiredParts($fee, $postable);
+            $partsChanged = $this->syncParts($fee, $parts, $userId ?? Auth::id());
+            $cash = round($postable - array_sum(array_column($parts, 'amount')), 2);
+
+            $result = $this->resyncOwnEntry($fee, $cash, $userId, $force);
+
+            return ($result === self::UNCHANGED && $partsChanged) ? self::REPOSTED : $result;
+        });
+    }
+
+    /** The fee's own entry, on its pay_date, for what is left after the parts. */
+    protected function resyncOwnEntry(Fee $fee, float $cash, ?int $userId, bool $force): string
+    {
         $posted = $this->postedAmount($fee);
         $shouldPost = $cash > 0.009 && !empty($fee->pay_date);
 
-        // Settled wholly by credit, or unpaid: nothing belongs in the ledger.
+        // Settled wholly by credit, unpaid, or all in earlier parts: nothing here.
         if (!$shouldPost) {
             if ($posted === null) {
                 return self::UNCHANGED;
@@ -134,13 +293,88 @@ class FeeLedgerPosting
             return self::NO_MAPPING;
         }
 
-        return DB::transaction(function () use ($fee, $payload, $userId) {
-            if (!$this->autoMap->remap('fee', $fee->id, $fee->category_id, $payload, $userId)) {
-                throw new \RuntimeException("Fee #{$fee->id} could not be reposted; its posting was left as it was.");
+        if (!$this->autoMap->remap('fee', $fee->id, $fee->category_id, $payload, $userId)) {
+            throw new \RuntimeException("Fee #{$fee->id} could not be reposted; its posting was left as it was.");
+        }
+
+        return self::REPOSTED;
+    }
+
+    /** Make the fee's earlier-dated parts match $desired. @return bool whether anything changed */
+    protected function syncParts(Fee $fee, array $desired, ?int $userId): bool
+    {
+        $changed = false;
+        $active = DB::table('fee_cash_parts')->where('fee_id', $fee->id)->where('status', 'active')->lockForUpdate()->get()
+            ->keyBy(fn ($p) => substr((string) $p->entry_date, 0, 10) . '|' . $p->debit_account_id . '|' . $p->credit_account_id);
+
+        foreach ($active as $key => $part) {
+            // Landed on another day because its month was closed: matched by account and amount.
+            $want = $desired[$key] ?? null;
+            if ($want && abs((float) $part->amount - $want['amount']) < 0.01) {
+                unset($desired[$key]);
+                continue;
             }
 
-            return self::REPOSTED;
-        });
+            $this->reversePart($part, $userId);
+            $changed = true;
+        }
+
+        foreach ($desired as $want) {
+            $this->postPart($fee, $want, $userId);
+            $changed = true;
+        }
+
+        return $changed;
+    }
+
+    protected function postPart(Fee $fee, array $want, ?int $userId): void
+    {
+        $date = $this->openDate($want['date']);
+        $description = 'Fee Payment - ' . ($fee->category->title ?? $fee->category->name ?? 'Student Fee') . ' (received ' . $want['date'] . ', fee #' . $fee->id . ')';
+
+        $partId = DB::table('fee_cash_parts')->insertGetId([
+            'fee_id' => $fee->id,
+            'entry_date' => $want['date'],
+            'debit_account_id' => $want['debit'],
+            'credit_account_id' => $want['credit'],
+            'amount' => $want['amount'],
+            'status' => 'active',
+            'created_by' => $userId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $entry = $this->newEntry($date, 'cash', $description, 'fee_receipt', $partId, $want['amount'], $userId, 'FEE-' . $fee->id);
+        JournalEntryLine::create(['journal_entry_id' => $entry->id, 'line_number' => 1, 'account_id' => $want['debit'],
+            'description' => $description, 'debit' => $want['amount'], 'credit' => 0]);
+        JournalEntryLine::create(['journal_entry_id' => $entry->id, 'line_number' => 2, 'account_id' => $want['credit'],
+            'description' => $description, 'debit' => 0, 'credit' => $want['amount']]);
+        $entry->load('lines');
+        $entry->post($userId);
+
+        DB::table('fee_cash_parts')->where('id', $partId)->update(['journal_entry_id' => $entry->id]);
+    }
+
+    protected function reversePart(object $part, ?int $userId): void
+    {
+        $original = $part->journal_entry_id ? JournalEntry::with('lines')->find($part->journal_entry_id) : null;
+        $reversalId = null;
+
+        if ($original && !$original->is_reversed) {
+            [$reversal] = $this->reverseEntry($original, 'fee_receipt_reversal', (int) $part->id, $userId);
+            $reversalId = $reversal->id;
+        }
+
+        DB::table('fee_cash_parts')->where('id', $part->id)
+            ->update(['status' => 'reversed', 'reversal_entry_id' => $reversalId, 'updated_at' => now()]);
+    }
+
+    protected function openDate(string $date): string
+    {
+        $year = FiscalYear::forDate($date);
+        $period = $year ? FiscalYear::periodForDate($date) : null;
+
+        return (($year && $year->is_closed) || ($period && $period->is_closed)) ? now()->toDateString() : $date;
     }
 
     protected function hasMapping(Fee $fee): bool

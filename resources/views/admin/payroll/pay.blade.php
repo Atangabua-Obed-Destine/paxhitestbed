@@ -2,7 +2,9 @@
     <div id="payModal-{{ $row->id }}" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
-              <form class="needs-validation" novalidate action="{{ route($route.'.pay', $payroll_data->id) }}" method="post" enctype="multipart/form-data">
+              <form class="needs-validation" novalidate action="{{ route($route.'.pay', $payroll_data->id) }}" method="post"
+                    data-review="{{ __('I have checked the salary, the account it is paid from and the ledger entry, and confirm this payment.') }}"
+                    data-review-label="{{ __('Pay and post') }}" enctype="multipart/form-data">
                 @csrf
                 <div class="modal-header">
                     <h5 class="modal-title" id="myModalLabel">{{ __('btn_pay') }}</h5>

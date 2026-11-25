@@ -285,7 +285,8 @@ class CourseClassFilter
         }
 
         return $this->routines($userId)
-            ->where('subject_id', $this->subjectId)
+            // the course and, in a course group, its other programmes' codes
+            ->whereIn('subject_id', \App\Services\Academic\CourseGroups::memberIds($this->subjectId))
             ->map(fn ($row) => $row->program_id . '|' . $row->semester_id . '|' . $row->section_id)
             ->unique()
             ->values()
@@ -304,7 +305,8 @@ class CourseClassFilter
         }
 
         return $this->routines($userId)
-            ->where('subject_id', $this->subjectId)
+            // the course and, in a course group, its other programmes' codes
+            ->whereIn('subject_id', \App\Services\Academic\CourseGroups::memberIds($this->subjectId))
             ->unique(fn ($row) => $row->program_id . '|' . $row->semester_id . '|' . $row->section_id)
             ->map(fn ($row) => [
                 'program_id' => $row->program_id,

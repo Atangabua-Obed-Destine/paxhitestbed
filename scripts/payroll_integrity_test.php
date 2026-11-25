@@ -75,6 +75,11 @@ $call = function (string $method, string $path, array $data = [], array $headers
     if ($method !== 'GET') {
         $data['_token'] = csrf_token();
     }
+    // Money-posting screens go through the review dialog (RequireReview);
+    // these steps act as if it had been confirmed.
+    if ($method !== 'GET' && !array_key_exists('reviewed', $data)) {
+        $data['reviewed'] = 1;
+    }
     $request = Request::create($path, $method, $data);
     $request->setLaravelSession(app('session.store'));
     $request->headers->set('referer', 'http://localhost/admin/staff/payroll');

@@ -2,6 +2,9 @@
 
 namespace App\Services\Academic;
 
+// CourseGroups is in this namespace: a register for a grouped course covers
+// every programme's code of the group.
+
 use App\Models\StudentAttendance;
 use App\Models\StudentEnroll;
 use App\Models\Subject;
@@ -135,7 +138,7 @@ class CourseRoster
     {
         $query = StudentEnroll::with(CourseClassFilter::RELATIONS)
             ->where('session_id', $filter->sessionId())
-            ->whereHas('subjects', fn ($q) => $q->where('subject_id', $filter->subjectId()));
+            ->whereHas('subjects', fn ($q) => $q->whereIn('subject_id', CourseGroups::memberIds($filter->subjectId())));
 
         if ($groups !== null) {
             // An empty allowed set means this user teaches no group of this
@@ -167,7 +170,7 @@ class CourseRoster
             return collect();
         }
 
-        $query = StudentAttendance::where('subject_id', $filter->subjectId())
+        $query = StudentAttendance::whereIn('subject_id', CourseGroups::memberIds($filter->subjectId()))
             ->whereIn('student_enroll_id', $enrollIds);
 
         if ($filter->from()) {
@@ -198,7 +201,7 @@ class CourseRoster
             return ['records' => 0, 'students' => 0];
         }
 
-        $query = StudentAttendance::where('subject_id', $filter->subjectId())
+        $query = StudentAttendance::whereIn('subject_id', CourseGroups::memberIds($filter->subjectId()))
             ->whereIn('student_enroll_id', $inScope);
 
         if ($enrollIds) {

@@ -18,7 +18,7 @@
                         </div>
                     </div>
                     <!-- /.card-header -->
-                    <form action="{{ route('admin.payment-account.withdraw', $payment_account->id) }}" 
+                    <form data-review="{{ __('I have checked the account, the amount and the ledger entry, and confirm this withdrawal.') }}" data-review-label="{{ __('Confirm and post') }}" action="{{ route('admin.payment-account.withdraw', $payment_account->id) }}" 
                           method="POST" enctype="multipart/form-data">
                         @csrf
                         <div class="card-body">

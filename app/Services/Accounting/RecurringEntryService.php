@@ -131,7 +131,7 @@ class RecurringEntryService
                         'debit' => $line['debit'] ?? 0,
                         'credit' => $line['credit'] ?? 0,
                         'description' => $line['description'] ?? null,
-                        'order' => $index + 1,
+                        'line_number' => $index + 1,
                     ]);
                 }
             }
@@ -198,7 +198,7 @@ class RecurringEntryService
                         'debit' => $line['debit'] ?? 0,
                         'credit' => $line['credit'] ?? 0,
                         'description' => $line['description'] ?? null,
-                        'order' => $index + 1,
+                        'line_number' => $index + 1,
                     ]);
                 }
             }

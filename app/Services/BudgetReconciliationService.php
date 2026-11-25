@@ -69,6 +69,13 @@ class BudgetReconciliationService
         // still does.
         $creditPostedAsCash = $this->feeCreditPostedAsCash($from, $to);
 
+        // The second is timing, and permanent by design. An overpayment is held
+        // on account 419 until it settles another fee (StudentCreditLedger), so
+        // the ledger takes it to income when it is used; the sheet, like the
+        // daybook, counts fee cash in the month it arrived. Over a window the two
+        // differ by exactly what the credit postings moved in or out of income.
+        $creditTiming = $this->feeIncomeTiming($from, $to);
+
         $sections = [];
         foreach (self::SECTION_CLASSES as $section => $meta) {
             $sheet = $this->actuals->sectionTotal($actuals['lines'], $section);
@@ -76,7 +83,7 @@ class BudgetReconciliationService
             $ledger = array_sum(array_column($accounts, 'amount'));
 
             $difference = round($sheet - $ledger, 2);
-            $explained = $section === 'income' ? round(-$creditPostedAsCash, 2) : 0.0;
+            $explained = $section === 'income' ? round(-$creditPostedAsCash - $creditTiming, 2) : 0.0;
 
             $sections[] = [
                 'section' => $section,
@@ -101,6 +108,17 @@ class BudgetReconciliationService
                 'detail' => sprintf(
                     'The ledger posted %s FCFA of student credit as cash received: overpayment moved from one fee to another was booked as income on both fees. The sheet counts that cash once. This needs a ledger correction; run php artisan fees:credit-audit for the detail.',
                     number_format($creditPostedAsCash)
+                ),
+            ];
+        }
+
+        if (abs($creditTiming) > 0.009) {
+            $knownDifferences[] = [
+                'section' => 'income',
+                'amount' => $creditTiming,
+                'detail' => sprintf(
+                    'Fee income timing: %s FCFA net. The sheet counts fee cash when it arrives. The ledger counts a fee as income when it is billed (fees on accrual), and money paid ahead or overpaid when it settles a fee (held on 419 until then). This is timing, not an error.',
+                    number_format($creditTiming)
                 ),
             ];
         }
@@ -159,7 +177,44 @@ class BudgetReconciliationService
             ->joinSub($posted, 'p', 'p.transaction_id', '=', 'f.id')
             ->when($from, fn ($q) => $q->whereDate('f.pay_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('f.pay_date', '<=', $to))
-            ->sum(DB::raw('p.total_debit - ' . \App\Models\Fee::cashReceivedSql('f'))), 2);
+            // Instalments taken through a payment plan post on their own, so a
+            // fee's posting carries its cash less those (FeeLedgerPosting).
+            ->sum(DB::raw('p.total_debit - ' . \App\Services\FeeLedgerPosting::remainderSql('f'))), 2);
+    }
+
+    /**
+     * Fee cash the ledger posted in the window, less the fee income it
+     * recognised there: billing on accrual, credit used, discounts honoured.
+     * The sheet counts the first; the ledger's class 7 holds the second. On a
+     * cash basis this is just the student credit timing; on accrual it also
+     * carries fees billed in one month and paid in another.
+     */
+    protected function feeIncomeTiming(?string $from, ?string $to): float
+    {
+        $window = fn ($q) => $q->where('e.is_posted', 1)->whereNull('e.deleted_at')
+            ->when($from, fn ($q) => $q->whereDate('e.entry_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('e.entry_date', '<=', $to));
+
+        $cash = (float) DB::table('journal_entries as e')->tap($window)
+            ->whereIn('e.reference_type', ['fee', 'payment_plan_payment', 'fee_receipt'])->sum('e.total_debit')
+            - (float) DB::table('journal_entries as e')->tap($window)
+            ->whereIn('e.reference_type', ['fee_reversal', 'payment_plan_payment_reversal', 'payment_plan_payments', 'fee_receipt_reversal'])->sum('e.total_debit');
+
+        $types = array_merge(
+            ['fee', 'fee_reversal', 'payment_plan_payment', 'payment_plan_payment_reversal', 'payment_plan_payments', 'fee_receipt', 'fee_receipt_reversal'],
+            \App\Services\Accounting\FeeAccrual::REFERENCE_TYPES,
+            \App\Services\Accounting\StudentCreditLedger::REFERENCE_TYPES
+        );
+        $income = (float) DB::table('journal_entry_lines as l')
+            ->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->join('chart_of_accounts as a', 'a.id', '=', 'l.account_id')
+            ->tap($window)
+            ->whereIn('e.reference_type', $types)
+            ->where('a.account_code', 'like', '7%')
+            ->sum(DB::raw('l.credit - l.debit'));
+
+        // Positive when the ledger recognised more fee income than cash came in.
+        return round($income - $cash, 2);
     }
 
     /**

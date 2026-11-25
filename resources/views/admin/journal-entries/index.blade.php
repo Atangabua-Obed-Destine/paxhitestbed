@@ -144,14 +144,14 @@
                                             
                                             @can('journal-entry-post')
                                             @if(!$entry->is_posted)
-                                            <form action="{{ route('admin.journal-entries.post', $entry->id) }}" method="POST" style="display: inline-block;">
+                                            <form data-review="{{ __('I have checked the accounts and amounts of this entry and confirm posting it.') }}" data-review-label="{{ __('Post the entry') }}" action="{{ route('admin.journal-entries.post', $entry->id) }}" method="POST" style="display: inline-block;">
                                                 @csrf
                                                 <button type="submit" class="btn btn-success btn-xs" title="{{ __('post_entry') }}" onclick="return confirm('{{ __('confirm_post_entry') }}')">
                                                     <i class="fas fa-check"></i>
                                                 </button>
                                             </form>
                                             @else
-                                            <form action="{{ route('admin.journal-entries.unpost', $entry->id) }}" method="POST" style="display: inline-block;">
+                                            <form data-review="{{ __('I understand this takes the entry out of the books. A reversal is usually better: it keeps the history.') }}" data-review-label="{{ __('Un-post') }}" data-review-class="btn-danger" action="{{ route('admin.journal-entries.unpost', $entry->id) }}" method="POST" style="display: inline-block;">
                                                 @csrf
                                                 <button type="submit" class="btn btn-warning btn-xs" title="{{ __('unpost_entry') }}" onclick="return confirm('{{ __('confirm_unpost_entry') }}')">
                                                     <i class="fas fa-undo"></i>

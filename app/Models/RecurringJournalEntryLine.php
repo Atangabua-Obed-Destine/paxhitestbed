@@ -17,13 +17,13 @@ class RecurringJournalEntryLine extends Model
         'debit',
         'credit',
         'description',
-        'order',
+        'line_number',
     ];
 
     protected $casts = [
         'debit' => 'decimal:2',
         'credit' => 'decimal:2',
-        'order' => 'integer',
+        'line_number' => 'integer',
     ];
 
     /**

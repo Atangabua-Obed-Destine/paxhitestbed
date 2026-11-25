@@ -13,7 +13,9 @@
         <div class="row">
             @can('staff-loan-action')
             <div class="col-md-4">
-                <form class="needs-validation" novalidate action="{{ route($route.'.store') }}" method="post">
+                <form class="needs-validation" novalidate action="{{ route($route.'.store') }}" method="post"
+                      data-review="{{ __('I have checked the staff member, the amount, the repayments and the ledger entry, and confirm this advance.') }}"
+                      data-review-label="{{ __('Give and post') }}">
                 @csrf
                     <div class="card">
                         <div class="card-header">
@@ -126,7 +128,9 @@
                                         <td>
                                             @can('staff-loan-action')
                                             @if($loan->status === 'active' && !$loan->has_lines)
-                                            <form action="{{ route($route.'.cancel', $loan->id) }}" method="post" onsubmit="return confirm('{{ __('Cancel this loan? Use this only for a loan entered by mistake.') }}');">
+                                            <form action="{{ route($route.'.cancel', $loan->id) }}" method="post"
+                                                  data-review="{{ __('I understand this cancels a loan entered by mistake and reverses it in the ledger.') }}"
+                                                  data-review-label="{{ __('Cancel the loan') }}" data-review-class="btn-danger">
                                                 @csrf
                                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="{{ __('Cancel') }}"><i class="fas fa-times"></i></button>
                                             </form>

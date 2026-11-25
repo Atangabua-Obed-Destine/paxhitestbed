@@ -207,7 +207,7 @@
                         </div>
                         <div class="card-body">
                             @if($recurringEntry->status === 'active')
-                            <form action="{{ route('admin.recurring-entries.process', $recurringEntry) }}" method="POST" class="mb-2">
+                            <form data-review="{{ __('I have checked this entry and its date, and confirm posting it.') }}" data-review-label="{{ __('Post it') }}" action="{{ route('admin.recurring-entries.process', $recurringEntry) }}" method="POST" class="mb-2">
                                 @csrf
                                 <button type="submit" class="btn btn-success btn-block" onclick="return confirm('{{ __('Process this entry now?') }}')">
                                     <i class="fas fa-play"></i> {{ __('Process Now') }}

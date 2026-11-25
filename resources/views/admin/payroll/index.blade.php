@@ -124,7 +124,9 @@
                         @endif
 
                         @can($access.'-action')
-                        <form id="payrollBulkForm" action="{{ route($route.'.bulk') }}" method="post" class="d-none">
+                        <form id="payrollBulkForm" action="{{ route($route.'.bulk') }}" method="post" class="d-none"
+                              data-review="{{ __('I have checked each salary, the account it is paid from and the ledger entries, and confirm these payments.') }}"
+                              data-review-label="{{ __('Pay and post') }}">
                             @csrf
                             <input type="hidden" name="action" value="">
                             <input type="hidden" name="month" value="{{ $selected_month }}">
@@ -368,7 +370,15 @@
                     form.querySelector('input[name="action"]').value = b.getAttribute('data-bulk-action');
                     var question = b.getAttribute('data-confirm');
                     if (question && !confirm(question)) { return; }
-                    form.submit();
+                    // Paying posts money, so it goes through the review dialog
+                    // (requestSubmit fires the submit event the dialog listens
+                    // for). Generating and approving post nothing.
+                    if (b.getAttribute('data-bulk-action') === 'pay' && form.requestSubmit) {
+                        form.removeAttribute('data-reviewed');
+                        form.requestSubmit();
+                    } else {
+                        HTMLFormElement.prototype.submit.call(form);
+                    }
                 });
             });
             document.querySelectorAll('[data-bank-file]').forEach(function (a) {

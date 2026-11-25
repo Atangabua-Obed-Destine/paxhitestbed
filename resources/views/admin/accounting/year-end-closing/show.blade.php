@@ -222,7 +222,7 @@
                             @endphp
                             @if($allCompleted)
                             @can('year-end-closing-process')
-                            <form action="{{ route('admin.year-end-closing.generate-entries', $closing->id) }}" method="POST" class="d-inline">
+                            <form data-review="{{ __('I have checked the closing entries: the year\'s income and expenses are closed to the result.') }}" data-review-label="{{ __('Generate the entries') }}" action="{{ route('admin.year-end-closing.generate-entries', $closing->id) }}" method="POST" class="d-inline">
                                 @csrf
                                 <button type="submit" class="btn btn-success" onclick="return confirm('{{ __('confirm_generate_entries') }}')">
                                     <i class="fas fa-cogs"></i> {{ __('generate_closing_entries') }}
@@ -238,7 +238,7 @@
                             
                             @if($closing->status == 'pending_approval')
                             @can('year-end-closing-approve')
-                            <form action="{{ route('admin.year-end-closing.approve', $closing->id) }}" method="POST" class="d-inline">
+                            <form data-review="{{ __('I have checked the closing entries and confirm the year can be closed. Nothing more can be posted into it.') }}" data-review-label="{{ __('Approve the closing') }}" data-review-class="btn-danger" action="{{ route('admin.year-end-closing.approve', $closing->id) }}" method="POST" class="d-inline">
                                 @csrf
                                 <button type="submit" class="btn btn-success" onclick="return confirm('{{ __('confirm_approve_closing') }}')">
                                     <i class="fas fa-check"></i> {{ __('approve_closing') }}

@@ -31,7 +31,7 @@ class JournalEntryController extends Controller
         $this->middleware('permission:journal-entry-unpost', ['only' => ['unpost']]);
         $this->middleware('permission:journal-entry-create', ['only' => ['duplicate']]);
         $this->middleware('permission:journal-entry-delete', ['only' => ['trash', 'restore', 'forceDelete']]);
-        $this->middleware('permission:journal-entry-reverse', ['only' => ['reverse']]);
+        $this->middleware('permission:journal-entry-reverse', ['only' => ['reverse', 'previewReverse']]);
     }
 
     /**
@@ -620,5 +620,41 @@ class JournalEntryController extends Controller
             return redirect()->back();
         }
     }
-}
 
+    /* ---- Reversing a posted manual entry, through the review dialog ------- */
+
+    public function previewReverse(Request $request, $id)
+    {
+        $entry = JournalEntry::with('lines')->findOrFail($id);
+        $date = $request->input('reversal_date') ?: now()->toDateString();
+
+        return view('admin.supplier-bill.partials.preview', [
+            'p' => app(\App\Services\Accounting\PeriodControls::class)->previewReverse($entry, $date, Auth::id()),
+        ]);
+    }
+
+    public function reverse(Request $request, $id)
+    {
+        $entry = JournalEntry::with('lines')->findOrFail($id);
+
+        if (!$request->boolean('reviewed')) {
+            Toastr::error(__('Review it first: open the review, check the details and tick the confirmation box.'), __('msg_error'));
+
+            return redirect()->route('admin.journal-entries.show', $id);
+        }
+
+        $request->validate(['reversal_date' => 'required|date', 'void_reason' => 'nullable|string|max:500']);
+
+        try {
+            $reversal = app(\App\Services\Accounting\PeriodControls::class)
+                ->reverseEntry($entry, $request->input('reversal_date'), Auth::id(), $request->input('void_reason'));
+            Toastr::success(__('Reversed by :number.', ['number' => $reversal->entry_number]), __('msg_success'));
+
+            return redirect()->route('admin.journal-entries.show', $reversal->id);
+        } catch (\RuntimeException $e) {
+            Toastr::error($e->getMessage(), __('msg_error'));
+        }
+
+        return redirect()->route('admin.journal-entries.show', $id);
+    }
+}

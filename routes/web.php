@@ -483,6 +483,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('academic/section', 'SectionController');
     Route::resource('academic/room', 'ClassRoomController');
     Route::resource('academic/subject', 'SubjectController');
+    Route::resource('academic/course-group', 'CourseGroupController')->except(['show']);
     Route::get('academic/subject-import', 'SubjectController@import')->name('subject.import');
     Route::post('academic/subject-import-store', 'SubjectController@importStore')->name('subject.import.store');
     Route::resource('academic/enroll-subject', 'EnrollSubjectController');
@@ -839,6 +840,13 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('fiscal-years/{id}/reopen', 'FiscalYearController@reopen')->name('fiscal-years.reopen');
     Route::post('fiscal-years/{id}/set-active', 'FiscalYearController@setActive')->name('fiscal-years.set-active');
     Route::post('fiscal-years/{id}/generate-periods', 'FiscalYearController@generatePeriods')->name('fiscal-years.generate-periods');
+    // Month-end: close or reopen one month, through the review dialog.
+    Route::get('accounting-periods/{id}/preview/close', 'FiscalYearController@previewClosePeriod')->name('accounting-periods.preview-close');
+    Route::post('accounting-periods/{id}/close', 'FiscalYearController@closePeriod')->name('accounting-periods.close');
+    Route::get('accounting-periods/{id}/preview/reopen', 'FiscalYearController@previewReopenPeriod')->name('accounting-periods.preview-reopen');
+    Route::post('accounting-periods/{id}/reopen', 'FiscalYearController@reopenPeriod')->name('accounting-periods.reopen');
+    // The review dialog for any action that posts money: replays it and rolls back.
+    Route::post('review/dry-run', 'ReviewController@dryRun')->name('review.dry-run');
     
     // Journal Entries
     // Declared before the journal-entries resource so "ledger-health" is never
@@ -852,6 +860,8 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('journal-entries/{id}/post', 'JournalEntryController@post')->name('journal-entries.post');
     Route::post('journal-entries/{id}/unpost', 'JournalEntryController@unpost')->name('journal-entries.unpost');
     Route::post('journal-entries/{id}/duplicate', 'JournalEntryController@duplicate')->name('journal-entries.duplicate');
+    Route::match(['get', 'post'], 'journal-entries/{id}/preview/reverse', 'JournalEntryController@previewReverse')->name('journal-entries.preview-reverse');
+    Route::post('journal-entries/{id}/reverse', 'JournalEntryController@reverse')->name('journal-entries.reverse');
     
     // General Ledger
     Route::get('general-ledger', 'GeneralLedgerController@index')->name('general-ledger.index');
@@ -899,6 +909,9 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::post('bank-reconciliation-item/{item}/clear', 'BankReconciliationController@clearItem')->name('bank-reconciliation.clear-item');
     Route::post('bank-reconciliation-item/{item}/unclear', 'BankReconciliationController@unclearItem')->name('bank-reconciliation.unclear-item');
     Route::post('bank-reconciliation/{bankReconciliation}/add-adjustment', 'BankReconciliationController@addAdjustment')->name('bank-reconciliation.add-adjustment');
+    Route::post('bank-reconciliation/{bankReconciliation}/preview/adjustment', 'BankReconciliationController@previewAdjustment')->name('bank-reconciliation.preview-adjustment');
+    Route::get('bank-reconciliation/{bankReconciliation}/preview/complete', 'BankReconciliationController@previewComplete')->name('bank-reconciliation.preview-complete');
+    Route::post('bank-reconciliation/{bankReconciliation}/ticks', 'BankReconciliationController@saveTicks')->name('bank-reconciliation.ticks');
 
     // Recurring Journal Entries
     Route::resource('recurring-entries', 'RecurringEntryController');
@@ -928,6 +941,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
         Route::get('cash-flow-statement', 'AccountingReportsController@cashFlowStatement')->name('cash-flow-statement');
         Route::get('comparative-cash-flow', 'AccountingReportsController@comparativeCashFlow')->name('comparative-cash-flow');
         Route::get('budget-vs-actual', 'AccountingReportsController@budgetVsActual')->name('budget-vs-actual');
+        Route::get('financial-health', 'AccountingReportsController@financialHealth')->name('financial-health');
         Route::get('export-pdf', 'AccountingReportsController@exportPdf')->name('export-pdf');
         Route::get('export-excel', 'AccountingReportsController@exportExcel')->name('export-excel');
     });
@@ -1079,6 +1093,28 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('account/income-category', 'IncomeCategoryController');
     Route::resource('account/expense', 'ExpenseController');
     Route::resource('account/expense-category', 'ExpenseCategoryController');
+    // Supplier bills and payments (accounts payable)
+    Route::get('account/supplier-bills/aging', 'SupplierBillController@aging')->name('supplier-bill.aging');
+    Route::get('account/supplier-bills/statement', 'SupplierBillController@statement')->name('supplier-bill.statement');
+    Route::post('account/supplier-bills/settings', 'SupplierBillController@settings')->name('supplier-bill.settings');
+    Route::get('account/supplier-bills/{id}/preview/approve', 'SupplierBillController@previewApprove')->name('supplier-bill.preview-approve');
+    Route::get('account/supplier-bills/{id}/preview/void', 'SupplierBillController@previewVoid')->name('supplier-bill.preview-void');
+    Route::post('account/supplier-bills/{id}/approve', 'SupplierBillController@approve')->name('supplier-bill.approve');
+    Route::post('account/supplier-bills/{id}/void', 'SupplierBillController@void')->name('supplier-bill.void');
+    Route::get('account/supplier-bills', 'SupplierBillController@index')->name('supplier-bill.index');
+    Route::get('account/supplier-bills/create', 'SupplierBillController@create')->name('supplier-bill.create');
+    Route::post('account/supplier-bills', 'SupplierBillController@store')->name('supplier-bill.store');
+    Route::get('account/supplier-bills/{id}', 'SupplierBillController@show')->name('supplier-bill.show');
+    Route::get('account/supplier-bills/{id}/edit', 'SupplierBillController@edit')->name('supplier-bill.edit');
+    Route::put('account/supplier-bills/{id}', 'SupplierBillController@update')->name('supplier-bill.update');
+    Route::delete('account/supplier-bills/{id}', 'SupplierBillController@destroy')->name('supplier-bill.destroy');
+    Route::post('account/supplier-payments/preview', 'SupplierPaymentController@preview')->name('supplier-payment.preview');
+    Route::get('account/supplier-payments/{id}/preview/void', 'SupplierPaymentController@previewVoid')->name('supplier-payment.preview-void');
+    Route::get('account/supplier-payments', 'SupplierPaymentController@index')->name('supplier-payment.index');
+    Route::get('account/supplier-payments/create', 'SupplierPaymentController@create')->name('supplier-payment.create');
+    Route::post('account/supplier-payments', 'SupplierPaymentController@store')->name('supplier-payment.store');
+    Route::get('account/supplier-payments/{id}', 'SupplierPaymentController@show')->name('supplier-payment.show');
+    Route::post('account/supplier-payments/{id}/void', 'SupplierPaymentController@void')->name('supplier-payment.void');
     Route::resource('account/outcome', 'OutcomeCalculationController');
 
 

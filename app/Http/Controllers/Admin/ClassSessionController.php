@@ -219,7 +219,7 @@ class ClassSessionController extends Controller
             $data['scheduled_sessions'][] = $session;
             
             // Group by time slot + subject for joint class detection
-            $key = $routine->start_time . '_' . $routine->end_time . '_' . $routine->subject_id;
+            $key = $routine->start_time . '_' . $routine->end_time . '_' . \App\Services\Academic\CourseGroups::key((int) $routine->subject_id);
             if (!isset($data['joint_sessions'][$key])) {
                 $data['joint_sessions'][$key] = [
                     'subject' => $routine->subject,
@@ -254,7 +254,7 @@ class ClassSessionController extends Controller
         // Group extra sessions for joint class detection (same subject + start time)
         $data['extra_joint_sessions'] = [];
         foreach ($data['extra_sessions'] as $extraSession) {
-            $key = $extraSession->subject_id . '_' . $extraSession->scheduled_start_time;
+            $key = \App\Services\Academic\CourseGroups::key((int) $extraSession->subject_id) . '_' . $extraSession->scheduled_start_time;
             if (!isset($data['extra_joint_sessions'][$key])) {
                 $data['extra_joint_sessions'][$key] = [
                     'subject' => $extraSession->subject,
@@ -504,9 +504,9 @@ class ClassSessionController extends Controller
 
         // Find all joint sessions (same teacher, date, subject, start time) that are in progress
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->where('status', ClassSession::STATUS_IN_PROGRESS)
             ->get();
 
@@ -729,9 +729,9 @@ class ClassSessionController extends Controller
         // For joint classes, find all sessions with same subject/time that are in progress
         $jointSessionIds = [$session->id];
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->where('status', ClassSession::STATUS_IN_PROGRESS)
             ->pluck('id')
             ->toArray();
@@ -962,9 +962,9 @@ class ClassSessionController extends Controller
 
         // Find all joint sessions (same teacher, date, subject, start time)
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->get();
 
         $updatedCount = 0;
@@ -1042,9 +1042,9 @@ class ClassSessionController extends Controller
 
         // Find all joint sessions (same teacher, date, subject, start time)
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->get();
         
         // Update all joint sessions
@@ -1106,9 +1106,9 @@ class ClassSessionController extends Controller
 
         // Find all joint sessions (same teacher, date, subject, start time)
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->get();
 
         $field = $type === 'attendance' ? 'attendance_delegated' : 'logbook_delegated';
@@ -1162,9 +1162,9 @@ class ClassSessionController extends Controller
         $jointSessionIds = [$session->id];
         if ($session->status === ClassSession::STATUS_IN_PROGRESS) {
             $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-                ->where('date', $session->date)
-                ->where('subject_id', $session->subject_id)
-                ->where('scheduled_start_time', $session->scheduled_start_time)
+                ->where('date', $session->getRawOriginal('date'))
+                ->sameCourseAs($session->subject_id)
+                ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
                 ->where('status', ClassSession::STATUS_IN_PROGRESS)
                 ->with(['studentAttendances.studentEnroll.student', 'program'])
                 ->get();
@@ -1272,9 +1272,9 @@ class ClassSessionController extends Controller
         
         if ($session->status === ClassSession::STATUS_IN_PROGRESS) {
             $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-                ->where('date', $session->date)
-                ->where('subject_id', $session->subject_id)
-                ->where('scheduled_start_time', $session->scheduled_start_time)
+                ->where('date', $session->getRawOriginal('date'))
+                ->sameCourseAs($session->subject_id)
+                ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
                 ->where('status', ClassSession::STATUS_IN_PROGRESS)
                 ->pluck('id')
                 ->toArray();
@@ -1338,9 +1338,9 @@ class ClassSessionController extends Controller
 
         // For joint classes, find all sessions with same subject/time
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->with(['program', 'studentAttendances.studentEnroll.student'])
             ->get();
         
@@ -1523,9 +1523,9 @@ class ClassSessionController extends Controller
         $jointSessionIds = [$session->id];
         if ($session->status === ClassSession::STATUS_IN_PROGRESS) {
             $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-                ->where('date', $session->date)
-                ->where('subject_id', $session->subject_id)
-                ->where('scheduled_start_time', $session->scheduled_start_time)
+                ->where('date', $session->getRawOriginal('date'))
+                ->sameCourseAs($session->subject_id)
+                ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
                 ->where('status', ClassSession::STATUS_IN_PROGRESS)
                 ->pluck('id')
                 ->toArray();
@@ -1694,9 +1694,9 @@ class ClassSessionController extends Controller
         $jointSessionIds = [$session->id];
         if ($session->status === ClassSession::STATUS_IN_PROGRESS) {
             $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-                ->where('date', $session->date)
-                ->where('subject_id', $session->subject_id)
-                ->where('scheduled_start_time', $session->scheduled_start_time)
+                ->where('date', $session->getRawOriginal('date'))
+                ->sameCourseAs($session->subject_id)
+                ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
                 ->where('status', ClassSession::STATUS_IN_PROGRESS)
                 ->pluck('id')
                 ->toArray();

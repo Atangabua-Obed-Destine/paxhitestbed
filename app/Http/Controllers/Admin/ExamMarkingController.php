@@ -217,10 +217,18 @@ class ExamMarkingController extends Controller
             })->firstOrFail();
 
             // ── Find all programmes that share this subject ──
-            $subjectModel = Subject::find($subject);
-            $data['sharing_programs'] = $subjectModel
-                ? $subjectModel->programs()->with('faculty')->where('programs.status', '1')->orderBy('programs.title')->get()
+            // With a course group, "this subject" is every course of the group:
+            // each programme takes it under its own code (AGE118H, MGT1101H),
+            // and one sheet lists them all. Each mark is still saved on the
+            // student's own course, so credits and transcripts stay per programme.
+            $memberIds = \App\Services\Academic\CourseGroups::memberIds((int) $subject);
+            $data['group_member_ids'] = $memberIds;
+            $data['group_courses'] = count($memberIds) > 1
+                ? Subject::whereIn('id', $memberIds)->orderBy('code')->get(['id', 'code', 'title'])
                 : collect();
+            $data['sharing_programs'] = Program::with('faculty')->where('status', '1')
+                ->whereHas('subjects', fn ($q) => $q->whereIn('subjects.id', $memberIds))
+                ->orderBy('title')->get();
 
             $crossProgram = $data['cross_program'];
 
@@ -231,18 +239,23 @@ class ExamMarkingController extends Controller
             // student has a present exam row so they appear and their marks count in the grade.
             if (!$isFinal) {
                 $sharingProgramIds = $crossProgram ? $data['sharing_programs']->pluck('id')->toArray() : [];
-                $this->ensureCaExamRows($subject, $type, $data['selected_exam_type'], [
-                    'cross_program'      => $crossProgram,
-                    'program'            => $program,
-                    'session'            => $session,
-                    'semester'           => $semester,
-                    'section'            => $section,
-                    'sharingProgramIds'  => $sharingProgramIds,
-                ], $teacher_id);
+                // Each course of a group gets its own rows: a student is only
+                // ever enrolled for their programme's code, so the enrolment
+                // filter inside picks the right students for each.
+                foreach ($crossProgram ? $memberIds : [(int) $subject] as $courseId) {
+                    $this->ensureCaExamRows($courseId, $type, $data['selected_exam_type'], [
+                        'cross_program'      => $crossProgram,
+                        'program'            => $program,
+                        'session'            => $session,
+                        'semester'           => $semester,
+                        'section'            => $section,
+                        'sharingProgramIds'  => $sharingProgramIds,
+                    ], $teacher_id);
+                }
             }
 
             // Exams — CA shows all rows (attendance not required); finals still require present
-            $exams = Exam::where('subject_id', $subject)
+            $exams = Exam::whereIn('subject_id', $crossProgram ? $memberIds : [(int) $subject])
                 ->where('exam_type_id', $type);
             if ($isFinal) {
                 $exams->where('attendance', '1');
@@ -355,7 +368,7 @@ class ExamMarkingController extends Controller
 
             // In-range absences (to pre-fill the input after a save)
             if (!empty($request->start_date) && !empty($request->end_date)) {
-                $data['mig_absences'] = StudentAttendance::where('subject_id', $request->subject)
+                $data['mig_absences'] = StudentAttendance::whereIn('subject_id', $data['group_member_ids'] ?? [(int) $request->subject])
                     ->whereIn('student_enroll_id', $enrollIds)
                     ->whereBetween('date', [$request->start_date, $request->end_date])
                     ->where('attendance', 2) // 2 = absent
@@ -367,13 +380,21 @@ class ExamMarkingController extends Controller
 
             // Actual attendance mark = weight x (present+leave)/(present+leave+absent) over ALL dates
             // (mirrors ExamMarksSyncService so it equals the graded attendance component)
+            // On a group sheet each student's attendance is on their own
+            // course, weighted by that course's own distribution.
             $weight = (float) $data['attendance_weight'];
-            $grouped = StudentAttendance::where('subject_id', $request->subject)
+            $courseOf = collect($migRows)->mapWithKeys(fn ($r) => [$r->student_enroll_id => (int) $r->subject_id])->all();
+            $weightOf = [];
+            foreach (array_unique(array_values($courseOf)) as $cid) {
+                $weightOf[$cid] = (float) (\App\Services\ResultContributionService::getSubjectContributions($cid)['attendance'] ?? 0);
+            }
+            $grouped = StudentAttendance::whereIn('subject_id', $data['group_member_ids'] ?? [(int) $request->subject])
                 ->whereIn('student_enroll_id', $enrollIds)
                 ->get()
                 ->groupBy('student_enroll_id');
             foreach ($enrollIds as $eid) {
-                $recs    = $grouped->get($eid) ?? collect();
+                $weight  = $weightOf[$courseOf[$eid] ?? 0] ?? (float) $data['attendance_weight'];
+                $recs    = $grouped->get($eid)?->where('subject_id', $courseOf[$eid] ?? (int) $request->subject) ?? collect();
                 $present = $recs->whereIn('attendance', [1, 3])->count(); // present + leave
                 $absent  = $recs->where('attendance', 2)->count();
                 $total   = $present + $absent;
@@ -428,11 +449,16 @@ class ExamMarkingController extends Controller
 
         $migSubjectId = $request->filled('subject') ? (int) $request->subject : null;
 
-        // Block submission if mark distribution is not configured for this course
-        $firstExam = $examIds->isNotEmpty() ? Exam::find($examIds->first()) : null;
-        $checkSubjectId = $firstExam ? $firstExam->subject_id : $migSubjectId;
-        if ($checkSubjectId && !\App\Services\ResultContributionService::isConfigured($checkSubjectId)) {
-            Flasher::addError('Mark distribution has not been configured for this course. Please configure it before submitting.', 'Error');
+        // Block submission if mark distribution is not configured for a course
+        // on the sheet. A course-group sheet carries several courses (each
+        // student's own code), and every one of them needs its distribution.
+        $checkSubjectIds = $examIds->isNotEmpty()
+            ? Exam::whereIn('id', $examIds)->distinct()->pluck('subject_id')->map(fn ($id) => (int) $id)->all()
+            : array_filter([$migSubjectId]);
+        $unconfigured = array_values(array_filter($checkSubjectIds, fn ($id) => !\App\Services\ResultContributionService::isConfigured($id)));
+        if ($unconfigured) {
+            $codes = Subject::whereIn('id', $unconfigured)->pluck('code')->implode(', ');
+            Flasher::addError(__('Mark distribution has not been configured for :codes. Please configure it before submitting.', ['codes' => $codes]), 'Error');
             return redirect()->back();
         }
 
@@ -679,7 +705,16 @@ class ExamMarkingController extends Controller
         if ($migReady && $classDates) {
             \Illuminate\Support\Facades\DB::beginTransaction();
             try {
-                $attendanceEnrolls = $this->applyAttendanceMigration($migSubjectId, $classDates, $request->absences, $T, $currentUserId);
+                // On a course-group sheet each student's attendance goes on the
+                // course they are enrolled for (AGE118H or MGT1101H), never on
+                // the course the sheet was opened with.
+                $attendanceCourse = $this->attendanceCourses($migSubjectId, array_keys((array) $request->absences));
+                foreach ($attendanceCourse as $courseId => $enrollIds) {
+                    $subset = array_intersect_key($request->absences, array_flip($enrollIds));
+                    foreach ($this->applyAttendanceMigration($courseId, $classDates, $subset, $T, $currentUserId) as $eid) {
+                        $attendanceEnrolls[$eid] = $courseId;
+                    }
+                }
                 \Illuminate\Support\Facades\DB::commit();
                 if (!empty($attendanceEnrolls)) {
                     Flasher::addSuccess(__(':n student attendance record-set(s) saved, :t class(es) each.', ['n' => count($attendanceEnrolls), 't' => $T]), __('msg_success'));
@@ -692,8 +727,8 @@ class ExamMarkingController extends Controller
 
         // Sync marks- and attendance-affected students once each
         $syncPairs = $syncPairs->keyBy(fn($p) => $p['enroll'] . '-' . $p['subject']);
-        foreach ($attendanceEnrolls as $eid) {
-            $syncPairs->put($eid . '-' . $migSubjectId, ['enroll' => $eid, 'subject' => $migSubjectId]);
+        foreach ($attendanceEnrolls as $eid => $courseId) {
+            $syncPairs->put($eid . '-' . $courseId, ['enroll' => $eid, 'subject' => $courseId]);
         }
         foreach ($syncPairs as $pair) {
             \App\Services\ExamMarksSyncService::sync((int) $pair['enroll'], (int) $pair['subject']);
@@ -1369,6 +1404,29 @@ class ExamMarkingController extends Controller
      * Students with a blank value are skipped. Returns the processed enroll ids.
      * Caller is responsible for the surrounding transaction and the sync.
      */
+    /**
+     * Which course each student's attendance belongs to: the sheet's course,
+     * or on a course-group sheet the group's course the student is enrolled
+     * for. Returns course id => enrolment ids.
+     */
+    private function attendanceCourses(?int $subjectId, array $enrollIds): array
+    {
+        $enrollIds = array_map('intval', $enrollIds);
+        $members = \App\Services\Academic\CourseGroups::memberIds($subjectId);
+        if (count($members) < 2 || !$enrollIds) {
+            return $subjectId ? [$subjectId => $enrollIds] : [];
+        }
+        $own = \Illuminate\Support\Facades\DB::table('student_enroll_subject')
+            ->whereIn('student_enroll_id', $enrollIds)->whereIn('subject_id', $members)
+            ->pluck('subject_id', 'student_enroll_id');
+        $out = [];
+        foreach ($enrollIds as $eid) {
+            $out[(int) ($own[$eid] ?? $subjectId)][] = $eid;
+        }
+
+        return $out;
+    }
+
     private function applyAttendanceMigration(int $subjectId, array $classDates, array $absences, int $T, $userId): array
     {
         $processed = [];

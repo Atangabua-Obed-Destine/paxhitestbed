@@ -422,9 +422,16 @@ class FeesStudentController extends Controller
             // Handle overpayment - create student credit
             if ($overpayment_amount > 0) {
                 $creditService = app(\App\Services\StudentCreditService::class);
-                $credit = $creditService->createFromOverpayment(
+                // Beyond every instalment: never added to a fee's paid amount,
+                // so it is cash received in advance, posted as such (419).
+                $credit = $creditService->createPrepayment(
                     $fee,
                     $overpayment_amount,
+                    [
+                        'pay_date' => $request->pay_date,
+                        'payment_method' => $request->payment_method,
+                        'payment_account_id' => $request->payment_account_id,
+                    ],
                     Auth::guard('web')->user()->id
                 );
 
@@ -929,6 +936,13 @@ class FeesStudentController extends Controller
         $fees->created_by = Auth::guard('web')->user()->id;
         $fees->save();
 
+        // Money the student already paid ahead (credit) settles the new fee
+        // at once, as the bulk assignment does. This is the common case of a
+        // student who paid both instalments before the second was assigned.
+        $applied = app(\App\Services\StudentCreditService::class)->autoApplyCreditsToNewFee($fees, Auth::guard('web')->user()->id);
+        if (($applied['total_applied'] ?? 0) > 0) {
+            Flasher::addInfo(__('Credit of :amount already paid by the student was applied to this fee.', ['amount' => format_amount($applied['total_applied'])]));
+        }
 
         Flasher::addSuccess(__('msg_created_successfully'), __('msg_success'));
 

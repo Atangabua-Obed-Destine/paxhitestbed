@@ -176,6 +176,13 @@ class GeneralLedgerController extends Controller
         $fiscalYearId = $request->input('fiscal_year_id');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
+
+        // A chosen fiscal year fills in whichever dates were left empty; it
+        // used to be shown on the form and then ignored.
+        if ($fiscalYearId && ($year = FiscalYear::find($fiscalYearId))) {
+            $startDate = $startDate ?: $year->start_date->toDateString();
+            $endDate = $endDate ?: $year->end_date->toDateString();
+        }
         
         $data['startDate'] = $startDate;
         $data['endDate'] = $endDate;

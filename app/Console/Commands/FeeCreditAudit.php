@@ -21,6 +21,7 @@ class FeeCreditAudit extends Command
     protected $signature = 'fees:credit-audit
                             {--void-duplicates : Cancel unspent credit that no payment backs}
                             {--correct-ledger : Repost fee entries at the cash actually received}
+                            {--post-credit : Post student credit to account 419 (hold, use, refund)}
                             {--force : Do not ask for confirmation}
                             {--show=20 : Rows to list for each finding}';
 
@@ -77,10 +78,11 @@ class FeeCreditAudit extends Command
         $this->comment('3. Ledger — fee postings against cash actually received');
         $this->line(sprintf('   Fee postings %s against %s actually collected: overstated by %s.',
             $money($ledger['posted']), $money($ledger['net_paid']), $money($ledger['overstated'])));
-        $this->line('   Each credit applied to a fee was posted as cash received (Dr cash/bank, Cr tuition income),');
-        $this->line('   although the cash had already been posted on the fee it came from.');
-
-        if ($ledger['by_month']->isNotEmpty()) {
+        if (abs($ledger['overstated']) < 1) {
+            $this->line('   Fee postings match the cash received (plan instalments included).');
+        } elseif ($ledger['by_month']->isNotEmpty()) {
+            $this->line('   Each credit applied to a fee was posted as cash received (Dr cash/bank, Cr tuition income),');
+            $this->line('   although the cash had already been posted on the fee it came from.');
             $this->table(['Month applied', 'Applications', 'Amount'],
                 $ledger['by_month']->map(fn ($r) => [$r->month, $r->applications, $money($r->amount)])->all());
         }
@@ -110,9 +112,29 @@ class FeeCreditAudit extends Command
             : sprintf('   %d, totalling %s. Audit trail only if the money was re-transferred; check each student.',
                 $orphans->count(), $money($orphans->sum('amount_applied'))));
 
+        // 6 ------------------------------------------------------------------
+        $creditLedger = app(\App\Services\Accounting\StudentCreditLedger::class);
+        $tie = $creditLedger->tieOut();
+        $this->line('');
+        $this->comment('6. Student credit in the ledger (account 419, Clients créditeurs)');
+        $this->line('   An overpayment is held on 419 until it settles another fee or is refunded.');
+        $this->line(sprintf('   419 holds %s; unused backed credit is %s. %s',
+            $money($tie['ledger']), $money($tie['expected']),
+            $tie['agrees'] && $tie['pending'] === 0 ? 'They agree.' : sprintf('%d posting(s) to make; --post-credit makes them.', $tie['pending'])));
+
+        // 7 ------------------------------------------------------------------
+        if (\App\Services\Accounting\FeeAccrual::enabled()) {
+            $owed = app(\App\Services\Accounting\FeeAccrual::class)->tieOut();
+            $this->line('');
+            $this->comment('7. What students owe (account 411, fees on accrual)');
+            $this->line(sprintf('   411 holds %s; the fee records say %s is owed. %s',
+                $money($owed['ledger']), $money($owed['expected']),
+                $owed['agrees'] ? 'They agree.' : 'They differ by ' . $money($owed['difference']) . ': run php artisan fees:accrual --enable to resync.'));
+        }
+
         // Corrections -----------------------------------------------------
 
-        if (!$this->option('void-duplicates') && !$this->option('correct-ledger')) {
+        if (!$this->option('void-duplicates') && !$this->option('correct-ledger') && !$this->option('post-credit')) {
             $this->line('');
             $this->line('Nothing was changed.');
 
@@ -157,6 +179,25 @@ class FeeCreditAudit extends Command
                 }
             } else {
                 $this->line('The ledger was not changed.');
+            }
+        }
+
+        if ($this->option('post-credit')) {
+            $this->line('');
+
+            if ($tie['pending'] === 0) {
+                $this->info('Student credit is already posted.');
+            } elseif ($this->option('force') || $this->confirm(sprintf(
+                'Make %d student credit posting(s) on account 419? Take a database backup first.', $tie['pending']
+            ))) {
+                $result = $creditLedger->sync();
+                $this->info(sprintf('Posted %d, reversed %d, left %d as they were.', $result['posted'], $result['reversed'], $result['unchanged']));
+
+                foreach ($result['problems'] as $problem) {
+                    $this->warn('   ' . $problem);
+                }
+            } else {
+                $this->line('Student credit was not posted.');
             }
         }
 

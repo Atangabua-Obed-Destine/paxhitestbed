@@ -520,7 +520,8 @@ if (!$admin) {
 
         $printed = function (float $amount) use ($table) {
             return str_contains($table, number_format($amount, 2))
-                || str_contains($table, number_format($amount, 2, '.', ''));
+                || str_contains($table, number_format($amount, 2, '.', ''))
+                || str_contains($table, format_amount($amount));
         };
 
         check('both instalment amounts appear in the instalments table',
@@ -548,7 +549,7 @@ if (!$admin) {
         $html = $kernel->handle($request)->getContent();
 
         check('an overpayment is printed, not clamped away',
-            str_contains($html, '25000.00') || str_contains($html, '25,000.00'),
+            str_contains($html, '25000.00') || str_contains($html, '25,000.00') || str_contains($html, format_amount(25000)),
             'the receipt used to print min(paid, total) and max(0, balance), '
                 . 'so money the student handed over vanished from it');
     } finally {

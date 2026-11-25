@@ -110,7 +110,7 @@
                                             @endif
                                         @endif
 
-                                        <tr class="{{ $account->account_category == 'header' ? 'table-primary' : '' }}">
+                                        <tr class="{{ $account->account_category == 'heading' ? 'table-primary' : '' }}">
                                             <td>
                                                 <strong>{{ $account->account_code }}</strong>
                                             </td>
@@ -121,7 +121,7 @@
                                                 @endif
                                             </td>
                                             <td class="text-center">
-                                                @if($account->account_category == 'header')
+                                                @if($account->account_category == 'heading')
                                                 <span class="badge badge-secondary">{{ __('header') }}</span>
                                                 @elseif($account->account_category == 'summary')
                                                 <span class="badge badge-info">{{ __('summary') }}</span>

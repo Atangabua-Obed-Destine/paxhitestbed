@@ -277,11 +277,15 @@ foreach ($ledgerRows as $row) {
 
 check('20,254,000 still sits on no budget line', '20254000.00', money($anchorUnallocated));
 check('across four transactions', 4, $anchorCount);
-check('July 2026 still took in 23,190,500', '23190500.00', money($byMonth['2026-07']['in'] ?? 0));
-check('November 2025 was still 4,434,616 short',
-    '-4434616.00',
+// Re-anchored 24 Nov 2026, when fee cash began to be dated by its receipts
+// (fee posting plan, step 3): 598,000 of July's fee cash and 1,300,000 of
+// November 2025's moved to the months it was actually received, and the
+// receipts of 14-31 October 2025 now open the book in that month.
+check('July 2026 took in 22,592,500', '22592500.00', money($byMonth['2026-07']['in'] ?? 0));
+check('November 2025 was 3,134,616 short',
+    '-3134616.00',
     money(($byMonth['2025-11']['in'] ?? 0) - ($byMonth['2025-11']['out'] ?? 0)));
-check('the ledger still spans 13 months', 13, count($byMonth));
+check('the ledger spans 14 months', 14, count($byMonth));
 
 echo "\n=== 9. can these figures be presented? ===\n";
 

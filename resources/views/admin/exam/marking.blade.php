@@ -538,7 +538,7 @@
                                     @if($cross_program)
                                         Marking students from <strong class="text-info">{{ $sharing_programs->count() }} programmes</strong> taking this course
                                     @else
-                                        This course is shared by <strong>{{ $sharing_programs->count() }} programmes</strong> &mdash; toggle to mark all
+                                        This course is shared by <strong>{{ $sharing_programs->count() }} programmes</strong>@if(isset($group_courses) && $group_courses->count() > 1) ({{ __('course group') }}: {{ $group_courses->pluck('code')->implode(', ') }})@endif &mdash; toggle to mark all
                                     @endif
                                 </span>
                             </div>
@@ -573,6 +573,16 @@
                                     <i class="fas fa-info-circle text-info"></i>
                                     Cross-programme mode is <strong>active</strong>. Students from all {{ $sharing_programs->count() }} programmes are shown below, grouped by programme.
                                     Marks entered here apply across all sharing programmes.
+                                </div>
+                            @endif
+                            @if(isset($group_courses) && $group_courses->count() > 1)
+                                <div class="mt-2 small">
+                                    <i class="fas fa-link text-info"></i>
+                                    {{ __('This course is in a course group. Each programme takes it under its own code:') }}
+                                    @foreach($group_courses as $gc)
+                                        <span class="badge badge-light border" style="font-family:monospace">{{ $gc->code }}</span>
+                                    @endforeach
+                                    {{ __("Each student's mark is saved on their own course, so credits and transcripts stay per programme. Every course needs its own mark distribution.") }}
                                 </div>
                             @endif
                         </div>

@@ -205,14 +205,17 @@
                                     
                                     @can('journal-entry-post')
                                     @if(!$entry->is_posted)
-                                    <form action="{{ route('admin.journal-entries.post', $entry->id) }}" method="POST" style="display: inline-block;">
+                                    <form data-review="{{ __('I have checked the accounts and amounts of this entry and confirm posting it.') }}" data-review-label="{{ __('Post the entry') }}" action="{{ route('admin.journal-entries.post', $entry->id) }}" method="POST" style="display: inline-block;">
                                         @csrf
                                         <button type="submit" class="btn btn-success" onclick="return confirm('{{ __('confirm_post_entry') }}')">
                                             <i class="fas fa-check"></i> {{ __('post_entry') }}
                                         </button>
                                     </form>
-                                    @else
-                                    <form action="{{ route('admin.journal-entries.unpost', $entry->id) }}" method="POST" style="display: inline-block;">
+                                    @endif
+                                    @endcan
+                                    @can('journal-entry-unpost')
+                                    @if($entry->is_posted)
+                                    <form data-review="{{ __('I understand this takes the entry out of the books. A reversal is usually better: it keeps the history.') }}" data-review-label="{{ __('Un-post') }}" data-review-class="btn-danger" action="{{ route('admin.journal-entries.unpost', $entry->id) }}" method="POST" style="display: inline-block;">
                                         @csrf
                                         <button type="submit" class="btn btn-warning" onclick="return confirm('{{ __('confirm_unpost_entry') }}')">
                                             <i class="fas fa-undo"></i> {{ __('unpost_entry') }}
@@ -221,6 +224,24 @@
                                     @endif
                                     @endcan
                                     
+                                    @can('journal-entry-reverse')
+                                    @if($entry->is_posted && !$entry->is_reversed && !$entry->reversed_entry_id && !$entry->is_system_generated)
+                                    <form action="{{ route('admin.journal-entries.reverse', $entry->id) }}" method="POST" id="reverse-form" style="display: inline-flex; gap: 6px; align-items: center; margin: 0 10px;">
+                                        @csrf
+                                        <input type="hidden" name="void_reason">
+                                        <label for="reversal_date" class="mb-0 small">{{ __('Reverse on') }}</label>
+                                        <input type="date" name="reversal_date" id="reversal_date" class="form-control form-control-sm" style="width: 150px"
+                                               min="{{ $entry->entry_date->toDateString() }}" value="{{ now()->toDateString() }}" required>
+                                        <button type="button" class="btn btn-outline-danger"
+                                                data-review-url="{{ route('admin.journal-entries.preview-reverse', $entry->id) }}"
+                                                data-review-form="reverse-form" data-confirm-form="reverse-form"
+                                                data-confirm-label="{{ __('Post the reversal') }}" data-confirm-class="btn-danger" data-needs-reason="1"
+                                                data-confirm-check="{{ __('I understand this posts a mirror entry on the date shown, cancelling this entry from that date. Nothing is deleted.') }}">
+                                            <i class="fas fa-exchange-alt"></i> {{ __('Reverse') }}</button>
+                                    </form>
+                                    @endif
+                                    @endcan
+
                                     @can('journal-entry-create')
                                     <form action="{{ route('admin.journal-entries.duplicate', $entry->id) }}" method="POST" style="display: inline-block;">
                                         @csrf
@@ -248,6 +269,8 @@
     <!-- /.container-fluid -->
 </section>
 <!-- /.content -->
+@include('admin.supplier-bill.partials.style')
+@include('admin.supplier-bill.partials.review-modal')
 @endsection
 
 @push('styles')

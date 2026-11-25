@@ -55,6 +55,11 @@ $call = function (string $method, string $path, array $data = [], bool $json = f
     if ($method !== 'GET') {
         $data['_token'] = csrf_token();
     }
+    // Money-posting screens go through the review dialog (RequireReview);
+    // these steps act as if it had been confirmed.
+    if ($method !== 'GET' && !array_key_exists('reviewed', $data)) {
+        $data['reviewed'] = 1;
+    }
     $request = Request::create($path, $method, $data);
     if ($json) {
         $request->headers->set('Accept', 'application/json');
@@ -85,6 +90,17 @@ $today = date('Y-m-d');
 $year = FiscalYear::forDate($today);
 $yearStart = $year->start_date->format('Y-m-d');
 $acct = DB::table('chart_of_accounts')->pluck('id', 'account_code');
+// Old codes also find their renumbered account (53 -> 552, 40 -> 401...), so
+// this test reads the same on either side of accounts:syscohada. 12 is not
+// aliased: the test uses it as retained earnings, which the new 12 is.
+$acct = $acct->all();
+foreach (\App\Console\Commands\ChartSyscohada::MOVES as [$from, , $to]) {
+    if ($from !== '12' && isset($acct[$to]) && \App\Console\Commands\ChartSyscohada::current($from) === $to) {
+        $acct[$from] = $acct[$to];
+    }
+}
+$acct = collect($acct);
+
 
 /** Raw ledger: code => debit minus credit, posted and live, up to a date (and from one). */
 $raw = function (?string $to = null, ?string $from = null) {
@@ -271,7 +287,7 @@ try {
 
     check('a supplier invoice posts', $post('TEST supplier invoice', [[$acct['628'], 100000, 0], [$acct['40'], 0, 100000]]));
     $s = $statementsAgree('supplier invoice');
-    check('the supplier is owed 100,000 on the passif', $close($s['bs']['payables']->firstWhere('account_code', '40')->balance ?? 0, ($live['bs']['payables']->firstWhere('account_code', '40')->balance ?? 0) + 100000));
+    check('the supplier is owed 100,000 on the passif', $close($s['bs']['payables']->firstWhere('account_code', \App\Console\Commands\ChartSyscohada::current('40'))->balance ?? 0, ($live['bs']['payables']->firstWhere('account_code', \App\Console\Commands\ChartSyscohada::current('40'))->balance ?? 0) + 100000));
     check('cash flow: owing the supplier more is cash kept, +100,000', $close($cfLine($s['cf'], 'payables') - $cfLine($live['cf'], 'payables'), 100000));
     check('cash flow: no cash moved', $close($s['cf']['net_change_in_cash'], $live['cf']['net_change_in_cash']));
 

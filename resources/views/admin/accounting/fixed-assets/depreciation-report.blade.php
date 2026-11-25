@@ -73,31 +73,13 @@
                         <!-- Summary Cards -->
                         <div class="row mb-4">
                             <div class="col-md-4">
-                                <div class="info-box bg-primary">
-                                    <span class="info-box-icon"><i class="fas fa-calculator"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">{{ __('total_depreciation') }}</span>
-                                        <span class="info-box-number">{{ format_amount($totals['total_depreciation'] ?? 0) }} FCFA</span>
-                                    </div>
-                                </div>
+                                <div class="card text-white bg-primary mb-0"><div class="card-body py-3 d-flex align-items-center"><i class="fas fa-calculator fa-2x mr-3 me-3" style="opacity:.8"></i><div><div class="small">{{ __('total_depreciation') }}</div><div class="h5 mb-0" style="font-variant-numeric:tabular-nums">{{ format_amount($totals['total_depreciation'] ?? 0) }} FCFA</div></div></div></div>
                             </div>
                             <div class="col-md-4">
-                                <div class="info-box bg-warning">
-                                    <span class="info-box-icon"><i class="fas fa-clock"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">{{ __('pending_entries') }}</span>
-                                        <span class="info-box-number">{{ $totals['pending_count'] ?? 0 }}</span>
-                                    </div>
-                                </div>
+                                <div class="card text-white bg-warning mb-0"><div class="card-body py-3 d-flex align-items-center"><i class="fas fa-clock fa-2x mr-3 me-3" style="opacity:.8"></i><div><div class="small">{{ __('pending_entries') }}</div><div class="h5 mb-0" style="font-variant-numeric:tabular-nums">{{ $totals['pending_count'] ?? 0 }}</div></div></div></div>
                             </div>
                             <div class="col-md-4">
-                                <div class="info-box bg-success">
-                                    <span class="info-box-icon"><i class="fas fa-check"></i></span>
-                                    <div class="info-box-content">
-                                        <span class="info-box-text">{{ __('posted_entries') }}</span>
-                                        <span class="info-box-number">{{ $totals['posted_count'] ?? 0 }}</span>
-                                    </div>
-                                </div>
+                                <div class="card text-white bg-success mb-0"><div class="card-body py-3 d-flex align-items-center"><i class="fas fa-check fa-2x mr-3 me-3" style="opacity:.8"></i><div><div class="small">{{ __('posted_entries') }}</div><div class="h5 mb-0" style="font-variant-numeric:tabular-nums">{{ $totals['posted_count'] ?? 0 }}</div></div></div></div>
                             </div>
                         </div>
 
@@ -119,13 +101,13 @@
                                 <tbody>
                                     @forelse($schedules as $schedule)
                                     <tr>
-                                        <td><strong>{{ $schedule->asset->asset_code ?? 'N/A' }}</strong></td>
-                                        <td>{{ $schedule->asset->name ?? 'N/A' }}</td>
-                                        <td><span class="badge badge-info">{{ $schedule->asset->category->name ?? 'N/A' }}</span></td>
+                                        <td><strong>{{ $schedule->fixedAsset->asset_code ?? 'N/A' }}</strong></td>
+                                        <td>{{ $schedule->fixedAsset->name ?? 'N/A' }}</td>
+                                        <td><span class="badge badge-info">{{ $schedule->fixedAsset->category->name ?? 'N/A' }}</span></td>
                                         <td>{{ \Carbon\Carbon::parse($schedule->depreciation_date)->format('M Y') }}</td>
                                         <td class="text-right">{{ format_amount($schedule->depreciation_amount) }}</td>
-                                        <td class="text-right">{{ format_amount($schedule->accumulated_depreciation) }}</td>
-                                        <td class="text-right">{{ format_amount($schedule->remaining_value) }}</td>
+                                        <td class="text-right">{{ format_amount($schedule->accumulated_depreciation_after ?? $schedule->accumulated_depreciation) }}</td>
+                                        <td class="text-right">{{ format_amount($schedule->book_value_after ?? $schedule->closing_book_value) }}</td>
                                         <td>
                                             @if($schedule->status == 'pending')
                                             <span class="badge badge-warning">{{ __('pending') }}</span>

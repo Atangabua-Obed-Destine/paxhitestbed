@@ -68,10 +68,10 @@ class RecurringJournalEntry extends Model
     {
         parent::boot();
 
+        // (There is no template_reference column: the reference is derived from
+        // the id, see getTemplateReferenceAttribute. Setting it here made every
+        // insert fail.)
         static::creating(function ($entry) {
-            if (empty($entry->template_reference)) {
-                $entry->template_reference = 'REC-' . strtoupper(uniqid());
-            }
             if (empty($entry->next_run_date)) {
                 $entry->next_run_date = $entry->start_date;
             }
@@ -91,8 +91,10 @@ class RecurringJournalEntry extends Model
      */
     public function journalEntries()
     {
-        return $this->hasMany(JournalEntry::class, 'source_id')
-            ->where('source_type', 'recurring');
+        // Journal entries carry reference_type / reference_id (there are no
+        // source_type / source_id columns).
+        return $this->hasMany(JournalEntry::class, 'reference_id')
+            ->where('reference_type', 'recurring_entry');
     }
 
     /**
@@ -189,24 +191,35 @@ class RecurringJournalEntry extends Model
                 return $fromDate->addWeeks(2);
 
             case self::FREQUENCY_MONTHLY:
-                $nextDate = $fromDate->copy()->addMonth();
-                if ($this->day_of_month) {
-                    $nextDate->day = min($this->day_of_month, $nextDate->daysInMonth);
-                }
-                return $nextDate;
+                return $this->monthsAhead($fromDate, 1);
 
             case self::FREQUENCY_QUARTERLY:
-                return $fromDate->addMonths(3);
+                return $this->monthsAhead($fromDate, 3);
 
             case self::FREQUENCY_SEMIANNUALLY:
-                return $fromDate->addMonths(6);
+                return $this->monthsAhead($fromDate, 6);
 
             case self::FREQUENCY_ANNUALLY:
-                return $fromDate->addYear();
+                return $this->monthsAhead($fromDate, 12);
 
             default:
-                return $fromDate->addMonth();
+                return $this->monthsAhead($fromDate, 1);
         }
+    }
+
+    /**
+     * $months later, on the entry's own day (its day of month, else the day it
+     * started), or the month's last day when that month is shorter.
+     *
+     * addMonth() on 31 January lands on 3 March (February skipped), and once a
+     * date was cut to the 28th every later month stayed on the 28th.
+     */
+    protected function monthsAhead(Carbon $from, int $months): Carbon
+    {
+        $day = (int) ($this->day_of_month ?: ($this->start_date ? Carbon::parse($this->start_date)->day : $from->day));
+        $next = $from->copy()->startOfMonth()->addMonthsNoOverflow($months);
+
+        return $next->day(min($day, $next->daysInMonth));
     }
 
     /**
@@ -236,33 +249,64 @@ class RecurringJournalEntry extends Model
      */
     public function generateJournalEntry($entryDate = null)
     {
-        if (!$this->shouldRun()) {
+        if (!$this->shouldRun($entryDate ?? now())) {
             return null;
         }
 
-        $entryDate = $entryDate ?? $this->next_run_date ?? now();
+        // The run's own date: the one it was due on.
+        $entryDate = Carbon::parse($this->next_run_date ?? $entryDate ?? now())->toDateString();
 
-        // Create journal entry
+        // Written against columns journal entries never had (source_type,
+        // source_id, status) and with no number or totals, so no recurring
+        // entry could ever be generated. Now: a numbered entry in the fiscal
+        // year and month that contain its date, refused for a closed month,
+        // posted when the template says auto-post, otherwise left for the
+        // accountant to check and post.
+        $year = FiscalYear::forDate($entryDate);
+        if (!$year || $year->is_closed) {
+            throw new \RuntimeException(__('No open fiscal year covers :date.', ['date' => Carbon::parse($entryDate)->format('j F Y')]));
+        }
+        $period = FiscalYear::periodForDate($entryDate);
+        if ($period && $period->is_closed) {
+            throw new \RuntimeException(__('The month that contains :date is closed.', ['date' => Carbon::parse($entryDate)->format('j F Y')]));
+        }
+
+        $debit = round((float) $this->lines->sum('debit'), 2);
+        $credit = round((float) $this->lines->sum('credit'), 2);
+        $types = ['general', 'sales', 'purchase', 'cash', 'bank', 'adjustment', 'opening', 'closing', 'payroll', 'remittance'];
+
         $journalEntry = JournalEntry::create([
+            'entry_number' => JournalEntry::generateEntryNumber($entryDate),
             'entry_date' => $entryDate,
+            'fiscal_year_id' => $year->id,
+            'accounting_period_id' => $period->id ?? null,
+            'journal_type' => in_array($this->journal_type, $types, true) ? $this->journal_type : 'general',
+            'description' => $this->description ?: $this->name,
             'reference_number' => $this->template_reference . '-' . Carbon::parse($entryDate)->format('Ymd'),
-            'description' => $this->description ?? $this->name,
-            'source_type' => 'recurring',
-            'source_id' => $this->id,
-            'fiscal_year_id' => $this->fiscal_year_id ?? FiscalYear::getActiveFiscalYear()?->id,
-            'status' => $this->auto_post ? 'posted' : 'draft',
-            'created_by' => $this->created_by,
+            'reference_type' => 'recurring_entry',
+            'reference_id' => $this->id,
+            'total_debit' => $debit,
+            'total_credit' => $credit,
+            'is_posted' => false,
+            'is_system_generated' => false,
+            'created_by' => auth()->id() ?? $this->created_by,
         ]);
 
-        // Create journal entry lines
-        foreach ($this->lines as $line) {
+        $n = 1;
+        foreach ($this->lines->sortBy('line_number') as $line) {
             JournalEntryLine::create([
                 'journal_entry_id' => $journalEntry->id,
+                'line_number' => $n++,
                 'account_id' => $line->account_id,
                 'debit' => $line->debit,
                 'credit' => $line->credit,
                 'description' => $line->description,
             ]);
+        }
+
+        if ($this->auto_post) {
+            $journalEntry->load('lines');
+            $journalEntry->post(auth()->id() ?? $this->created_by);
         }
 
         // Update recurring entry
@@ -281,6 +325,39 @@ class RecurringJournalEntry extends Model
         $this->save();
 
         return $journalEntry;
+    }
+
+    /* ---- The names the screens use, answered from the real columns ---- */
+
+    public function getTemplateReferenceAttribute(): string
+    {
+        return 'REC-' . str_pad((string) $this->id, 4, '0', STR_PAD_LEFT);
+    }
+
+    public function getTemplateNameAttribute(): ?string
+    {
+        return $this->name;
+    }
+
+    public function getTotalOccurrencesAttribute(): ?int
+    {
+        return $this->occurrences;
+    }
+
+    public function getOccurrencesCreatedAttribute(): int
+    {
+        return (int) $this->occurrences_completed;
+    }
+
+    /** active, paused (switched off) or expired (end date or occurrences reached). */
+    public function getStatusAttribute(): string
+    {
+        if (($this->end_date && Carbon::parse($this->end_date)->lt(now()->startOfDay()))
+            || ($this->occurrences && $this->occurrences_completed >= $this->occurrences)) {
+            return 'expired';
+        }
+
+        return $this->is_active ? 'active' : 'paused';
     }
 
     /**

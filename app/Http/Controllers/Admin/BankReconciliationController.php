@@ -6,324 +6,215 @@ use App\Http\Controllers\Controller;
 use App\Models\BankReconciliation;
 use App\Models\BankReconciliationItem;
 use App\Models\ChartOfAccount;
-use App\Models\FiscalYear;
 use App\Services\Accounting\BankReconciliationService;
+use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
-use Exception;
+use Illuminate\Support\Facades\Auth;
 
+/**
+ * Bank reconciliation screens. Every rule is in BankReconciliationService;
+ * posting a charge or interest and completing go through the review dialog,
+ * and the server refuses them without the review tick (reviewed=1).
+ */
 class BankReconciliationController extends Controller
 {
-    protected $reconciliationService;
-
-    public function __construct(BankReconciliationService $reconciliationService)
+    public function __construct(protected BankReconciliationService $service)
     {
-        $this->reconciliationService = $reconciliationService;
-        
         $this->middleware('auth');
-        $this->middleware('permission:bank-reconciliation-list')->only(['index', 'show']);
+        $this->middleware('permission:bank-reconciliation-list')->only(['index', 'show', 'summary']);
         $this->middleware('permission:bank-reconciliation-create')->only(['create', 'store']);
-        $this->middleware('permission:bank-reconciliation-edit')->only(['edit', 'update', 'clearItem', 'unclearItem', 'addAdjustment']);
+        $this->middleware('permission:bank-reconciliation-edit')->only(['clearItem', 'unclearItem', 'saveTicks', 'addAdjustment', 'previewAdjustment', 'updateStatementBalance', 'recalculate']);
         $this->middleware('permission:bank-reconciliation-delete')->only(['destroy']);
-        $this->middleware('permission:bank-reconciliation-approve')->only(['complete', 'approve']);
+        $this->middleware('permission:bank-reconciliation-complete')->only(['complete', 'previewComplete']);
     }
 
-    /**
-     * Display a listing of bank reconciliations
-     */
     public function index(Request $request)
     {
-        try {
-            $query = BankReconciliation::with(['bankAccount', 'creator']);
+        $rows = BankReconciliation::with('chartOfAccount')
+            ->when($request->filled('account_id'), fn ($q) => $q->where('chart_of_account_id', $request->account_id))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->orderByDesc('statement_date')->orderByDesc('id')
+            ->paginate(20)->withQueryString();
 
-            if ($request->filled('bank_account_id')) {
-                $query->where('bank_account_id', $request->bank_account_id);
-            }
+        $accounts = $this->service->accounts();
+        $last = $accounts->mapWithKeys(fn ($a) => [$a->id => [
+            'last' => $this->service->lastCompleted($a->id),
+            'book' => $this->service->bookBalance($a->id, now()->toDateString()),
+        ]]);
 
-            if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            }
-
-            if ($request->filled('fiscal_year_id')) {
-                $query->where('fiscal_year_id', $request->fiscal_year_id);
-            }
-
-            $reconciliations = $query->orderBy('statement_date', 'desc')->paginate(20);
-
-            // Get bank accounts (Class 52 in OHADA - Bank accounts)
-            $bankAccounts = ChartOfAccount::where('account_code', 'like', '52%')
-                ->where('is_active', true)
-                ->orderBy('account_code')
-                ->get();
-
-            $fiscalYears = FiscalYear::orderBy('start_date', 'desc')->get();
-
-            return view('admin.accounting.bank-reconciliation.index', compact('reconciliations', 'bankAccounts', 'fiscalYears'));
-        } catch (Exception $e) {
-            Log::error('Error loading bank reconciliations', ['exception' => $e->getMessage()]);
-            return back()->with('error', __('error_loading_reconciliations'));
-        }
+        return view('admin.accounting.bank-reconciliation.index', [
+            'title' => __('Bank reconciliation'),
+            'rows' => $rows,
+            'accounts' => $accounts,
+            'last' => $last,
+        ]);
     }
 
-    /**
-     * Show form for creating a new reconciliation
-     */
+    public function summary(Request $request)
+    {
+        return redirect()->route('admin.bank-reconciliation.index', $request->query());
+    }
+
     public function create(Request $request)
     {
-        try {
-            // Get bank accounts
-            $bankAccounts = ChartOfAccount::where('account_code', 'like', '52%')
-                ->where('is_active', true)
-                ->orderBy('account_code')
-                ->get();
-
-            $fiscalYears = FiscalYear::orderBy('start_date', 'desc')->get();
-            $activeFiscalYear = FiscalYear::getActiveFiscalYear();
-
-            $selectedBankAccountId = $request->bank_account_id;
-            $summary = null;
-
-            if ($selectedBankAccountId) {
-                $summary = $this->reconciliationService->getSummary($selectedBankAccountId);
-            }
-
-            return view('admin.accounting.bank-reconciliation.create', compact('bankAccounts', 'fiscalYears', 'activeFiscalYear', 'selectedBankAccountId', 'summary'));
-        } catch (Exception $e) {
-            Log::error('Error loading reconciliation create form', ['exception' => $e->getMessage()]);
-            return back()->with('error', __('error_loading_form'));
-        }
+        return view('admin.accounting.bank-reconciliation.create', [
+            'title' => __('New bank reconciliation'),
+            'accounts' => $this->service->accounts(),
+            'selected' => (int) $request->input('account_id'),
+        ]);
     }
 
-    /**
-     * Store a newly created reconciliation
-     */
     public function store(Request $request)
     {
-        $request->validate([
-            'bank_account_id' => 'required|exists:chart_of_accounts,id',
-            'statement_date' => 'required|date',
-            'statement_ending_balance' => 'required|numeric',
-            'statement_beginning_balance' => 'nullable|numeric',
+        $data = $request->validate([
+            'chart_of_account_id' => 'required|integer|exists:chart_of_accounts,id',
+            'statement_date' => 'required|date|before_or_equal:today',
+            'statement_closing_balance' => 'required|numeric',
+            'statement_opening_balance' => 'nullable|numeric',
+            'statement_reference' => 'nullable|string|max:190',
+            'notes' => 'nullable|string|max:2000',
         ]);
 
         try {
-            $reconciliation = $this->reconciliationService->create($request->all());
+            $rec = $this->service->create($data, Auth::id());
+        } catch (\RuntimeException $e) {
+            Flasher::addError($e->getMessage(), __('msg_error'));
 
-            return redirect()->route('admin.bank-reconciliation.show', $reconciliation)
-                ->with('success', __('reconciliation_created_successfully'));
-        } catch (Exception $e) {
-            Log::error('Error creating reconciliation', ['exception' => $e->getMessage()]);
-            return back()->withInput()->with('error', __('error_creating_reconciliation') . ': ' . $e->getMessage());
+            return back()->withInput();
         }
+
+        Flasher::addSuccess(__('Reconciliation started. Tick each movement that appears on the bank statement.'), __('msg_success'));
+
+        return redirect()->route('admin.bank-reconciliation.show', $rec->id);
     }
 
-    /**
-     * Display a specific reconciliation
-     */
     public function show(BankReconciliation $bankReconciliation)
     {
-        try {
-            $bankReconciliation->load(['bankAccount', 'items' => function ($q) {
-                $q->orderBy('transaction_date', 'desc');
-            }, 'creator', 'approver']);
+        $rec = $bankReconciliation->load(['chartOfAccount', 'items' => fn ($q) => $q->orderBy('transaction_date')->orderBy('id')]);
 
-            // Group items by type
-            $itemsByType = $bankReconciliation->items->groupBy('item_type');
-
-            // Get reconciliation status
-            $isBalanced = $bankReconciliation->isReconciled();
-
-            return view('admin.accounting.bank-reconciliation.show', compact('bankReconciliation', 'itemsByType', 'isBalanced'));
-        } catch (Exception $e) {
-            Log::error('Error showing reconciliation', ['id' => $bankReconciliation->id, 'exception' => $e->getMessage()]);
-            return back()->with('error', __('error_loading_reconciliation'));
-        }
+        return view('admin.accounting.bank-reconciliation.show', [
+            'title' => __('Bank reconciliation'),
+            'rec' => $rec,
+            'position' => $this->service->position($rec),
+            'editable' => in_array($rec->status, [BankReconciliation::STATUS_DRAFT, BankReconciliation::STATUS_IN_PROGRESS], true),
+            'chargeCategories' => (new \App\Services\Accounting\BudgetLineChoices())->categories('expense_category')->values(),
+            'interestCategories' => (new \App\Services\Accounting\BudgetLineChoices())->categories('income_category')->values(),
+        ]);
     }
 
-    /**
-     * Clear an item
-     */
+    public function saveTicks(Request $request, BankReconciliation $bankReconciliation)
+    {
+        $ids = array_map('intval', (array) $request->input('cleared', []));
+
+        return $this->attempt(fn () => $this->service->saveTicks($bankReconciliation, $ids), $bankReconciliation, __('Ticks saved.'));
+    }
+
     public function clearItem(Request $request, BankReconciliationItem $item)
     {
-        try {
-            $this->reconciliationService->clearItem($item, $request->cleared_date);
+        $rec = BankReconciliation::findOrFail($item->bank_reconciliation_id);
 
-            return response()->json([
-                'success' => true,
-                'message' => __('item_cleared_successfully'),
-                'reconciliation' => $item->bankReconciliation->fresh(),
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error clearing item', ['item_id' => $item->id, 'exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_clearing_item') . ': ' . $e->getMessage(),
-            ], 500);
-        }
+        return $this->attempt(fn () => $this->service->setCleared($rec, [$item->id], true), $rec);
     }
 
-    /**
-     * Unclear an item
-     */
     public function unclearItem(BankReconciliationItem $item)
     {
-        try {
-            $this->reconciliationService->unclearItem($item);
+        $rec = BankReconciliation::findOrFail($item->bank_reconciliation_id);
 
-            return response()->json([
-                'success' => true,
-                'message' => __('item_uncleared_successfully'),
-                'reconciliation' => $item->bankReconciliation->fresh(),
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error unclearing item', ['item_id' => $item->id, 'exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_unclearing_item') . ': ' . $e->getMessage(),
-            ], 500);
-        }
+        return $this->attempt(fn () => $this->service->setCleared($rec, [$item->id], false), $rec);
     }
 
-    /**
-     * Add adjustment item
-     */
-    public function addAdjustment(Request $request, BankReconciliation $bankReconciliation)
+    public function updateStatementBalance(Request $request, BankReconciliation $bankReconciliation)
     {
-        $request->validate([
-            'item_type' => 'required|in:bank_charge,interest_earned,nsf_check,other',
-            'description' => 'required|string|max:255',
-            'amount' => 'required|numeric|min:0.01',
-            'effect' => 'required|in:add,subtract',
+        $data = $request->validate([
+            'statement_closing_balance' => 'required|numeric',
+            'statement_reference' => 'nullable|string|max:190',
         ]);
 
-        try {
-            $item = $this->reconciliationService->addAdjustment($bankReconciliation, $request->all());
-
-            return response()->json([
-                'success' => true,
-                'message' => __('adjustment_added_successfully'),
-                'item' => $item,
-                'reconciliation' => $bankReconciliation->fresh(),
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error adding adjustment', ['exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_adding_adjustment') . ': ' . $e->getMessage(),
-            ], 500);
-        }
+        return $this->attempt(fn () => $this->service->updateStatement($bankReconciliation,
+            (float) $data['statement_closing_balance'], $data['statement_reference'] ?? null), $bankReconciliation, __('Statement balance updated.'));
     }
 
-    /**
-     * Complete the reconciliation
-     */
+    public function recalculate(BankReconciliation $bankReconciliation)
+    {
+        return $this->attempt(fn () => $this->service->recalculate($bankReconciliation), $bankReconciliation);
+    }
+
+    public function previewAdjustment(Request $request, BankReconciliation $bankReconciliation)
+    {
+        $data = $this->adjustmentInput($request);
+
+        return view('admin.supplier-bill.partials.preview', ['p' => $this->service->previewAdjustment($bankReconciliation, $data, Auth::id())]);
+    }
+
+    public function addAdjustment(Request $request, BankReconciliation $bankReconciliation)
+    {
+        if (!$request->boolean('reviewed')) {
+            Flasher::addError(__('Review it first: open the review, check the details and tick the confirmation box.'), __('msg_error'));
+
+            return back()->withInput();
+        }
+
+        $data = $this->adjustmentInput($request);
+
+        return $this->attempt(fn () => $this->service->addAdjustment($bankReconciliation, $data, Auth::id()), $bankReconciliation, __('Posted to the ledger and ticked.'));
+    }
+
+    public function previewComplete(BankReconciliation $bankReconciliation)
+    {
+        return view('admin.supplier-bill.partials.preview', ['p' => $this->service->previewComplete($bankReconciliation, Auth::id())]);
+    }
+
     public function complete(Request $request, BankReconciliation $bankReconciliation)
     {
-        try {
-            $this->reconciliationService->complete(
-                $bankReconciliation,
-                $request->boolean('create_adjusting_entries', true)
-            );
+        if (!$request->boolean('reviewed')) {
+            Flasher::addError(__('Review it first: open the review, check the details and tick the confirmation box.'), __('msg_error'));
 
-            return redirect()->route('admin.bank-reconciliation.show', $bankReconciliation)
-                ->with('success', __('reconciliation_completed_successfully'));
-        } catch (Exception $e) {
-            Log::error('Error completing reconciliation', ['id' => $bankReconciliation->id, 'exception' => $e->getMessage()]);
-            return back()->with('error', __('error_completing_reconciliation') . ': ' . $e->getMessage());
+            return back();
         }
+
+        return $this->attempt(fn () => $this->service->complete($bankReconciliation, Auth::id()), $bankReconciliation, __('Reconciliation completed.'));
     }
 
-    /**
-     * Delete a reconciliation
-     */
     public function destroy(BankReconciliation $bankReconciliation)
     {
         try {
-            $this->reconciliationService->delete($bankReconciliation);
+            $this->service->delete($bankReconciliation);
+        } catch (\RuntimeException $e) {
+            Flasher::addError($e->getMessage(), __('msg_error'));
 
-            return redirect()->route('admin.bank-reconciliation.index')
-                ->with('success', __('reconciliation_deleted_successfully'));
-        } catch (Exception $e) {
-            Log::error('Error deleting reconciliation', ['id' => $bankReconciliation->id, 'exception' => $e->getMessage()]);
-            return back()->with('error', __('error_deleting_reconciliation') . ': ' . $e->getMessage());
+            return back();
         }
+
+        Flasher::addSuccess(__('Reconciliation deleted.'), __('msg_success'));
+
+        return redirect()->route('admin.bank-reconciliation.index');
     }
 
-    /**
-     * Get reconciliation summary for a bank account
-     */
-    public function summary(Request $request)
+    protected function adjustmentInput(Request $request): array
     {
-        $request->validate([
-            'bank_account_id' => 'required|exists:chart_of_accounts,id',
+        return $request->validate([
+            'kind' => 'required|in:bank_charge,bank_interest',
+            'amount' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'category_id' => 'required|integer',
+            'description' => 'nullable|string|max:150',
         ]);
-
-        try {
-            $summary = $this->reconciliationService->getSummary($request->bank_account_id);
-
-            return response()->json([
-                'success' => true,
-                'data' => $summary,
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error getting reconciliation summary', ['exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_loading_summary'),
-            ], 500);
-        }
     }
 
-    /**
-     * Recalculate reconciliation balances
-     */
-    public function recalculate(BankReconciliation $bankReconciliation)
+    protected function attempt(callable $action, BankReconciliation $rec, ?string $success = null)
     {
         try {
-            $bankReconciliation->calculateBalances();
+            $action();
+        } catch (\RuntimeException $e) {
+            Flasher::addError($e->getMessage(), __('msg_error'));
 
-            return response()->json([
-                'success' => true,
-                'message' => __('balances_recalculated'),
-                'reconciliation' => $bankReconciliation->fresh(),
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error recalculating balances', ['exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_recalculating_balances'),
-            ], 500);
+            return redirect()->route('admin.bank-reconciliation.show', $rec->id);
         }
-    }
 
-    /**
-     * Update statement balance
-     */
-    public function updateStatementBalance(Request $request, BankReconciliation $bankReconciliation)
-    {
-        $request->validate([
-            'statement_ending_balance' => 'required|numeric',
-        ]);
-
-        try {
-            $bankReconciliation->update([
-                'statement_ending_balance' => $request->statement_ending_balance,
-            ]);
-
-            $bankReconciliation->calculateBalances();
-
-            return response()->json([
-                'success' => true,
-                'message' => __('statement_balance_updated'),
-                'reconciliation' => $bankReconciliation->fresh(),
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error updating statement balance', ['exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_updating_balance'),
-            ], 500);
+        if ($success) {
+            Flasher::addSuccess($success, __('msg_success'));
         }
+
+        return redirect()->route('admin.bank-reconciliation.show', $rec->id);
     }
 }

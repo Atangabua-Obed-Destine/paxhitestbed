@@ -44,7 +44,9 @@ class DaybookService
             $this->feeRows($from, $to),
             $this->incomeRows($from, $to),
             $this->expenseRows($from, $to),
-            $this->payrollRows($from, $to)
+            $this->payrollRows($from, $to),
+            $this->supplierBillRows($from, $to),
+            $this->bankAdjustmentRows($from, $to)
         );
 
         usort($rows, function ($a, $b) {
@@ -767,7 +769,10 @@ class DaybookService
     {
         $facultyLines = BudgetLine::whereNotNull('faculty_id')->pluck('id', 'faculty_id');
 
-        $records = DB::table('fees as f')
+        // One row per day the fee's cash came in: earlier receipts on their
+        // own days, the rest on pay_date - the split the ledger posts.
+        $records = DB::table(DB::raw('(' . \App\Services\FeeLedgerPosting::cashEventsSql() . ') as ev'))
+            ->join('fees as f', 'f.id', '=', 'ev.fee_id')
             ->leftJoin('default_account_mappings as m', function ($join) {
                 $join->on('m.category_id', '=', 'f.category_id')
                     ->where('m.mapping_type', '=', 'fee_category');
@@ -777,13 +782,12 @@ class DaybookService
             ->leftJoin('programs as p', 'p.id', '=', 'se.program_id')
             ->leftJoin('students as s', 's.id', '=', 'se.student_id')
             ->leftJoin('applications as ap', 'ap.id', '=', 'f.applicant_id')
-            ->where('f.paid_amount', '>', 0)
-            ->when($from, fn ($q) => $q->whereDate('f.pay_date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('f.pay_date', '<=', $to))
-            // The cash that arrived on this fee. Credit applied to it from
-            // another fee brought no cash and is not a movement in a cash book;
-            // it was already recorded when it was paid. See Fee::cashReceivedSql().
-            ->selectRaw("f.id, f.pay_date, f.paid_amount, f.note, " . \App\Models\Fee::cashReceivedSql('f') . " as cash_received,
+            ->when($from, fn ($q) => $q->whereDate('ev.event_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('ev.event_date', '<=', $to))
+            // The cash that arrived on this fee, that day. Credit applied to it
+            // from another fee brought no cash and is not a movement in a cash
+            // book; it was already recorded when it was paid.
+            ->selectRaw("f.id, ev.event_date as pay_date, f.paid_amount, f.note, ev.amount as cash_received,
                          m.budget_line_id as mapped_line, fc.title as category,
                          fc.is_admission, fc.is_resit, p.faculty_id,
                          TRIM(CONCAT(COALESCE(s.first_name, ap.first_name, ''), ' ',
@@ -921,6 +925,80 @@ class DaybookService
                 'signed_amount' => $isReversal ? -$amount : $amount,
                 'line_id' => $r->line_id ? (int) $r->line_id : null,
                 'source' => 'payroll',
+                'source_id' => (int) $r->id,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Supplier bills, read from the entries their approval and voiding post.
+     *
+     * A bill is spending on the day it is approved into the ledger (its bill
+     * date), on its lines' budget lines; a voided bill comes back off on the
+     * day of the void, as its own row, the way a payroll reversal does.
+     * Paying the bill later is not a second cost and adds nothing here.
+     *
+     * @see \App\Services\Accounting\SupplierPayables::budgetLedgerLines()
+     */
+    protected function supplierBillRows(?string $from, ?string $to): array
+    {
+        $records = \App\Services\Accounting\SupplierPayables::budgetLedgerLines($from, $to)
+            ->selectRaw('jl.id, je.entry_date, b.number, s.title as supplier, ec.title as category,
+                         jl.debit, jl.credit, m.budget_line_id as line_id')
+            ->get();
+
+        $rows = [];
+
+        foreach ($records as $r) {
+            $isReversal = (float) $r->credit > 0;
+            $amount = $isReversal ? (float) $r->credit : (float) $r->debit;
+
+            if ($amount == 0.0) {
+                continue;
+            }
+
+            $rows[] = [
+                'date' => substr((string) $r->entry_date, 0, 10),
+                'ref' => (string) $r->number,
+                'description' => trim(($isReversal ? __('Supplier bill voided') : __('Supplier bill'))
+                    . ' — ' . ($r->supplier ?? '') . ($r->category ? ' — ' . $r->category : '')),
+                'direction' => $isReversal ? self::IN : self::OUT,
+                'amount' => $amount,
+                'signed_amount' => $isReversal ? -$amount : $amount,
+                'line_id' => $r->line_id ? (int) $r->line_id : null,
+                'source' => 'supplier_bill',
+                'source_id' => (int) $r->id,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** Bank charges (money out) and interest (money in) posted from a bank reconciliation. */
+    protected function bankAdjustmentRows(?string $from, ?string $to): array
+    {
+        $records = \App\Services\Accounting\BankReconciliationService::budgetLedgerLines($from, $to)
+            ->selectRaw('jl.id, je.entry_date, je.entry_number, i.item_type, i.description, jl.debit, jl.credit, m.budget_line_id as line_id')
+            ->get();
+
+        $rows = [];
+        foreach ($records as $r) {
+            $isCharge = $r->item_type === 'bank_charge';
+            $amount = $isCharge ? (float) $r->debit - (float) $r->credit : (float) $r->credit - (float) $r->debit;
+            if ($amount == 0.0) {
+                continue;
+            }
+
+            $rows[] = [
+                'date' => substr((string) $r->entry_date, 0, 10),
+                'ref' => (string) $r->entry_number,
+                'description' => (string) $r->description,
+                'direction' => $isCharge ? self::OUT : self::IN,
+                'amount' => $amount,
+                'line_id' => $r->line_id ? (int) $r->line_id : null,
+                'source' => 'bank_reconciliation',
                 'source_id' => (int) $r->id,
             ];
         }

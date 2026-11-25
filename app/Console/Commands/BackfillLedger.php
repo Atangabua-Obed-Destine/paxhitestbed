@@ -154,6 +154,23 @@ class BackfillLedger extends Command
                 $amount = (float) $row->{$amountColumn};
                 $categoryId = $row->category_id ?? null;
 
+                // A fee posts the cash it received, never paid_amount: paid_amount
+                // includes credit brought in from another fee, which brought no
+                // cash, and instalments a payment plan posts on its own. Posting
+                // paid_amount here re-created the double count that
+                // fees:credit-audit --correct-ledger removes. FeeLedgerPosting is
+                // the one place that knows the rule.
+                if ($type === 'fee') {
+                    $posting = app(\App\Services\FeeLedgerPosting::class);
+                    $amount = round($row->cash_received_amount - $posting->paidThroughPlans($row), 2);
+
+                    if ($amount <= 0.009) {
+                        $totals['already']++;
+                        $seen['already']++;
+                        continue;
+                    }
+                }
+
                 if (!$this->hasMapping($type, $categoryId)) {
                     $totals['skipped']++;
                     $seen['skipped']++;
@@ -168,7 +185,9 @@ class BackfillLedger extends Command
                     continue;
                 }
 
-                $result = $this->mapper->autoMap($type, $row->id, $categoryId, [
+                $result = $type === 'fee'
+                    ? app(\App\Services\FeeLedgerPosting::class)->resync($row) === \App\Services\FeeLedgerPosting::POSTED
+                    : $this->mapper->autoMap($type, $row->id, $categoryId, [
                     'amount' => $amount,
                     'date' => $row->{$dateColumn},
                     'description' => $row->title ?? ($type . ' #' . $row->id),

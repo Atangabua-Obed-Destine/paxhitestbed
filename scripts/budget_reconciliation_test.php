@@ -78,30 +78,66 @@ foreach (['income' => 7, 'expenditure' => 6, 'capital' => 2] as $section => $cla
     check("$section is compared against ledger class $class", $s['class'] === $class);
 }
 
-// The one difference allowed, and only to the franc: fee credit the ledger
-// posted as cash a second time. Worked out here from the credit and posting
-// tables, not by the service, so the service cannot excuse an arbitrary gap.
-// Each posted fee: what its journal entry carries, less the cash it received
-// (paid_amount, less credit applied into it, plus transfers out of it).
+// The differences allowed in income, each worked out here from the raw
+// posting tables, not by the service, so the service cannot excuse an
+// arbitrary gap:
+//
+//   1. a fee posting that differs from the cash the fee received (less
+//      instalments a payment plan posted itself) - zero once
+//      fees:credit-audit --correct-ledger has run;
+//   2. fee income timing: the sheet counts fee cash when it arrives, the
+//      ledger counts fee income when it is recognised - when billed (fees on
+//      accrual), and overpaid or prepaid money when it settles a fee.
+$planPaid = fn (int $feeId) => (float) DB::table('payment_plan_payments as ppp')
+    ->join('payment_plan_installments as ppi', 'ppi.id', '=', 'ppp.installment_id')
+    ->join('payment_plans as pp', 'pp.id', '=', 'ppi.payment_plan_id')
+    ->where('pp.fee_id', $feeId)->where('ppp.status', '!=', 'reversed')->sum('ppp.amount');
+/** Earlier receipts posted on their own days (FeeLedgerPosting): worked out here from the receipts. */
+$splitOff = function (int $feeId, float $postable): float {
+    $fee = DB::table('fees')->where('id', $feeId)->first(['pay_date']);
+    if (!$fee || !$fee->pay_date) {
+        return 0.0;
+    }
+    $prior = (float) DB::table('payment_receipts as pr')->where('pr.fee_id', $feeId)->where('pr.verification_status', 'approved')
+        ->whereDate('pr.payment_date', '<', $fee->pay_date)
+        ->whereExists(fn ($q) => $q->from('fiscal_years as fy')->whereRaw('pr.payment_date BETWEEN fy.start_date AND fy.end_date'))
+        ->sum('pr.amount');
+
+    return $prior <= $postable + 0.005 ? $prior : 0.0;
+};
 $creditPostedAsCash = 0.0;
 foreach (DB::table('transaction_mappings as tm')->join('journal_entries as je', 'je.id', '=', 'tm.journal_entry_id')
     ->join('fees as f', 'f.id', '=', 'tm.transaction_id')
     ->where('tm.transaction_type', 'fee')->where('tm.status', 'active')
     ->select('f.id', 'f.paid_amount', 'je.total_debit')->get() as $postedFee) {
-    $creditPostedAsCash += (float) $postedFee->total_debit - (float) $postedFee->paid_amount
-        + (float) DB::table('credit_applications')->where('fee_id', $postedFee->id)->sum('amount_applied')
-        - (float) DB::table('student_credits')->where('source_type', 'transfer')->where('source_fee_id', $postedFee->id)->sum('original_amount');
+    $cash = (float) $postedFee->paid_amount
+        - (float) DB::table('credit_applications')->where('fee_id', $postedFee->id)->sum('amount_applied')
+        + (float) DB::table('student_credits')->where('source_type', 'transfer')->where('source_fee_id', $postedFee->id)->sum('original_amount');
+    $postable = $cash - $planPaid((int) $postedFee->id);
+    $creditPostedAsCash += (float) $postedFee->total_debit - ($postable - $splitOff((int) $postedFee->id, $postable));
 }
 $creditPostedAsCash = round($creditPostedAsCash, 2);
+
+$feeTypes = ['fee', 'fee_reversal', 'fee_receipt', 'fee_receipt_reversal', 'payment_plan_payment', 'payment_plan_payment_reversal', 'payment_plans_payments',
+    'payment_plan_payments', 'fee_billing', 'fee_billing_reversal'];
+$feeIncome = (float) DB::table('journal_entry_lines as l')->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+    ->join('chart_of_accounts as a', 'a.id', '=', 'l.account_id')
+    ->where('e.is_posted', 1)->whereNull('e.deleted_at')
+    ->where(fn ($q) => $q->whereIn('e.reference_type', $feeTypes)->orWhere('e.reference_type', 'like', 'student_credit_%'))
+    ->where('a.account_code', 'like', '7%')->sum(DB::raw('l.credit - l.debit'));
+$feeCash = (float) DB::table('journal_entries')->where('is_posted', 1)->whereNull('deleted_at')
+        ->whereIn('reference_type', ['fee', 'payment_plan_payment', 'fee_receipt'])->sum('total_debit')
+    - (float) DB::table('journal_entries')->where('is_posted', 1)->whereNull('deleted_at')
+        ->whereIn('reference_type', ['fee_reversal', 'payment_plan_payment_reversal', 'payment_plan_payments', 'fee_receipt_reversal'])->sum('total_debit');
+$timing = round($feeIncome - $feeCash, 2);
 $income = sectionOf($base, 'income');
 
-check('the only difference in income is the fee credit the ledger posted as cash',
-    abs(-$income['explained'] - $creditPostedAsCash) < 0.01 && abs($income['unexplained']) < 0.01,
-    sprintf('explained %s, expected %s, unexplained %s', number_format(-$income['explained']), number_format($creditPostedAsCash), number_format($income['unexplained'])));
-check('and it is reported by name, with its amount',
-    $creditPostedAsCash < 0.01
-        ? empty($base['known_differences'])
-        : abs(($base['known_differences'][0]['amount'] ?? 0) - $creditPostedAsCash) < 0.01,
+check('the only differences explained in income are fee postings vs cash, and fee income timing',
+    abs(-$income['explained'] - ($creditPostedAsCash + $timing)) < 0.01,
+    sprintf('explained %s, expected %s (postings vs cash %s, timing %s)', number_format(-$income['explained']), number_format($creditPostedAsCash + $timing),
+        number_format($creditPostedAsCash), number_format($timing)));
+check('and each is reported by name, with its amount',
+    abs(collect($base['known_differences'] ?? [])->where('section', 'income')->sum('amount') - ($creditPostedAsCash + $timing)) < 0.01,
     json_encode($base['known_differences'] ?? null));
 check('expenditure and capital have no allowance at all',
     sectionOf($base, 'expenditure')['explained'] == 0 && sectionOf($base, 'capital')['explained'] == 0);

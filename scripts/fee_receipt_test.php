@@ -161,7 +161,7 @@ try {
     check('named by the cashier who took it', $h && $h['cashier'] === $admin->name, (string) ($h['cashier'] ?? ''));
 
     $html = $receiptOf($first->id);
-    check('the receipt prints that amount', str_contains($html, number_format((float) $one->amount, 2)));
+    check('the receipt prints that amount', (str_contains($html, number_format((float) $one->amount, 2)) || str_contains($html, format_amount((float) $one->amount))));
     check('and not the 30,000 paid before the plan as the amount received',
         !preg_match('/class="v">[^<]*30,000\.00/', $html));
     check('it says the fee is on a payment plan', str_contains($html, 'class="tag plan"') && str_contains($html, __('status_active')));
@@ -197,7 +197,7 @@ try {
     check('what landed on this fee is the plan\'s part', abs($service->onFee($h, $first->id) - $rest) < 0.005);
 
     $html = $receiptOf($first->id);
-    check('the receipt prints the whole handover', str_contains($html, number_format($handed, 2)));
+    check('the receipt prints the whole handover', str_contains($html, number_format($handed, 2)) || str_contains($html, format_amount($handed)));
     check('and lists what it settled', str_contains($html, 'class="settled-line"') && substr_count($html, 'class="leg"') === 4);
     check('naming the fee the rest went to', str_contains($html, e(optional($second->category)->title)));
 
@@ -221,7 +221,7 @@ try {
 
     $page = $get($pathOf($h['url']))->getContent();
     check('the check lists every line', substr_count($page, '&nbsp;&nbsp;') === 4);
-    check('and the whole amount', str_contains($page, number_format($handed, 2)));
+    check('and the whole amount', str_contains($page, number_format($handed, 2)) || str_contains($page, format_amount($handed)));
 
     // Change one line after printing: the sheet must stop verifying.
     PaymentPlanPayment::whereKey($planRows->first()->id)->update(['amount' => DB::raw('amount - 1')]);

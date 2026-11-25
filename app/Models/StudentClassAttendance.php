@@ -182,9 +182,9 @@ class StudentClassAttendance extends Model
         
         // Get all joint session IDs (same teacher, date, subject, start time)
         $jointSessionIds = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->where('status', ClassSession::STATUS_IN_PROGRESS)
             ->pluck('id')
             ->toArray();

@@ -38,6 +38,8 @@ class BudgetActualsService
         $this->addIncomes($lines, $unallocated, $from, $to);
         $this->addFees($lines, $unallocated, $from, $to);
         $this->addPayroll($lines, $unallocated, $from, $to);
+        $this->addSupplierBills($lines, $unallocated, $from, $to);
+        $this->addBankAdjustments($lines, $unallocated, $from, $to);
 
         return ['lines' => $lines, 'unallocated' => $unallocated];
     }
@@ -105,7 +107,10 @@ class BudgetActualsService
         $facultyLines = BudgetLine::whereNotNull('faculty_id')
             ->pluck('id', 'faculty_id');
 
-        $rows = DB::table('fees as f')
+        // Cash on the day it came in: earlier receipts on their own days, the
+        // rest on pay_date - the split the ledger posts (FeeLedgerPosting).
+        $rows = DB::table(DB::raw('(' . \App\Services\FeeLedgerPosting::cashEventsSql() . ') as ev'))
+            ->join('fees as f', 'f.id', '=', 'ev.fee_id')
             ->leftJoin('default_account_mappings as m', function ($join) {
                 $join->on('m.category_id', '=', 'f.category_id')
                     ->where('m.mapping_type', '=', 'fee_category');
@@ -119,10 +124,9 @@ class BudgetActualsService
             // second copy in a later period as if it were new cash.
             // See Fee::cashReceivedSql().
             ->selectRaw('m.budget_line_id as mapped_line, fc.is_admission, fc.is_resit,
-                         p.faculty_id, SUM(' . \App\Models\Fee::cashReceivedSql('f') . ') as total')
-            ->where('f.paid_amount', '>', 0)
-            ->when($from, fn ($q) => $q->whereDate('f.pay_date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('f.pay_date', '<=', $to))
+                         p.faculty_id, SUM(ev.amount) as total')
+            ->when($from, fn ($q) => $q->whereDate('ev.event_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('ev.event_date', '<=', $to))
             ->groupBy('m.budget_line_id', 'fc.is_admission', 'fc.is_resit', 'p.faculty_id')
             ->get();
 
@@ -214,6 +218,65 @@ class BudgetActualsService
 
             if ($row->line_id === null) {
                 $unallocated['payroll'] = ($unallocated['payroll'] ?? 0) + $amount;
+                continue;
+            }
+
+            $id = (int) $row->line_id;
+            $lines[$id] = ($lines[$id] ?? 0) + $amount;
+        }
+    }
+
+    /**
+     * Approved supplier bills, net of voids, on their lines' budget lines.
+     *
+     * Read from the posted entries, like payroll, so the sheet agrees with
+     * the ledger. Must stay in step with DaybookService::supplierBillRows().
+     *
+     * @see \App\Services\Accounting\SupplierPayables::budgetLedgerLines()
+     */
+    protected function addSupplierBills(array &$lines, array &$unallocated, ?string $from, ?string $to): void
+    {
+        $rows = \App\Services\Accounting\SupplierPayables::budgetLedgerLines($from, $to)
+            ->selectRaw('m.budget_line_id as line_id, SUM(jl.debit - jl.credit) as total')
+            ->groupBy('line_id')
+            ->get();
+
+        foreach ($rows as $row) {
+            $amount = (float) $row->total;
+            if ($amount == 0.0) {
+                continue;
+            }
+
+            if ($row->line_id === null) {
+                $unallocated['supplier_bills'] = ($unallocated['supplier_bills'] ?? 0) + $amount;
+                continue;
+            }
+
+            $id = (int) $row->line_id;
+            $lines[$id] = ($lines[$id] ?? 0) + $amount;
+        }
+    }
+
+    /**
+     * Bank charges and interest posted from a bank reconciliation, on the
+     * budget line of the category they were filed under. Read from the ledger
+     * (BankReconciliationService::budgetLedgerLines), like supplier bills.
+     */
+    protected function addBankAdjustments(array &$lines, array &$unallocated, ?string $from, ?string $to): void
+    {
+        $rows = \App\Services\Accounting\BankReconciliationService::budgetLedgerLines($from, $to)
+            ->selectRaw("m.budget_line_id as line_id, SUM(IF(i.item_type = 'bank_charge', jl.debit - jl.credit, jl.credit - jl.debit)) as total")
+            ->groupBy('line_id')
+            ->get();
+
+        foreach ($rows as $row) {
+            $amount = (float) $row->total;
+            if ($amount == 0.0) {
+                continue;
+            }
+
+            if ($row->line_id === null) {
+                $unallocated['bank_adjustments'] = ($unallocated['bank_adjustments'] ?? 0) + $amount;
                 continue;
             }
 

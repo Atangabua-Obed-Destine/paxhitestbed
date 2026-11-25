@@ -151,9 +151,10 @@
                                                     <select class="form-control select2 @error('subject') is-invalid @enderror" name="subject" id="subject" required>
                                                         <option value="">{{ __('select') }}</option>
                                                         @foreach($subjects as $subject)
-                                                        <option value="{{ $subject->id }}" {{ old('subject') == $subject->id ? 'selected' : '' }}>{{ $subject->code }} - {{ $subject->title }}</option>
+                                                        <option value="{{ $subject->id }}" {{ old('subject') == $subject->id ? 'selected' : '' }}>{{ $subject->code }} - {{ $subject->title }}@if($subject->courseGroup) ({{ __('group') }}: {{ $subject->courseGroup->subjects->pluck('code')->implode(', ') }})@endif</option>
                                                         @endforeach
                                                     </select>
+                                                    <small class="form-text text-muted">{{ __('A course in a course group gives each programme its own code of the group; the class stays one lecture.') }}</small>
                                                     @error('subject')
                                                     <div class="invalid-feedback d-block">{{ $message }}</div>
                                                     @enderror

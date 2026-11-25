@@ -148,6 +148,7 @@ class ClassTimetable
         // keys and the strings the messages are built from — and the pair
         // walk below touches nothing but arrays.
         $flat = [];
+        \App\Services\Academic\CourseGroups::load($rows->pluck('subject_id')->all());
 
         foreach ($rows as $row) {
             $flat[] = [
@@ -160,6 +161,9 @@ class ClassTimetable
                 'room_id' => (int) $row->room_id,
                 'teacher_id' => (int) $row->teacher_id,
                 'subject_id' => (int) $row->subject_id,
+                // Equal for the same course and for courses of one course
+                // group: AGE118H and MGT1101H in one room is one lecture.
+                'course' => \App\Services\Academic\CourseGroups::key((int) $row->subject_id),
                 'code' => $row->subject->code ?? __('another class'),
                 'room' => $row->room->title ?? __('The room'),
                 'programme' => $row->program->shortcode ?? $row->program->title ?? '—',
@@ -232,7 +236,7 @@ class ClassTimetable
                         }
                     }
 
-                    $differentCourse = $a['subject_id'] !== $b['subject_id'];
+                    $differentCourse = $a['course'] !== $b['course'];
 
                     // The same subject in the same room at the same time is a
                     // joint lecture, which is how this school teaches shared

@@ -85,7 +85,7 @@ define('GROUP_PIT', (int) DB::table('tax_groups')->where('code', 'PIT')->value('
 define('GROUP_CFC', (int) DB::table('tax_groups')->where('code', 'HLF')->value('id'));
 define('GROUP_CRTV', (int) DB::table('tax_groups')->where('code', 'CRTV')->value('id'));
 define('ACCOUNT_SOCIAL', (int) DB::table('chart_of_accounts')->where('account_code', '431')->value('id'));
-define('ACCOUNT_STATE', (int) DB::table('chart_of_accounts')->where('account_code', '443')->value('id'));
+define('ACCOUNT_STATE', (int) DB::table('chart_of_accounts')->where('account_code', \App\Console\Commands\ChartSyscohada::current('443'))->value('id'));
 
 $month = Carbon::parse('2026-10-01');
 $breakdown = app(PayrollTaxBreakdownService::class);
@@ -278,7 +278,7 @@ $social = collect($lines)->filter(fn ($l) => $l['liability_account_id'] == ACCOU
 $state = collect($lines)->filter(fn ($l) => $l['liability_account_id'] == ACCOUNT_STATE);
 
 check('the social contributions are owed to 431', $social->count() > 0);
-check('the State withholdings are owed to 443', $state->count() > 0);
+check('the State withholdings are owed to the State account (447)', $state->count() > 0);
 
 $totals = $breakdown->totals($lines);
 $split = $social->sum('employee') + $social->sum('employer')

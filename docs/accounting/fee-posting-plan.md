@@ -1,5 +1,21 @@
 # Fee posting: what is wrong today, and the plan to fix it
 
+## Status, 24 Nov 2026 (testbed)
+
+| Step | Status |
+|---|---|
+| 1. Repost fees at the cash received | **Done on the testbed.** 53 fees reposted (6,193,000 off tuition income and cash); 21 more that `ledger:backfill` had re-posted at the paid amount were reversed again, and the backfill now posts the cash received. Fee postings now equal the cash collected exactly (22,143,667, plan instalments included). |
+| 2. Hold overpayments on 419 | **Done.** `StudentCreditLedger`: hold (Dr fee income / Cr 419) when credit is raised, release (Dr 419 / Cr income) when it is used, refund (Dr 419 / Cr cash) when it is paid back. Only credit that cash backs is held: 6,233,000 of the 6,992,000 raised. All of it has since been used, so 419 stands at nil, and total income did not change; only the month it is recognised in did. Refunds used to post nothing at all; they now take the cash out of the books. |
+| Decision: the 759,000 of unbacked credit already spent | **Honoured** (it stays as a discount on the fees it settled). No cash came in, so nothing is posted for it. The accountant can still recover it from the students; the credit audit lists them. |
+| Decision: the 22 fees with no receipt (2,363,333) | Left for the accountant to confirm against the cash book; still listed by `php artisan fees:credit-audit`, section 4. |
+| Fees on accrual (decided by the school, 24 Nov) | **Done.** `php artisan fees:accrual --enable`: 298 fees billed to 411 (25,230,000), 259 fee payments and 4 plan instalments reposted to settle 411, credit moved between 411 and 419. 411 = what students owe (3,684,333) and agrees with the fee records. |
+| What the "overpayments" were | The school confirmed: students paid both instalments before the second was assigned; the excess was recorded on the first and transferred to the second. That is money paid in advance, which 419 holds until the instalment is billed. Quick-assigning an instalment now applies such credit automatically. |
+| 3. Cash on the day it came in | **Done.** Each fee's approved receipts dated before its last payment are posted as their own entries, on their own days, into the account their method names (`fee_cash_parts`); the fee's own entry carries the rest on its pay date. Receipts on the same day as the fee's last payment stay in that entry, so an ordinary payment makes no extra entries. Receipts from before the first fiscal year stay with the fee. On the testbed: 54 fees, 81 entries, 6,713,000 moved to the month it arrived. The budget sheet, the daybook and the fee collection chart read the same split, so they still agree with the ledger month by month. `fees:credit-audit --correct-ledger` applies it. |
+
+On production, the same commands apply, in this order, after a database backup:
+`php artisan migrate --force`, then `php artisan accounts:syscohada` (read the preview; any account marked NAME DIFFERS is settled by hand first) and `php artisan accounts:syscohada --apply`, then `php artisan fees:credit-audit --correct-ledger --post-credit`, then `php artisan fees:accrual --enable`, then `php artisan fees:credit-audit` (sections 3, 6 and 7 must all agree).
+
+
 A plan for decision. Nothing described here has been built or changed. The
 figures come from the testbed (`php artisan fees:credit-audit`, run on 23 Nov
 2026); production will have its own figures.
@@ -21,7 +37,7 @@ figures come from the testbed (`php artisan fees:credit-audit`, run on 23 Nov
 
 | # | Problem | Testbed figure | Effect on the books |
 |---|---|---|---|
-| 1 | Overpayment credit moved from one fee to another was posted again as cash received | **6,079,667** over 54 fees, Apr–Sep 2026 | Tuition revenue (711) and cash (571) both overstated by that amount |
+| 1 | Overpayment credit moved from one fee to another was posted again as cash received | **6,079,667** over 54 fees, Apr–Sep 2026 | Tuition revenue (711, now 7061) and cash (571) both overstated by that amount |
 | 2 | Credit raised twice for the same overpayment, already spent on other fees | **759,000** on 5 fees | Students hold credit no payment backs; needs a person to decide |
 | 3 | Instalments move to the date of the last payment | every fee paid in more than one go | October cash shows in November, so monthly reports and the cash flow mislead |
 | 4 | Overpayments are counted as revenue straight away | part of #1 | The school shows income it has not earned yet; no liability for money it holds |

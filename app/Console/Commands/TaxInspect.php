@@ -112,7 +112,7 @@ class TaxInspect extends Command
         $this->info('Liability accounts the taxes need');
         $this->line(str_repeat('-', 78));
 
-        foreach (['443' => 'Etat - Retenue (State withholdings)', '431' => 'CNPS (social funds)'] as $code => $what) {
+        foreach ([\App\Console\Commands\ChartSyscohada::current('443') => 'State withholdings (447, formerly 443)', '431' => 'CNPS (social funds)'] as $code => $what) {
             $account = DB::table('chart_of_accounts')->where('account_code', $code)->first();
 
             $this->line(sprintf('  %-5s %-40s %s', $code, $what,
@@ -144,7 +144,7 @@ class TaxInspect extends Command
         $coded = DB::table('tax_groups')->whereIn('code', array_keys(CameroonTaxTable::GROUPS))->count();
         $paid = DB::table('payrolls')->where('status', 1)->count();
         $lines = DB::table('payroll_tax_lines')->count();
-        $hasAccounts = DB::table('chart_of_accounts')->whereIn('account_code', ['443', '431'])->count() === 2;
+        $hasAccounts = DB::table('chart_of_accounts')->whereIn('account_code', [\App\Console\Commands\ChartSyscohada::current('443'), '431'])->count() === 2;
 
         $this->info('What to do next');
         $this->line(str_repeat('-', 78));

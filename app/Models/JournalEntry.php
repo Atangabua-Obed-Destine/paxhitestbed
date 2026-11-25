@@ -169,7 +169,22 @@ class JournalEntry extends Model
      */
     public function isBalanced()
     {
-        return abs($this->total_debit - $this->total_credit) < 0.01;
+        if (abs($this->total_debit - $this->total_credit) >= 0.01) {
+            return false;
+        }
+
+        // The header can say anything; the lines are what post. Once there are
+        // lines, they must balance and agree with the header.
+        if ($this->exists) {
+            $lines = $this->lines()->selectRaw('COALESCE(SUM(debit),0) d, COALESCE(SUM(credit),0) c, COUNT(*) n')->first();
+            if ((int) $lines->n > 0) {
+                return abs($lines->d - $lines->c) < 0.01
+                    && abs($lines->d - $this->total_debit) < 0.01
+                    && abs($lines->c - $this->total_credit) < 0.01;
+            }
+        }
+
+        return true;
     }
 
     /**

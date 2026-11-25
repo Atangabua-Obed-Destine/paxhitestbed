@@ -144,6 +144,22 @@ class DepreciationSchedule extends Model
     }
 
     /**
+     * The table carries both the model's columns (status, *_before / *_after) and
+     * its original ones (opening/closing book value, accumulated, period number,
+     * is_posted); keep the originals in step so either set reads right.
+     */
+    protected static function booted()
+    {
+        static::saving(function (self $s) {
+            $s->opening_book_value = $s->book_value_before ?? $s->opening_book_value ?? 0;
+            $s->closing_book_value = $s->book_value_after ?? $s->closing_book_value ?? 0;
+            $s->accumulated_depreciation = $s->accumulated_depreciation_after ?? $s->accumulated_depreciation ?? 0;
+            $s->period_number = $s->period_number ?: (int) Carbon::parse($s->depreciation_date)->format('n');
+            $s->is_posted = ($s->status === self::STATUS_POSTED);
+        });
+    }
+
+    /**
      * Post the depreciation entry
      */
     public function post($userId = null)
@@ -185,40 +201,55 @@ class DepreciationSchedule extends Model
         $asset = $this->fixedAsset;
         $category = $asset->category;
 
-        if (!$category || !$category->depreciationExpenseAccount || !$category->accumulatedDepreciationAccount) {
+        // The category's expense account is depreciation_account_id (there is
+        // no depreciation_expense_account_id), so this used to refuse every
+        // asset as "not configured".
+        if (!$category || !$category->depreciationAccount || !$category->accumulatedDepreciationAccount) {
             throw new \Exception(__('depreciation_accounts_not_configured'));
         }
 
-        // Create journal entry
+        $date = Carbon::parse($this->depreciation_date)->toDateString();
+        $amount = round((float) $this->depreciation_amount, 2);
+
+        // Journal entries have no source_type / source_id / status columns,
+        // and need a number and totals: written against those, no
+        // depreciation could ever post.
         $journalEntry = JournalEntry::create([
-            'entry_date' => $this->depreciation_date,
-            'reference_number' => 'DEP-' . $asset->asset_code . '-' . Carbon::parse($this->depreciation_date)->format('Ym'),
-            'description' => __('depreciation_for') . ' ' . $asset->name . ' - ' . Carbon::parse($this->depreciation_date)->format('F Y'),
-            'source_type' => 'depreciation',
-            'source_id' => $this->id,
-            'fiscal_year_id' => $this->fiscal_year_id,
-            'accounting_period_id' => $this->accounting_period_id,
-            'status' => 'posted',
+            'entry_number' => JournalEntry::generateEntryNumber($date),
+            'entry_date' => $date,
+            'fiscal_year_id' => $this->fiscal_year_id ?: optional(\App\Models\FiscalYear::forDate($date))->id,
+            'accounting_period_id' => $this->accounting_period_id ?: optional(\App\Models\FiscalYear::periodForDate($date))->id,
+            'journal_type' => 'adjustment',
+            'description' => __('Depreciation') . ' — ' . $asset->name . ' — ' . Carbon::parse($date)->format('F Y'),
+            'reference_number' => 'DEP-' . $asset->asset_code . '-' . Carbon::parse($date)->format('Ym'),
+            'reference_type' => 'depreciation',
+            'reference_id' => $this->id,
+            'total_debit' => $amount,
+            'total_credit' => $amount,
+            'is_posted' => false,
+            'is_system_generated' => true,
             'created_by' => auth()->id(),
         ]);
 
-        // Debit: Depreciation Expense
         JournalEntryLine::create([
             'journal_entry_id' => $journalEntry->id,
-            'account_id' => $category->depreciation_expense_account_id,
-            'debit' => $this->depreciation_amount,
+            'line_number' => 1,
+            'account_id' => $category->depreciation_account_id,
+            'debit' => $amount,
             'credit' => 0,
-            'description' => __('depreciation_expense') . ' - ' . $asset->name,
+            'description' => __('Depreciation') . ' — ' . $asset->name,
         ]);
-
-        // Credit: Accumulated Depreciation
         JournalEntryLine::create([
             'journal_entry_id' => $journalEntry->id,
+            'line_number' => 2,
             'account_id' => $category->accumulated_depreciation_account_id,
             'debit' => 0,
-            'credit' => $this->depreciation_amount,
-            'description' => __('accumulated_depreciation') . ' - ' . $asset->name,
+            'credit' => $amount,
+            'description' => __('Accumulated depreciation') . ' — ' . $asset->name,
         ]);
+
+        $journalEntry->load('lines');
+        $journalEntry->post(auth()->id());
 
         return $journalEntry;
     }
@@ -238,6 +269,10 @@ class DepreciationSchedule extends Model
         $asset->accumulated_depreciation -= $this->depreciation_amount;
         $asset->book_value = $asset->acquisition_cost - $asset->accumulated_depreciation;
         
+        // The last month still charged, so that month can be charged again.
+        $asset->last_depreciation_date = static::where('fixed_asset_id', $asset->id)
+            ->where('status', self::STATUS_POSTED)->whereKeyNot($this->id)->max('depreciation_date');
+
         // Update status if it was fully depreciated
         if ($asset->status === FixedAsset::STATUS_FULLY_DEPRECIATED) {
             $asset->status = FixedAsset::STATUS_ACTIVE;
@@ -245,9 +280,13 @@ class DepreciationSchedule extends Model
         
         $asset->save();
 
-        // Reverse journal entry if exists
-        if ($this->journalEntry) {
-            $this->journalEntry->reverse($reason ?? __('depreciation_reversal'));
+        // Reverse journal entry if exists. Journal entries have no reverse();
+        // the month-end reversal writes the counter-entry by the usual rule.
+        if ($this->journalEntry && $this->journalEntry->is_posted) {
+            app(\App\Services\Accounting\PeriodControls::class)->reverseEntry(
+                $this->journalEntry,
+                max(now()->toDateString(), Carbon::parse($this->journalEntry->entry_date)->toDateString()),
+                $userId ?? auth()->id(), $reason ?? __('Depreciation reversed'), true);
         }
 
         // Update this record

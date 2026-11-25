@@ -59,6 +59,37 @@ class StudentCreditService
     }
 
     /**
+     * Money handed over beyond every instalment the student owes, kept as
+     * credit. It was never added to any fee's paid amount, so it is not an
+     * overpayment of the fee (nothing to carve out of it): it is cash received
+     * in advance, and StudentCreditLedger posts it as such (Dr cash / Cr 419).
+     *
+     * @param array{pay_date:string, payment_method:?int, payment_account_id:?int} $payment
+     */
+    public function createPrepayment(Fee $fee, float $amount, array $payment, ?int $createdBy = null): StudentCredit
+    {
+        $studentId = optional($fee->studentEnroll)->student_id ?? $fee->student_id ?? null;
+
+        if (!$studentId) {
+            throw new \RuntimeException("Cannot record a prepayment: fee #{$fee->id} has no resolvable student.");
+        }
+
+        return StudentCredit::create([
+            'student_id' => $studentId,
+            'original_amount' => $amount,
+            'remaining_amount' => $amount,
+            'source_fee_id' => $fee->id,
+            'source_type' => StudentCredit::SOURCE_PREPAYMENT,
+            'received_on' => $payment['pay_date'] ?? now()->toDateString(),
+            'received_method' => $payment['payment_method'] ?? null,
+            'received_payment_account_id' => $payment['payment_account_id'] ?? null,
+            'status' => StudentCredit::STATUS_AVAILABLE,
+            'note' => 'Paid in advance with ' . ($fee->category->title ?? 'a fee') . " (Fee ID: {$fee->id})",
+            'created_by' => $createdBy ?? Auth::id(),
+        ]);
+    }
+
+    /**
      * Create a manual credit (admin adjustment).
      *
      * @param int $studentId
@@ -775,7 +806,8 @@ class StudentCreditService
             $transaction->transaction_id = Str::random(16);
             $transaction->amount = $amount;
             $transaction->type = '1'; // Credit
-            $transaction->note = 'Applied from student credit #' . $credit->id;
+            // The transactions table has no note column; writing one made every
+            // manual application fail. The credit application row carries the note.
             $transaction->created_by = $appliedBy ?? Auth::id();
             
             $student = $fee->studentEnroll->student ?? Student::find($feeStudentId);

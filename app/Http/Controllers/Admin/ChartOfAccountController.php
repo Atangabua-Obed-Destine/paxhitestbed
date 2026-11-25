@@ -140,7 +140,7 @@ class ChartOfAccountController extends Controller
                 'opening_balance' => $request->opening_balance ?? 0,
                 'current_balance' => $request->opening_balance ?? 0,
                 'normal_balance' => $request->normal_balance,
-                'is_active' => $request->has('is_active') ? 1 : 0,
+                'is_active' => (int) $request->input('is_active', 1) === 1 ? 1 : 0,
                 'display_order' => $request->display_order ?? 0,
                 'created_by' => Auth::id(),
             ]);
@@ -239,7 +239,7 @@ class ChartOfAccountController extends Controller
                 'account_type' => $request->account_type,
                 'account_category' => $request->account_category,
                 'normal_balance' => $request->normal_balance,
-                'is_active' => $request->has('is_active') ? 1 : 0,
+                'is_active' => (int) $request->input('is_active', 1) === 1 ? 1 : 0,
                 'display_order' => $request->display_order ?? 0,
                 'updated_by' => Auth::id(),
             ]);

@@ -101,6 +101,12 @@ class CashAccounts
             ?? $this->forMethod($row->payment_method ?? null, $scheme);
     }
 
+    /** Incomes, expenses and supplier payments use the current scheme (App\Support\PaymentMethod). */
+    public function forCurrentMethod($method): ?int
+    {
+        return $this->forMethod($method, self::SCHEME_CURRENT);
+    }
+
     /** Payroll keeps its payment method in the older scheme. */
     public function forPayrollMethod($method): ?int
     {

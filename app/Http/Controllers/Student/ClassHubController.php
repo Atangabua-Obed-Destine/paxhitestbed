@@ -259,9 +259,9 @@ class ClassHubController extends Controller
         $jointSessionIds = [$session->id];
         if ($session->status === ClassSession::STATUS_IN_PROGRESS) {
             $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-                ->where('date', $session->date)
-                ->where('subject_id', $session->subject_id)
-                ->where('scheduled_start_time', $session->scheduled_start_time)
+                ->where('date', $session->getRawOriginal('date'))
+                ->sameCourseAs($session->subject_id)
+                ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
                 ->where('status', ClassSession::STATUS_IN_PROGRESS)
                 ->pluck('id')
                 ->toArray();
@@ -373,9 +373,9 @@ class ClassHubController extends Controller
         // For joint classes, get messages from all sessions with same subject/time
         $jointSessionIds = [$session->id];
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->pluck('id')
             ->toArray();
         
@@ -564,9 +564,9 @@ class ClassHubController extends Controller
         $jointSessionIds = [$session->id];
         if ($session->status === ClassSession::STATUS_IN_PROGRESS) {
             $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-                ->where('date', $session->date)
-                ->where('subject_id', $session->subject_id)
-                ->where('scheduled_start_time', $session->scheduled_start_time)
+                ->where('date', $session->getRawOriginal('date'))
+                ->sameCourseAs($session->subject_id)
+                ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
                 ->where('status', ClassSession::STATUS_IN_PROGRESS)
                 ->pluck('id')
                 ->toArray();
@@ -997,9 +997,9 @@ class ClassHubController extends Controller
         // For joint classes, find all sessions with same subject/time that are in progress
         $jointSessionIds = [$session->id];
         $jointSessions = ClassSession::where('teacher_id', $session->teacher_id)
-            ->where('date', $session->date)
-            ->where('subject_id', $session->subject_id)
-            ->where('scheduled_start_time', $session->scheduled_start_time)
+            ->where('date', $session->getRawOriginal('date'))
+            ->sameCourseAs($session->subject_id)
+            ->where('scheduled_start_time', $session->getRawOriginal('scheduled_start_time'))
             ->where('status', ClassSession::STATUS_IN_PROGRESS)
             ->pluck('id')
             ->toArray();

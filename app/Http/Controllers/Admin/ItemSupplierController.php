@@ -78,6 +78,9 @@ class ItemSupplierController extends Controller
         $request->validate([
             'title' => 'required|max:191|unique:item_suppliers,title',
             'email' => 'nullable|email',
+            'tax_number' => 'nullable|string|max:64',
+            'payment_terms_days' => 'nullable|integer|min:0|max:365',
+            'bank_details' => 'nullable|string|max:255',
         ]);
 
         // Insert Data
@@ -91,6 +94,9 @@ class ItemSupplierController extends Controller
         $itemSupplier->contact_person_email = $request->contact_person_email;
         $itemSupplier->contact_person_phone = $request->contact_person_phone;
         $itemSupplier->description = $request->description;
+        $itemSupplier->tax_number = $request->tax_number;
+        $itemSupplier->payment_terms_days = $request->filled('payment_terms_days') ? (int) $request->payment_terms_days : null;
+        $itemSupplier->bank_details = $request->bank_details;
         $itemSupplier->save();
 
 
@@ -150,6 +156,9 @@ class ItemSupplierController extends Controller
         $request->validate([
             'title' => 'required|max:191|unique:item_suppliers,title,'.$itemSupplier->id,
             'email' => 'nullable|email',
+            'tax_number' => 'nullable|string|max:64',
+            'payment_terms_days' => 'nullable|integer|min:0|max:365',
+            'bank_details' => 'nullable|string|max:255',
         ]);
 
         // Update Data
@@ -162,6 +171,9 @@ class ItemSupplierController extends Controller
         $itemSupplier->contact_person_email = $request->contact_person_email;
         $itemSupplier->contact_person_phone = $request->contact_person_phone;
         $itemSupplier->description = $request->description;
+        $itemSupplier->tax_number = $request->tax_number;
+        $itemSupplier->payment_terms_days = $request->filled('payment_terms_days') ? (int) $request->payment_terms_days : null;
+        $itemSupplier->bank_details = $request->bank_details;
         $itemSupplier->status = $request->status;
         $itemSupplier->save();
 
@@ -179,6 +191,14 @@ class ItemSupplierController extends Controller
      */
     public function destroy(ItemSupplier $itemSupplier)
     {
+        // A supplier with bills or payments is part of the accounts: deleting
+        // it would leave them pointing at nobody.
+        if ($itemSupplier->bills()->exists() || $itemSupplier->payments()->exists()) {
+            Flasher::addError(__('This supplier has bills or payments on record, so it cannot be deleted. Mark it inactive instead.'), __('msg_error'));
+
+            return redirect()->back();
+        }
+
         // Delete Data
         $itemSupplier->delete();
 

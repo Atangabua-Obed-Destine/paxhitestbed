@@ -31,6 +31,10 @@ class FeeObserver
      */
     public function created(Fee $fee): void
     {
+        // Fees on accrual: what the student now owes goes on 411 first, so a
+        // payment taken with the assignment settles it.
+        app(\App\Services\Accounting\FeeAccrual::class)->syncQuietly($fee);
+
         // Money taken through a payment plan is posted by PaymentPlanPaymentObserver;
         // FeeLedgerPosting subtracts it, so a fee posts only what it took directly.
         if ($fee->paid_amount > 0 && $fee->pay_date) {
@@ -45,6 +49,11 @@ class FeeObserver
      */
     public function updated(Fee $fee): void
     {
+        // What it asks, its category, date or status changed: the bill follows.
+        if ($fee->wasChanged(['fee_amount', 'discount_amount', 'fine_amount', 'category_id', 'assign_date', 'status', 'student_enroll_id', 'applicant_id'])) {
+            app(\App\Services\Accounting\FeeAccrual::class)->syncQuietly($fee);
+        }
+
         // A fee posts what it took directly; money taken through a payment plan
         // is posted per instalment and subtracted by FeeLedgerPosting, so the
         // same rules apply whether or not the fee is on a plan.
@@ -58,6 +67,13 @@ class FeeObserver
             // entry. A changed category or date moves the entry even when
             // the amount is the same.
             $this->postCashReceived($fee, $fee->wasChanged(['category_id', 'pay_date']));
+        }
+
+        // What a fee asks for and what it took decide how much of any credit
+        // it raised is backed by cash, and so what account 419 holds.
+        if ($fee->wasChanged(['paid_amount', 'fee_amount', 'discount_amount', 'fine_amount', 'status'])) {
+            app(\App\Services\Accounting\StudentCreditLedger::class)
+                ->syncQuietly(optional($fee->studentEnroll)->student_id ? (int) $fee->studentEnroll->student_id : null);
         }
 
         $this->resitFeeService->syncFromFee($fee);
@@ -113,6 +129,7 @@ class FeeObserver
     public function deleted(Fee $fee): void
     {
         $this->autoMapService->reverse('fee', $fee->id);
+        app(\App\Services\Accounting\FeeAccrual::class)->syncQuietly($fee->id);
     }
 
     /**

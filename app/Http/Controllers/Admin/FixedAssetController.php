@@ -254,25 +254,39 @@ class FixedAssetController extends Controller
      */
     public function dispose(Request $request, FixedAsset $fixedAsset)
     {
+        // The screen's form sends disposal_proceeds, disposal_method and notes;
+        // the older names are still accepted.
+        $request->merge([
+            'disposal_value' => $request->input('disposal_value', $request->input('disposal_proceeds', 0)),
+        ]);
         $request->validate([
             'disposal_date' => 'required|date',
             'disposal_value' => 'required|numeric|min:0',
+            'disposal_method' => 'nullable|string|max:30',
             'disposal_reason' => 'nullable|string|max:500',
+            'notes' => 'nullable|string|max:500',
+            'payment_account_id' => 'nullable|required_unless:disposal_value,0|exists:payment_accounts,id',
         ]);
+        $reason = $request->disposal_reason
+            ?? trim(($request->disposal_method ? __($request->disposal_method) : '') . ($request->notes ? ' — ' . $request->notes : ''), ' —');
 
         try {
             $journalEntry = $this->depreciationService->disposeAsset(
                 $fixedAsset,
                 $request->disposal_date,
-                $request->disposal_value,
-                $request->disposal_reason
+                (float) $request->disposal_value,
+                $reason ?: null,
+                $request->filled('payment_account_id') ? (int) $request->payment_account_id : null
             );
 
-            return redirect()->route('admin.fixed-assets.show', $fixedAsset)
-                ->with('success', __('asset_disposed_successfully'));
+            \Flasher\Laravel\Facade\Flasher::addSuccess(__('Asset disposed; entry :number posted.', ['number' => $journalEntry->entry_number]), __('msg_success'));
+
+            return redirect()->route('admin.fixed-assets.index');
         } catch (Exception $e) {
             Log::error('Error disposing asset', ['asset_id' => $fixedAsset->id, 'exception' => $e->getMessage()]);
-            return back()->withInput()->with('error', __('error_disposing_asset') . ': ' . $e->getMessage());
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage(), __('msg_error'));
+
+            return back()->withInput();
         }
     }
 
@@ -282,52 +296,67 @@ class FixedAssetController extends Controller
     public function calculateDepreciation(Request $request)
     {
         $request->validate([
-            'depreciation_date' => 'required|date',
+            'depreciation_date' => 'nullable|date',
+            'month' => 'nullable|date_format:Y-m',
             'auto_post' => 'nullable|boolean',
         ]);
 
-        try {
-            $results = $this->depreciationService->calculateMonthlyDepreciation(
-                $request->depreciation_date,
-                $request->boolean('auto_post')
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => __('depreciation_calculated_successfully'),
-                'data' => $results,
-            ]);
-        } catch (Exception $e) {
-            Log::error('Error calculating depreciation', ['exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_calculating_depreciation') . ': ' . $e->getMessage(),
-            ], 500);
-        }
+        return $this->runDepreciation($request, $request->boolean('auto_post'));
     }
 
     /**
-     * Post pending depreciation entries
+     * Charge the month's depreciation and post it: one action on the screen.
+     * Assets already charged for the month are left alone; schedules waiting
+     * to be posted are posted.
      */
     public function postDepreciation(Request $request)
     {
-        try {
-            $results = $this->depreciationService->postPendingDepreciation(
-                $request->accounting_period_id
-            );
+        $request->validate([
+            'depreciation_date' => 'nullable|date',
+            'month' => 'nullable|date_format:Y-m',
+            'accounting_period_id' => 'nullable|exists:accounting_periods,id',
+        ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => __('depreciation_posted_successfully'),
-                'data' => $results,
-            ]);
+        return $this->runDepreciation($request, true);
+    }
+
+    private function runDepreciation(Request $request, bool $post)
+    {
+        $date = $request->filled('depreciation_date')
+            ? \Carbon\Carbon::parse($request->depreciation_date)->endOfMonth()
+            : ($request->filled('month') ? \Carbon\Carbon::createFromFormat('Y-m', $request->month)->endOfMonth() : now()->endOfMonth());
+
+        try {
+            $results = \Illuminate\Support\Facades\DB::transaction(function () use ($date, $post) {
+                $results = $this->depreciationService->calculateMonthlyDepreciation($date, $post);
+                if ($post && $results['errors']) {
+                    // A month is charged whole or not at all.
+                    throw new Exception(collect($results['errors'])->map(fn ($e) => ($e['asset_code'] ?? '') . ': ' . ($e['error'] ?? ''))->implode('; '));
+                }
+
+                return $results;
+            });
         } catch (Exception $e) {
-            Log::error('Error posting depreciation', ['exception' => $e->getMessage()]);
-            return response()->json([
-                'success' => false,
-                'message' => __('error_posting_depreciation') . ': ' . $e->getMessage(),
-            ], 500);
+            Log::error('Error running depreciation', ['exception' => $e->getMessage()]);
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            }
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage(), __('msg_error'));
+
+            return redirect()->route('admin.fixed-assets.index');
         }
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'data' => $results]);
+        }
+
+        $month = $date->format('F Y');
+        $message = $post
+            ? trans_choice('{0} Nothing to charge for :month.|{1} Depreciation for :month: one asset charged and posted.|[2,*] Depreciation for :month: :count assets charged and posted.', $results['posted'], ['count' => $results['posted'], 'month' => $month])
+            : trans_choice('{0} Nothing to charge for :month.|{1} Depreciation for :month: one asset calculated, waiting to be posted.|[2,*] Depreciation for :month: :count assets calculated, waiting to be posted.', $results['processed'], ['count' => $results['processed'], 'month' => $month]);
+        \Flasher\Laravel\Facade\Flasher::addSuccess($message, __('msg_success'));
+
+        return redirect()->route('admin.fixed-assets.index');
     }
 
     /**

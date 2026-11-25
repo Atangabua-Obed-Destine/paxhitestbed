@@ -247,17 +247,26 @@ class FeeCreditReconciliation
             return collect();
         }
 
+        // What the fee's own entry should carry: cash less plan instalments
+        // less earlier receipts posted on their own days.
         $cash = DB::table('fees')
             ->whereIn('id', $postings->keys())
-            ->whereNull('payment_plan_id')
-            ->selectRaw('id, ' . Fee::cashReceivedSql('fees') . ' as cash')
+            // Fees on a plan too: the remainder already leaves out what the plan posted.
+            ->selectRaw('id, ' . \App\Services\FeeLedgerPosting::remainderSql('fees') . ' as cash')
             ->pluck('cash', 'id');
 
         $fees = Fee::with(['category', 'studentEnroll.student'])->whereIn('id', $cash->keys())->get()->keyBy('id');
 
-        return $cash->map(function ($amount, $feeId) use ($postings, $fees) {
+        // Instalments taken through a payment plan post on their own, so the
+        // fee's posting carries only the rest (FeeLedgerPosting::resync does
+        // the same). Without this, a fee part-paid through a plan was listed
+        // here for ever, and correctLedger() could not "fix" it.
+        $viaPlans = $this->paidThroughPlans($cash->keys());
+
+        return $cash->map(function ($amount, $feeId) use ($postings, $fees, $viaPlans) {
             $posting = $postings[$feeId];
             $fee = $fees->get($feeId);
+            $amount = (float) $amount;
             $difference = round((float) $posting->posted - (float) $amount, 2);
 
             if (abs($difference) < 0.01) {
@@ -332,7 +341,16 @@ class FeeCreditReconciliation
             ->where('status', 'active')
             ->pluck('journal_entry_id');
 
-        $posted = (float) DB::table('journal_entries')->whereIn('id', $postedIds)->sum('total_debit');
+        // Plan instalments post as their own entries; they are fee cash too.
+        $planIds = DB::table('transaction_mappings')
+            ->where('transaction_type', 'payment_plan_payment')
+            ->where('status', 'active')
+            ->pluck('journal_entry_id');
+
+        // And the earlier receipts posted on their own days.
+        $partIds = DB::table('fee_cash_parts')->where('status', 'active')->pluck('journal_entry_id');
+
+        $posted = (float) DB::table('journal_entries')->whereIn('id', $postedIds->merge($planIds)->merge($partIds))->sum('total_debit');
         $netPaid = (float) DB::table('fees')->sum(DB::raw(Fee::netPaidSql('fees')));
 
         $byMonth = DB::table('credit_applications as ca')
@@ -391,5 +409,21 @@ class FeeCreditReconciliation
             ->select('ca.id', 'ca.amount_applied', 'ca.created_at', 'sc.id as credit_id', 'sc.student_id')
             ->orderBy('ca.id')
             ->get();
+    }
+
+    /**
+     * What each fee's payment plans have taken, keyed by fee id. Mirrors
+     * FeeLedgerPosting::paidThroughPlans() for many fees in one query.
+     */
+    protected function paidThroughPlans($feeIds): Collection
+    {
+        return DB::table('payment_plan_payments as ppp')
+            ->join('payment_plan_installments as ppi', 'ppi.id', '=', 'ppp.installment_id')
+            ->join('payment_plans as pp', 'pp.id', '=', 'ppi.payment_plan_id')
+            ->whereIn('pp.fee_id', $feeIds)
+            ->where('ppp.status', '!=', 'reversed')
+            ->selectRaw('pp.fee_id, SUM(ppp.amount) as amount')
+            ->groupBy('pp.fee_id')
+            ->pluck('amount', 'fee_id');
     }
 }

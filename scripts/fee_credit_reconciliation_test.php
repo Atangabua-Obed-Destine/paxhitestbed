@@ -108,9 +108,12 @@ check('the dashboard total is net paid, and its dated charts are cash',
 check('the budget sheet\'s fee actuals are cash, dated when it arrived',
     str_contains($source('app/Services/BudgetActualsService.php'), 'cashReceivedSql')
     && !str_contains($source('app/Services/BudgetActualsService.php'), 'SUM(f.paid_amount)'));
+// The daybook reads fee cash through FeeLedgerPosting::cashEventsSql(), which
+// is built on Fee::cashReceivedSql() and dates each part by its receipt.
 check('the daybook books cash only',
-    str_contains($source('app/Services/DaybookService.php'), 'cashReceivedSql')
-    && str_contains($source('app/Services/DaybookService.php'), 'cash_received'));
+    str_contains($source('app/Services/DaybookService.php'), 'cashEventsSql')
+    && str_contains($source('app/Services/DaybookService.php'), 'cash_received')
+    && str_contains($source('app/Services/FeeLedgerPosting.php'), 'Fee::cashReceivedSql'));
 check('the income statement\'s fee revenue is cash, dated when it arrived',
     str_contains($source('app/Http/Controllers/Admin/GeneralLedgerController.php'), 'cashReceivedSql')
     && !str_contains($source('app/Http/Controllers/Admin/GeneralLedgerController.php'), "->sum('paid_amount')")
@@ -523,10 +526,28 @@ $postingOf = fn (int $feeId) => DB::table('transaction_mappings as tm')
 /** The cash a fee received, from the fee and credit tables alone. */
 $cashOf = fn (int $feeId) => round((float) DB::table('fees')->where('id', $feeId)->value('paid_amount')
     - (float) DB::table('credit_applications')->where('fee_id', $feeId)->sum('amount_applied')
-    + (float) DB::table('student_credits')->where('source_fee_id', $feeId)->where('source_type', 'transfer')->sum('original_amount'), 2);
+    + (float) DB::table('student_credits')->where('source_fee_id', $feeId)->where('source_type', 'transfer')->sum('original_amount')
+    // Instalments a payment plan took post on their own, not on the fee.
+    - (float) DB::table('payment_plan_payments as ppp')->join('payment_plan_installments as ppi', 'ppi.id', '=', 'ppp.installment_id')
+        ->join('payment_plans as pp', 'pp.id', '=', 'ppi.payment_plan_id')->where('pp.fee_id', $feeId)
+        ->where('ppp.status', '!=', 'reversed')->sum('ppp.amount'), 2);
+
+/** Earlier receipts posted on their own days (FeeLedgerPosting): worked out here from the receipts. */
+$splitOff = function (int $feeId, float $postable): float {
+    $fee = DB::table('fees')->where('id', $feeId)->first(['pay_date']);
+    if (!$fee || !$fee->pay_date) {
+        return 0.0;
+    }
+    $prior = (float) DB::table('payment_receipts as pr')->where('pr.fee_id', $feeId)->where('pr.verification_status', 'approved')
+        ->whereDate('pr.payment_date', '<', $fee->pay_date)
+        ->whereExists(fn ($q) => $q->from('fiscal_years as fy')->whereRaw('pr.payment_date BETWEEN fy.start_date AND fy.end_date'))
+        ->sum('pr.amount');
+
+    return $prior <= $postable + 0.005 ? $prior : 0.0;
+};
 
 /** Every posted fee whose posting differs from its cash, worked out independently. */
-$mismatches = function () use ($cashOf) {
+$mismatches = function () use ($cashOf, $splitOff) {
     $out = [];
 
     foreach (DB::table('transaction_mappings as tm')
@@ -535,7 +556,8 @@ $mismatches = function () use ($cashOf) {
         ->whereNull('f.payment_plan_id')
         ->where('tm.transaction_type', 'fee')->where('tm.status', 'active')
         ->select('tm.transaction_id', 'je.total_debit')->get() as $row) {
-        $difference = round((float) $row->total_debit - $cashOf((int) $row->transaction_id), 2);
+        $own = $cashOf((int) $row->transaction_id);
+        $difference = round((float) $row->total_debit - ($own - $splitOff((int) $row->transaction_id, $own)), 2);
 
         if (abs($difference) >= 0.01) {
             $out[(int) $row->transaction_id] = $difference;

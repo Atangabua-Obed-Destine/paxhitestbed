@@ -1,7 +1,9 @@
     <!-- UnPay modal -->
     <div class="modal fade" id="unpayModal-{{ $row->id }}" tabindex="-1" role="dialog" aria-labelledby="UnpayModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-sm">
-          <form action="{{ route($route.'.unpay', $payroll_data->id) }}" method="post">
+          <form action="{{ route($route.'.unpay', $payroll_data->id) }}" method="post"
+                data-review="{{ __('I understand this reverses the salary payment in the ledger.') }}"
+                data-review-label="{{ __('Reverse the payment') }}" data-review-class="btn-danger">
             @csrf
             <div class="modal-content">
                 <div class="modal-body text-center">

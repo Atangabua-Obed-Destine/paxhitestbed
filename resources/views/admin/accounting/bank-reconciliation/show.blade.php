@@ -1,486 +1,228 @@
 @extends('admin.layouts.master')
-@section('title', __('bank_reconciliation_details'))
-
-@push('css')
-<style>
-    .reconciliation-item.cleared {
-        background-color: #d4edda !important;
-    }
-    .reconciliation-summary {
-        font-size: 1.1em;
-    }
-    .summary-card {
-        border-left: 4px solid;
-    }
-    .summary-card.book { border-color: #007bff; }
-    .summary-card.statement { border-color: #28a745; }
-    .summary-card.difference { border-color: #dc3545; }
-</style>
-@endpush
-
+@section('title', $title)
 @section('content')
-<!-- Main content -->
-<section class="content">
-    <div class="container-fluid">
+
+@include('admin.supplier-bill.partials.style')
+
+@php
+    $account = $rec->chartOfAccount;
+    $done = !$editable;
+@endphp
+
+<div class="main-body">
+    <div class="page-wrapper">
         <div class="row">
-            <!-- Header Card -->
-            <div class="col-md-12">
+            <div class="col-sm-12">
                 <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            {{ __('bank_reconciliation') }}: {{ $reconciliation->bankAccount->account_name ?? 'N/A' }}
-                            <span class="badge badge-{{ $reconciliation->status == 'completed' ? 'success' : ($reconciliation->status == 'in_progress' ? 'warning' : 'secondary') }}">
-                                {{ __($reconciliation->status) }}
-                            </span>
-                        </h3>
-                        <div class="card-tools">
-                            @if($reconciliation->status != 'completed')
-                            @can('bank-reconciliation-complete')
-                            <form action="{{ route('admin.bank-reconciliation.complete', $reconciliation->id) }}" method="POST" class="d-inline">
-                                @csrf
-                                <button type="submit" class="btn btn-success btn-sm mr-2" onclick="return confirm('{{ __('confirm_complete_reconciliation') }}')">
-                                    <i class="fas fa-check"></i> {{ __('complete_reconciliation') }}
-                                </button>
-                            </form>
-                            @endcan
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap" style="gap:10px">
+                        <h5 class="mb-0">{{ __('Bank reconciliation') }} — {{ $account->account_code ?? '' }} {{ $account->account_name ?? '' }}
+                            · {{ format_date($rec->statement_date) }}
+                            @if($done)<span class="ap-chip paid">{{ __('Completed') }}</span>@else<span class="ap-chip part_paid">{{ __('In progress') }}</span>@endif
+                        </h5>
+                        <div class="ap-toolbar">
+                            <a href="{{ route('admin.bank-reconciliation.index') }}" class="btn btn-light btn-sm"><i class="fas fa-arrow-left"></i> {{ __('btn_back') }}</a>
+                            @if($editable)
+                                @can('bank-reconciliation-complete')
+                                <form method="post" action="{{ route('admin.bank-reconciliation.complete', $rec->id) }}" id="complete-form" class="d-none">@csrf</form>
+                                <button type="button" class="btn btn-success btn-sm"
+                                        data-review-url="{{ route('admin.bank-reconciliation.preview-complete', $rec->id) }}"
+                                        data-confirm-form="complete-form" data-confirm-label="{{ __('Complete reconciliation') }}"
+                                        data-confirm-check="{{ __('I have matched the ticked movements against the bank statement and confirm the reconciliation.') }}">
+                                    <i class="fas fa-check"></i> {{ __('Review and complete') }}</button>
+                                @endcan
+                                @can('bank-reconciliation-delete')
+                                <form method="post" action="{{ route('admin.bank-reconciliation.destroy', $rec->id) }}" class="d-inline" data-confirm="{{ __('Delete this reconciliation? Nothing in the ledger is changed.') }}" onsubmit="return confirm(this.dataset.confirm)">
+                                    @csrf @method('DELETE')
+                                    <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash"></i> {{ __('Delete') }}</button>
+                                </form>
+                                @endcan
                             @endif
-                            <a href="{{ route('admin.bank-reconciliation.index') }}" class="btn btn-secondary btn-sm">
-                                <i class="fas fa-arrow-left"></i> {{ __('back') }}
-                            </a>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <!-- Summary Cards -->
+
+                    <div class="card-block">
                         <div class="row">
-                            <div class="col-md-3">
-                                <div class="card summary-card book">
-                                    <div class="card-body py-2">
-                                        <small class="text-muted">{{ __('book_balance') }}</small>
-                                        <h4 class="mb-0">{{ format_amount($reconciliation->book_balance) }} FCFA</h4>
-                                    </div>
-                                </div>
+                            <div class="col-lg-6">
+                                <table class="table table-sm ap-table mb-3" id="bank-position">
+                                    <tbody>
+                                        <tr><td>{{ __('Closing balance on the statement') }}</td><td class="ap-num" data-v="statement">{{ format_amount($position['statement']) }}</td></tr>
+                                        <tr><td>+ {{ __('Deposits in transit (in the books, not yet on the statement)') }}</td><td class="ap-num" data-v="in_transit">{{ format_amount($position['in_transit']) }}</td></tr>
+                                        <tr><td>− {{ __('Outstanding payments (in the books, not yet on the statement)') }}</td><td class="ap-num" data-v="outstanding">{{ format_amount($position['outstanding']) }}</td></tr>
+                                        <tr class="ap-total-row"><td>= {{ __('Adjusted bank balance') }}</td><td class="ap-num" data-v="adjusted">{{ format_amount($position['adjusted']) }}</td></tr>
+                                        <tr><td>{{ __('Balance in the books at the statement date') }}</td><td class="ap-num" data-v="book">{{ format_amount($position['book']) }}</td></tr>
+                                        <tr class="ap-total-row"><td>{{ __('Difference') }}</td>
+                                            <td class="ap-num"><span data-v="difference">{{ format_amount($position['difference']) }}</span>
+                                                <span id="diff-chip" class="ap-chip {{ abs($position['difference']) < 0.01 ? 'paid' : 'unpaid' }}">{{ abs($position['difference']) < 0.01 ? __('Agrees') : __('Does not agree') }}</span></td></tr>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div class="col-md-3">
-                                <div class="card summary-card statement">
-                                    <div class="card-body py-2">
-                                        <small class="text-muted">{{ __('statement_ending_balance') }}</small>
-                                        <h4 class="mb-0">{{ format_amount($reconciliation->statement_ending_balance) }} FCFA</h4>
+                            <div class="col-lg-6">
+                                @if($editable)
+                                <div class="ap-note mb-3">{{ __('Tick each movement that appears on the bank statement, then save. The difference must be nil to complete. A charge or interest on the statement that is not in the books can be posted below.') }}</div>
+                                <form method="post" action="{{ route('admin.bank-reconciliation.update-balance', $rec->id) }}" class="ap-filters">
+                                    @csrf
+                                    <div class="form-group">
+                                        <label for="statement_closing_balance">{{ __('Statement balance') }}</label>
+                                        <input type="number" step="0.01" class="form-control" name="statement_closing_balance" id="statement_closing_balance" value="{{ $rec->statement_closing_balance }}">
                                     </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="card summary-card book">
-                                    <div class="card-body py-2">
-                                        <small class="text-muted">{{ __('adjusted_book_balance') }}</small>
-                                        <h4 class="mb-0">{{ format_amount($reconciliation->adjusted_book_balance) }} FCFA</h4>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                @php
-                                    $difference = $reconciliation->statement_ending_balance - $reconciliation->adjusted_book_balance;
-                                @endphp
-                                <div class="card summary-card difference">
-                                    <div class="card-body py-2">
-                                        <small class="text-muted">{{ __('difference') }}</small>
-                                        <h4 class="mb-0 {{ abs($difference) < 1 ? 'text-success' : 'text-danger' }}">
-                                            {{ format_amount($difference) }} FCFA
-                                        </h4>
-                                    </div>
-                                </div>
+                                    <div class="form-group"><button class="btn btn-outline-primary" type="submit">{{ __('Update') }}</button></div>
+                                </form>
+                                @else
+                                <div class="ap-note mb-3">{{ __('Completed :date by :name.', ['date' => format_date($rec->reconciled_at), 'name' => optional($rec->reconciledBy)->first_name . ' ' . optional($rec->reconciledBy)->last_name]) }}</div>
+                                @endif
                             </div>
                         </div>
 
-                        <!-- Reconciliation Info -->
-                        <div class="row mt-3">
-                            <div class="col-md-6">
-                                <table class="table table-sm table-borderless">
-                                    <tr>
-                                        <th width="40%">{{ __('bank_account') }}</th>
-                                        <td>{{ $reconciliation->bankAccount->account_code ?? '' }} - {{ $reconciliation->bankAccount->account_name ?? '' }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>{{ __('statement_date') }}</th>
-                                        <td>{{ \Carbon\Carbon::parse($reconciliation->statement_date)->format('d M Y') }}</td>
-                                    </tr>
-                                    <tr>
-                                        <th>{{ __('fiscal_year') }}</th>
-                                        <td>{{ $reconciliation->fiscalYear->name ?? 'N/A' }}</td>
-                                    </tr>
+                        <form method="post" action="{{ route('admin.bank-reconciliation.ticks', $rec->id) }}" id="ticks-form">
+                            @csrf
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">{{ __('Movements in the books') }} <span class="ap-muted">({{ $position['ticked'] }} {{ __('ticked') }}, {{ $position['unticked'] }} {{ __('not on the statement') }})</span></h6>
+                                @if($editable)
+                                <div class="ap-toolbar">
+                                    <button type="button" class="btn btn-light btn-sm" id="tick-all">{{ __('Tick all') }}</button>
+                                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> {{ __('Save ticks') }}</button>
+                                </div>
+                                @endif
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover ap-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:40px">{{ __('On statement') }}</th>
+                                            <th>{{ __('Date') }}</th>
+                                            <th>{{ __('Entry') }}</th>
+                                            <th>{{ __('Description') }}</th>
+                                            <th class="ap-num">{{ __('Money in') }}</th>
+                                            <th class="ap-num">{{ __('Money out') }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse($rec->items as $item)
+                                        <tr>
+                                            <td class="text-center">
+                                                <input type="checkbox" name="cleared[]" value="{{ $item->id }}" class="tick" data-effect="{{ $item->effect }}" data-amount="{{ $item->amount }}"
+                                                       aria-label="{{ __('On statement') }}" @checked($item->is_cleared) @disabled(!$editable)>
+                                            </td>
+                                            <td class="text-nowrap">{{ format_date($item->transaction_date) }}</td>
+                                            <td class="text-nowrap">
+                                                @if($item->journal_entry_id)<a href="{{ route('admin.journal-entries.show', $item->journal_entry_id) }}">{{ $item->reference_number }}</a>@else{{ $item->reference_number }}@endif
+                                                @if(in_array($item->item_type, ['bank_charge', 'bank_interest']))<span class="ap-chip posted">{{ $item->item_type === 'bank_charge' ? __('Charge') : __('Interest') }}</span>@endif
+                                            </td>
+                                            <td>{{ $item->description }}</td>
+                                            <td class="ap-num">{{ $item->effect === 'add' ? format_amount($item->amount) : '' }}</td>
+                                            <td class="ap-num">{{ $item->effect === 'subtract' ? format_amount($item->amount) : '' }}</td>
+                                        </tr>
+                                        @empty
+                                        <tr><td colspan="6" class="ap-muted">{{ __('No movement in the books up to this date that has not already been reconciled.') }}</td></tr>
+                                        @endforelse
+                                    </tbody>
                                 </table>
                             </div>
-                            <div class="col-md-6">
-                                <table class="table table-sm table-borderless">
-                                    <tr>
-                                        <th width="40%">{{ __('statement_beginning_balance') }}</th>
-                                        <td>{{ format_amount($reconciliation->statement_beginning_balance) }} FCFA</td>
-                                    </tr>
-                                    <tr>
-                                        <th>{{ __('prepared_by') }}</th>
-                                        <td>{{ $reconciliation->preparedBy->name ?? 'N/A' }}</td>
-                                    </tr>
-                                    @if($reconciliation->completed_at)
-                                    <tr>
-                                        <th>{{ __('completed_at') }}</th>
-                                        <td>{{ \Carbon\Carbon::parse($reconciliation->completed_at)->format('d M Y H:i') }}</td>
-                                    </tr>
-                                    @endif
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                        </form>
 
-            <!-- Outstanding Checks -->
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-warning">
-                        <h5 class="card-title mb-0"><i class="fas fa-money-check"></i> {{ __('outstanding_checks') }}</h5>
-                        @if($reconciliation->status != 'completed')
-                        <div class="card-tools">
-                            <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#addItemModal" data-type="outstanding_check">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
+                        @if($editable)
+                        @can('bank-reconciliation-edit')
+                        <h6 class="mt-4 mb-2">{{ __('Post a charge or interest shown on the statement') }}</h6>
+                        <form method="post" action="{{ route('admin.bank-reconciliation.add-adjustment', $rec->id) }}" id="adj-form" class="ap-filters">
+                            @csrf
+                            <div class="form-group">
+                                <label for="adj-kind">{{ __('What') }}</label>
+                                <select name="kind" id="adj-kind" class="form-control" required>
+                                    <option value="bank_charge">{{ __('Bank charges') }}</option>
+                                    <option value="bank_interest">{{ __('Bank interest') }}</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="adj-amount">{{ __('Amount') }}</label>
+                                <input type="number" step="0.01" min="0.01" name="amount" id="adj-amount" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="adj-date">{{ __('Date') }}</label>
+                                <input type="date" name="date" id="adj-date" class="form-control" required value="{{ $rec->statement_date->toDateString() }}" max="{{ $rec->statement_date->toDateString() }}">
+                            </div>
+                            <div class="form-group" style="min-width:260px">
+                                <label for="adj-account">{{ __('Category') }}</label>
+                                <select name="category_id" id="adj-account" class="form-control" required>
+                                    <optgroup label="{{ __('Expense categories (bank charges)') }}" data-kind="bank_charge">
+                                        @foreach($chargeCategories as $c)<option value="{{ $c['id'] }}" data-kind="bank_charge" @selected(stripos($c['title'], 'bank') !== false || stripos($c['title'], 'banc') !== false)>{{ $c['title'] }} — {{ $c['line_code'] }} {{ $c['line_name'] }}</option>@endforeach
+                                    </optgroup>
+                                    <optgroup label="{{ __('Income categories (bank interest)') }}" data-kind="bank_interest">
+                                        @foreach($interestCategories as $c)<option value="{{ $c['id'] }}" data-kind="bank_interest">{{ $c['title'] }} — {{ $c['line_code'] }} {{ $c['line_name'] }}</option>@endforeach
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="adj-desc">{{ __('Note') }}</label>
+                                <input type="text" name="description" id="adj-desc" class="form-control" maxlength="150">
+                            </div>
+                            <div class="form-group">
+                                <button type="button" class="btn btn-outline-success"
+                                        data-review-url="{{ route('admin.bank-reconciliation.preview-adjustment', $rec->id) }}"
+                                        data-review-form="adj-form" data-confirm-form="adj-form" data-confirm-label="{{ __('Post and tick') }}"
+                                        data-confirm-check="{{ __('I have checked the amount and the account against the bank statement, and confirm this posting.') }}">
+                                    <i class="fas fa-search"></i> {{ __('Review and post') }}</button>
+                            </div>
+                        </form>
+                        @endcan
                         @endif
                     </div>
-                    <div class="card-body p-0">
-                        <table class="table table-sm mb-0">
-                            <thead>
-                                <tr>
-                                    <th>{{ __('date') }}</th>
-                                    <th>{{ __('reference') }}</th>
-                                    <th class="text-right">{{ __('amount') }}</th>
-                                    @if($reconciliation->status != 'completed')
-                                    <th width="10%"></th>
-                                    @endif
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php $totalOutstandingChecks = 0; @endphp
-                                @forelse($reconciliation->items->where('item_type', 'outstanding_check')->where('is_cleared', false) as $item)
-                                <tr class="reconciliation-item">
-                                    <td>{{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}</td>
-                                    <td>{{ $item->reference }}</td>
-                                    <td class="text-right">{{ format_amount($item->amount) }}</td>
-                                    @if($reconciliation->status != 'completed')
-                                    <td>
-                                        <form action="{{ route('admin.bank-reconciliation.clear-item', [$reconciliation->id, $item->id]) }}" method="POST" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn-xs btn-success" title="{{ __('clear') }}">
-                                                <i class="fas fa-check"></i>
-                                            </button>
-                                        </form>
-                                    </td>
-                                    @endif
-                                </tr>
-                                @php $totalOutstandingChecks += $item->amount; @endphp
-                                @empty
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted">{{ __('no_outstanding_checks') }}</td>
-                                </tr>
-                                @endforelse
-                            </tbody>
-                            <tfoot>
-                                <tr class="table-warning">
-                                    <th colspan="2">{{ __('total') }}</th>
-                                    <th class="text-right">{{ format_amount($totalOutstandingChecks) }} FCFA</th>
-                                    @if($reconciliation->status != 'completed')<th></th>@endif
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
                 </div>
             </div>
-
-            <!-- Deposits in Transit -->
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header bg-info">
-                        <h5 class="card-title mb-0"><i class="fas fa-piggy-bank"></i> {{ __('deposits_in_transit') }}</h5>
-                        @if($reconciliation->status != 'completed')
-                        <div class="card-tools">
-                            <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#addItemModal" data-type="deposit_in_transit">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                        @endif
-                    </div>
-                    <div class="card-body p-0">
-                        <table class="table table-sm mb-0">
-                            <thead>
-                                <tr>
-                                    <th>{{ __('date') }}</th>
-                                    <th>{{ __('reference') }}</th>
-                                    <th class="text-right">{{ __('amount') }}</th>
-                                    @if($reconciliation->status != 'completed')
-                                    <th width="10%"></th>
-                                    @endif
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php $totalDepositsInTransit = 0; @endphp
-                                @forelse($reconciliation->items->where('item_type', 'deposit_in_transit')->where('is_cleared', false) as $item)
-                                <tr class="reconciliation-item">
-                                    <td>{{ \Carbon\Carbon::parse($item->transaction_date)->format('d/m/Y') }}</td>
-                                    <td>{{ $item->reference }}</td>
-                                    <td class="text-right">{{ format_amount($item->amount) }}</td>
-                                    @if($reconciliation->status != 'completed')
-                                    <td>
-                                        <form action="{{ route('admin.bank-reconciliation.clear-item', [$reconciliation->id, $item->id]) }}" method="POST" class="d-inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn-xs btn-success" title="{{ __('clear') }}">
-                                                <i class="fas fa-check"></i>
-                                            </button>
-                                        </form>
-                                    </td>
-                                    @endif
-                                </tr>
-                                @php $totalDepositsInTransit += $item->amount; @endphp
-                                @empty
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted">{{ __('no_deposits_in_transit') }}</td>
-                                </tr>
-                                @endforelse
-                            </tbody>
-                            <tfoot>
-                                <tr class="table-info">
-                                    <th colspan="2">{{ __('total') }}</th>
-                                    <th class="text-right">{{ format_amount($totalDepositsInTransit) }} FCFA</th>
-                                    @if($reconciliation->status != 'completed')<th></th>@endif
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bank Adjustments -->
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header bg-secondary">
-                        <h5 class="card-title mb-0"><i class="fas fa-sliders-h"></i> {{ __('adjustments') }}</h5>
-                        @if($reconciliation->status != 'completed')
-                        <div class="card-tools">
-                            <button type="button" class="btn btn-sm btn-light" data-toggle="modal" data-target="#addAdjustmentModal">
-                                <i class="fas fa-plus"></i> {{ __('add_adjustment') }}
-                            </button>
-                        </div>
-                        @endif
-                    </div>
-                    <div class="card-body p-0">
-                        <table class="table table-sm mb-0">
-                            <thead>
-                                <tr>
-                                    <th>{{ __('type') }}</th>
-                                    <th>{{ __('description') }}</th>
-                                    <th class="text-right">{{ __('debit') }}</th>
-                                    <th class="text-right">{{ __('credit') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php $totalAdjustmentDebits = 0; $totalAdjustmentCredits = 0; @endphp
-                                @forelse($reconciliation->items->whereIn('item_type', ['bank_charge', 'interest_income', 'nsf_check', 'adjustment']) as $item)
-                                <tr>
-                                    <td>{{ __($item->item_type) }}</td>
-                                    <td>{{ $item->description }}</td>
-                                    <td class="text-right">{{ $item->amount < 0 ? format_amount(abs($item->amount)) : '-' }}</td>
-                                    <td class="text-right">{{ $item->amount > 0 ? format_amount($item->amount) : '-' }}</td>
-                                </tr>
-                                @php 
-                                    if ($item->amount > 0) $totalAdjustmentCredits += $item->amount;
-                                    else $totalAdjustmentDebits += abs($item->amount);
-                                @endphp
-                                @empty
-                                <tr>
-                                    <td colspan="4" class="text-center text-muted">{{ __('no_adjustments') }}</td>
-                                </tr>
-                                @endforelse
-                            </tbody>
-                            <tfoot>
-                                <tr class="table-secondary">
-                                    <th colspan="2">{{ __('total_adjustments') }}</th>
-                                    <th class="text-right">{{ format_amount($totalAdjustmentDebits) }}</th>
-                                    <th class="text-right">{{ number_format($totalAdjustmentCredits, 0, ',', ' ') }}</th>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Reconciliation Summary -->
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header bg-primary">
-                        <h5 class="card-title mb-0"><i class="fas fa-calculator"></i> {{ __('reconciliation_summary') }}</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <h6>{{ __('bank_statement_reconciliation') }}</h6>
-                                <table class="table table-sm">
-                                    <tr>
-                                        <td>{{ __('statement_ending_balance') }}</td>
-                                        <td class="text-right">{{ format_amount($reconciliation->statement_ending_balance) }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{{ __('add') }}: {{ __('deposits_in_transit') }}</td>
-                                        <td class="text-right text-success">+ {{ format_amount($totalDepositsInTransit) }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{{ __('less') }}: {{ __('outstanding_checks') }}</td>
-                                        <td class="text-right text-danger">- {{ format_amount($totalOutstandingChecks) }}</td>
-                                    </tr>
-                                    <tr class="table-primary font-weight-bold">
-                                        <td>{{ __('adjusted_bank_balance') }}</td>
-                                        <td class="text-right">{{ format_amount($reconciliation->statement_ending_balance + $totalDepositsInTransit - $totalOutstandingChecks) }}</td>
-                                    </tr>
-                                </table>
-                            </div>
-                            <div class="col-md-6">
-                                <h6>{{ __('book_balance_reconciliation') }}</h6>
-                                <table class="table table-sm">
-                                    <tr>
-                                        <td>{{ __('book_balance') }}</td>
-                                        <td class="text-right">{{ format_amount($reconciliation->book_balance) }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{{ __('add') }}: {{ __('credits') }}</td>
-                                        <td class="text-right text-success">+ {{ number_format($totalAdjustmentCredits, 0, ',', ' ') }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>{{ __('less') }}: {{ __('debits') }}</td>
-                                        <td class="text-right text-danger">- {{ format_amount($totalAdjustmentDebits) }}</td>
-                                    </tr>
-                                    <tr class="table-primary font-weight-bold">
-                                        <td>{{ __('adjusted_book_balance') }}</td>
-                                        <td class="text-right">{{ format_amount($reconciliation->adjusted_book_balance) }}</td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <!-- /.row -->
-    </div>
-    <!-- /.container-fluid -->
-</section>
-<!-- /.content -->
-
-<!-- Add Item Modal -->
-@if($reconciliation->status != 'completed')
-<div class="modal fade" id="addItemModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <form action="{{ route('admin.bank-reconciliation.update', $reconciliation->id) }}" method="POST">
-                @csrf
-                @method('PUT')
-                <input type="hidden" name="action" value="add_item">
-                <div class="modal-header">
-                    <h5 class="modal-title">{{ __('add_reconciliation_item') }}</h5>
-                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>{{ __('type') }} <span class="text-danger">*</span></label>
-                        <select name="item_type" class="form-control" id="itemType" required>
-                            <option value="outstanding_check">{{ __('outstanding_check') }}</option>
-                            <option value="deposit_in_transit">{{ __('deposit_in_transit') }}</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>{{ __('date') }} <span class="text-danger">*</span></label>
-                        <input type="date" name="transaction_date" class="form-control" required value="{{ date('Y-m-d') }}">
-                    </div>
-                    <div class="form-group">
-                        <label>{{ __('reference') }}</label>
-                        <input type="text" name="reference" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>{{ __('amount') }} (FCFA) <span class="text-danger">*</span></label>
-                        <input type="number" name="amount" class="form-control" required min="0" step="1">
-                    </div>
-                    <div class="form-group">
-                        <label>{{ __('description') }}</label>
-                        <input type="text" name="description" class="form-control">
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
-                    <button type="submit" class="btn btn-primary">{{ __('add') }}</button>
-                </div>
-            </form>
         </div>
     </div>
 </div>
 
-<!-- Add Adjustment Modal -->
-<div class="modal fade" id="addAdjustmentModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <form action="{{ route('admin.bank-reconciliation.update', $reconciliation->id) }}" method="POST">
-                @csrf
-                @method('PUT')
-                <input type="hidden" name="action" value="add_adjustment">
-                <div class="modal-header">
-                    <h5 class="modal-title">{{ __('add_adjustment') }}</h5>
-                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>{{ __('adjustment_type') }} <span class="text-danger">*</span></label>
-                        <select name="item_type" class="form-control" required>
-                            <option value="bank_charge">{{ __('bank_charge') }}</option>
-                            <option value="interest_income">{{ __('interest_income') }}</option>
-                            <option value="nsf_check">{{ __('nsf_check') }}</option>
-                            <option value="adjustment">{{ __('other_adjustment') }}</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>{{ __('description') }} <span class="text-danger">*</span></label>
-                        <input type="text" name="description" class="form-control" required>
-                    </div>
-                    <div class="form-group">
-                        <label>{{ __('amount') }} (FCFA) <span class="text-danger">*</span></label>
-                        <input type="number" name="amount" class="form-control" required step="1">
-                        <small class="text-muted">{{ __('positive_for_credit_negative_for_debit') }}</small>
-                    </div>
-                    <div class="form-group">
-                        <label>{{ __('account') }}</label>
-                        <select name="account_id" class="form-control">
-                            <option value="">{{ __('select_account') }}</option>
-                            @foreach($accounts ?? [] as $account)
-                            <option value="{{ $account->id }}">{{ $account->account_code }} - {{ $account->account_name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">{{ __('cancel') }}</button>
-                    <button type="submit" class="btn btn-primary">{{ __('add') }}</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-@endif
+@include('admin.supplier-bill.partials.review-modal')
 @endsection
 
 @push('scripts')
 <script>
-    $(document).ready(function() {
-        // Set item type when modal is opened
-        $('#addItemModal').on('show.bs.modal', function(event) {
-            var button = $(event.relatedTarget);
-            var type = button.data('type');
-            if (type) {
-                $('#itemType').val(type);
-            }
+(function () {
+    var ticks = document.querySelectorAll('.tick');
+    var pos = @json(['book' => (float) $position['book'], 'statement' => (float) $position['statement']]);
+    var book = pos.book;
+    var statement = pos.statement;
+    var fmt = function (v) { return (Math.round(v * 100) / 100).toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 2}); };
+    var agrees = @json(__('Agrees'));
+    var differs = @json(__('Does not agree'));
+
+    // Recompute the position as boxes are ticked, so the accountant sees the
+    // difference close before saving. The server recomputes on save.
+    function refresh() {
+        var inTransit = 0, outstanding = 0;
+        ticks.forEach(function (t) {
+            if (t.checked) { return; }
+            var a = parseFloat(t.getAttribute('data-amount')) || 0;
+            if (t.getAttribute('data-effect') === 'add') { inTransit += a; } else { outstanding += a; }
         });
-    });
+        var adjusted = statement + inTransit - outstanding;
+        var diff = book - adjusted;
+        var set = function (k, v) { var el = document.querySelector('[data-v="' + k + '"]'); if (el) { el.textContent = fmt(v); } };
+        set('in_transit', inTransit); set('outstanding', outstanding); set('adjusted', adjusted); set('difference', diff);
+        var chip = document.getElementById('diff-chip');
+        var ok = Math.abs(diff) < 0.01;
+        chip.className = 'ap-chip ' + (ok ? 'paid' : 'unpaid');
+        chip.textContent = ok ? agrees : differs;
+    }
+
+    ticks.forEach(function (t) { t.addEventListener('change', refresh); });
+    var all = document.getElementById('tick-all');
+    if (all) { all.addEventListener('click', function () { ticks.forEach(function (t) { if (!t.disabled) { t.checked = true; } }); refresh(); }); }
+
+    // Offer only the accounts that suit the kind chosen.
+    var kind = document.getElementById('adj-kind');
+    var account = document.getElementById('adj-account');
+    function filterAccounts() {
+        if (!kind || !account) { return; }
+        account.querySelectorAll('optgroup').forEach(function (g) {
+            var show = g.getAttribute('data-kind') === kind.value;
+            g.hidden = !show;
+            g.querySelectorAll('option').forEach(function (o) { o.disabled = !show; });
+        });
+        var first = account.querySelector('optgroup:not([hidden]) option');
+        if (account.selectedOptions[0] && account.selectedOptions[0].disabled && first) { first.selected = true; }
+    }
+    if (kind) { kind.addEventListener('change', filterAccounts); filterAccounts(); }
+})();
 </script>
 @endpush

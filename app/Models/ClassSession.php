@@ -302,6 +302,17 @@ class ClassSession extends Model
     /**
      * Scope for filtering by date
      */
+    /**
+     * Sessions of the same course as this one: the course itself and, when it
+     * is in a course group, the other programmes' courses of that group. The
+     * joint-class lookups (same lecturer, date and start) use it, so AGE118H
+     * and MGT1101H taught together are one class, not two.
+     */
+    public function scopeSameCourseAs($query, $subjectId)
+    {
+        return $query->whereIn('subject_id', \App\Services\Academic\CourseGroups::memberIds((int) $subjectId));
+    }
+
     public function scopeForDate($query, $date)
     {
         return $query->whereDate('date', $date);
@@ -360,7 +371,7 @@ class ClassSession extends Model
         // Get all joint session IDs (same teacher, date, subject, start time)
         $jointSessionIds = self::where('teacher_id', $this->teacher_id)
             ->where('date', $this->attributes['date'] ?? $this->date)
-            ->where('subject_id', $this->subject_id)
+            ->sameCourseAs($this->subject_id)
             ->where('scheduled_start_time', $this->attributes['scheduled_start_time'] ?? null)
             ->pluck('id')
             ->toArray();
@@ -530,9 +541,9 @@ class ClassSession extends Model
         // End all joint sessions if applicable
         if ($endJointSessions) {
             $jointSessions = ClassSession::where('teacher_id', $this->teacher_id)
-                ->where('date', $this->date)
-                ->where('subject_id', $this->subject_id)
-                ->where('scheduled_start_time', $this->scheduled_start_time)
+                ->where('date', $this->getRawOriginal('date'))
+                ->sameCourseAs($this->subject_id)
+                ->where('scheduled_start_time', $this->getRawOriginal('scheduled_start_time'))
                 ->where('id', '!=', $this->id)
                 ->where('status', self::STATUS_IN_PROGRESS)
                 ->get();
@@ -716,13 +727,28 @@ class ClassSession extends Model
         $minimumPercentage = AttendanceSetting::getValue('minimum_class_duration_percentage', 70);
         $status = $this->determineLecturerAttendanceStatus($minimumPercentage);
         
-        // Create or update staff hourly attendance
+        // One lecture is one hour of the lecturer's time, however many
+        // programmes sit in it: a joint class (the same course, or courses of
+        // one course group) updates the hour the first programme's session
+        // recorded instead of adding another. Matched on the stored date and
+        // time: the model reads scheduled_start_time back as a full date-time,
+        // which never equals the TIME column, so every programme's session
+        // used to add its own hour.
+        $date = $this->getRawOriginal('date') ?: optional($this->date)->format('Y-m-d');
+        $start = $this->getRawOriginal('scheduled_start_time') ?: optional($this->scheduled_start_time)->format('H:i:s');
+        $existing = StaffHourlyAttendance::where('user_id', $this->teacher_id)
+            ->where('date', $date)
+            ->where('start_time', $start)
+            ->whereIn('subject_id', \App\Services\Academic\CourseGroups::memberIds((int) $this->subject_id))
+            ->orderBy('id')
+            ->first();
+
         $hourlyAttendance = StaffHourlyAttendance::updateOrCreate(
-            [
+            $existing ? ['id' => $existing->id] : [
                 'user_id' => $this->teacher_id,
                 'subject_id' => $this->subject_id,
-                'date' => $this->date,
-                'start_time' => $this->scheduled_start_time,
+                'date' => $date,
+                'start_time' => $start,
             ],
             [
                 'session_id' => $this->session_id,

@@ -64,12 +64,16 @@ class TeacherTimetable
      */
     private function mergeRows(Collection $rows): Collection
     {
+        // One lecture is one course at one time, and courses of one course
+        // group are one course (AGE118H and MGT1101H taught together).
+        \App\Services\Academic\CourseGroups::load($rows->pluck('subject_id')->all());
+
         return $rows
             ->groupBy(fn ($r) => implode('|', [
                 $r->day,
                 substr((string) $r->start_time, 0, 5),
                 substr((string) $r->end_time, 0, 5),
-                $r->subject_id,
+                \App\Services\Academic\CourseGroups::key((int) $r->subject_id),
             ]))
             ->map(function (Collection $group) {
                 $first = $group->first();
@@ -91,7 +95,9 @@ class TeacherTimetable
                     'end' => $end,
                     'duration' => max(0, $end - $start),
                     'subject_id' => $first->subject_id,
-                    'code' => $first->subject->code ?? '—',
+                    'course' => \App\Services\Academic\CourseGroups::key((int) $first->subject_id),
+                    // "AGE118H / MGT1101H" when the programmes take it under their own codes
+                    'code' => $group->map(fn ($r) => $r->subject->code ?? null)->filter()->unique()->sort()->implode(' / ') ?: '—',
                     'title' => $first->subject->title ?? '',
                     'rooms' => $rooms,
                     // "Room 5", or "SCEDT HALL +3" when the programs meet in several halls
@@ -115,9 +121,9 @@ class TeacherTimetable
     /** One colour per course, stable across the week. */
     private function assignCourseColours(): void
     {
-        $order = $this->slots->pluck('subject_id')->unique()->values()->flip();
+        $order = $this->slots->pluck('course')->unique()->values()->flip();
         foreach ($this->slots as $slot) {
-            $slot->colour = $order[$slot->subject_id] % count(self::PALETTE);
+            $slot->colour = $order[$slot->course] % count(self::PALETTE);
         }
     }
 
@@ -134,7 +140,7 @@ class TeacherTimetable
             $hasPrev = [];
             foreach ($daySlots as $a) {
                 foreach ($daySlots as $b) {
-                    if ($a !== $b && $a->subject_id === $b->subject_id && $a->end === $b->start && !isset($hasPrev[spl_object_id($b)])) {
+                    if ($a !== $b && $a->course === $b->course && $a->end === $b->start && !isset($hasPrev[spl_object_id($b)])) {
                         $next[spl_object_id($a)] = $b;
                         $hasPrev[spl_object_id($b)] = true;
                         break;
@@ -219,7 +225,7 @@ class TeacherTimetable
     private function summarise(): void
     {
         $this->courses = $this->slots
-            ->groupBy('subject_id')
+            ->groupBy('course')
             ->map(fn (Collection $s) => (object) [
                 'code' => $s->first()->code,
                 'title' => $s->first()->title,

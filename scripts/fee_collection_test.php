@@ -414,14 +414,16 @@ foreach ($budgets as $budget) {
        from its own query rather than taken from the service, so a scope
        applied to the cohort but forgotten on the curve would fail. */
     $instalmentCash = 0.0;
+    // Fee cash on the day it came in: earlier receipts on their own days,
+    // the rest on pay_date (FeeLedgerPosting::cashEventsSql), as the ledger
+    // and the daybook date it.
     foreach (DB::select("
-        SELECT COALESCE(SUM(" . Fee::cashReceivedSql('f') . "), 0) AS cash
-          FROM fees f
+        SELECT COALESCE(SUM(ev.amount), 0) AS cash
+          FROM (" . App\Services\FeeLedgerPosting::cashEventsSql() . ") ev
+          JOIN fees f ON f.id = ev.fee_id
          WHERE f.status <> 3
-           AND f.paid_amount > 0
-           AND f.pay_date IS NOT NULL
-           AND f.pay_date >= ?
-           AND f.pay_date <= ?
+           AND ev.event_date >= ?
+           AND ev.event_date <= ?
            AND f.category_id IN ({$scopeSql})
     ", array_merge([$from, $to], $instalmentIds)) as $row) {
         $instalmentCash = (float) $row->cash;
@@ -1124,7 +1126,7 @@ ok('the screen marks which categories feed the counts',
 if ($c['scope']['excluded']['fees'] > 0) {
     ok('and states what it left out, in money',
         strpos($html, e(__('Not counted above: :amount', [
-            'amount' => number_format($c['scope']['excluded']['billed'])]))) !== false);
+            'amount' => format_amount($c['scope']['excluded']['billed'])]))) !== false);
 }
 
 /* The uncounted categories are still on the page. This is the assertion that
@@ -1316,8 +1318,8 @@ foreach ([[], ['data:image/png;base64,AAAA']] as $i => $charts) {
         ok('but still accounts for the money in a sentence',
             strpos($packHtml, __('A note on the totals: :count fee(s) worth :amount, of which :owed is still outstanding, are attached to enrolments that no longer exist and so belong to no named person. They are in none of the figures above. They are listed on the analysis screen for correction.', [
                 'count' => number_format($c['unattributed']['count']),
-                'amount' => number_format($c['unattributed']['amount']),
-                'owed' => number_format($c['unattributed']['owed']),
+                'amount' => format_amount($c['unattributed']['amount']),
+                'owed' => format_amount($c['unattributed']['owed']),
             ])) !== false);
     }
 

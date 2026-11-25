@@ -16,6 +16,9 @@
                                 <p><mark class="text-primary">{{ __('field_phone') }}:</mark> {{ $row->phone }}</p><hr/>
                                 <p><mark class="text-primary">{{ __('field_email') }}:</mark> {{ $row->email }}</p><hr/>
                                 <p><mark class="text-primary">{{ __('field_address') }}:</mark> {{ $row->address }}</p><hr/>
+                                <p><mark class="text-primary">{{ __('Tax number (NIU)') }}:</mark> {{ $row->tax_number }}</p><hr/>
+                                <p><mark class="text-primary">{{ __('Payment terms (days)') }}:</mark> {{ $row->payment_terms_days ?? '—' }}</p><hr/>
+                                <p><mark class="text-primary">{{ __('Bank details') }}:</mark> {{ $row->bank_details }}</p><hr/>
 
                                 <p><mark class="text-primary">{{ __('field_status') }}:</mark> 
                                 @if( $row->status == 1 )

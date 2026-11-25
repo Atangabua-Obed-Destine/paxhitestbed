@@ -176,10 +176,10 @@ class StudentCreditController extends Controller
                 Auth::id()
             );
 
-            \Flasher\Prime\Flasher::addSuccess(__('credit_created_successfully'));
+            \Flasher\Laravel\Facade\Flasher::addSuccess(__('credit_created_successfully'));
             return redirect()->route($this->route . '.show', $credit->id);
         } catch (\Exception $e) {
-            \Flasher\Prime\Flasher::addError($e->getMessage());
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage());
             return redirect()->back()->withInput();
         }
     }
@@ -192,16 +192,16 @@ class StudentCreditController extends Controller
         $credit = StudentCredit::findOrFail($id);
 
         if (!$credit->canBeRefunded()) {
-            \Flasher\Prime\Flasher::addError(__('credit_cannot_be_refunded'));
+            \Flasher\Laravel\Facade\Flasher::addError(__('credit_cannot_be_refunded'));
             return redirect()->back();
         }
 
         try {
             $reason = $request->input('reason');
             $this->creditService->requestRefund($credit, $reason, Auth::id());
-            \Flasher\Prime\Flasher::addSuccess(__('refund_requested_successfully'));
+            \Flasher\Laravel\Facade\Flasher::addSuccess(__('refund_requested_successfully'));
         } catch (\Exception $e) {
-            \Flasher\Prime\Flasher::addError($e->getMessage());
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage());
         }
 
         return redirect()->back();
@@ -215,15 +215,15 @@ class StudentCreditController extends Controller
         $credit = StudentCredit::findOrFail($id);
 
         if (!$credit->refund_requested) {
-            \Flasher\Prime\Flasher::addError(__('no_refund_request'));
+            \Flasher\Laravel\Facade\Flasher::addError(__('no_refund_request'));
             return redirect()->back();
         }
 
         try {
             $this->creditService->approveRefund($credit, Auth::id());
-            \Flasher\Prime\Flasher::addSuccess(__('refund_approved_successfully'));
+            \Flasher\Laravel\Facade\Flasher::addSuccess(__('refund_approved_successfully'));
         } catch (\Exception $e) {
-            \Flasher\Prime\Flasher::addError($e->getMessage());
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage());
         }
 
         return redirect()->back();
@@ -238,9 +238,9 @@ class StudentCreditController extends Controller
 
         try {
             $this->creditService->rejectRefund($credit, $request->reason, Auth::id());
-            \Flasher\Prime\Flasher::addSuccess(__('refund_rejected_successfully'));
+            \Flasher\Laravel\Facade\Flasher::addSuccess(__('refund_rejected_successfully'));
         } catch (\Exception $e) {
-            \Flasher\Prime\Flasher::addError($e->getMessage());
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage());
         }
 
         return redirect()->back();
@@ -259,7 +259,7 @@ class StudentCreditController extends Controller
         $data['row'] = StudentCredit::with(['student'])->findOrFail($id);
 
         if (!$data['row']->refund_approved) {
-            \Flasher\Prime\Flasher::addError(__('refund_not_approved'));
+            \Flasher\Laravel\Facade\Flasher::addError(__('refund_not_approved'));
             return redirect()->route($this->route . '.show', $id);
         }
 
@@ -284,14 +284,14 @@ class StudentCreditController extends Controller
                 $credit,
                 $request->refund_method,
                 $request->refund_reference,
-                $request->refund_note,
+                $request->input('refund_note', $request->input('note')),
                 Auth::id()
             );
 
-            \Flasher\Prime\Flasher::addSuccess(__('refund_processed_successfully'));
+            \Flasher\Laravel\Facade\Flasher::addSuccess(__('refund_processed_successfully'));
             return redirect()->route($this->route . '.show', $id);
         } catch (\Exception $e) {
-            \Flasher\Prime\Flasher::addError($e->getMessage());
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage());
             return redirect()->back()->withInput();
         }
     }
@@ -366,21 +366,21 @@ class StudentCreditController extends Controller
         // student_id column — students live on student_enrolls.
         $feeStudentId = optional($fee->studentEnroll)->student_id;
         if (!$feeStudentId || $feeStudentId != $credit->student_id) {
-            \Flasher\Prime\Flasher::addError(__('fee_does_not_belong_to_student'));
+            \Flasher\Laravel\Facade\Flasher::addError(__('fee_does_not_belong_to_student'));
             return redirect()->back();
         }
 
         // Ensure amount doesn't exceed available credit
         if ($request->amount > $credit->remaining_amount) {
-            \Flasher\Prime\Flasher::addError(__('amount_exceeds_available_credit'));
+            \Flasher\Laravel\Facade\Flasher::addError(__('amount_exceeds_available_credit'));
             return redirect()->back();
         }
 
         try {
             $this->creditService->applyToFee($credit, $fee, $request->amount, Auth::id(), $request->note);
-            \Flasher\Prime\Flasher::addSuccess(__('credit_applied_successfully'));
+            \Flasher\Laravel\Facade\Flasher::addSuccess(__('credit_applied_successfully'));
         } catch (\Exception $e) {
-            \Flasher\Prime\Flasher::addError($e->getMessage());
+            \Flasher\Laravel\Facade\Flasher::addError($e->getMessage());
         }
 
         return redirect()->route($this->route . '.show', $id);

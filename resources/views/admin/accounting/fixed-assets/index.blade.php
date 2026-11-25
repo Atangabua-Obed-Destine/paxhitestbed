@@ -134,10 +134,10 @@
                                             <i class="fas fa-calculator"></i> {{ __('calculate_monthly_depreciation') }}
                                         </button>
                                     </form>
-                                    <form action="{{ route('admin.fixed-assets.post-depreciation') }}" method="POST" class="d-inline ml-2">
+                                    <form data-review="{{ __('I have checked the depreciation of each asset and the ledger entries, and confirm posting them.') }}" data-review-label="{{ __('Post depreciation') }}" action="{{ route('admin.fixed-assets.post-depreciation') }}" method="POST" class="d-inline ml-2">
                                         @csrf
                                         <input type="hidden" name="month" value="{{ date('Y-m') }}">
-                                        <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('{{ __('confirm_post_depreciation') }}')">
+                                        <button type="submit" class="btn btn-success btn-sm">
                                             <i class="fas fa-check"></i> {{ __('post_depreciation_entries') }}
                                         </button>
                                     </form>
@@ -235,11 +235,11 @@
                                     <div class="modal fade" id="disposeModal{{ $asset->id }}" tabindex="-1" role="dialog">
                                         <div class="modal-dialog" role="document">
                                             <div class="modal-content">
-                                                <form action="{{ route('admin.fixed-assets.dispose', $asset->id) }}" method="POST">
+                                                <form data-review="{{ __('I have checked the disposal, the value written off and the ledger entry, and confirm it.') }}" data-review-label="{{ __('Dispose and post') }}" data-review-class="btn-danger" action="{{ route('admin.fixed-assets.dispose', $asset->id) }}" method="POST">
                                                     @csrf
                                                     <div class="modal-header">
                                                         <h5 class="modal-title">{{ __('dispose_asset') }}: {{ $asset->name }}</h5>
-                                                        <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                                                        <button type="button" class="close" data-bs-dismiss="modal" data-dismiss="modal"><span>&times;</span></button>
                                                     </div>
                                                     <div class="modal-body">
                                                         <div class="form-group">
@@ -260,6 +260,16 @@
                                                             <label>{{ __('disposal_proceeds') }}</label>
                                                             <input type="number" name="disposal_proceeds" class="form-control" value="0" min="0">
                                                             <small class="text-muted">{{ __('current_nbv') }}: {{ format_amount($asset->book_value ?? 0) }} FCFA</small>
+                                                        </div>
+                                                        <div class="form-group">
+                                                            <label>{{ __('Paid into') }}</label>
+                                                            <select name="payment_account_id" class="form-control">
+                                                                <option value="">{{ __('Nothing received') }}</option>
+                                                                @foreach(\App\Models\PaymentAccount::whereNotNull('chart_of_account_id')->orderBy('title')->get(['id', 'title']) as $pa)
+                                                                <option value="{{ $pa->id }}">{{ $pa->title }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                            <small class="text-muted">{{ __('Needed when there are proceeds.') }}</small>
                                                         </div>
                                                         <div class="form-group">
                                                             <label>{{ __('notes') }}</label>

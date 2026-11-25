@@ -129,6 +129,7 @@
                                                 <th>{{ __('end_date') }}</th>
                                                 <th width="10%">{{ __('entries') }}</th>
                                                 <th width="10%">{{ __('status_title') }}</th>
+                                                <th width="14%"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -153,6 +154,29 @@
                                                     <span class="badge badge-danger">{{ __('closed') }}</span>
                                                     @else
                                                     <span class="badge badge-success">{{ __('open') }}</span>
+                                                    @endif
+                                                </td>
+                                                <td class="text-right text-nowrap">
+                                                    @if(!$fiscalYear->is_closed)
+                                                    @if(!$period->is_closed)
+                                                    @can('accounting-period-close')
+                                                    <form method="post" action="{{ route('admin.accounting-periods.close', $period->id) }}" id="close-period-{{ $period->id }}" class="d-none">@csrf</form>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            data-review-url="{{ route('admin.accounting-periods.preview-close', $period->id) }}"
+                                                            data-confirm-form="close-period-{{ $period->id }}" data-confirm-label="{{ __('Close the month') }}" data-confirm-class="btn-danger"
+                                                            data-confirm-check="{{ __('I have checked this month’s books and confirm they can be closed. Nothing more can be posted into it.') }}">
+                                                        <i class="fas fa-lock"></i> {{ __('Close') }}</button>
+                                                    @endcan
+                                                    @else
+                                                    @can('accounting-period-reopen')
+                                                    <form method="post" action="{{ route('admin.accounting-periods.reopen', $period->id) }}" id="reopen-period-{{ $period->id }}" class="d-none">@csrf<input type="hidden" name="void_reason"></form>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                            data-review-url="{{ route('admin.accounting-periods.preview-reopen', $period->id) }}"
+                                                            data-confirm-form="reopen-period-{{ $period->id }}" data-confirm-label="{{ __('Reopen the month') }}" data-needs-reason="1"
+                                                            data-confirm-check="{{ __('I understand that reopening lets entries be posted into this month again, and its reported figures may change.') }}">
+                                                        <i class="fas fa-lock-open"></i> {{ __('Reopen') }}</button>
+                                                    @endcan
+                                                    @endif
                                                     @endif
                                                 </td>
                                             </tr>
@@ -218,4 +242,6 @@
     <!-- /.container-fluid -->
 </section>
 <!-- /.content -->
+@include('admin.supplier-bill.partials.style')
+@include('admin.supplier-bill.partials.review-modal')
 @endsection

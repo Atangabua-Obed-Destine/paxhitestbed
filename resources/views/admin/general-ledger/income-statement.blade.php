@@ -71,6 +71,12 @@
                             </div>
                         </div>
 
+                        @unless($useJournalEntries)
+                        <div class="alert alert-warning" role="note">
+                            <strong>{{ __('This is not the books.') }}</strong>
+                            {{ __('This view adds up the fee, income, expense and payroll records by module, with fees counted when the cash arrived. It leaves out supplier bills, manual journal entries, bank charges and interest, and overpayments held for students on 419, so it will not match the trial balance or the balance sheet. For financial statements, switch on the accounting view.') }}
+                        </div>
+                        @endunless
                         <!-- Comprehensive Income Statement Report -->
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover" style="font-size: 14px;">

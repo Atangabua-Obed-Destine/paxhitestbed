@@ -77,7 +77,7 @@ class TaxSettingSeeder extends Seeder
         // at them, rather than ending up with two of each.
         $this->adoptUncodedGroups();
 
-        $this->state = $this->account(self::ACCOUNT_STATE);
+        $this->state = $this->account(\App\Console\Commands\ChartSyscohada::current(self::ACCOUNT_STATE));
         $this->social = $this->account(self::ACCOUNT_SOCIAL);
 
         if (!$this->state || !$this->social) {

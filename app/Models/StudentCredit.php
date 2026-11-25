@@ -21,6 +21,9 @@ class StudentCredit extends Model
         'remaining_amount',
         'source_fee_id',
         'source_type',
+        'received_on',
+        'received_method',
+        'received_payment_account_id',
         'status',
         'note',
         'refund_requested',
@@ -73,6 +76,8 @@ class StudentCredit extends Model
     const SOURCE_REFUND_REVERSAL = 'refund_reversal';
     const SOURCE_ADMIN_ADJUSTMENT = 'admin_adjustment';
     const SOURCE_TRANSFER = 'transfer';
+    /** Cash paid beyond every instalment owed, never added to a fee's paid amount. */
+    const SOURCE_PREPAYMENT = 'prepayment';
 
     /**
      * Refund method constants
@@ -302,6 +307,7 @@ class StudentCredit extends Model
             self::SOURCE_REFUND_REVERSAL => 'Refund Reversal',
             self::SOURCE_ADMIN_ADJUSTMENT => 'Admin Adjustment',
             self::SOURCE_TRANSFER => 'Transfer',
+            self::SOURCE_PREPAYMENT => 'Paid in advance',
         ];
 
         return $labels[$this->source_type] ?? 'Unknown';
