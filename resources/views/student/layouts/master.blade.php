@@ -178,7 +178,9 @@
                         // enrollment existed, and the layout quietly won — the
                         // student's whole portal moved to a resit semester the
                         // middleware had deliberately not selected.
-                        $allEnrollments = \App\Support\EnrolmentOrder::furthestPerMatricule($tempEnrollments);
+                        // Programmes the student has left (every enrolment
+                        // inactive) and inactive programmes are not offered.
+                        $allEnrollments = \App\Support\EnrolmentOrder::switchable($tempEnrollments);
 
                         $selectedEnrollmentId = session('selected_enrollment_id');
                         $currentEnrollment = $allEnrollments->firstWhere('id', $selectedEnrollmentId);

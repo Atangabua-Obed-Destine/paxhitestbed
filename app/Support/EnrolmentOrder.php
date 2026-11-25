@@ -121,6 +121,42 @@ class EnrolmentOrder
     }
 
     /**
+     * The programmes a student may switch to: one enrolment per matricule, as
+     * furthestPerMatricule(), but only for a matricule the student is still
+     * active on (at least one enrolment not marked inactive, status 0) and a
+     * programme that is itself active.
+     *
+     * A student moved off a programme keeps its enrolments, all set inactive;
+     * those must not be offered in the portal. If nothing qualifies (a record
+     * left in an odd state), every matricule is offered as before, so the
+     * portal never strands a student on an empty page.
+     *
+     * @param  Collection<int, StudentEnroll>  $enrolments
+     * @return Collection<int, StudentEnroll>
+     */
+    public static function switchable(Collection $enrolments): Collection
+    {
+        $groups = $enrolments->groupBy('matricule')->filter(function (Collection $group) {
+            $program = $group->first()->program;
+
+            return $group->contains(fn (StudentEnroll $e) => (string) $e->status !== '0')
+                && (!$program || (string) $program->status === '1');
+        });
+
+        if ($groups->isEmpty()) {
+            return self::furthestPerMatricule($enrolments);
+        }
+
+        return self::furthestPerMatricule($groups->flatten(1));
+    }
+
+    /** May the student switch to this enrolment's programme? */
+    public static function canSwitchTo(StudentEnroll $enrolment, Collection $all): bool
+    {
+        return self::switchable($all)->contains(fn (StudentEnroll $e) => $e->matricule === $enrolment->matricule);
+    }
+
+    /**
      * One enrolment per matricule, each the furthest along for that matricule.
      *
      * The grouping is what the student portal's programme switcher shows: a

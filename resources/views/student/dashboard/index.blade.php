@@ -1,545 +1,142 @@
 @extends('student.layouts.master')
 @section('title', $title)
 
+{{--
+    The student's day book.
+
+    Laid out like the staff dashboard: today's date in the margin and a
+    greeting, then what the day holds (the classes on the student's own
+    timetable, with the one in progress and the next one marked), what is
+    waiting on them, their messages, four figures with the context that makes
+    them mean something, results and progress to graduation, and every screen
+    of the portal grouped below. Figures come from Student\DashboardController.
+--}}
+
 @section('page_css')
-<link rel="stylesheet" href="{{ asset('dashboard/plugins/fullcalendar/css/fullcalendar.min.css') }}">
+@include('common.dashboard._daybook_style')
 <style>
-    /* ========== ANIMATIONS ========== */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-    }
-
-    @keyframes slideInLeft {
-        from {
-            opacity: 0;
-            transform: translateX(-30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes slideInRight {
-        from {
-            opacity: 0;
-            transform: translateX(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-
-    @keyframes bounce {
-        0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-        40% { transform: translateY(-10px); }
-        60% { transform: translateY(-5px); }
-    }
-
-    /* ========== DASHBOARD STYLES ========== */
-    .dashboard-card {
-        border-radius: 15px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        animation: fadeInUp 0.6s ease;
-        border: none;
-        overflow: hidden;
-    }
-
-    .dashboard-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
-
-    .stat-card {
-        position: relative;
-        padding: 25px;
-        border-radius: 15px;
-        color: #fff;
-        overflow: hidden;
-        transition: all 0.3s ease;
-    }
-
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        right: -50%;
-        width: 200%;
-        height: 200%;
-        background: rgba(255,255,255,0.1);
-        transform: rotate(45deg);
-        transition: all 0.5s ease;
-    }
-
-    .stat-card:hover::before {
-        top: -60%;
-        right: -60%;
-    }
-
-    .stat-card .icon-wrapper {
-        width: 70px;
-        height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255,255,255,0.2);
-        border-radius: 50%;
-        font-size: 30px;
-        margin-bottom: 15px;
-        animation: pulse 2s infinite;
-    }
-
-    .stat-card h3 {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }
-
-    .stat-card p {
-        margin: 0;
-        opacity: 0.9;
-        font-size: 0.95rem;
-    }
-
-    /* Gradient backgrounds for stat cards */
-    .gradient-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-
-    .gradient-success {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    }
-
-    .gradient-warning {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    }
-
-    .gradient-info {
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    }
-
-    .gradient-danger {
-        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-    }
-
-    .gradient-purple {
-        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-    }
-
-    /* Quick action buttons */
-    .quick-action-btn {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 15px 20px;
-        border-radius: 10px;
-        background: #f8f9fa;
-        border: 2px solid transparent;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        color: #333;
-        margin-bottom: 10px;
-    }
-
-    .quick-action-btn:hover {
-        border-color: #667eea;
-        background: #fff;
-        transform: translateX(5px);
-        color: #667eea;
-    }
-
-    .quick-action-btn i {
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: #fff;
-        border-radius: 8px;
-        font-size: 18px;
-    }
-
-    /* Progress bars */
-    .custom-progress {
-        height: 8px;
-        border-radius: 10px;
-        overflow: hidden;
-        background: #e9ecef;
-    }
-
-    .custom-progress-bar {
-        height: 100%;
-        border-radius: 10px;
-        transition: width 1s ease;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .custom-progress-bar::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        right: 0;
-        background-image: linear-gradient(
-            -45deg,
-            rgba(255, 255, 255, .2) 25%,
-            transparent 25%,
-            transparent 50%,
-            rgba(255, 255, 255, .2) 50%,
-            rgba(255, 255, 255, .2) 75%,
-            transparent 75%,
-            transparent
-        );
-        z-index: 1;
-        background-size: 50px 50px;
-        animation: move 2s linear infinite;
-    }
-
-    @keyframes move {
-        0% { background-position: 0 0; }
-        100% { background-position: 50px 50px; }
-    }
-
-    /* List items */
-    .list-item {
-        padding: 15px;
-        border-radius: 10px;
-        background: #f8f9fa;
-        margin-bottom: 10px;
-        transition: all 0.3s ease;
-        border-left: 4px solid transparent;
-    }
-
-    .list-item:hover {
-        background: #fff;
-        border-left-color: #667eea;
-        transform: translateX(5px);
-        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-    }
-
-    /* Section headers */
-    .section-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #e9ecef;
-    }
-
-    .section-header i {
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: #fff;
-        border-radius: 8px;
-        font-size: 18px;
-    }
-
-    .section-header h5 {
-        margin: 0;
-        font-weight: 600;
-    }
-
-    /* Badge styles */
-    .custom-badge {
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-    }
-
-    /* Timeline */
-    .timeline-item {
-        position: relative;
-        padding-left: 40px;
-        margin-bottom: 20px;
-    }
-
-    .timeline-item::before {
-        content: '';
-        position: absolute;
-        left: 8px;
-        top: 25px;
-        bottom: -20px;
-        width: 2px;
-        background: #e9ecef;
-    }
-
-    .timeline-item:last-child::before {
-        display: none;
-    }
-
-    .timeline-icon {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background: #667eea;
-        border: 3px solid #fff;
-        box-shadow: 0 0 0 2px #667eea;
-    }
-
-    /* Animated loader */
-    .metric-loader {
-        display: inline-block;
-        animation: bounce 1s ease-in-out;
-    }
-
-    /* Welcome banner */
-    .welcome-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 30px;
-        border-radius: 15px;
-        color: #fff;
-        position: relative;
-        overflow: hidden;
-        margin-bottom: 30px;
-        animation: fadeIn 0.6s ease;
-    }
-
-    .welcome-banner::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        right: -50%;
-        width: 200%;
-        height: 200%;
-        background: rgba(255,255,255,0.05);
-        transform: rotate(45deg);
-    }
-
-    .welcome-banner h2 {
-        font-size: 2rem;
-        margin-bottom: 10px;
-        position: relative;
-        z-index: 1;
-    }
-
-    .welcome-banner p {
-        margin: 0;
-        opacity: 0.9;
-        position: relative;
-        z-index: 1;
-    }
-
-    /* Responsive animations */
-    .fade-in-up { animation: fadeInUp 0.6s ease; }
-    .fade-in-left { animation: slideInLeft 0.6s ease; }
-    .fade-in-right { animation: slideInRight 0.6s ease; }
-    
-    .delay-1 { animation-delay: 0.1s; }
-    .delay-2 { animation-delay: 0.2s; }
-    .delay-3 { animation-delay: 0.3s; }
-    .delay-4 { animation-delay: 0.4s; }
-    .delay-5 { animation-delay: 0.5s; }
-
-    /* Card icon backgrounds */
-    .card-icon-bg {
-        width: 50px;
-        height: 50px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        font-size: 24px;
-        margin-right: 15px;
-    }
-
-    .bg-primary-light {
-        background: rgba(102, 126, 234, 0.1);
-        color: #667eea;
-    }
-
-    .bg-success-light {
-        background: rgba(17, 153, 142, 0.1);
-        color: #11998e;
-    }
-
-    .bg-warning-light {
-        background: rgba(240, 147, 251, 0.1);
-        color: #f093fb;
-    }
-
-    .bg-info-light {
-        background: rgba(79, 172, 254, 0.1);
-        color: #4facfe;
-    }
-
-    .bg-danger-light {
-        background: rgba(250, 112, 154, 0.1);
-        color: #fa709a;
-    }
-
-    /* Empty state */
-    .empty-state {
-        text-align: center;
-        padding: 40px 20px;
-        color: #6c757d;
-    }
-
-    .empty-state i {
-        font-size: 48px;
-        margin-bottom: 15px;
-        opacity: 0.5;
-    }
-
-    /* Hover effects */
-    .hover-scale {
-        transition: transform 0.3s ease;
-    }
-
-    .hover-scale:hover {
-        transform: scale(1.02);
-    }
+    .et-dash .et-live { background: var(--et-good-tint); border-color: #b9dcc7; }
+    .et-dash .et-live .et-panel-title { color: var(--et-good); }
+    .et-dash .et-live-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 20px; border-top: 1px solid #cfe6d8; }
+    .et-dash .et-class.is-break .et-class-title { font-weight: 500; color: var(--et-muted); font-style: italic; }
+    .et-dash .et-class.is-break .et-class-node::after { border-style: dashed; }
+    .et-dash .et-reasons { margin: 12px 0 0; padding: 10px 14px 10px 30px; border-radius: 8px; background: var(--et-warn-tint); color: var(--et-warn); font-size: 13px; }
+    .et-dash .et-progress-row { padding: 10px 0; }
+    .et-dash .et-progress-row + .et-progress-row { border-top: 1px solid var(--et-rule); }
+    .et-dash .et-progress-head { display: flex; justify-content: space-between; font-size: 14px; color: var(--et-ink); }
+    .et-dash .et-progress-head b { font-variant-numeric: tabular-nums; }
+    .et-dash .et-verdict { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-weight: 700; }
+    .et-dash .et-verdict.good { color: var(--et-good); }
+    .et-dash .et-verdict.warn { color: var(--et-warn); }
+    .et-dash .et-bar-fill.good { background: var(--et-good); }
+    .et-dash .et-bar-fill.bad { background: var(--et-bad); }
 </style>
 @endsection
 
 @section('content')
+@php
+    $now = now();
+    $greeting = $now->hour < 12 ? __('Good morning') : ($now->hour < 17 ? __('Good afternoon') : __('Good evening'));
+    $timeFormat = preg_match('/[aA]/', $setting->time_format ?? '') ? 'g:i A' : 'H:i';
+    $at = fn ($time) => date($timeFormat, strtotime($time));
+    $money = fn ($amount) => format_amount($amount) . ' ' . ($setting->currency_symbol ?? 'XAF');
 
-<!-- Start Content-->
+    $needsRegistration = isset($registrationStatus) && in_array($registrationStatus['state'], ['open', 'partly_done'], true);
+    $registrationDeadline = $registrationStatus['deadline'] ?? null;
+    $missedDeadline = isset($registrationStatus) && $registrationStatus['state'] === 'closed' && $registrationStatus['registered'] === 0;
+
+    $current = $nowNext['current'] ?? null;
+    $next = $nowNext['next'] ?? null;
+    $clock = $now->format('H:i:s');
+
+    // Live classes in the student's class right now.
+    $liveClasses = collect();
+    if (isset($currentEnroll) && $currentEnroll) {
+        $liveClasses = \App\Models\ClassSession::where('status', 'in_progress')
+            ->where('program_id', $currentEnroll->program_id)->where('semester_id', $currentEnroll->semester_id)
+            ->where('session_id', $currentEnroll->session_id)
+            ->where(fn ($q) => $q->whereNull('section_id')->orWhere('section_id', $currentEnroll->section_id))
+            ->with(['subject', 'teacher'])->get();
+    }
+
+    $unreadMessages = app(\App\Services\Mailbox\Mailbox::class)->unreadCount(['student', (int) $student->id]);
+    $examsSoon = collect($upcomingExams ?? [])->filter(fn ($e) => $e->date && \Carbon\Carbon::parse($e->date)->lte($now->copy()->addDays(14)));
+
+    // What is waiting on this student: only what needs doing, never a row of zeros.
+    $waiting = array_values(array_filter([
+        $needsRegistration ? ['count' => $registrationStatus['registered'] ?? 0, 'icon' => null, 'route' => route('student.course-registration.index'), 'label' => __('Register your courses'), 'note' => $registrationDeadline ? __('Before :when', ['when' => $registrationDeadline->closesAtLong()]) : __('Registration is open'), 'tone' => 'warn', 'chip' => '!'] : null,
+        ($dueFees ?? 0) > 0 ? ['route' => route('student.fees.index'), 'label' => __('Fees still to pay'), 'note' => $money($dueFees) . ' · ' . __('paid so far: :p', ['p' => $money($paidFees ?? 0)]), 'tone' => 'bad', 'chip' => '<i class="fas fa-money-bill-wave"></i>'] : null,
+        ($pendingAssignments ?? 0) > 0 ? ['route' => route('student.assignment.index'), 'label' => __('Assignments to hand in'), 'note' => __('Not yet submitted'), 'tone' => '', 'chip' => (string) $pendingAssignments] : null,
+        $unreadMessages > 0 ? ['route' => route('student.mailbox.index'), 'label' => __('Unread messages'), 'note' => __('From your lecturers or the school offices'), 'tone' => '', 'chip' => (string) $unreadMessages] : null,
+        $examsSoon->count() ? ['route' => route('student.exam-routine.index'), 'label' => __('Exams in the next two weeks'), 'note' => __('First: :course on :date', ['course' => $examsSoon->first()->subject->code ?? $examsSoon->first()->subject->title ?? '', 'date' => \Carbon\Carbon::parse($examsSoon->first()->date)->translatedFormat('D j M')]), 'tone' => 'warn', 'chip' => (string) $examsSoon->count()] : null,
+    ]));
+
+    $attended = $totalAttendance ?? 0;
+    $passShare = ($totalCourses ?? 0) > 0 ? round($passedCourses / $totalCourses * 100) : 0;
+    $paidShare = ($totalFees ?? 0) > 0 ? min(100, round(($paidFees ?? 0) / $totalFees * 100)) : 0;
+    $attendShare = round($attendancePercentage ?? 0);
+
+    $typeMap = [0 => [__('Optional'), 'muted'], 1 => [__('Compulsory'), 'bad'], 2 => [__('University req.'), 'warn']];
+@endphp
+
 <div class="main-body">
     <div class="page-wrapper">
-        <!-- [ Main Content ] start -->
+    <div class="et-dash">
 
-        {{-- Courses still to register.
-
-             Said twice on purpose: once as a popup the moment the dashboard
-             opens, because a student who misses registration misses the class
-             and exam lists; and once as a banner that stays put, because a
-             popup that has been dismissed is gone. --}}
-        @php
-            $needsRegistration = isset($registrationStatus)
-                && in_array($registrationStatus['state'], ['open', 'partly_done'], true);
-            $registrationDeadline = $registrationStatus['deadline'] ?? null;
-            $missedDeadline = isset($registrationStatus)
-                && $registrationStatus['state'] === 'closed'
-                && $registrationStatus['registered'] === 0;
-        @endphp
-
-        {{-- Both banners below carry the deadline themselves; tell the layout
-             not to add its strip on top. Every other state keeps the strip. --}}
+        {{-- Both notices below carry the deadline themselves; tell the layout not to add its strip. --}}
         @if(($needsRegistration && $registrationDeadline) || $missedDeadline)
             @section('registration_deadline_shown', '1')
         @endif
 
-        {{-- The deadline passed with nothing registered. Not a reminder any
-             more: the student is on no class list and the portal cannot fix
-             it, so it stays red until the department does. --}}
         @if($missedDeadline)
-        <div class="alert alert-danger shadow-sm mb-4" role="alert" style="border-left: 5px solid #dc3545;">
-            <div class="d-flex align-items-center flex-wrap">
-                <div class="mr-3 mb-2 mb-md-0">
-                    <i class="fas fa-lock fa-2x text-danger"></i>
-                </div>
-                <div class="flex-grow-1 mb-2 mb-md-0">
-                    <h6 class="mb-1 font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
-                    <p class="mb-0 small">{{ $registrationStatus['detail'] }}</p>
-                    @if($registrationDeadline && trim((string) $registrationDeadline->note) !== '')
-                        <p class="mb-0 small mt-1"><i class="fas fa-info-circle"></i> {{ $registrationDeadline->note }}</p>
-                    @endif
-                </div>
+        <div class="et-alert bad" role="alert">
+            <i class="fas fa-lock" aria-hidden="true"></i>
+            <div>
+                <h3>{{ $registrationStatus['headline'] }}</h3>
+                <p>{{ $registrationStatus['detail'] }}</p>
+                @if($registrationDeadline && trim((string) $registrationDeadline->note) !== '')<p class="et-when">{{ $registrationDeadline->note }}</p>@endif
             </div>
         </div>
         @endif
 
         @if($needsRegistration)
-        <div class="alert alert-{{ $registrationDeadline ? $registrationDeadline->colour() : 'warning' }} shadow-sm mb-4" role="alert"
-             style="border-left: 5px solid {{ $registrationDeadline && $registrationDeadline->urgency() === 'imminent' ? '#dc3545' : '#ffc107' }};">
-            <div class="d-flex align-items-center flex-wrap">
-                <div class="mr-3 mb-2 mb-md-0">
-                    <i class="fas fa-clipboard-list fa-2x {{ $registrationDeadline && $registrationDeadline->urgency() === 'imminent' ? 'text-danger' : 'text-warning' }}"></i>
-                </div>
-                <div class="flex-grow-1 mb-2 mb-md-0">
-                    <h6 class="mb-1 font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
-                    <p class="mb-0 small">{{ $registrationStatus['detail'] }}</p>
-                    @if($registrationDeadline)
-                        {{-- The countdown, in the colour of how little time is left. --}}
-                        <p class="mb-0 small mt-1 font-weight-bold">
-                            <i class="fas fa-hourglass-half"></i>
-                            {{ __('Register before :when', ['when' => $registrationDeadline->closesAtLong()]) }}
-                            <span class="badge badge-pill badge-{{ $registrationDeadline->colour() }}">{{ $registrationDeadline->countdown() }}</span>
-                        </p>
-                    @endif
-                </div>
-                <a href="{{ route('student.course-registration.index') }}" class="btn btn-warning">
-                    <i class="fas fa-arrow-right"></i> {{ __('Register my courses') }}
-                </a>
+        <div class="et-alert {{ $registrationDeadline && $registrationDeadline->urgency() === 'imminent' ? 'bad' : 'warn' }}" role="alert">
+            <i class="fas fa-clipboard-list" aria-hidden="true"></i>
+            <div>
+                <h3>{{ $registrationStatus['headline'] }}</h3>
+                <p>{{ $registrationStatus['detail'] }}</p>
+                @if($registrationDeadline)
+                    <p class="et-when"><i class="fas fa-hourglass-half" aria-hidden="true"></i> {{ __('Register before :when', ['when' => $registrationDeadline->closesAtLong()]) }} · {{ $registrationDeadline->countdown() }}</p>
+                @endif
             </div>
+            <a href="{{ route('student.course-registration.index') }}" class="et-btn"><i class="fas fa-arrow-right" aria-hidden="true"></i> {{ __('Register my courses') }}</a>
         </div>
 
         <div class="modal fade" id="courseRegistrationModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header bg-warning">
-                        <h5 class="modal-title">
-                            <i class="fas fa-clipboard-list"></i> {{ __('Course registration is open') }}
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <h5 class="modal-title"><i class="fas fa-clipboard-list"></i> {{ __('Course registration is open') }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ __('Close') }}"></button>
                     </div>
                     <div class="modal-body">
                         <h6 class="font-weight-bold">{{ $registrationStatus['headline'] }}</h6>
                         <p>{{ $registrationStatus['detail'] }}</p>
-
                         @if($registrationDeadline)
                         <div class="alert alert-{{ $registrationDeadline->colour() }} py-2 mb-2">
-                            <i class="fas fa-hourglass-half"></i>
-                            <strong>{{ __('Deadline') }}:</strong>
-                            {{ $registrationDeadline->closesAtLong() }}
-                            &mdash; <strong>{{ $registrationDeadline->countdown() }}</strong>.
-                            {{ __('After that, you will not be able to register on the portal.') }}
+                            <i class="fas fa-hourglass-half"></i> <strong>{{ __('Deadline') }}:</strong> {{ $registrationDeadline->closesAtLong() }}
+                            &mdash; <strong>{{ $registrationDeadline->countdown() }}</strong>. {{ __('After that, you will not be able to register on the portal.') }}
                         </div>
                         @endif
-
                         @if($registrationStatus['enrollment'] && $registrationStatus['enrollment']->semester)
-                        <p class="mb-2 text-muted small">
-                            {{ __('field_semester') }}:
-                            <strong>{{ $registrationStatus['enrollment']->semester->title }}</strong>
-                            @if($registrationStatus['enrollment']->session)
-                                &mdash; {{ $registrationStatus['enrollment']->session->title }}
-                            @endif
-                        </p>
+                        <p class="mb-2 text-muted small">{{ __('field_semester') }}: <strong>{{ $registrationStatus['enrollment']->semester->title }}</strong>
+                            @if($registrationStatus['enrollment']->session) &mdash; {{ $registrationStatus['enrollment']->session->title }}@endif</p>
                         @endif
-
-                        <div class="alert alert-light border mb-0 small">
-                            <i class="fas fa-info-circle"></i>
-                            {{ __('Until you register, you will not appear on the class list or the exam list for these courses.') }}
-                        </div>
+                        <div class="alert alert-light border mb-0 small"><i class="fas fa-info-circle"></i> {{ __('Until you register, you will not appear on the class list or the exam list for these courses.') }}</div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                            {{ __('I will do it later') }}
-                        </button>
-                        <a href="{{ route('student.course-registration.index') }}" class="btn btn-warning">
-                            <i class="fas fa-arrow-right"></i> {{ __('Take me there') }}
-                        </a>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ __('I will do it later') }}</button>
+                        <a href="{{ route('student.course-registration.index') }}" class="btn btn-warning"><i class="fas fa-arrow-right"></i> {{ __('Take me there') }}</a>
                     </div>
                 </div>
             </div>
@@ -549,903 +146,433 @@
         <script>
         document.addEventListener('DOMContentLoaded', function () {
             var modalEl = document.getElementById('courseRegistrationModal');
-
-            // Bootstrap 5 dropped the jQuery plugin, so $(...).modal('show')
-            // does nothing here - the native API is what this version answers to.
             if (!modalEl || typeof bootstrap === 'undefined') { return; }
-
-            // Shown once a visit rather than on every dashboard load. The banner
-            // above stays put, so nothing is lost by closing this.
+            // Once a visit; the notice above stays put.
             var seen = null;
-
-            try {
-                seen = sessionStorage.getItem('courseRegistrationPrompt');
-            } catch (e) {
-                // Private browsing, blocked storage: fall through and show it.
-            }
-
+            try { seen = sessionStorage.getItem('courseRegistrationPrompt'); } catch (e) {}
             if (seen === '{{ $registrationStatus['available'] }}') { return; }
-
             bootstrap.Modal.getOrCreateInstance(modalEl).show();
-
-            try {
-                sessionStorage.setItem('courseRegistrationPrompt', '{{ $registrationStatus['available'] }}');
-            } catch (e) {
-                // Nothing to do: it will simply show again next time.
-            }
+            try { sessionStorage.setItem('courseRegistrationPrompt', '{{ $registrationStatus['available'] }}'); } catch (e) {}
         });
         </script>
         @endpush
         @endif
 
-        <!-- Progression Status Alert -->
         @if(isset($progressionStatus) && $progressionStatus['status'] == 'waiting_for_session')
-        <div class="alert alert-info alert-dismissible fade show shadow-sm mb-4" role="alert" style="border-left: 5px solid #17a2b8;">
-            <div class="d-flex align-items-center">
-                <div class="mr-3">
-                    <i class="fas fa-clock fa-2x text-info"></i>
-                </div>
-                <div>
-                    <h5 class="alert-heading mb-1"><i class="fas fa-hourglass-half"></i> Semester Completed!</h5>
-                    <p class="mb-0">{{ $progressionStatus['message'] }}</p>
-                    <small class="text-muted">You have met all requirements for progression. Your dashboard will automatically update once the new academic session begins.</small>
-                </div>
+        <div class="et-alert info" role="status">
+            <i class="fas fa-hourglass-half" aria-hidden="true"></i>
+            <div>
+                <h3>{{ __('Semester completed') }}</h3>
+                <p>{{ $progressionStatus['message'] }} {{ __('You have met the requirements to move on; this page updates once the new academic session begins.') }}</p>
             </div>
-            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                <span aria-hidden="true">&times;</span>
-            </button>
         </div>
         @endif
 
-        <!-- Welcome Banner -->
-        <div class="welcome-banner">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h2><i class="fas fa-hand-sparkles"></i> Welcome back, {{ $student->first_name }}!</h2>
-                    <p>{{ Carbon\Carbon::now()->format('l, F j, Y') }}</p>
-                    @if(isset($currentEnroll))
-                    <p class="mb-0">
-                        <i class="fas fa-graduation-cap"></i> {{ $currentEnroll->program->title ?? 'N/A' }} | 
-                        <i class="fas fa-calendar-alt"></i> {{ $currentEnroll->semester->title ?? 'N/A' }} | 
-                        <i class="fas fa-users"></i> {{ $currentEnroll->section->title ?? 'N/A' }}
-                    </p>
+        {{-- ══ Masthead ══ --}}
+        <header class="et-mast">
+            <div class="et-date" aria-hidden="true">
+                <span class="et-date-day">{{ $now->format('j') }}</span>
+                <span class="et-date-week">{{ $now->translatedFormat('l') }}</span>
+                <span class="et-date-month">{{ $now->translatedFormat('M Y') }}</span>
+            </div>
+            <div class="et-mast-main">
+                <p class="et-eyebrow">{{ collect([optional(optional($currentEnroll)->program)->title, optional(optional($currentEnroll)->semester)->title])->filter()->implode(' · ') ?: institution_name() }}</p>
+                <h1 class="et-greet">{{ $greeting }}, {{ $student->first_name }}.</h1>
+                <p class="et-lede">
+                    @if($current)
+                        {!! __('You are in :course right now, until :end.', ['course' => '<strong>' . e(trim(($current->subject->code ?? '') . ' ' . ($current->subject->title ?? ''))) . '</strong>', 'end' => e($at($current->end_time))]) !!}
+                        @if($next) {!! __('Next is :course at :time.', ['course' => '<strong>' . e($next->subject->code ?? $next->subject->title ?? '') . '</strong>', 'time' => e($at($next->start_time))]) !!} @endif
+                    @elseif($next)
+                        {{ trans_choice('{1} You have one class today.|[2,*] You have :n classes today.', $todayClasses->count(), ['n' => $todayClasses->count()]) }}
+                        {!! __('The next is :course at :time:room.', [
+                            'course' => '<strong>' . e(trim(($next->subject->code ?? '') . ' ' . ($next->subject->title ?? ''))) . '</strong>',
+                            'time' => e($at($next->start_time)),
+                            'room' => $next->room ? ', ' . e(__('in :room', ['room' => $next->room->title])) : '',
+                        ]) !!}
+                    @elseif($todayClasses->count())
+                        {{ __('Your classes are over for today.') }}
+                    @else
+                        {{ __('No classes on your timetable today.') }}
+                    @endif
+                    @if(count($waiting))
+                        {{ trans_choice('{1} One thing is waiting on you below.|[2,*] :n things are waiting on you below.', count($waiting), ['n' => count($waiting)]) }}
+                    @endif
+                </p>
+            </div>
+            <div class="et-mast-side">
+                @if(isset($currentEnroll) && $currentEnroll)
+                    <span class="et-chip"><i class="fas fa-id-card" aria-hidden="true"></i> {{ $currentEnroll->matricule ?? $student->student_id }}</span>
+                    @if($currentEnroll->session)<span class="et-chip"><i class="fas fa-graduation-cap" aria-hidden="true"></i> {{ __('Academic year :year', ['year' => $currentEnroll->session->title]) }}</span>@endif
+                @endif
+                <span class="et-clock">{{ $now->translatedFormat('l, j F Y') }}</span>
+            </div>
+        </header>
+
+        {{-- ══ Live classes ══ --}}
+        @if($liveClasses->count())
+        <section class="et-section" aria-label="{{ __('Classes in progress') }}">
+            <div class="et-panel et-live">
+                <div class="et-panel-head">
+                    <h2 class="et-panel-title"><span class="et-live-dot" aria-hidden="true"></span> {{ trans_choice('{1} A class is live now|[2,*] :n classes are live now', $liveClasses->count(), ['n' => $liveClasses->count()]) }}</h2>
+                    <a class="et-panel-link" href="{{ route('student.class-hub.index') }}">{{ __('Class Hub') }} →</a>
+                </div>
+                @foreach($liveClasses as $live)
+                <div class="et-live-row">
+                    <div>
+                        <strong>{{ trim(($live->subject->code ?? '') . ' ' . ($live->subject->title ?? __('Class in session'))) }}</strong>
+                        <div class="et-figure-sub">{{ trim(($live->teacher->first_name ?? '') . ' ' . ($live->teacher->last_name ?? '')) }}@if($live->actual_start_time) · {{ __('started :when', ['when' => \Carbon\Carbon::parse($live->actual_start_time)->diffForHumans()]) }}@endif</div>
+                    </div>
+                    <a href="{{ route('student.class-hub.live-room', $live->id) }}" class="et-btn good"><i class="fas fa-sign-in-alt" aria-hidden="true"></i> {{ __('Join now') }}</a>
+                </div>
+                @endforeach
+            </div>
+        </section>
+        @endif
+
+        {{-- ══ Today ══ --}}
+        <section class="et-section" aria-labelledby="et-today-title">
+            <div class="et-row">
+                <div class="et-panel et-wide">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title" id="et-today-title">{{ __('Your classes today') }}</h2>
+                        <a class="et-panel-link" href="{{ route('student.class-routine.index') }}">{{ __('Full timetable') }} →</a>
+                    </div>
+                    @if($todayAgenda->count())
+                        <ol class="et-timeline">
+                            @foreach($todayAgenda as $row)
+                                @php
+                                    $isBreak = $row instanceof \App\Models\TimetableBreak;
+                                    $start = date('H:i:s', strtotime($row->start_time));
+                                    $end = date('H:i:s', strtotime($row->end_time));
+                                    $state = $isBreak ? 'break' : ($end <= $clock ? 'done' : ($start <= $clock ? 'now' : ($next && $row->id === $next->id ? 'next' : 'later')));
+                                @endphp
+                                <li class="et-class is-{{ $state }}">
+                                    <div class="et-class-time"><b>{{ $at($row->start_time) }}</b><span>{{ __('to :time', ['time' => $at($row->end_time)]) }}</span></div>
+                                    <div class="et-class-node" aria-hidden="true"></div>
+                                    <div>
+                                        @if($isBreak)
+                                            <p class="et-class-title">{{ $row->title }}</p>
+                                        @else
+                                            <p class="et-class-title">
+                                                @if($row->subject->code ?? false)<span class="et-code">{{ $row->subject->code }}</span>@endif{{ $row->subject->title ?? '' }}
+                                                @if($state === 'now')<span class="et-state now">{{ __('In progress') }}</span>
+                                                @elseif($state === 'next')<span class="et-state next">{{ __('Next') }}</span>
+                                                @elseif($state === 'done')<span class="et-state done">{{ __('Finished') }}</span>@endif
+                                            </p>
+                                            <p class="et-class-meta">
+                                                {{ collect([$row->room->title ?? null, $row->teacher ? trim($row->teacher->first_name . ' ' . $row->teacher->last_name) : null])->filter()->implode(' · ') }}
+                                            </p>
+                                        @endif
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ol>
+                    @else
+                        <div class="et-empty"><i class="fas fa-mug-hot" aria-hidden="true"></i>
+                            {{ ($weekClassCount ?? 0) ? __('No classes on your timetable today.') : __('Your class timetable has not been published yet.') }}
+                        </div>
                     @endif
                 </div>
-                <div class="col-md-4 text-md-right">
-                    <img src="{{ asset('dashboard/images/graduation-cap.png') }}" alt="Education" style="max-width: 150px; opacity: 0.2;" onerror="this.style.display='none'">
-                </div>
-            </div>
-        </div>
 
-        <!-- Statistics Cards Row -->
-        <div class="row mb-4">
-            <div class="col-xl-3 col-md-6 fade-in-up delay-1">
-                <div class="stat-card gradient-primary">
-                    <div class="icon-wrapper">
-                        <i class="fas fa-chart-line"></i>
+                <div class="et-panel">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title">{{ __('Waiting on you') }}</h2>
+                        @if(count($waiting))<span class="et-section-note">{{ trans_choice('{1} One item|[2,*] :n items', count($waiting), ['n' => count($waiting)]) }}</span>@endif
                     </div>
-                    <h3 class="metric-loader">{{ number_format($cgpa ?? 0, 2) }}</h3>
-                    <p>Cumulative GPA</p>
-                    <small style="opacity: 0.8;">{{ $totalCredits ?? 0 }} Credits Earned</small>
-                </div>
-            </div>
-
-            <div class="col-xl-3 col-md-6 fade-in-up delay-2">
-                <div class="stat-card gradient-success">
-                    <div class="icon-wrapper">
-                        <i class="fas fa-book-reader"></i>
-                    </div>
-                    <h3 class="metric-loader">{{ $passedCourses ?? 0 }}/{{ $totalCourses ?? 0 }}</h3>
-                    <p>Courses Passed</p>
-                    <small style="opacity: 0.8;">
-                        @php
-                            $completion = $totalCourses > 0 ? ($passedCourses / $totalCourses) * 100 : 0;
-                        @endphp
-                        Of {{ $totalCourses ?? 0 }} Courses Attempted • {{ number_format($completion, 1) }}% Complete
-                    </small>
-                </div>
-            </div>
-
-            <div class="col-xl-3 col-md-6 fade-in-up delay-3">
-                <div class="stat-card gradient-info">
-                    <div class="icon-wrapper">
-                        <i class="fas fa-user-check"></i>
-                    </div>
-                    <h3 class="metric-loader">{{ number_format($attendancePercentage ?? 0, 1) }}%</h3>
-                    <p>Attendance Rate</p>
-                    <small style="opacity: 0.8;">{{ $presentAttendance ?? 0 }}/{{ $totalAttendance ?? 0 }} Classes</small>
-                </div>
-            </div>
-
-            <div class="col-xl-3 col-md-6 fade-in-up delay-4">
-                <div class="stat-card gradient-warning">
-                    <div class="icon-wrapper">
-                        <i class="fas fa-money-bill-wave"></i>
-                    </div>
-                    <h3 class="metric-loader">{{ format_amount($dueFees ?? 0) }}</h3>
-                    <p>Fees Balance (XAF)</p>
-                    <small style="opacity: 0.8;">Paid: {{ format_amount($paidFees ?? 0) }} XAF</small>
-                </div>
-            </div>
-        </div>
-
-        <!-- Live Classes Widget - PROMINENT POSITION -->
-        @php
-            // Check for live class sessions
-            $liveClasses = collect();
-            $enrollmentId = session('selected_enrollment_id');
-            if($enrollmentId) {
-                $enrollment = \App\Models\StudentEnroll::find($enrollmentId);
-                if($enrollment) {
-                    $liveClasses = \App\Models\ClassSession::where('status', 'in_progress')
-                        ->where('program_id', $enrollment->program_id)
-                        ->where('semester_id', $enrollment->semester_id)
-                        ->where('session_id', $enrollment->session_id)
-                        ->where(function($q) use ($enrollment) {
-                            $q->whereNull('section_id')
-                              ->orWhere('section_id', $enrollment->section_id);
-                        })
-                        ->with(['subject', 'teacher'])
-                        ->get();
-                }
-            }
-        @endphp
-        @if($liveClasses->count() > 0)
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card dashboard-card" style="border: 3px solid #28a745; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); animation: pulse 2s infinite;">
-                    <div class="card-body">
-                        <div class="section-header d-flex justify-content-between align-items-center mb-3">
-                            <div class="d-flex align-items-center">
-                                <span class="badge badge-success mr-2 px-3 py-2" style="font-size: 14px; animation: pulse 1.5s infinite;">
-                                    <i class="fas fa-broadcast-tower mr-1"></i> {{ $liveClasses->count() }} LIVE CLASS{{ $liveClasses->count() > 1 ? 'ES' : '' }}
-                                </span>
-                                <h5 class="mb-0" style="color: #28a745;"><i class="fas fa-video mr-2"></i>Classes In Progress</h5>
-                            </div>
-                            <a href="{{ route('student.class-hub.index') }}" class="btn btn-success btn-sm">
-                                <i class="fas fa-broadcast-tower mr-1"></i> Go to Class Hub
-                            </a>
-                        </div>
-                        @foreach($liveClasses as $liveClass)
-                        <div class="list-item" style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px; border-left: 4px solid #28a745;">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center">
-                                    <div class="card-icon-bg mr-3" style="background: rgba(40, 167, 69, 0.2); width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-broadcast-tower fa-lg" style="color: #28a745;"></i>
-                                    </div>
-                                    <div>
-                                        <strong style="font-size: 16px;">{{ $liveClass->subject->title ?? 'Class in Session' }}</strong>
-                                        <span class="badge badge-success ml-2" style="animation: pulse 1s infinite;">LIVE NOW</span>
-                                        <br><small class="text-muted">
-                                            <i class="fas fa-user-tie"></i> {{ $liveClass->teacher->first_name ?? '' }} {{ $liveClass->teacher->last_name ?? 'Lecturer' }}
-                                            @if($liveClass->actual_start_time)
-                                            | <i class="fas fa-clock"></i> Started {{ \Carbon\Carbon::parse($liveClass->actual_start_time)->diffForHumans() }}
-                                            @endif
-                                            @if($liveClass->topic_covered)
-                                            <br><i class="fas fa-book"></i> Topic: {{ Str::limit($liveClass->topic_covered, 50) }}
-                                            @endif
-                                        </small>
-                                    </div>
-                                </div>
-                                <a href="{{ route('student.class-hub.live-room', $liveClass->id) }}" class="btn btn-success">
-                                    <i class="fas fa-sign-in-alt mr-1"></i> Join Now
+                    @if(count($waiting))
+                        <ul class="et-todo">
+                            @foreach($waiting as $item)
+                            <li>
+                                <a href="{{ $item['route'] }}">
+                                    <span class="et-count {{ $item['tone'] }}">{!! $item['chip'] !!}</span>
+                                    <span><span class="et-todo-label">{{ $item['label'] }}</span><span class="et-todo-note">{{ $item['note'] }}</span></span>
+                                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
                                 </a>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        </div>
-        @endif
-
-        <!-- Course Breakdown -->
-        @if(isset($courseBreakdown) && count($courseBreakdown) > 0)
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card dashboard-card fade-in-up">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div class="section-header mb-0 border-0 pb-0">
-                                <i class="fas fa-book-open"></i>
-                                <h5 class="mb-0">Complete Course Overview</h5>
-                            </div>
-                            <button class="btn btn-sm btn-outline-primary" type="button" id="toggleCourseBreakdown">
-                                <i class="fas fa-chevron-down"></i> Expand
-                            </button>
-                        </div>
-                        <p class="text-muted small mb-3">View all courses organized by semester with detailed information including validation status, attempts, and schedules</p>
-                        
-                        <div class="collapse" id="courseBreakdownCollapse">
-                            @foreach($courseBreakdown as $semesterData)
-                            <div class="mb-4">
-                                <div class="d-flex align-items-center mb-3">
-                                    <div class="badge badge-{{ $semesterData['is_resit'] ? 'warning' : 'primary' }} mr-2">
-                                        {{ $semesterData['is_resit'] ? 'RESIT' : 'REGULAR' }}
-                                    </div>
-                                    <h6 class="mb-0">
-                                        <strong>{{ $semesterData['semester']->title }}</strong>
-                                        @if($semesterData['session'])
-                                        <span class="text-muted"> - {{ $semesterData['session']->title }}</span>
-                                        @endif
-                                    </h6>
-                                </div>
-
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-hover">
-                                        <thead class="thead-light">
-                                            <tr>
-                                                <th>Code</th>
-                                                <th>Course Name</th>
-                                                <th>Credits</th>
-                                                <th>Type</th>
-                                                <th>Status</th>
-                                                <th>Grade</th>
-                                                <th>Attempts</th>
-                                                <th>Schedule</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($semesterData['courses'] as $course)
-                                            <tr>
-                                                <td><code>{{ $course['code'] }}</code></td>
-                                                <td>
-                                                    <strong>{{ $course['name'] }}</strong>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-info">{{ $course['credits'] }} CR</span>
-                                                </td>
-                                                <td>
-                                                    @php
-                                                        $typeMap = [
-                                                            0 => ['label' => 'Optional', 'class' => 'secondary'],
-                                                            1 => ['label' => 'Compulsory', 'class' => 'danger'],
-                                                            2 => ['label' => 'University Req.', 'class' => 'warning']
-                                                        ];
-                                                        $typeInfo = $typeMap[$course['type']] ?? ['label' => 'Unknown', 'class' => 'secondary'];
-                                                    @endphp
-                                                    <small class="badge badge-{{ $typeInfo['class'] }}">{{ $typeInfo['label'] }}</small>
-                                                </td>
-                                                <td>
-                                                    @if($course['validated'])
-                                                        @if($course['marks']['passed'])
-                                                            <span class="badge badge-success">
-                                                                <i class="fas fa-check-circle"></i> Passed
-                                                            </span>
-                                                        @else
-                                                            <span class="badge badge-danger">
-                                                                <i class="fas fa-times-circle"></i> Failed
-                                                            </span>
-                                                        @endif
-                                                    @else
-                                                        <span class="badge badge-secondary">
-                                                            <i class="fas fa-hourglass-half"></i> Pending
-                                                        </span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    @if($course['validated'] && $course['marks'])
-                                                        <span class="font-weight-bold">{{ $course['marks']['grade'] ?? 'N/A' }}</span>
-                                                        <br><small class="text-muted">{{ $course['marks']['marks'] }}% ({{ $course['marks']['grade_point'] }} GP)</small>
-                                                    @else
-                                                        <span class="text-muted">-</span>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-{{ $course['attempts'] > 1 ? 'warning' : 'light' }}">
-                                                        {{ $course['attempts'] }}{{ $course['attempts'] == 1 ? 'st' : ($course['attempts'] == 2 ? 'nd' : 'th') }}
-                                                    </span>
-                                                    @if($course['resit_info'])
-                                                        <br><small class="text-warning"><i class="fas fa-redo"></i> Resit</small>
-                                                    @endif
-                                                </td>
-                                                <td>
-                                                    @if(count($course['class_routines']) > 0)
-                                                        <button class="btn btn-sm btn-outline-info" type="button" data-toggle="collapse" data-target="#schedule-{{ $course['id'] }}-{{ $semesterData['semester']->id }}">
-                                                            <i class="fas fa-clock"></i> {{ count($course['class_routines']) }}
-                                                        </button>
-                                                        <div class="collapse mt-2" id="schedule-{{ $course['id'] }}-{{ $semesterData['semester']->id }}">
-                                                            <div class="card card-body p-2" style="font-size: 0.85rem;">
-                                                                @foreach($course['class_routines'] as $routine)
-                                                                <div class="mb-1">
-                                                                    <strong>{{ $routine['day'] }}</strong>: 
-                                                                    {{ date('g:i A', strtotime($routine['start_time'])) }} - {{ date('g:i A', strtotime($routine['end_time'])) }}
-                                                                    @if($routine['room'])
-                                                                        <br><small class="text-muted"><i class="fas fa-door-open"></i> {{ $routine['room'] }}</small>
-                                                                    @endif
-                                                                    @if($routine['teacher'])
-                                                                        <br><small class="text-muted"><i class="fas fa-chalkboard-teacher"></i> {{ $routine['teacher'] }}</small>
-                                                                    @endif
-                                                                </div>
-                                                                @if(!$loop->last)<hr class="my-1">@endif
-                                                                @endforeach
-                                                            </div>
-                                                        </div>
-                                                    @else
-                                                        <span class="text-muted small">No schedule</span>
-                                                    @endif
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            @if(!$loop->last)
-                            <hr class="my-4">
-                            @endif
+                            </li>
                             @endforeach
-                            
-                            <div class="text-center mt-4 pt-3 border-top">
-                                <a href="{{ route('student.transcript.index') }}" class="btn btn-primary btn-sm mr-2">
-                                    <i class="fas fa-file-alt"></i> View Full Transcript
-                                </a>
-                                <a href="{{ route('student.class-routine.index') }}" class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-calendar-alt"></i> View Class Routine
-                                </a>
-                            </div>
-                        </div>
-                    </div>
+                        </ul>
+                    @else
+                        <div class="et-empty"><i class="fas fa-check-circle" aria-hidden="true"></i> {{ __('Nothing is waiting on you. You are up to date.') }}</div>
+                    @endif
                 </div>
             </div>
-        </div>
-        @endif
+        </section>
 
-        <!-- Main Content Grid -->
-        <div class="row">
-            
-            <!-- Left Column -->
-            <div class="col-xl-8">
-                
-                <!-- Quick Actions -->
-                <div class="card dashboard-card mb-4 fade-in-left">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-bolt"></i>
-                            <h5>Quick Actions</h5>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <a href="{{ route('student.course-registration.index') }}" class="quick-action-btn">
-                                    <i class="fas fa-clipboard-list"></i>
-                                    <div>
-                                        <strong>Course Registration</strong>
-                                        <br><small>Manage courses</small>
-                                    </div>
-                                </a>
-                            </div>
-                            <div class="col-md-4">
-                                <a href="{{ route('student.class-routine.index') }}" class="quick-action-btn">
-                                    <i class="fas fa-calendar-day"></i>
-                                    <div>
-                                        <strong>Class Routine</strong>
-                                        <br><small>View schedule</small>
-                                    </div>
-                                </a>
-                            </div>
-                            <div class="col-md-4">
-                                <a href="{{ route('student.exam-results.index') }}" class="quick-action-btn">
-                                    <i class="fas fa-award"></i>
-                                    <div>
-                                        <strong>Exam Results</strong>
-                                        <br><small>Check grades</small>
-                                    </div>
-                                </a>
-                            </div>
-                            <div class="col-md-4">
-                                <a href="{{ route('student.fees.index') }}" class="quick-action-btn">
-                                    <i class="fas fa-wallet"></i>
-                                    <div>
-                                        <strong>Fees Payment</strong>
-                                        <br><small>Pay fees</small>
-                                    </div>
-                                </a>
-                            </div>
-                            <div class="col-md-4">
-                                <a href="{{ route('student.assignment.index') }}" class="quick-action-btn">
-                                    <i class="fas fa-tasks"></i>
-                                    <div>
-                                        <strong>Assignments</strong>
-                                        <br><small>{{ $pendingAssignments ?? 0 }} pending</small>
-                                    </div>
-                                </a>
-                            </div>
-                            <div class="col-md-4">
-                                <a href="{{ route('student.e-library.index') }}" class="quick-action-btn">
-                                    <i class="fas fa-book"></i>
-                                    <div>
-                                        <strong>E-Library</strong>
-                                        <br><small>Browse books</small>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
+        {{-- ══ Messages and what is coming up ══ --}}
+        <section class="et-section" aria-label="{{ __('Messages and what is coming up') }}">
+            <div class="et-row">
+                @include('common.dashboard._messages_panel', ['mbRoute' => 'student.mailbox', 'mbMember' => ['student', (int) $student->id]])
+
+                <div class="et-panel">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title">{{ __('Coming up') }}</h2>
+                        <a class="et-panel-link" href="{{ route('student.exam-routine.index') }}">{{ __('Exam timetable') }} →</a>
                     </div>
+                    @php
+                        $coming = collect($upcomingExams ?? [])->map(fn ($e) => ['when' => \Carbon\Carbon::parse($e->date), 'icon' => 'fa-file-alt', 'label' => trim(($e->subject->code ?? '') . ' ' . ($e->subject->title ?? __('Exam'))), 'note' => __('Exam') . ($e->start_time ? ' · ' . $at($e->start_time) : '')])
+                            ->concat(collect($latest_events ?? [])->map(fn ($ev) => ['when' => \Carbon\Carbon::parse($ev->start_date), 'icon' => 'fa-calendar-check', 'label' => $ev->title, 'note' => $ev->start_date != $ev->end_date ? __('until :d', ['d' => \Carbon\Carbon::parse($ev->end_date)->translatedFormat('j M')]) : __('Event')]))
+                            ->sortBy('when')->take(6)->values();
+                    @endphp
+                    @if($coming->count())
+                        <ul class="et-daybook">
+                            @foreach($coming as $c)
+                            <li><div class="et-line">
+                                <i class="fas {{ $c['icon'] }}" aria-hidden="true"></i>
+                                <span class="et-day-label"><b style="color:var(--et-ink)">{{ $c['label'] }}</b><br><span class="et-todo-note">{{ $c['note'] }}</span></span>
+                                <span class="et-day-count" style="font-size:13px">{{ $c['when']->isToday() ? __('Today') : $c['when']->translatedFormat('D j M') }}</span>
+                            </div></li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <div class="et-empty"><i class="fas fa-calendar" aria-hidden="true" style="color: var(--et-faint)"></i> {{ __('No exams or events coming up.') }}</div>
+                    @endif
                 </div>
-
-                @if(isset($todayClasses) && count($todayClasses) > 0)
-                <div class="card dashboard-card mb-4 fade-in-left delay-1">
-                    <div class="card-body">
-                        <div class="section-header d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-chalkboard-teacher"></i>
-                                <h5>Today's Classes</h5>
-                            </div>
-                            <a href="{{ route('student.class-hub.index') }}" class="btn btn-outline-primary btn-sm">
-                                <i class="fas fa-broadcast-tower mr-1"></i> Class Hub
-                            </a>
-                        </div>
-                        @foreach($todayClasses as $class)
-                        <div class="list-item">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center">
-                                    <div class="card-icon-bg bg-primary-light">
-                                        <i class="fas fa-book-open"></i>
-                                    </div>
-                                    <div>
-                                        <strong>{{ $class->subject->title ?? 'N/A' }}</strong>
-                                        <br><small class="text-muted">
-                                            <i class="fas fa-clock"></i> {{ date('h:i A', strtotime($class->start_time)) }} - {{ date('h:i A', strtotime($class->end_time)) }}
-                                            @if($class->room)
-                                            | <i class="fas fa-door-open"></i> {{ $class->room }}
-                                            @endif
-                                        </small>
-                                    </div>
-                                </div>
-                                <span class="custom-badge bg-primary text-white">
-                                    {{ $class->subject->code ?? '' }}
-                                </span>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-                @endif
-
-                <!-- Recent Assignments -->
-                @if(isset($assignments) && count($assignments) > 0)
-                <div class="card dashboard-card mb-4 fade-in-left delay-2">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-clipboard-check"></i>
-                            <h5>Recent Assignments</h5>
-                        </div>
-                        @foreach($assignments as $assignment)
-                        @if($assignment->assignment && $assignment->assignment->status == 1)
-                        <div class="list-item">
-                            <div class="d-flex align-items-start justify-content-between">
-                                <div class="d-flex align-items-start flex-grow-1">
-                                    <div class="card-icon-bg {{ $assignment->attendance == 1 ? 'bg-success-light' : 'bg-warning-light' }}">
-                                        <i class="fas {{ $assignment->attendance == 1 ? 'fa-check-circle' : 'fa-clock' }}"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <a href="{{ route('student.assignment.show', $assignment->id) }}" class="text-dark">
-                                            <strong>{{ $assignment->assignment->title ?? 'N/A' }}</strong>
-                                        </a>
-                                        <br><small class="text-muted">
-                                            <i class="fas fa-book"></i> {{ $assignment->assignment->subject->code ?? '' }}
-                                            | <i class="fas fa-calendar"></i> Due: {{ date('d/m/Y', strtotime($assignment->assignment->end_date)) }}
-                                        </small>
-                                    </div>
-                                </div>
-                                @if($assignment->attendance == 1)
-                                <span class="custom-badge bg-success text-white">Submitted</span>
-                                @else
-                                <span class="custom-badge bg-warning text-white">Pending</span>
-                                @endif
-                            </div>
-                        </div>
-                        @endif
-                        @endforeach
-                        <div class="text-center mt-3">
-                            <a href="{{ route('student.assignment.index') }}" class="btn btn-outline-primary btn-sm">
-                                View All Assignments <i class="fas fa-arrow-right ml-2"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                <!-- Recent Exam Results -->
-                @if(isset($latestMarks) && count($latestMarks) > 0)
-                <div class="card dashboard-card mb-4 fade-in-left delay-3">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-chart-bar"></i>
-                            <h5>Recent Exam Results</h5>
-                        </div>
-                        @foreach($latestMarks as $mark)
-                        <div class="list-item">
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <strong>{{ $mark->subject->title ?? 'N/A' }}</strong>
-                                <span class="custom-badge {{ $mark->total_marks >= 50 ? 'bg-success' : 'bg-danger' }} text-white">
-                                    {{ number_format($mark->total_marks, 2) }}%
-                                </span>
-                            </div>
-                            <div class="custom-progress">
-                                <div class="custom-progress-bar {{ $mark->total_marks >= 50 ? 'bg-success' : 'bg-danger' }}" 
-                                     style="width: {{ $mark->total_marks }}%"></div>
-                            </div>
-                        </div>
-                        @endforeach
-                        <div class="text-center mt-3">
-                            <a href="{{ route('student.exam-results.index') }}" class="btn btn-outline-primary btn-sm">
-                                View All Results <i class="fas fa-arrow-right ml-2"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
             </div>
+        </section>
 
-            <!-- Right Column -->
-            <div class="col-xl-4">
-                
-                <!-- Academic Performance Summary -->
-                @if(isset($graduationEligibility))
-                <div class="card dashboard-card mb-4 fade-in-right">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-graduation-cap"></i>
-                            <h5>Graduation Status</h5>
-                        </div>
-                        <div class="text-center py-3">
-                            @if($graduationEligibility['is_eligible'])
-                            <i class="fas fa-check-circle text-success" style="font-size: 48px;"></i>
-                            <h6 class="mt-3 text-success">Eligible for Graduation!</h6>
-                            @else
-                            <i class="fas fa-hourglass-half text-warning" style="font-size: 48px;"></i>
-                            <h6 class="mt-3 text-warning">Not Yet Eligible</h6>
-                            @endif
-                        </div>
-                        <hr>
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Compulsory Courses</span>
-                                <strong>{{ $graduationEligibility['compulsory']['passed_subjects'] }}/{{ $graduationEligibility['compulsory']['total_subjects'] }}</strong>
-                            </div>
-                            <div class="custom-progress">
-                                @php
-                                    $compPer = $graduationEligibility['compulsory']['total_subjects'] > 0 
-                                        ? ($graduationEligibility['compulsory']['passed_subjects'] / $graduationEligibility['compulsory']['total_subjects']) * 100 
-                                        : 0;
-                                @endphp
-                                <div class="custom-progress-bar bg-primary" style="width: {{ $compPer }}%"></div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>University Requirements</span>
-                                <strong>{{ $graduationEligibility['university_requirement']['passed_subjects'] }}/{{ $graduationEligibility['university_requirement']['total_subjects'] }}</strong>
-                            </div>
-                            <div class="custom-progress">
-                                @php
-                                    $uniPer = $graduationEligibility['university_requirement']['total_subjects'] > 0 
-                                        ? ($graduationEligibility['university_requirement']['passed_subjects'] / $graduationEligibility['university_requirement']['total_subjects']) * 100 
-                                        : 0;
-                                @endphp
-                                <div class="custom-progress-bar bg-info" style="width: {{ $uniPer }}%"></div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Total Credits</span>
-                                <strong>{{ $graduationEligibility['completed_credits'] }}/{{ $graduationEligibility['total_credits'] }}</strong>
-                            </div>
-                            <div class="custom-progress">
-                                @php
-                                    $creditPer = $graduationEligibility['total_credits'] > 0 
-                                        ? ($graduationEligibility['completed_credits'] / $graduationEligibility['total_credits']) * 100 
-                                        : 0;
-                                @endphp
-                                <div class="custom-progress-bar bg-success" style="width: {{ $creditPer }}%"></div>
-                            </div>
-                        </div>
-                        @if(!$graduationEligibility['is_eligible'] && isset($graduationEligibility['reasons']))
-                        <div class="alert alert-warning mb-0" style="font-size: 0.9rem;">
-                            <strong>Requirements:</strong>
-                            <ul class="mb-0 pl-3 mt-2">
-                                @foreach($graduationEligibility['reasons'] as $reason)
-                                <li>{{ $reason }}</li>
+        {{-- ══ Figures ══ --}}
+        <section class="et-section" aria-labelledby="et-figures-title">
+            <div class="et-section-head">
+                <h2 class="et-section-title" id="et-figures-title">{{ __('Your studies at a glance') }}</h2>
+            </div>
+            <div class="et-figures">
+                <a class="et-figure" href="{{ route('student.transcript.index') }}">
+                    <p class="et-figure-label"><i class="fas fa-chart-line" aria-hidden="true"></i> {{ __('Grade point average') }}</p>
+                    <p class="et-figure-value">{{ number_format($cgpa ?? 0, 2) }} <small>/ 4.00</small></p>
+                    <div class="et-meter" aria-hidden="true"><span class="accent" style="width: {{ min(100, round(($cgpa ?? 0) / 4 * 100)) }}%"></span></div>
+                    <p class="et-figure-sub"><b>{{ $totalCredits ?? 0 }}</b> {{ __('credits earned') }}</p>
+                </a>
+                <a class="et-figure" href="{{ route('student.exam-results.index') }}">
+                    <p class="et-figure-label"><i class="fas fa-book-reader" aria-hidden="true"></i> {{ __('Courses passed') }}</p>
+                    <p class="et-figure-value">{{ $passedCourses ?? 0 }} <small>{{ __('of :n', ['n' => $totalCourses ?? 0]) }}</small></p>
+                    <div class="et-meter" role="img" aria-label="{{ __(':p% of courses taken have been passed', ['p' => $passShare]) }}"><span class="good" style="width: {{ $passShare }}%"></span>@if(($failedCourses ?? 0) > 0)<span class="bad" style="width: {{ 100 - $passShare }}%"></span>@endif</div>
+                    <p class="et-figure-sub">
+                        @if(($failedCourses ?? 0) > 0)<b>{{ $failedCourses }}</b> {{ __('still to pass') }}@else{{ __('Every course taken is passed.') }}@endif
+                    </p>
+                </a>
+                <a class="et-figure" href="{{ route('student.attendance.index') }}">
+                    <p class="et-figure-label"><i class="fas fa-clipboard-check" aria-hidden="true"></i> {{ __('Attendance this semester') }}</p>
+                    @if($attended)
+                        <p class="et-figure-value">{{ $attendShare }}% <small>{{ __('present') }}</small></p>
+                        <div class="et-meter" aria-hidden="true"><span class="{{ $attendShare >= 75 ? 'good' : 'bad' }}" style="width: {{ $attendShare }}%"></span></div>
+                        <p class="et-figure-sub"><b>{{ $presentAttendance }}</b> {{ __('of :n classes', ['n' => $totalAttendance]) }}</p>
+                    @else
+                        <p class="et-figure-value">— <small>{{ __('no register yet') }}</small></p>
+                        <p class="et-figure-sub">{{ __('Shown once your lecturers take attendance.') }}</p>
+                    @endif
+                </a>
+                <a class="et-figure" href="{{ route('student.fees.index') }}">
+                    <p class="et-figure-label"><i class="fas fa-money-bill-wave" aria-hidden="true"></i> {{ __('Fees') }}</p>
+                    <p class="et-figure-value">{{ format_amount($dueFees ?? 0) }} <small>{{ __('to pay') }}</small></p>
+                    <div class="et-meter" role="img" aria-label="{{ __(':p% of your fees are paid', ['p' => $paidShare]) }}"><span class="good" style="width: {{ $paidShare }}%"></span></div>
+                    <p class="et-figure-sub"><b>{{ $paidShare }}%</b> {{ __('paid') }} · {{ $money($paidFees ?? 0) }}</p>
+                </a>
+            </div>
+        </section>
+
+        {{-- ══ Results and progress ══ --}}
+        <section class="et-section" aria-label="{{ __('Results and progress') }}">
+            <div class="et-row">
+                <div class="et-panel et-wide">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title">{{ __('Latest results') }}</h2>
+                        <a class="et-panel-link" href="{{ route('student.exam-results.index') }}">{{ __('All results') }} →</a>
+                    </div>
+                    <div class="et-panel-body">
+                        @if(isset($latestMarks) && $latestMarks->count())
+                            <ul class="et-bars">
+                                @foreach($latestMarks as $mark)
+                                <li>
+                                    <span class="et-bar-name">@if($mark->subject->code ?? false)<span class="et-code">{{ $mark->subject->code }}</span>@endif{{ $mark->subject->title ?? '' }}</span>
+                                    <span class="et-bar-count">{{ rtrim(rtrim(number_format($mark->total_marks, 2), '0'), '.') }}<small style="font-weight:600;color:var(--et-muted)">/100</small></span>
+                                    <span class="et-bar-track"><span class="et-bar-fill {{ $mark->total_marks >= 50 ? 'good' : 'bad' }}" style="width: {{ min(100, max(0, $mark->total_marks)) }}%"></span></span>
+                                </li>
                                 @endforeach
                             </ul>
-                        </div>
-                        @endif
-                    </div>
-                </div>
-                @endif
-
-                <!-- Upcoming Exams -->
-                @if(isset($upcomingExams) && count($upcomingExams) > 0)
-                <div class="card dashboard-card mb-4 fade-in-right delay-1">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-file-alt"></i>
-                            <h5>Upcoming Exams</h5>
-                        </div>
-                        @foreach($upcomingExams as $exam)
-                        <div class="timeline-item">
-                            <div class="timeline-icon"></div>
-                            <div class="list-item mb-0">
-                                <strong>{{ $exam->subject->title ?? 'N/A' }}</strong>
-                                <br><small class="text-muted">
-                                    <i class="fas fa-calendar"></i> {{ date('d/m/Y', strtotime($exam->exam_date)) }}
-                                    <br><i class="fas fa-clock"></i> {{ date('h:i A', strtotime($exam->start_time)) }}
-                                    @if($exam->room)
-                                    <br><i class="fas fa-door-open"></i> {{ $exam->room }}
-                                    @endif
-                                </small>
-                            </div>
-                        </div>
-                        @endforeach
-                        <div class="text-center mt-3">
-                            <a href="{{ route('student.exam-routine.index') }}" class="btn btn-outline-primary btn-sm">
-                                View Full Schedule <i class="fas fa-arrow-right ml-2"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                <!-- Latest Notices -->
-                @if(isset($latestNotices) && count($latestNotices) > 0)
-                <div class="card dashboard-card mb-4 fade-in-right delay-2">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-bullhorn"></i>
-                            <h5>Latest Notices</h5>
-                        </div>
-                        @foreach($latestNotices->take(3) as $notice)
-                        <div class="list-item">
-                            <a href="{{ route('student.notice.index') }}" class="text-dark">
-                                <strong>{{ Str::limit($notice->title, 50) }}</strong>
-                            </a>
-                            <br><small class="text-muted">
-                                <i class="fas fa-calendar"></i> {{ date('d/m/Y', strtotime($notice->created_at)) }}
-                            </small>
-                        </div>
-                        @endforeach
-                        <div class="text-center mt-3">
-                            <a href="{{ route('student.notice.index') }}" class="btn btn-outline-primary btn-sm">
-                                View All Notices <i class="fas fa-arrow-right ml-2"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                <!-- Payment Reminders -->
-                @if($dueFees > 0)
-                <div class="card dashboard-card mb-4 fade-in-right delay-3" style="border-left: 4px solid #f5576c;">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <h5>Payment Reminder</h5>
-                        </div>
-                        <div class="alert alert-warning mb-3">
-                            <strong>Outstanding Balance:</strong> {{ format_amount($dueFees) }} XAF
-                        </div>
-                        @if(isset($upcomingPayments) && count($upcomingPayments) > 0)
-                        <p class="mb-2"><strong>Pending Payments:</strong></p>
-                        @foreach($upcomingPayments as $payment)
-                        <div class="list-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>{{ $payment->description ?? 'Payment Plan' }}</span>
-                                <span class="custom-badge bg-warning text-white">Pending</span>
-                            </div>
-                        </div>
-                        @endforeach
-                        @endif
-                        <div class="text-center mt-3">
-                            <a href="{{ route('student.fees.index') }}" class="btn btn-warning btn-sm">
-                                <i class="fas fa-credit-card mr-2"></i> Make Payment
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                <!-- E-Library Quick Access -->
-                @if(isset($recentEBooks) && count($recentEBooks) > 0)
-                <div class="card dashboard-card mb-4 fade-in-right delay-4">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-book-reader"></i>
-                            <h5>E-Library</h5>
-                        </div>
-                        <div class="row">
-                            @foreach($recentEBooks as $book)
-                            <div class="col-6 mb-3">
-                                <a href="{{ route('student.e-library.show', $book->id) }}" class="text-decoration-none">
-                                    <div class="hover-scale" style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                                        @if($book->cover_image)
-                                        <img src="{{ asset('uploads/e-library/'.$book->cover_image) }}" alt="{{ $book->title }}" style="width: 100%; height: 150px; object-fit: cover;">
-                                        @else
-                                        <div style="width: 100%; height: 150px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: #fff;">
-                                            <i class="fas fa-book" style="font-size: 48px;"></i>
-                                        </div>
-                                        @endif
-                                        <div class="p-2 bg-light">
-                                            <small class="text-dark"><strong>{{ Str::limit($book->title, 20) }}</strong></small>
-                                        </div>
-                                    </div>
-                                </a>
-                            </div>
-                            @endforeach
-                        </div>
-                        <div class="text-center mt-2">
-                            <a href="{{ route('student.e-library.index') }}" class="btn btn-outline-primary btn-sm">
-                                Browse Library <i class="fas fa-arrow-right ml-2"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                <!-- Upcoming Events -->
-                <div class="card dashboard-card mb-4 fade-in-right delay-5">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-calendar-star"></i>
-                            <h5>Upcoming Events</h5>
-                        </div>
-                        @if(isset($latest_events) && count($latest_events) > 0)
-                            @foreach($latest_events->take(3) as $event)
-                            <div class="list-item">
-                                <div class="d-flex align-items-start">
-                                    <div style="width: 50px; height: 50px; background: {{ $event->color }}20; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-right: 15px; border: 2px solid {{ $event->color }};">
-                                        <i class="fas fa-calendar-check" style="color: {{ $event->color }}; font-size: 20px;"></i>
-                                    </div>
-                                    <div>
-                                        <strong>{{ $event->title }}</strong>
-                                        <br><small class="text-muted">
-                                            {{ date('M d', strtotime($event->start_date)) }} 
-                                            @if($event->start_date != $event->end_date)
-                                            - {{ date('d/m/Y', strtotime($event->end_date)) }}
-                                            @else
-                                            , {{ date('Y', strtotime($event->start_date)) }}
-                                            @endif
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                            @endforeach
                         @else
-                        <div class="empty-state">
-                            <i class="fas fa-calendar"></i>
-                            <p>No upcoming events</p>
-                        </div>
+                            <div class="et-empty" style="padding:0"><i class="fas fa-hourglass-half" aria-hidden="true" style="color: var(--et-faint)"></i> {{ __('No results published yet this semester.') }}</div>
                         @endif
                     </div>
                 </div>
 
-            </div>
-        </div>
-
-        <!-- Calendar Section -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card dashboard-card fade-in-up">
-                    <div class="card-body">
-                        <div class="section-header">
-                            <i class="fas fa-calendar-alt"></i>
-                            <h5>Academic Calendar</h5>
+                @if(isset($graduationEligibility))
+                @php $g = $graduationEligibility; $pct = fn ($a, $b) => $b > 0 ? min(100, round($a / $b * 100)) : 0; @endphp
+                <div class="et-panel">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title">{{ __('Towards graduation') }}</h2>
+                        <a class="et-panel-link" href="{{ route('student.transcript.index') }}">{{ __('Transcript') }} →</a>
+                    </div>
+                    <div class="et-panel-body">
+                        <p class="et-verdict {{ $g['is_eligible'] ? 'good' : 'warn' }}">
+                            <i class="fas {{ $g['is_eligible'] ? 'fa-check-circle' : 'fa-hourglass-half' }}" aria-hidden="true"></i>
+                            {{ $g['is_eligible'] ? __('You meet the requirements to graduate.') : __('Not yet eligible to graduate.') }}
+                        </p>
+                        @foreach([
+                            [__('Compulsory courses'), $g['compulsory']['passed_subjects'], $g['compulsory']['total_subjects']],
+                            [__('University requirements'), $g['university_requirement']['passed_subjects'], $g['university_requirement']['total_subjects']],
+                            [__('Credits'), $g['completed_credits'], $g['total_credits']],
+                        ] as [$label, $have, $need])
+                        <div class="et-progress-row">
+                            <div class="et-progress-head"><span>{{ $label }}</span><b>{{ $have }} / {{ $need }}</b></div>
+                            <div class="et-bar-track" style="margin-top:6px"><span class="et-bar-fill" style="width: {{ $pct($have, $need) }}%"></span></div>
                         </div>
-                        <div id='calendar' class='calendar'></div>
+                        @endforeach
+                        @if(!$g['is_eligible'] && !empty($g['reasons']))
+                        <ul class="et-reasons">@foreach($g['reasons'] as $reason)<li>{{ $reason }}</li>@endforeach</ul>
+                        @endif
                     </div>
                 </div>
+                @endif
             </div>
-        </div>
+        </section>
 
-        <!-- [ Main Content ] end -->
+        {{-- ══ Notices and assignments ══ --}}
+        @if((isset($latestNotices) && $latestNotices->count()) || (isset($assignments) && $assignments->count()))
+        <section class="et-section" aria-label="{{ __('Notices and assignments') }}">
+            <div class="et-row">
+                @if(isset($latestNotices) && $latestNotices->count())
+                <div class="et-panel">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title">{{ __('Notices') }}</h2>
+                        <a class="et-panel-link" href="{{ route('student.notice.index') }}">{{ __('All notices') }} →</a>
+                    </div>
+                    <ul class="et-daybook">
+                        @foreach($latestNotices->take(4) as $notice)
+                        <li><a href="{{ route('student.notice.index') }}">
+                            <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                            <span class="et-day-label">{{ \Illuminate\Support\Str::limit($notice->title, 70) }}</span>
+                            <span class="et-todo-note">{{ \Carbon\Carbon::parse($notice->date ?? $notice->created_at)->translatedFormat('j M') }}</span>
+                        </a></li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
+
+                @if(isset($assignments) && $assignments->count())
+                <div class="et-panel">
+                    <div class="et-panel-head">
+                        <h2 class="et-panel-title">{{ __('Assignments') }}</h2>
+                        <a class="et-panel-link" href="{{ route('student.assignment.index') }}">{{ __('All assignments') }} →</a>
+                    </div>
+                    <ul class="et-daybook">
+                        @foreach($assignments as $a)
+                            @continue(!$a->assignment || $a->assignment->status != 1)
+                            <li><a href="{{ route('student.assignment.show', $a->id) }}">
+                                <i class="fas {{ $a->attendance == 1 ? 'fa-check-circle' : 'fa-clock' }}" aria-hidden="true" style="color: {{ $a->attendance == 1 ? 'var(--et-good)' : 'var(--et-warn)' }}"></i>
+                                <span class="et-day-label">{{ \Illuminate\Support\Str::limit($a->assignment->title, 60) }}<br><span class="et-todo-note">{{ $a->assignment->subject->code ?? '' }} · {{ __('due :d', ['d' => \Carbon\Carbon::parse($a->assignment->end_date)->translatedFormat('D j M')]) }}</span></span>
+                                <span class="et-pill {{ $a->attendance == 1 ? 'good' : 'warn' }}">{{ $a->attendance == 1 ? __('Submitted') : __('To do') }}</span>
+                            </a></li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
+            </div>
+        </section>
+        @endif
+
+        {{-- ══ Course overview ══ --}}
+        @if(isset($courseBreakdown) && count($courseBreakdown))
+        <section class="et-section" aria-labelledby="et-courses-title">
+            <div class="et-section-head">
+                <h2 class="et-section-title" id="et-courses-title">{{ __('Your courses, semester by semester') }}</h2>
+                <span class="et-section-note">{{ __('Open a semester to see each course, its grade and attempts.') }}</span>
+            </div>
+            <div class="et-panel">
+                @foreach($courseBreakdown as $sem)
+                    @php
+                        $passedHere = collect($sem['courses'])->filter(fn ($c) => $c['validated'] && ($c['marks']['passed'] ?? false))->count();
+                    @endphp
+                    <details class="et-semester" @if($loop->last) open @endif>
+                        <summary>
+                            {{ $sem['semester']->title }}@if($sem['is_resit']) · {{ __('Resit') }}@endif
+                            <span>{{ optional($sem['session'])->title }} · {{ trans_choice('{1} one course|[2,*] :n courses', count($sem['courses']), ['n' => count($sem['courses'])]) }} · {{ __(':n passed', ['n' => $passedHere]) }}</span>
+                        </summary>
+                        <div class="et-table-wrap">
+                            <table class="et-table">
+                                <thead><tr><th>{{ __('Code') }}</th><th>{{ __('Course') }}</th><th class="num">{{ __('Credits') }}</th><th>{{ __('Type') }}</th><th>{{ __('Result') }}</th><th class="num">{{ __('Mark') }}</th><th class="num">{{ __('Attempt') }}</th></tr></thead>
+                                <tbody>
+                                    @foreach($sem['courses'] as $course)
+                                    @php $type = $typeMap[$course['type']] ?? [__('Other'), 'muted']; @endphp
+                                    <tr>
+                                        <td><span class="et-code">{{ $course['code'] }}</span></td>
+                                        <td>{{ $course['name'] }}</td>
+                                        <td class="num">{{ $course['credits'] }}</td>
+                                        <td><span class="et-pill {{ $type[1] }}">{{ $type[0] }}</span></td>
+                                        <td>
+                                            @if($course['validated'])
+                                                @if($course['marks']['passed'] ?? false)<span class="et-pill good">{{ __('Passed') }}</span>@else<span class="et-pill bad">{{ __('Failed') }}</span>@endif
+                                            @else
+                                                <span class="et-pill muted">{{ __('Pending') }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="num">@if($course['validated'] && $course['marks']){{ $course['marks']['grade'] ?? '' }} · {{ $course['marks']['marks'] }}@else — @endif</td>
+                                        <td class="num">{{ $course['attempts'] }}@if($course['resit_info']) <span class="et-pill warn">{{ __('Resit') }}</span>@endif</td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                @endforeach
+            </div>
+        </section>
+        @endif
+
+        {{-- ══ Everything in the portal ══ --}}
+        <section class="et-section" aria-labelledby="et-dir-title">
+            <div class="et-section-head">
+                <h2 class="et-section-title" id="et-dir-title">{{ __('Everything in your portal') }}</h2>
+            </div>
+            @php
+                $directory = [
+                    [__('Studies'), 'fa-book', [
+                        ['student.course-registration.index', __('Course registration')],
+                        ['student.class-routine.index', __('Class timetable')],
+                        ['student.exam-routine.index', __('Exam timetable')],
+                        ['student.exam-results.index', __('Exam results')],
+                        ['student.transcript.index', __('Transcript')],
+                        ['student.resit.index', __('Resits')],
+                    ]],
+                    [__('Learning'), 'fa-chalkboard', [
+                        ['student.class-hub.index', __('Class Hub')],
+                        ['student.assignment.index', __('Assignments')],
+                        ['student.download.index', __('Downloads')],
+                        ['student.e-library.index', __('E-Library')],
+                        ['student.library.index', __('Library')],
+                    ]],
+                    [__('Fees'), 'fa-money-bill-wave', [
+                        ['student.fees.index', __('Fees and receipts')],
+                        ['student.manual-payment.index', __('Upload a payment')],
+                        ['student.multi-payment.index', __('Pay several fees')],
+                        ['student.payment-plan.index', __('Payment plans')],
+                    ]],
+                    [__('Me'), 'fa-user', [
+                        ['student.mailbox.index', __('Messages')],
+                        ['student.notice.index', __('Notices')],
+                        ['student.attendance.index', __('Attendance')],
+                        ['student.leave.index', __('Leave')],
+                        ['student.form-a2.index', __('Form A2')],
+                        ['student.profile.index', __('My profile')],
+                    ]],
+                ];
+            @endphp
+            <div class="et-directory">
+                @foreach($directory as [$groupTitle, $icon, $links])
+                <div class="et-dir-group">
+                    <h3 class="et-dir-title"><i class="fas {{ $icon }}" aria-hidden="true"></i> {{ $groupTitle }}</h3>
+                    <ul class="et-dir-links">
+                        @foreach($links as [$name, $label])
+                            @if(\Illuminate\Support\Facades\Route::has($name))
+                            <li><a href="{{ route($name) }}">{{ $label }}</a></li>
+                            @endif
+                        @endforeach
+                    </ul>
+                </div>
+                @endforeach
+            </div>
+        </section>
+
+    </div>
     </div>
 </div>
-<!-- End Content-->
-
-@endsection
-
-@section('page_js')
-<!-- Full calendar js -->
-<script src="{{ asset('dashboard/plugins/fullcalendar/js/lib/moment.min.js') }}"></script>
-<script src="{{ asset('dashboard/plugins/fullcalendar/js/lib/jquery-ui.min.js') }}"></script>
-<script src="{{ asset('dashboard/plugins/fullcalendar/js/fullcalendar.min.js') }}"></script>
-
-<script type="text/javascript">
-    // Full calendar
-    $(window).on('load', function() {
-        "use strict";
-        $('#calendar').fullCalendar({
-            header: {
-                left: 'prev,next',
-                center: 'title',
-                right: 'today'
-            },
-            defaultDate: '@php echo date("Y-m-d"); @endphp',
-            editable: false,
-            droppable: false,
-            events: [
-                @php
-                    foreach($events as $key => $row){
-                        echo "{
-                                title: '".$row->title."',
-                                start: '".$row->start_date."',
-                                end: '".$row->end_date."',
-                                borderColor: '".$row->color."',
-                                backgroundColor: '".$row->color."',
-                                textColor: '#fff'
-                            }, ";
-                    }
-                @endphp
-            ],
-        });
-    });
-
-    // Animate progress bars on load
-    $(document).ready(function() {
-        $('.custom-progress-bar').each(function() {
-            const width = $(this).attr('style').match(/width:\s*(\d+(\.\d+)?%)/);
-            if (width) {
-                $(this).css('width', '0%');
-                setTimeout(() => {
-                    $(this).css('width', width[1]);
-                }, 300);
-            }
-        });
-
-        // Add fade-in animation to elements as they come into view
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }
-            });
-        }, observerOptions);
-
-        // Observe all animated elements
-        document.querySelectorAll('.fade-in-up, .fade-in-left, .fade-in-right').forEach(el => {
-            el.style.opacity = '0';
-            observer.observe(el);
-        });
-
-        // Course breakdown expand/collapse functionality
-        setTimeout(function() {
-            var $toggleBtn = $('#toggleCourseBreakdown');
-            var $collapseDiv = $('#courseBreakdownCollapse');
-            
-            console.log('Toggle button found:', $toggleBtn.length);
-            console.log('Collapse div found:', $collapseDiv.length);
-            console.log('Bootstrap collapse is available');
-            
-            // Manual click handler to trigger collapse
-            $toggleBtn.on('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Button clicked!');
-                $collapseDiv.collapse('toggle');
-            });
-            
-            // Listen for collapse events
-            $collapseDiv.on('show.bs.collapse', function () {
-                console.log('Collapse showing');
-                $toggleBtn.html('<i class="fas fa-chevron-up"></i> Collapse');
-            });
-
-            $collapseDiv.on('hide.bs.collapse', function () {
-                console.log('Collapse hiding');
-                $toggleBtn.html('<i class="fas fa-chevron-down"></i> Expand');
-            });
-            
-            $collapseDiv.on('shown.bs.collapse', function () {
-                console.log('Collapse shown (animation complete)');
-            });
-        }, 100);
-    });
-</script>
 @endsection

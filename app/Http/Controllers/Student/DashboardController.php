@@ -363,17 +363,28 @@ class DashboardController extends Controller
 
 
         // ========== CLASS ROUTINE ==========
+        // The timetable numbers days 1 = Saturday … 7 = Friday; this used to ask
+        // for day = 'monday', which never matched, so the dashboard never showed
+        // a class. Same rows and same breaks as the student's timetable page.
+        $data['todayClasses'] = collect();
+        $data['todayAgenda'] = collect();
+        $data['nowNext'] = ['current' => null, 'next' => null, 'done' => false];
         if(isset($enroll)){
-            $today = Carbon::now()->format('l');
-            $data['todayClasses'] = ClassRoutine::where('semester_id', $enroll->semester_id)
+            $todayNumber = ClassRoutineController::todayNumber();
+            $weekRows = ClassRoutine::where('status', '1')
+                ->where('session_id', $enroll->session_id)
+                ->where('program_id', $enroll->program_id)
+                ->where('semester_id', $enroll->semester_id)
                 ->where('section_id', $enroll->section_id)
-                ->where('day', strtolower($today))
-                ->where('status', '1')
+                ->with(['subject', 'room', 'teacher'])
                 ->orderBy('start_time', 'asc')
-                ->limit(5)
                 ->get();
-        } else {
-            $data['todayClasses'] = collect();
+            $data['todayClasses'] = $weekRows->where('day', (string) $todayNumber)->sortBy('start_time')->values();
+            $breaks = \App\Models\TimetableBreak::forClasses($weekRows);
+            $data['todayAgenda'] = $data['todayClasses']->concat($data['todayClasses']->count() ? ($breaks[$todayNumber] ?? []) : [])
+                ->sortBy(fn ($r) => (string) $r->start_time)->values();
+            $data['nowNext'] = ClassRoutineController::nowAndNext($weekRows, $todayNumber);
+            $data['weekClassCount'] = $weekRows->count();
         }
 
 
@@ -460,7 +471,10 @@ class DashboardController extends Controller
         // ========== EXAM ROUTINE ==========
         if(isset($enroll)){
             $data['upcomingExams'] = ExamRoutine::where('semester_id', $enroll->semester_id)
-                ->where('section_id', $enroll->section_id)
+                ->where('session_id', $enroll->session_id)
+                ->where('program_id', $enroll->program_id)
+                ->where(fn ($q) => $q->where('section_id', $enroll->section_id)->orWhereNull('section_id'))
+                ->with('subject')
                 ->where('date', '>=', Carbon::today())
                 ->where('status', '1')
                 ->orderBy('date', 'asc')

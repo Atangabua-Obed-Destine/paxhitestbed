@@ -51,7 +51,7 @@ class SelectEnrollmentMiddleware
         // so creation order no longer decides it. Checked against the live data
         // when it was introduced: for all 86 matricule groups it picks the same
         // enrollment this line used to.
-        $enrollments = EnrolmentOrder::furthestPerMatricule($allEnrollments);
+        $enrollments = EnrolmentOrder::switchable($allEnrollments);
 
         // If student has no active enrollments, continue (edge case)
         if ($enrollments->isEmpty()) {
@@ -68,6 +68,14 @@ class SelectEnrollmentMiddleware
         $selectedEnrollmentId = session('selected_enrollment_id');
 
         // If no enrollment selected OR selected enrollment doesn't belong to this student's active enrollments
+        // The selection must also sit on a programme the student may still use;
+        // an old session pointing at a programme they have left is dropped.
+        $selected = $allEnrollments->firstWhere('id', $selectedEnrollmentId);
+        if ($selected && !$enrollments->contains(fn ($e) => $e->matricule === $selected->matricule)) {
+            session()->forget('selected_enrollment_id');
+            $selectedEnrollmentId = null;
+        }
+
         if (!$selectedEnrollmentId || !$allEnrollments->contains('id', $selectedEnrollmentId)) {
             
             // Skip enrollment selection for these routes

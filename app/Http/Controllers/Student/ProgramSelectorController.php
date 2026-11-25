@@ -32,7 +32,7 @@ class ProgramSelectorController extends Controller
         // Shared with SelectEnrollmentMiddleware, which has the full reasoning —
         // in short, `sortByDesc('id')` picked the most recently created row,
         // which a back-dated resit enrollment makes the wrong answer.
-        $enrollments = EnrolmentOrder::furthestPerMatricule($allEnrollments);
+        $enrollments = EnrolmentOrder::switchable($allEnrollments);
 
         // If only one unique enrollment, auto-select and redirect to dashboard
         if ($enrollments->count() === 1) {
@@ -66,11 +66,23 @@ class ProgramSelectorController extends Controller
         $student = Auth::guard('student')->user();
         $enrollmentId = $request->enrollment_id;
 
-        // Verify the enrollment belongs to this student (allow both active and inactive)
+        // Verify the enrollment belongs to this student, on a programme they are
+        // still active on and that is itself active (EnrolmentOrder::switchable).
         $enrollment = StudentEnroll::where('id', $enrollmentId)
                                    ->where('student_id', $student->id)
                                    ->with(['program.degreeType', 'program.faculty'])
                                    ->first();
+
+        if ($enrollment && !EnrolmentOrder::canSwitchTo($enrollment, StudentEnroll::where('student_id', $student->id)->with('program')->get())) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('That programme is no longer active for you.'),
+                ], 403);
+            }
+            Flasher::addError(__('That programme is no longer active for you.'), __('Error'));
+            return redirect()->back();
+        }
 
         if (!$enrollment) {
             if ($request->ajax() || $request->wantsJson()) {
