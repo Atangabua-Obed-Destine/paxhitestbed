@@ -52,3 +52,20 @@ Run the same command with `--apply` added. It is safe to run again: classes alre
 - **Two clashes kept as written:**
   - Mr. Ashu teaches Year 1 and Year 2 Agro-Pastoral Practicals on Thursday 3–5.
   - Dr. Aseh teaches CPT Roots & Tuber and AGPT Cereal/Roots on Tuesday 1–3.
+
+## Breaks and printing
+
+**Breaks** (Routine > Timetable Breaks) are blocks of the week that are not classes, such as the midday Break (Holy Mass) or Friday's Club Activities.
+
+- Give each break a name, a time and its days. Leave every day unticked to make it apply to all days.
+- A break shows on every class timetable, on printouts and on each student's week, but only on days when that class has lessons.
+
+**Print Timetables** (Routine > Print Timetables) prints the timetables the way the Word ones are laid out:
+
+- **one sheet per specialty:** programmes that share the same week are printed together;
+- **days down the side** and time slots across the top;
+- **the midday break** as one column running down every day.
+
+Choose the session and semester, and optionally one programme, then press **Print**. Each sheet prints on its own landscape page.
+
+Students have a **Print my timetable** button on their timetable page. It prints their own specialty's sheet.
