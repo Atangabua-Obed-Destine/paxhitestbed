@@ -1124,6 +1124,23 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
 
 
     // Communicate Routes
+    // Mailbox: conversations between staff and students (every member of staff has one).
+    Route::get('mailbox', 'MailboxController@index')->name('mailbox.index');
+    Route::get('mailbox/compose', 'MailboxController@create')->name('mailbox.create');
+    Route::post('mailbox', 'MailboxController@store')->name('mailbox.store');
+    Route::get('mailbox/search', 'MailboxController@search')->name('mailbox.search');
+    Route::get('mailbox/audience', 'MailboxController@audience')->name('mailbox.audience');
+    Route::get('mailbox/group/{broadcast}', 'MailboxController@broadcast')->whereNumber('broadcast')->name('mailbox.broadcast');
+    Route::get('mailbox/attachment/{attachment}', 'MailboxController@attachment')->whereNumber('attachment')->name('mailbox.attachment');
+    Route::get('mailbox/offices', 'MailboxOfficeController@index')->name('mailbox.offices');
+    Route::post('mailbox/offices', 'MailboxOfficeController@store')->name('mailbox.offices.store');
+    Route::put('mailbox/offices/{office}', 'MailboxOfficeController@update')->whereNumber('office')->name('mailbox.offices.update');
+    Route::delete('mailbox/offices/{office}', 'MailboxOfficeController@destroy')->whereNumber('office')->name('mailbox.offices.destroy');
+    Route::get('mailbox/{thread}', 'MailboxController@show')->whereNumber('thread')->name('mailbox.show');
+    Route::post('mailbox/{thread}/reply', 'MailboxController@reply')->whereNumber('thread')->name('mailbox.reply');
+    Route::post('mailbox/{thread}/archive', 'MailboxController@archive')->whereNumber('thread')->name('mailbox.archive');
+    Route::delete('mailbox/{thread}', 'MailboxController@destroy')->whereNumber('thread')->name('mailbox.destroy');
+
     Route::resource('communicate/email-notify', 'EmailNotifyController');
     Route::resource('communicate/sms-notify', 'SMSNotifyController');
     Route::resource('communicate/event', 'EventController');
@@ -1512,6 +1529,16 @@ Route::middleware(['auth:student', 'XSS'])->prefix('student')->name('student.')-
     Route::get('select-program', 'ProgramSelectorController@showSelectProgram')->name('select-program');
     Route::post('switch-program', 'ProgramSelectorController@switchProgram')->name('switch-program');
     Route::get('current-enrollment', 'ProgramSelectorController@getCurrentEnrollment')->name('current-enrollment');
+
+    // Mailbox (EXCLUDED from the fee middlewares: a student must always be able to reach the bursary)
+    Route::get('mailbox', 'MailboxController@index')->name('mailbox.index');
+    Route::get('mailbox/compose', 'MailboxController@create')->name('mailbox.create');
+    Route::post('mailbox', 'MailboxController@store')->name('mailbox.store');
+    Route::get('mailbox/attachment/{attachment}', 'MailboxController@attachment')->whereNumber('attachment')->name('mailbox.attachment');
+    Route::get('mailbox/{thread}', 'MailboxController@show')->whereNumber('thread')->name('mailbox.show');
+    Route::post('mailbox/{thread}/reply', 'MailboxController@reply')->whereNumber('thread')->name('mailbox.reply');
+    Route::post('mailbox/{thread}/archive', 'MailboxController@archive')->whereNumber('thread')->name('mailbox.archive');
+    Route::delete('mailbox/{thread}', 'MailboxController@destroy')->whereNumber('thread')->name('mailbox.destroy');
 
     // Leave Impersonation Route (EXCLUDED from middlewares so admins can always exit)
     Route::get('leave-impersonation', 'DashboardController@leaveImpersonation')->name('leave-impersonation');

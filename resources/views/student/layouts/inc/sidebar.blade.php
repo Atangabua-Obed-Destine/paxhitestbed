@@ -228,6 +228,13 @@
             </ul>
         </li>
 
+        <li class="nav-item {{ Request::is('student/mailbox*') ? 'active' : '' }}">
+            <a href="{{ route('student.mailbox.index') }}" class="nav-link">
+                <span class="pcoded-micon"><i class="fas fa-envelope"></i></span>
+                <span class="pcoded-mtext">{{ __('Messages') }}</span>
+            </a>
+        </li>
+
         @if(panel('panel_notice')->status == 1)
         <li class="nav-item {{ Request::is('student/notice*') ? 'active' : '' }}">
             <a href="{{ route('student.notice.index') }}" class="nav-link">

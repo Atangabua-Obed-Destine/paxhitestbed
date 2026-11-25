@@ -161,6 +161,18 @@
                 </ul>
             </li>
 
+            {{-- Mailbox --}}
+            @php $mailbox_unread = app(\App\Services\Mailbox\Mailbox::class)->unreadCount(['staff', (int) Auth::guard('web')->id()]); @endphp
+            <li class="header-mailbox">
+                <a href="{{ route('admin.mailbox.index') }}" title="{{ __('Mailbox') }}" aria-label="{{ __('Mailbox') }}{{ $mailbox_unread ? ' — ' . $mailbox_unread . ' ' . __('unread') : '' }}">
+                    <i class="icon feather icon-mail">
+                    @if($mailbox_unread > 0)
+                    <span class="badge bg-danger rounded-pill notification-badge">{{ $mailbox_unread }}</span>
+                    @endif
+                    </i>
+                </a>
+            </li>
+
             {{-- Notifications --}}
             <li class="header-notif dropdown">
                 @php

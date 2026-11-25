@@ -400,6 +400,17 @@
                     </a>
                 </li>
 
+                <!-- Mailbox -->
+                @php $mailbox_unread = app(\App\Services\Mailbox\Mailbox::class)->unreadCount(['student', (int) Auth::guard('student')->id()]); @endphp
+                <li>
+                    <a href="{{ route('student.mailbox.index') }}" title="{{ __('Messages') }}" aria-label="{{ __('Messages') }}{{ $mailbox_unread ? ' — ' . $mailbox_unread . ' ' . __('unread') : '' }}" class="position-relative">
+                        <i class="icon feather icon-mail"></i>
+                        @if($mailbox_unread > 0)
+                        <span class="badge bg-danger rounded-pill" style="position:absolute;top:-6px;right:-10px;font-size:10px;">{{ $mailbox_unread }}</span>
+                        @endif
+                    </a>
+                </li>
+
                 <!-- Notification -->
                 <li>
                     <div class="dropdown">

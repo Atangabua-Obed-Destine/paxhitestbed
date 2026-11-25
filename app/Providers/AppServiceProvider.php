@@ -33,7 +33,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        // One per request: the mailbox loads each person's name once, and
+        // the alerts it raises are collected in one place.
+        $this->app->scoped(\App\Services\Mailbox\Members::class);
+        $this->app->scoped(\App\Services\Mailbox\Alerts::class);
     }
 
     /**

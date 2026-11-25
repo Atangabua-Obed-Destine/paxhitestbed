@@ -1147,6 +1147,23 @@
         </li>
         @endcanany
 
+        {{-- Mailbox: every member of staff has one --}}
+        <li class="nav-item pcoded-hasmenu {{ Request::is('admin/mailbox*') ? 'pcoded-trigger active' : '' }}">
+            <a href="#!" class="nav-link">
+                <span class="pcoded-micon"><i class="fas fa-envelope"></i></span>
+                <span class="pcoded-mtext">{{ __('Mailbox') }}</span>
+            </a>
+            <ul class="pcoded-submenu">
+                <li class="{{ Request::is('admin/mailbox') && !request('folder') ? 'active' : '' }}"><a href="{{ route('admin.mailbox.index') }}" class="">{{ __('Inbox') }}</a></li>
+                <li class="{{ Request::is('admin/mailbox/compose') ? 'active' : '' }}"><a href="{{ route('admin.mailbox.create') }}" class="">{{ __('New message') }}</a></li>
+                <li class="{{ request('folder') === 'sent' ? 'active' : '' }}"><a href="{{ route('admin.mailbox.index', ['folder' => 'sent']) }}" class="">{{ __('Sent') }}</a></li>
+                <li class="{{ request('folder') === 'groups' ? 'active' : '' }}"><a href="{{ route('admin.mailbox.index', ['folder' => 'groups']) }}" class="">{{ __('Group messages') }}</a></li>
+                @can('mailbox-office')
+                <li class="{{ Request::is('admin/mailbox/offices*') ? 'active' : '' }}"><a href="{{ route('admin.mailbox.offices') }}" class="">{{ __('Mailbox offices') }}</a></li>
+                @endcan
+            </ul>
+        </li>
+
         @canany(['email-notify-create', 'email-notify-view', 'sms-notify-create', 'sms-notify-view', 'event-create', 'event-view', 'event-calendar', 'notice-create', 'notice-view', 'notice-category-create', 'notice-category-view'])
         <li class="nav-item pcoded-hasmenu {{ Request::is('admin/communicate*') ? 'pcoded-trigger active' : '' }}">
             <a href="#!" class="nav-link">
