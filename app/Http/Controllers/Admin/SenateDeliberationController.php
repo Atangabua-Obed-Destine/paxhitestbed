@@ -30,6 +30,7 @@ use App\Models\SubjectMarking;
 use App\Exports\SenateResultsPreviewExport;
 use App\Services\ResultContributionService;
 use App\Services\StaffAssignmentService;
+use App\Traits\ChoosesSemesters;
 use App\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -39,6 +40,8 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class SenateDeliberationController extends Controller
 {
+    use ChoosesSemesters;
+
     protected $title, $route, $view, $path, $access;
 
     public function __construct()
@@ -77,11 +80,14 @@ class SenateDeliberationController extends Controller
 
         // Filters
         $data['selected_session']  = $session  = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
 
         // Sessions & semesters (all active, no staff assignment filter — senate sees everything)
         $data['sessions']  = Session::where('status', 1)->orderBy('id', 'desc')->get();
         $data['semesters'] = Semester::where('status', 1)->where('is_resit', 0)->orderBy('id', 'asc')->get();
+
+        // A semester type and any number of its semesters (resits excluded here).
+        $choice = $this->chooseSemesters($request, $data['semesters']);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         // If no session selected, try to default to current session
         if ($session === '0') {
@@ -91,12 +97,36 @@ class SenateDeliberationController extends Controller
             }
         }
 
-        // ── Build dashboard data when both filters are set ──────────────────
-        if ($session !== '0' && $semester !== '0') {
-            $data = array_merge($data, $this->buildDashboardData((int)$session, (int)$semester));
+        // ── Build dashboard data, one block per chosen semester ─────────────
+        // Figures stay per semester; with one semester the page is as before.
+        $blocks = [];
+        if ($session !== '0') {
+            foreach ($choice['semesters'] as $sem) {
+                $blocks[] = ['semester' => $sem] + $this->buildDashboardData((int) $session, (int) $sem->id);
+            }
         }
+        [$data['semester_blocks'], $data['skipped_semesters']] = $this->keepBlocksWithData($blocks,
+            fn ($b) => $b['total_students'] > 0 || $b['standings_computed'] || $b['publishing']['total'] > 0 || $b['deliberation']);
 
         return view($this->view . '.index', $data);
+    }
+
+    /**
+     * With several semesters chosen, drop the ones with nothing to show and
+     * name them; a single chosen semester always shows, as it always did.
+     *
+     * @return array{0: array, 1: Collection}
+     */
+    private function keepBlocksWithData(array $blocks, callable $hasData): array
+    {
+        if (count($blocks) <= 1) {
+            return [$blocks, collect()];
+        }
+
+        return [
+            array_values(array_filter($blocks, $hasData)),
+            collect($blocks)->reject($hasData)->pluck('semester')->values(),
+        ];
     }
 
     /**
@@ -405,13 +435,16 @@ class SenateDeliberationController extends Controller
         ];
 
         $data['selected_session']  = $session  = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
         $data['selected_faculty']  = $faculty  = $request->faculty ?? '0';
         $data['selected_program']  = $program  = $request->program ?? '0';
         $data['selected_standing'] = $standing = $request->standing ?? 'all';
 
         $data['sessions']  = Session::where('status', 1)->orderBy('id', 'desc')->get();
         $data['semesters'] = Semester::where('status', 1)->orderBy('is_resit', 'asc')->orderBy('id', 'asc')->get();
+
+        // A semester type and any number of its semesters: one block each.
+        $choice = $this->chooseSemesters($request, $data['semesters']);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
         $data['faculties'] = StaffAssignmentService::filterFaculties($facultyQuery)->get();
@@ -425,51 +458,70 @@ class SenateDeliberationController extends Controller
 
         $data['standing_options'] = AcademicStanding::standingLabels();
 
-        // ── Fetch standings ─────────────────────────────────────────────────
-        if ($session !== '0' && $semester !== '0') {
-            $query = AcademicStanding::where('session_id', $session)
-                ->where('semester_id', $semester)
-                ->with(['student', 'program.faculty', 'enrollment']);
-
-            if ($faculty !== '0') {
-                $query->where('faculty_id', $faculty);
+        // ── Fetch standings, one block per chosen semester ──────────────────
+        $blocks = [];
+        if ($session !== '0') {
+            $multi = count($choice['ids']) > 1;
+            foreach ($choice['semesters'] as $sem) {
+                // Several blocks page independently.
+                $pageName = $multi ? 'page_' . $sem->id : 'page';
+                $blocks[] = ['semester' => $sem, 'page_name' => $pageName]
+                    + $this->buildStandingsBlock($session, (string) $sem->id, $faculty, $program, $standing, $pageName);
             }
-            if ($program !== '0') {
-                $query->where('program_id', $program);
-            }
-            if ($standing !== 'all') {
-                $query->where('standing', $standing);
-            }
-
-            $data['standings'] = $query->orderBy('gpa', 'desc')->paginate(50);
-
-            // ── Attach carry-over metrics (#CO and CO Cr.) to each standing ──
-            // Definition for this report: courses the student has FAILED
-            // (published marks < 50) anywhere in their (student, program)
-            // history — including the current enrollment — that they have
-            // not since passed and that are not in an active resit workflow.
-            $this->attachCarryOverMetrics(collect($data['standings']->items()));
-
-            // Summary counts
-            $countQuery = AcademicStanding::where('session_id', $session)
-                ->where('semester_id', $semester);
-            if ($faculty !== '0') $countQuery->where('faculty_id', $faculty);
-            if ($program !== '0') $countQuery->where('program_id', $program);
-
-            $data['standing_counts'] = $countQuery
-                ->select('standing', DB::raw('COUNT(*) as count'))
-                ->groupBy('standing')
-                ->pluck('count', 'standing')
-                ->toArray();
-
-            $data['standings_exist'] = true;
-        } else {
-            $data['standings'] = null;
-            $data['standing_counts'] = [];
-            $data['standings_exist'] = false;
         }
+        [$data['semester_blocks'], $data['skipped_semesters']] = $this->keepBlocksWithData($blocks,
+            fn ($b) => !empty($b['standing_counts']));
+        $data['standings_exist'] = count($data['semester_blocks']) > 0;
 
         return view($this->view . '.academic-standings', $data);
+    }
+
+    /**
+     * One semester of the academic standings screen (what the screen showed
+     * for a single semester): the page of standings and the summary counts.
+     */
+    private function buildStandingsBlock(string $session, string $semester, string $faculty, string $program, string $standing, string $pageName = 'page'): array
+    {
+        $data = [];
+
+        $query = AcademicStanding::where('session_id', $session)
+            ->where('semester_id', $semester)
+            ->with(['student', 'program.faculty', 'enrollment']);
+
+        if ($faculty !== '0') {
+            $query->where('faculty_id', $faculty);
+        }
+        if ($program !== '0') {
+            $query->where('program_id', $program);
+        }
+        if ($standing !== 'all') {
+            $query->where('standing', $standing);
+        }
+
+        $data['standings'] = $query->orderBy('gpa', 'desc')->paginate(50, ['*'], $pageName);
+
+        // ── Attach carry-over metrics (#CO and CO Cr.) to each standing ──
+        // Definition for this report: courses the student has FAILED
+        // (published marks < 50) anywhere in their (student, program)
+        // history — including the current enrollment — that they have
+        // not since passed and that are not in an active resit workflow.
+        $this->attachCarryOverMetrics(collect($data['standings']->items()));
+
+        // Summary counts
+        $countQuery = AcademicStanding::where('session_id', $session)
+            ->where('semester_id', $semester);
+        if ($faculty !== '0') $countQuery->where('faculty_id', $faculty);
+        if ($program !== '0') $countQuery->where('program_id', $program);
+
+        $data['standing_counts'] = $countQuery
+            ->select('standing', DB::raw('COUNT(*) as count'))
+            ->groupBy('standing')
+            ->pluck('count', 'standing')
+            ->toArray();
+
+        $data['standings_exist'] = true;
+
+        return $data;
     }
 
     /* =========================================================================
@@ -713,10 +765,13 @@ class SenateDeliberationController extends Controller
         ];
 
         $data['selected_session']  = $session  = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
 
         $data['sessions']  = Session::where('status', 1)->orderBy('id', 'desc')->get();
         $data['semesters'] = Semester::where('status', 1)->where('is_resit', 0)->orderBy('id', 'asc')->get();
+
+        // Optional: a semester type and any number of its semesters.
+        $choice = $this->chooseSemesters($request, $data['semesters']);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         $query = SenateDeliberation::with(['session', 'semester', 'creator', 'programs', 'signatures'])
             ->orderBy('created_at', 'desc');
@@ -724,8 +779,8 @@ class SenateDeliberationController extends Controller
         if ($session !== '0') {
             $query->where('session_id', $session);
         }
-        if ($semester !== '0') {
-            $query->where('semester_id', $semester);
+        if (!empty($choice['ids'])) {
+            $query->whereIn('semester_id', $choice['ids']);
         }
 
         $data['deliberations'] = $query->paginate(15);
@@ -1027,13 +1082,16 @@ class SenateDeliberationController extends Controller
 
         // Filters
         $data['selected_session']  = $session  = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
         $data['selected_faculty']  = $selFaculty = $request->faculty ?? '0';
 
         $data['sessions']  = Session::where('status', 1)->orderBy('id', 'desc')->get();
         $data['semesters'] = Semester::where('status', 1)->orderBy('is_resit', 'asc')->orderBy('id', 'asc')->get();
         $data['faculties'] = Faculty::where('status', '1')->orderBy('title', 'asc')->get();
         $data['grades']    = Grade::where('status', '1')->orderBy('min_mark', 'desc')->get();
+
+        // A semester type and any number of its semesters: one preview each.
+        $choice = $this->chooseSemesters($request, $data['semesters']);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         // Default to current session
         if ($session === '0') {
@@ -1043,86 +1101,101 @@ class SenateDeliberationController extends Controller
             }
         }
 
-        // Build data when both session + semester set
-        if ($session !== '0' && $semester !== '0') {
-            $sessionId  = (int) $session;
-            $semesterId = (int) $semester;
-            $facultyId  = $selFaculty !== '0' ? (int) $selFaculty : null;
-
-            // ── 1. Institution KPIs ─────────────────────────────────────────
-            $data['kpis'] = $this->buildResultsKPIs($sessionId, $semesterId, $facultyId);
-
-            // ── 2. Faculty Performance Summary ──────────────────────────────
-            $data['faculty_summaries'] = $this->buildFacultySummaries($sessionId, $semesterId, $facultyId);
-
-            // ── 3. Department + Course Results (grouped by faculty) ─────────
-            $data['faculty_course_data'] = $this->buildCourseResultsByFaculty($sessionId, $semesterId, $facultyId);
-
-            // ── 4. Lecturer Performance Index ───────────────────────────────
-            $data['lecturer_performance'] = $this->buildLecturerPerformance($sessionId, $semesterId, $facultyId);
-
-            // ── 5. Publishing Readiness Summary ─────────────────────────────
-            $data['publishing_summary_ca'] = $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 0);
-            $data['publishing_summary_final'] = $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 1);
-
-            // ── 6. Academic Standing Distribution (if computed) ─────────────
-            $data['standings_computed'] = AcademicStanding::where('session_id', $sessionId)
-                ->where('semester_id', $semesterId)
-                ->exists();
-
-            if ($data['standings_computed']) {
-                $stQuery = AcademicStanding::where('session_id', $sessionId)
-                    ->where('semester_id', $semesterId);
-                if ($facultyId) $stQuery->where('faculty_id', $facultyId);
-
-                $data['standing_distribution'] = $stQuery
-                    ->select('standing', DB::raw('COUNT(*) as count'))
-                    ->groupBy('standing')
-                    ->pluck('count', 'standing')
-                    ->toArray();
-            } else {
-                $data['standing_distribution'] = [];
+        // Build data per chosen semester (figures never merged across semesters)
+        $blocks = [];
+        if ($session !== '0') {
+            $facultyId = $selFaculty !== '0' ? (int) $selFaculty : null;
+            foreach ($choice['semesters'] as $sem) {
+                $blocks[] = ['semester' => $sem]
+                    + $this->buildResultsPreviewBlock((int) $session, (int) $sem->id, $facultyId, $data['grades']);
             }
-
-            // ── 7. Top/Bottom performing courses ────────────────────────────
-            $data['top_courses']    = $this->getPerformingCourses($sessionId, $semesterId, $facultyId, 'best', 10);
-            $data['bottom_courses'] = $this->getPerformingCourses($sessionId, $semesterId, $facultyId, 'worst', 10);
-
-            // ── 8. Programs list for student matrix loading ─────────────────
-            $progQuery = Program::where('status', '1')
-                ->whereHas('studentEnrolls', function ($q) use ($sessionId, $semesterId) {
-                    $q->where('session_id', $sessionId)
-                      ->where('semester_id', $semesterId)
-                                            ->whereIn('status', [1, 2]);
-                })
-                ->with(['faculty', 'academicDepartment', 'degreeType']);
-
-            if ($facultyId) {
-                $progQuery->where('faculty_id', $facultyId);
-            }
-
-            $data['programs_list'] = $progQuery->orderBy('faculty_id')->orderBy('title')->get();
-
-            // ── 9. Build full student result matrices grouped by faculty ────
-            $data['faculty_student_matrices'] = $this->buildStudentMatrixByFaculty(
-                $sessionId, $semesterId, $facultyId, $data['grades']
-            );
-
-            // ── 10. Build student performance summary for screenshot table ──
-            $data['student_performance_summaries'] = $this->buildStudentPerformanceSummaries(
-                $data['faculty_student_matrices'],
-                $data['faculty_summaries']
-            );
-
-            // Context labels
-            $data['session_label']  = Session::find($sessionId)->title ?? '';
-            $data['semester_label'] = Semester::find($semesterId)->title ?? '';
-            $data['institution_name'] = config('app.name', 'Institution');
         }
+        [$data['semester_blocks'], $data['skipped_semesters']] = $this->keepBlocksWithData($blocks,
+            fn ($b) => $b['kpis']['total_scripts'] > 0 || $b['programs_list']->isNotEmpty() || $b['standings_computed']);
 
         $data['standingLabels'] = AcademicStanding::standingLabels();
 
         return view($this->view . '.results-preview', $data);
+    }
+
+    /**
+     * Everything the results preview shows for one session + semester.
+     */
+    private function buildResultsPreviewBlock(int $sessionId, int $semesterId, ?int $facultyId, $grades): array
+    {
+        $data = ['grades' => $grades];
+
+        // ── 1. Institution KPIs ─────────────────────────────────────────
+        $data['kpis'] = $this->buildResultsKPIs($sessionId, $semesterId, $facultyId);
+
+        // ── 2. Faculty Performance Summary ──────────────────────────────
+        $data['faculty_summaries'] = $this->buildFacultySummaries($sessionId, $semesterId, $facultyId);
+
+        // ── 3. Department + Course Results (grouped by faculty) ─────────
+        $data['faculty_course_data'] = $this->buildCourseResultsByFaculty($sessionId, $semesterId, $facultyId);
+
+        // ── 4. Lecturer Performance Index ───────────────────────────────
+        $data['lecturer_performance'] = $this->buildLecturerPerformance($sessionId, $semesterId, $facultyId);
+
+        // ── 5. Publishing Readiness Summary ─────────────────────────────
+        $data['publishing_summary_ca'] = $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 0);
+        $data['publishing_summary_final'] = $this->buildPublishingSummary($sessionId, $semesterId, $facultyId, 1);
+
+        // ── 6. Academic Standing Distribution (if computed) ─────────────
+        $data['standings_computed'] = AcademicStanding::where('session_id', $sessionId)
+            ->where('semester_id', $semesterId)
+            ->exists();
+
+        if ($data['standings_computed']) {
+            $stQuery = AcademicStanding::where('session_id', $sessionId)
+                ->where('semester_id', $semesterId);
+            if ($facultyId) $stQuery->where('faculty_id', $facultyId);
+
+            $data['standing_distribution'] = $stQuery
+                ->select('standing', DB::raw('COUNT(*) as count'))
+                ->groupBy('standing')
+                ->pluck('count', 'standing')
+                ->toArray();
+        } else {
+            $data['standing_distribution'] = [];
+        }
+
+        // ── 7. Top/Bottom performing courses ────────────────────────────
+        $data['top_courses']    = $this->getPerformingCourses($sessionId, $semesterId, $facultyId, 'best', 10);
+        $data['bottom_courses'] = $this->getPerformingCourses($sessionId, $semesterId, $facultyId, 'worst', 10);
+
+        // ── 8. Programs list for student matrix loading ─────────────────
+        $progQuery = Program::where('status', '1')
+            ->whereHas('studentEnrolls', function ($q) use ($sessionId, $semesterId) {
+                $q->where('session_id', $sessionId)
+                  ->where('semester_id', $semesterId)
+                                        ->whereIn('status', [1, 2]);
+            })
+            ->with(['faculty', 'academicDepartment', 'degreeType']);
+
+        if ($facultyId) {
+            $progQuery->where('faculty_id', $facultyId);
+        }
+
+        $data['programs_list'] = $progQuery->orderBy('faculty_id')->orderBy('title')->get();
+
+        // ── 9. Build full student result matrices grouped by faculty ────
+        $data['faculty_student_matrices'] = $this->buildStudentMatrixByFaculty(
+            $sessionId, $semesterId, $facultyId, $data['grades']
+        );
+
+        // ── 10. Build student performance summary for screenshot table ──
+        $data['student_performance_summaries'] = $this->buildStudentPerformanceSummaries(
+            $data['faculty_student_matrices'],
+            $data['faculty_summaries']
+        );
+
+        // Context labels
+        $data['session_label']  = Session::find($sessionId)->title ?? '';
+        $data['semester_label'] = Semester::find($semesterId)->title ?? '';
+        $data['institution_name'] = config('app.name', 'Institution');
+
+        return $data;
     }
 
     /**
@@ -2989,15 +3062,47 @@ class SenateDeliberationController extends Controller
 
     public function exportResultsPreview(Request $request)
     {
+        // semester: one id (as before) or semester[]; or just a semester_type.
         $request->validate([
             'session'  => 'required|exists:sessions,id',
-            'semester' => 'required|exists:semesters,id',
+            'semester' => 'required_without:semester_type|exists:semesters,id',
         ]);
 
         $sessionId  = (int) $request->session;
-        $semesterId = (int) $request->semester;
         $facultyId  = ($request->faculty && $request->faculty !== '0') ? (int) $request->faculty : null;
 
+        $choice = $this->chooseSemesters($request, Semester::where('status', 1)->get());
+        if (empty($choice['ids'])) {
+            return redirect()->back()->with('error', __('Select a semester to export.'));
+        }
+
+        // One semester: the workbook it always was.
+        if (count($choice['ids']) === 1) {
+            return $this->exportResultsPreviewForSemester($sessionId, $choice['ids'][0], $facultyId);
+        }
+
+        // Several: each semester's own sheets, prefixed by year ("Y1 Overview").
+        $years = $choice['semesters']->pluck('year');
+        $byYear = $years->filter()->unique()->count() === $choice['semesters']->count();
+        $books = [];
+        foreach ($choice['semesters'] as $sem) {
+            $one = $this->exportResultsPreviewForSemester($sessionId, (int) $sem->id, $facultyId, true);
+            $one['sheet_prefix'] = $byYear ? 'Y' . $sem->year . ' ' : 'S' . $sem->id . ' ';
+            $books[] = $one;
+        }
+
+        $sessionSlug = str_replace(['/', ' ', '\\'], '_', $books[0]['session_label']);
+        $typeSlug = str_replace(['/', ' ', '\\'], '_', $choice['type'] !== '0' ? ucwords(strtolower($choice['type'])) : 'Several_Semesters');
+
+        return Excel::download(new \App\Exports\SenateResultsPreviewMultiExport($books), "Senate_Results_Preview_{$sessionSlug}_{$typeSlug}.xlsx");
+    }
+
+    /**
+     * The results preview export for one semester: the download, or with
+     * $dataOnly the workbook's data array for a several-semester book.
+     */
+    private function exportResultsPreviewForSemester(int $sessionId, int $semesterId, ?int $facultyId, bool $dataOnly = false)
+    {
         $grades = Grade::where('status', '1')->orderBy('min_mark', 'desc')->get();
 
         // Build all data sections (same as resultsPreview)
@@ -3066,6 +3171,10 @@ class SenateDeliberationController extends Controller
             ]);
         }
 
+        if ($dataOnly) {
+            return $exportData;
+        }
+
         return Excel::download(new SenateResultsPreviewExport($exportData), $filename);
     }
 
@@ -3075,17 +3184,60 @@ class SenateDeliberationController extends Controller
 
     public function exportExcel(Request $request)
     {
+        // semester: one id (as before) or semester[]; or just a semester_type.
         $request->validate([
             'session'  => 'required|exists:sessions,id',
-            'semester' => 'required|exists:semesters,id',
+            'semester' => 'required_without:semester_type|exists:semesters,id',
         ]);
 
         $sessionId  = (int) $request->session;
-        $semesterId = (int) $request->semester;
         $facultyId  = $request->faculty !== null && $request->faculty !== '0' ? (int) $request->faculty : null;
         $programId  = $request->program !== null && $request->program !== '0' ? (int) $request->program : null;
         $standingFilter = $request->standing ?: 'all';
 
+        $choice = $this->chooseSemesters($request);
+        if (empty($choice['ids'])) {
+            return redirect()->back()->with('error', 'No standings data to export. Please classify standings first.');
+        }
+
+        // One semester: the workbook it always was.
+        if (count($choice['ids']) === 1) {
+            return $this->exportStandingsForSemester($sessionId, $choice['ids'][0], $facultyId, $programId, $standingFilter);
+        }
+
+        // Several: one sheet per semester (each the single-semester sheet),
+        // semesters without standings left out.
+        $sheets = [];
+        foreach ($choice['semesters'] as $sem) {
+            $one = $this->exportStandingsForSemester($sessionId, (int) $sem->id, $facultyId, $programId, $standingFilter, true);
+            if (is_array($one)) {
+                $one['sheet_title'] = mb_substr(trim(preg_replace('/[\\[\\]\\*\\/\\\\\\?\\:]/', '', $sem->title)), 0, 31);
+                $sheets[] = $one;
+            }
+        }
+
+        if (empty($sheets)) {
+            return redirect()->back()->with('error', 'No standings data to export. Please classify standings first.');
+        }
+
+        $session = Session::find($sessionId);
+        $label = $choice['type'] !== '0' ? ucwords(strtolower($choice['type'])) : 'Several_Semesters';
+        $filename = 'Academic_Standings_' . ($session->title ?? '') . '_' . $label;
+        if ($facultyId) $filename .= '_' . $sheets[0]['faculty_label'];
+        if ($programId) $filename .= '_' . $sheets[0]['program_label'];
+        if ($standingFilter !== 'all') $filename .= '_' . $sheets[0]['standing_label'];
+        $filename = str_replace(['/', ' ', '\\'], '_', $filename) . '.xlsx';
+
+        return Excel::download(new \App\Exports\AcademicStandingsMultiExport($sheets), $filename);
+    }
+
+    /**
+     * The academic standings export for one semester. Returns the download
+     * (or the "nothing to export" redirect); with $dataOnly, the sheet's data
+     * array (or null when there are no standings) for a several-semester book.
+     */
+    private function exportStandingsForSemester(int $sessionId, int $semesterId, ?int $facultyId, ?int $programId, string $standingFilter, bool $dataOnly = false)
+    {
         $session  = Session::find($sessionId);
         $semester = Semester::find($semesterId);
 
@@ -3104,7 +3256,7 @@ class SenateDeliberationController extends Controller
             ->get();
 
         if ($standings->isEmpty()) {
-            return redirect()->back()->with('error', 'No standings data to export. Please classify standings first.');
+            return $dataOnly ? null : redirect()->back()->with('error', 'No standings data to export. Please classify standings first.');
         }
 
         $this->attachCarryOverMetrics($standings);
@@ -3171,6 +3323,10 @@ class SenateDeliberationController extends Controller
                 'description'  => 'Academic standings exported as Excel',
                 'performed_by' => Auth::id(),
             ]);
+        }
+
+        if ($dataOnly) {
+            return $exportData;
         }
 
         return Excel::download(new \App\Exports\AcademicStandingsExport($exportData), $filename);

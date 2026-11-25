@@ -24,7 +24,7 @@ class ReferenceSheet implements FromArray, WithTitle, WithStyles, WithEvents
 
     public function title(): string
     {
-        return 'Reference & Legend';
+        return \App\Exports\SenateResultsPreviewExport::titled($this->data, 'Reference & Legend');
     }
 
     public function array(): array

@@ -26,7 +26,7 @@ class LecturerPerformanceSheet implements FromArray, WithTitle, WithStyles, With
 
     public function title(): string
     {
-        return 'Lecturer Performance';
+        return \App\Exports\SenateResultsPreviewExport::titled($this->data, 'Lecturer Performance');
     }
 
     public function array(): array

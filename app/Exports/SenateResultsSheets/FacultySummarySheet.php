@@ -24,7 +24,7 @@ class FacultySummarySheet implements FromArray, WithTitle, WithStyles, WithEvent
 
     public function title(): string
     {
-        return 'Faculty Summary';
+        return \App\Exports\SenateResultsPreviewExport::titled($this->data, 'Faculty Summary');
     }
 
     public function array(): array

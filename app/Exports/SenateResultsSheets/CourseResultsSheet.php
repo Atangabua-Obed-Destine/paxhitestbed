@@ -28,7 +28,7 @@ class CourseResultsSheet implements FromArray, WithTitle, WithStyles, WithEvents
 
     public function title(): string
     {
-        return 'Course Results';
+        return \App\Exports\SenateResultsPreviewExport::titled($this->data, 'Course Results');
     }
 
     public function array(): array

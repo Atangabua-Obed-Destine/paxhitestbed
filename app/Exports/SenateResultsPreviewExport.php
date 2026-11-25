@@ -13,6 +13,17 @@ class SenateResultsPreviewExport implements WithMultipleSheets
         $this->data = $data;
     }
 
+    /**
+     * A sheet's title. When several semesters share one workbook each
+     * semester's sheets carry its prefix ("Y1 Overview", "Y2 Overview").
+     */
+    public static function titled(array $data, string $title): string
+    {
+        $prefix = (string) ($data['sheet_prefix'] ?? '');
+
+        return $prefix === '' ? $title : mb_substr($prefix . $title, 0, 31);
+    }
+
     public function sheets(): array
     {
         $sheets = [

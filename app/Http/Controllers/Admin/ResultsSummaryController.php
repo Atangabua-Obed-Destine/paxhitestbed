@@ -16,6 +16,7 @@ use App\Models\Subject;
 use App\Models\SubjectMarking;
 use App\Models\StudentEnroll;
 use App\Services\StaffAssignmentService;
+use App\Traits\ChoosesSemesters;
 use App\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +24,8 @@ use Illuminate\Support\Facades\DB;
 
 class ResultsSummaryController extends Controller
 {
+    use ChoosesSemesters;
+
     protected $title, $route, $view, $path, $access;
 
     /**
@@ -57,8 +60,10 @@ class ResultsSummaryController extends Controller
         $data['selected_faculty'] = $faculty = $request->faculty ?? '0';
         $data['selected_program'] = $program = $request->program ?? '0';
         $data['selected_session'] = $session = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
         $data['selected_department'] = $department = $request->department ?? '0';
+        // A semester type and any number of its semesters; one block each.
+        $choice = $this->chooseSemesters($request);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         // Get filter options
         $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
@@ -86,23 +91,24 @@ class ResultsSummaryController extends Controller
             $data['sessions'] = $sessions->orderBy('id', 'desc')->get();
         }
 
-        if ($program != '0') {
-            $semesters = Semester::where('status', 1);
-            $semesters->with('programs')->whereHas('programs', function ($query) use ($program) {
-                $query->where('program_id', $program);
-            });
-            $data['semesters'] = $semesters->orderBy('id', 'asc')->get();
+        // Calculate KPIs if filters are applied: once per chosen semester,
+        // each block exactly what the screen shows for that semester alone.
+        $blocks = [];
+        if ($faculty != '0' && $session != '0') {
+            foreach ($choice['semesters'] as $semesterModel) {
+                $semester = $semesterModel->id;
+                $blocks[] = [
+                    'semester' => $semesterModel,
+                    'kpis' => $this->calculateKPIs($faculty, $program, $session, $semester, $department),
+                    'faculty_summary' => $this->getFacultySummary($faculty, $session, $semester),
+                    'department_summaries' => $this->getDepartmentSummaries($faculty, $session, $semester, $department),
+                    'grade_distribution' => $this->getGradeDistribution($faculty, $program, $session, $semester, $department),
+                    'top_performing_courses' => $this->getTopPerformingCourses($faculty, $program, $session, $semester, $department, 'best'),
+                    'low_performing_courses' => $this->getTopPerformingCourses($faculty, $program, $session, $semester, $department, 'worst'),
+                ];
+            }
         }
-
-        // Calculate KPIs if filters are applied
-        if ($faculty != '0' && $session != '0' && $semester != '0') {
-            $data['kpis'] = $this->calculateKPIs($faculty, $program, $session, $semester, $department);
-            $data['faculty_summary'] = $this->getFacultySummary($faculty, $session, $semester);
-            $data['department_summaries'] = $this->getDepartmentSummaries($faculty, $session, $semester, $department);
-            $data['grade_distribution'] = $this->getGradeDistribution($faculty, $program, $session, $semester, $department);
-            $data['top_performing_courses'] = $this->getTopPerformingCourses($faculty, $program, $session, $semester, $department, 'best');
-            $data['low_performing_courses'] = $this->getTopPerformingCourses($faculty, $program, $session, $semester, $department, 'worst');
-        }
+        $data = array_merge($data, $this->semesterBlocks($blocks, fn ($b) => $b['kpis']['total_scripts'] > 0));
 
         return view($this->view . '.index', $data);
     }
@@ -125,7 +131,8 @@ class ResultsSummaryController extends Controller
         $data['selected_department'] = $department = $request->department ?? '0';
         $data['selected_program'] = $program = $request->program ?? '0';
         $data['selected_session'] = $session = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
+        $choice = $this->chooseSemesters($request);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         // Get filter options
         $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
@@ -153,20 +160,21 @@ class ResultsSummaryController extends Controller
             $data['sessions'] = $sessions->orderBy('id', 'desc')->get();
         }
 
-        if ($program != '0') {
-            $semesters = Semester::where('status', 1);
-            $semesters->with('programs')->whereHas('programs', function ($query) use ($program) {
-                $query->where('program_id', $program);
-            });
-            $data['semesters'] = $semesters->orderBy('id', 'asc')->get();
+        // Generate course-by-course report if all required filters are selected,
+        // once per chosen semester.
+        $blocks = [];
+        if ($faculty != '0' && $session != '0') {
+            foreach ($choice['semesters'] as $semesterModel) {
+                $semester = $semesterModel->id;
+                $blocks[] = [
+                    'semester' => $semesterModel,
+                    'course_results' => $this->getCourseResults($faculty, $department, $program, $session, $semester),
+                    'report_meta' => $this->getReportMetadata($faculty, $department, $program, $session, $semester),
+                    'lecturers' => $this->getCourseLecturers($faculty, $department, $program, $session, $semester),
+                ];
+            }
         }
-
-        // Generate course-by-course report if all required filters are selected
-        if ($faculty != '0' && $session != '0' && $semester != '0') {
-            $data['course_results'] = $this->getCourseResults($faculty, $department, $program, $session, $semester);
-            $data['report_meta'] = $this->getReportMetadata($faculty, $department, $program, $session, $semester);
-            $data['lecturers'] = $this->getCourseLecturers($faculty, $department, $program, $session, $semester);
-        }
+        $data = array_merge($data, $this->semesterBlocks($blocks, fn ($b) => count($b['course_results']) > 0));
 
         return view($this->view . '.department-report', $data);
     }
@@ -187,24 +195,62 @@ class ResultsSummaryController extends Controller
         // Initialize selected values
         $data['selected_faculty'] = $faculty = $request->faculty ?? '0';
         $data['selected_session'] = $session = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
         $data['selected_degree_type'] = $degreeType = $request->degree_type ?? '0';
+        $choice = $this->chooseSemesters($request);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         // Get filter options
         $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
         $data['faculties'] = StaffAssignmentService::filterFaculties($facultyQuery)->get();
         $data['sessions'] = Session::where('status', 1)->orderBy('id', 'desc')->get();
-        $data['semesters'] = Semester::where('status', 1)->orderBy('id', 'asc')->get();
         $data['degree_types'] = \App\Models\DegreeType::where('status', '1')->orderBy('title', 'asc')->get();
 
-        // Generate faculty summary if filters are selected
-        if ($faculty != '0' && $session != '0' && $semester != '0') {
-            $data['department_summaries'] = $this->getDepartmentSummariesForFaculty($faculty, $session, $semester, $degreeType);
-            $data['faculty_totals'] = $this->getFacultyTotals($faculty, $session, $semester, $degreeType);
-            $data['report_meta'] = $this->getFacultyReportMetadata($faculty, $session, $semester, $degreeType);
+        // Generate faculty summary if filters are selected, once per chosen semester
+        $blocks = [];
+        if ($faculty != '0' && $session != '0') {
+            foreach ($choice['semesters'] as $semesterModel) {
+                $semester = $semesterModel->id;
+                $blocks[] = [
+                    'semester' => $semesterModel,
+                    'department_summaries' => $this->getDepartmentSummariesForFaculty($faculty, $session, $semester, $degreeType),
+                    'faculty_totals' => $this->getFacultyTotals($faculty, $session, $semester, $degreeType),
+                    'report_meta' => $this->getFacultyReportMetadata($faculty, $session, $semester, $degreeType),
+                ];
+            }
         }
+        $data = array_merge($data, $this->semesterBlocks($blocks, fn ($b) => count($b['department_summaries']) > 0));
 
         return view($this->view . '.faculty-report', $data);
+    }
+
+    /**
+     * The per-semester blocks a screen shows. With several semesters chosen,
+     * one with nothing to show is left out and named instead. With exactly one
+     * block its figures are also handed to the view at the top level, so the
+     * page (and anything reading those variables) is what it always was.
+     */
+    private function semesterBlocks(array $blocks, callable $hasData): array
+    {
+        $skipped = collect();
+        if (count($blocks) > 1) {
+            $skipped = collect($blocks)->reject($hasData)->pluck('semester')->values();
+            $blocks = array_values(array_filter($blocks, $hasData));
+        }
+
+        $multi = count($blocks) > 1;
+        foreach ($blocks as &$block) {
+            // DOM ids: unchanged for one block, suffixed per semester for several
+            $block['bk'] = $multi ? '-s' . $block['semester']->id : '';
+            $block['show_heading'] = $multi;
+        }
+        unset($block);
+
+        $out = ['semester_blocks' => $blocks, 'skipped_semesters' => $skipped];
+        if (count($blocks) === 1) {
+            $out = array_merge($out, collect($blocks[0])->except(['semester', 'bk', 'show_heading'])->all());
+        }
+
+        return $out;
     }
 
     /**
@@ -1525,8 +1571,9 @@ class ResultsSummaryController extends Controller
         $data['selected_faculty'] = $faculty = $request->faculty ?? '0';
         $data['selected_program'] = $program = $request->program ?? '0';
         $data['selected_session'] = $session = $request->session ?? '0';
-        $data['selected_semester'] = $semester = $request->semester ?? '0';
         $data['selected_section'] = $section = $request->section ?? '0';
+        $choice = $this->chooseSemesters($request);
+        $data = array_merge($data, $this->semesterFilterData($choice));
 
         // Get filter options
         $facultyQuery = Faculty::where('status', '1')->orderBy('title', 'asc');
@@ -1547,28 +1594,28 @@ class ResultsSummaryController extends Controller
                 $query->where('program_id', $program);
             });
             $data['sessions'] = $sessions->orderBy('id', 'desc')->get();
-
-            $semesters = Semester::where('status', 1);
-            $semesters->with('programs')->whereHas('programs', function ($query) use ($program) {
-                $query->where('program_id', $program);
-            });
-            $data['semesters'] = $semesters->orderBy('id', 'asc')->get();
         }
 
-        if ($program != '0' && $semester != '0') {
+        if ($program != '0' && $choice['ids']) {
+            $semesterIds = $choice['ids'];
             $sections = Section::where('status', 1);
-            $sections->with('semesterPrograms')->whereHas('semesterPrograms', function ($query) use ($program, $semester) {
+            $sections->with('semesterPrograms')->whereHas('semesterPrograms', function ($query) use ($program, $semesterIds) {
                 $query->where('program_id', $program);
-                $query->where('semester_id', $semester);
+                $query->whereIn('semester_id', $semesterIds);
             });
             $data['sections'] = $sections->orderBy('title', 'asc')->get();
         }
 
-        // Generate student results summary if all required filters are selected
-        if ($faculty != '0' && $program != '0' && $session != '0' && $semester != '0') {
-            $summaryData = $this->generateStudentResultsSummary($faculty, $program, $session, $semester, $section);
-            $data = array_merge($data, $summaryData);
+        // Generate student results summary if all required filters are selected,
+        // once per chosen semester
+        $blocks = [];
+        if ($faculty != '0' && $program != '0' && $session != '0') {
+            foreach ($choice['semesters'] as $semesterModel) {
+                $blocks[] = ['semester' => $semesterModel]
+                    + $this->generateStudentResultsSummary($faculty, $program, $session, $semesterModel->id, $section);
+            }
         }
+        $data = array_merge($data, $this->semesterBlocks($blocks, fn ($b) => count($b['student_results']) > 0));
 
         return view($this->view . '.student-results-summary', $data);
     }
@@ -1927,19 +1974,60 @@ class ResultsSummaryController extends Controller
         $faculty = $request->faculty;
         $program = $request->program;
         $session = $request->session;
-        $semester = $request->semester;
         $section = $request->section ?? '0';
+        $choice = $this->chooseSemesters($request);
 
-        if (!$faculty || !$program || !$session || !$semester) {
+        if (!$faculty || !$program || !$session || !$choice['ids']) {
             return back()->with('error', 'Please select all required filters.');
         }
 
-        $summaryData = $this->generateStudentResultsSummary($faculty, $program, $session, $semester, $section);
-        
+        // One RESULTS sheet per chosen semester, each the sheet a
+        // single-semester export has always produced.
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('RESULTS');
+        $multi = count($choice['ids']) > 1;
+        $meta = null;
+        foreach ($choice['semesters'] as $i => $semesterModel) {
+            $summaryData = $this->generateStudentResultsSummary($faculty, $program, $session, $semesterModel->id, $section);
+            $sheet = $i === 0 ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
+            $sheet->setTitle($multi ? $this->sheetTitle($semesterModel->title, $spreadsheet) : 'RESULTS');
+            $this->fillStudentResultsSheet($sheet, $summaryData);
+            $meta = $meta ?? $summaryData['meta'];
+        }
+        $spreadsheet->setActiveSheetIndex(0);
 
+        // Create the file
+        $filename = 'Student_Results_Summary_' . str_replace(['/', ' '], '_', $meta['program_shortcode']) . '_' .
+                   str_replace(['/', ' '], '_', $meta['session_title']) .
+                   ($multi && $choice['type'] !== '0' ? '_' . str_replace(['/', ' '], '_', ucwords(strtolower($choice['type']))) : '') . '.xlsx';
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
+    }
+
+    /** A worksheet title from a semester title: at most 31 characters, unique in the book. */
+    private function sheetTitle(string $title, \PhpOffice\PhpSpreadsheet\Spreadsheet $book): string
+    {
+        $base = mb_substr(trim(str_replace(['\\', '/', '?', '*', ':', '[', ']'], ' ', $title)), 0, 31) ?: 'RESULTS';
+        $name = $base;
+        for ($n = 2; $book->sheetNameExists($name); $n++) {
+            $name = mb_substr($base, 0, 31 - strlen(" ($n)")) . " ($n)";
+        }
+
+        return $name;
+    }
+
+    /**
+     * Write one semester's Student Results Summary (the Excel RESULTS sheet
+     * format) onto a worksheet.
+     */
+    private function fillStudentResultsSheet(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, array $summaryData): void
+    {
         $meta = $summaryData['meta'];
         $subjects = $summaryData['subjects'];
         $studentResults = $summaryData['student_results'];
@@ -2434,18 +2522,5 @@ class ResultsSummaryController extends Controller
         $genRow = $osDataRow + 2;
         $sheet->setCellValue('A' . $genRow, 'Generated: ' . $meta['generated_at'] . ' by ' . $meta['generated_by']);
         $sheet->getStyle('A' . $genRow)->getFont()->setItalic(true)->setSize(9);
-
-        // Create the file
-        $filename = 'Student_Results_Summary_' . str_replace(['/', ' '], '_', $meta['program_shortcode']) . '_' . 
-                   str_replace(['/', ' '], '_', $meta['session_title']) . '.xlsx';
-        
-        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-        
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="' . $filename . '"');
-        header('Cache-Control: max-age=0');
-        
-        $writer->save('php://output');
-        exit;
     }
 }

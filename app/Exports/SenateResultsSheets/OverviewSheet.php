@@ -25,7 +25,7 @@ class OverviewSheet implements FromArray, WithTitle, WithStyles, WithEvents
 
     public function title(): string
     {
-        return 'Overview';
+        return \App\Exports\SenateResultsPreviewExport::titled($this->data, 'Overview');
     }
 
     public function array(): array

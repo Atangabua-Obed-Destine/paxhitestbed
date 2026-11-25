@@ -25,7 +25,7 @@ class TopBottomCoursesSheet implements FromArray, WithTitle, WithStyles, WithEve
 
     public function title(): string
     {
-        return 'Top & Bottom Courses';
+        return \App\Exports\SenateResultsPreviewExport::titled($this->data, 'Top & Bottom Courses');
     }
 
     public function array(): array

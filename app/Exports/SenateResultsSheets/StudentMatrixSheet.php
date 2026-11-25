@@ -34,7 +34,7 @@ class StudentMatrixSheet implements FromArray, WithTitle, WithStyles, WithEvents
     public function title(): string
     {
         $name = 'Students — ' . substr($this->facMatrix['shortcode'] ?? 'FAC', 0, 20);
-        return substr(preg_replace('/[\\[\\]\\*\\/\\\\\\?\\:]/', '', $name), 0, 31);
+        return \App\Exports\SenateResultsPreviewExport::titled($this->data, substr(preg_replace('/[\\[\\]\\*\\/\\\\\\?\\:]/', '', $name), 0, 31));
     }
 
     public function array(): array

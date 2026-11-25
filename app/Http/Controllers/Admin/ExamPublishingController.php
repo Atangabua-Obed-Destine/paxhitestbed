@@ -26,6 +26,7 @@ use App\Models\SubjectMarkingExamState;
 use App\Notifications\ExamPublishingNotification;
 use App\Services\ResultContributionService;
 use App\Services\StaffAssignmentService;
+use App\Traits\ChoosesSemesters;
 use Flasher\Laravel\Facade\Flasher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -35,6 +36,8 @@ use Illuminate\Support\Facades\Notification;
 
 class ExamPublishingController extends Controller
 {
+    use ChoosesSemesters;
+
     protected $title, $route, $view, $path, $access;
 
     /**
@@ -85,7 +88,8 @@ class ExamPublishingController extends Controller
         $data['selected_faculty'] = $faculty = $request->faculty ?? null;
         $data['selected_program'] = $program = $request->program ?? null;
         $data['selected_session'] = $session = $request->session ?? null;
-        $data['selected_semester'] = $semester = $request->semester ?? null;
+        // semester[] (multi mode, several semesters) reads as its first here.
+        $data['selected_semester'] = $semester = is_array($request->semester) ? (collect($request->semester)->first() ?: null) : ($request->semester ?? null);
         $data['selected_section'] = $section = $request->section ?? null;
         $data['selected_type'] = $type = $request->type ?? null;
         $data['multi_mode'] = $multiMode = (bool) ($request->multi ?? false);
@@ -145,38 +149,47 @@ class ExamPublishingController extends Controller
         // ==========================================
         // MULTI-PROGRAM MODE: Load ALL programs
         // ==========================================
-        if ($multiMode && !empty($session) && !empty($semester) && !empty($type)) {
-            $data['faculty_groups'] = $this->loadMultiProgramData(
-                (int) $session,
-                (int) $semester,
-                (int) $type
-            );
+        // A semester type and any number of its semesters: "First Semester"
+        // publishes Year 1 and Year 2 together. Each semester keeps its own
+        // Faculty -> Programme listing and figures.
+        $data['semester_blocks'] = [];
+        // The type controls are rendered in both modes (the switch flips them
+        // client-side); only multi mode reads them.
+        $choice = $this->chooseSemesters($request);
+        $filterData = $this->semesterFilterData($choice);
+        if (!$multiMode) {
+            unset($filterData['selected_semester']);
+        }
+        $data = array_merge($data, $filterData);
 
-            // Compute global stats for multi-mode
-            $globalStats = [
-                'total_programs' => 0,
-                'total_courses' => 0,
-                'total_students' => 0,
-                'draft' => 0,
-                'submitted' => 0,
-                'checked' => 0,
-                'approved' => 0,
-                'published' => 0,
-            ];
-            foreach ($data['faculty_groups'] as $fg) {
-                foreach ($fg['programs'] as $pg) {
-                    $globalStats['total_programs']++;
-                    $globalStats['total_courses'] += count($pg['subjects']);
-                    $globalStats['total_students'] += $pg['total_students'];
-                    foreach ($pg['subject_states'] as $state) {
-                        $ws = $state->workflow_state ?? 'draft';
-                        if (isset($globalStats[$ws])) {
-                            $globalStats[$ws]++;
-                        }
-                    }
+        if ($multiMode && !empty($session) && !empty($data['selected_semesters']) && !empty($type)) {
+            $many = count($choice['semesters']) > 1;
+            foreach ($choice['semesters'] as $semesterModel) {
+                $facultyGroups = $this->loadMultiProgramData(
+                    (int) $session,
+                    (int) $semesterModel->id,
+                    (int) $type
+                );
+
+                // Several semesters: a semester with nothing to publish is left out.
+                if ($many && empty($facultyGroups)) {
+                    continue;
                 }
+
+                $data['semester_blocks'][] = [
+                    'semester' => $semesterModel,
+                    'faculty_groups' => $facultyGroups,
+                    'global_stats' => $this->multiProgramStats($facultyGroups),
+                    'block_key' => $many ? 's' . $semesterModel->id . '_' : '',
+                ];
             }
-            $data['global_stats'] = $globalStats;
+
+            // One semester: the page reads these as it always has. (With
+            // several, every block kept is non-empty, so faculty_groups being
+            // set still opens the multi-mode section of the view.)
+            $firstBlock = $data['semester_blocks'][0] ?? null;
+            $data['faculty_groups'] = $firstBlock['faculty_groups'] ?? [];
+            $data['global_stats'] = $firstBlock['global_stats'] ?? $this->multiProgramStats([]);
 
             // Set exam type info for multi-mode
             $examType = ExamType::find($type);
@@ -211,6 +224,38 @@ class ExamPublishingController extends Controller
         }
 
         return view($this->view . '.index', $data);
+    }
+
+    /**
+     * Workflow counts for one semester's Faculty -> Programme listing.
+     */
+    protected function multiProgramStats(array $facultyGroups): array
+    {
+        $globalStats = [
+            'total_programs' => 0,
+            'total_courses' => 0,
+            'total_students' => 0,
+            'draft' => 0,
+            'submitted' => 0,
+            'checked' => 0,
+            'approved' => 0,
+            'published' => 0,
+        ];
+        foreach ($facultyGroups as $fg) {
+            foreach ($fg['programs'] as $pg) {
+                $globalStats['total_programs']++;
+                $globalStats['total_courses'] += count($pg['subjects']);
+                $globalStats['total_students'] += $pg['total_students'];
+                foreach ($pg['subject_states'] as $state) {
+                    $ws = $state->workflow_state ?? 'draft';
+                    if (isset($globalStats[$ws])) {
+                        $globalStats[$ws]++;
+                    }
+                }
+            }
+        }
+
+        return $globalStats;
     }
 
     /**
@@ -1219,8 +1264,12 @@ class ExamPublishingController extends Controller
             'notes' => 'nullable|string|max:500',
             'state_ids' => 'required|array|min:1',
             'state_ids.*' => 'integer|exists:exam_publishing_states,id',
-            'session_id' => 'required|integer|exists:sessions,id',
-            'semester_id' => 'required|integer|exists:semesters,id',
+            // The page may list several semesters (a semester type): each
+            // state carries its own session and semester, and those are what
+            // the notifications use. These two are informational only.
+            'session_id' => 'nullable|integer|exists:sessions,id',
+            'semester_id' => 'nullable',
+            'semester_id.*' => 'integer|exists:semesters,id',
             'exam_type_id' => 'required|integer|exists:exam_types,id',
             'publish_date' => 'nullable|date',
             'publish_time' => 'nullable|date_format:H:i',
@@ -1363,16 +1412,18 @@ class ExamPublishingController extends Controller
 
                 // Send notifications when publishing
                 if ($targetState === ExamPublishingState::STATE_PUBLISHED) {
-                    // Group by program for notifications
-                    $statesByProgram = $states->groupBy('program_id');
-                    foreach ($statesByProgram as $programId => $programStates) {
+                    // Group by program and by each state's own session and
+                    // semester: one bulk action may span several semesters.
+                    $statesByProgram = $states->groupBy(fn ($st) => $st->program_id . '|' . $st->session_id . '|' . $st->semester_id);
+                    foreach ($statesByProgram as $programStates) {
+                        $first = $programStates->first();
                         $subjectIds = $programStates->pluck('subject_id')->toArray();
-                        $sectionId = $programStates->first()->section_id;
+                        $sectionId = $first->section_id;
                         $this->sendPublishingNotifications(
                             $subjectIds,
-                            $programId,
-                            $request->session_id,
-                            $request->semester_id,
+                            (int) $first->program_id,
+                            (int) $first->session_id,
+                            (int) $first->semester_id,
                             $sectionId,
                             $request->exam_type_id,
                             $request->input('publish_date'),

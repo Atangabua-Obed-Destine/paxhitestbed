@@ -21,8 +21,8 @@
     .custom-switch-track:hover { opacity: 0.85; }
     
     /* Faculty accordion styling */
-    #facultyAccordion > .card { border-radius: 6px; overflow: hidden; }
-    #facultyAccordion > .card > .card-header:hover { opacity: 0.92; }
+    .faculty-accordion > .card { border-radius: 6px; overflow: hidden; }
+    .faculty-accordion > .card > .card-header:hover { opacity: 0.92; }
     
     /* Progress bar segments */
     .progress-bar { font-size: 0.78em; font-weight: 600; }
@@ -71,6 +71,10 @@
     .card.bg-warning h3, .card.bg-warning small {
         color: #333 !important;
     }
+    /* Single-semester and semester-type controls share the filter row; the
+       mode switch shows one set and disables the other so only it is sent. */
+    .stf-contents { display: contents; }
+    .stf-contents.stf-off { display: none; }
 </style>
 @endsection
 
@@ -159,6 +163,7 @@
                                     </select>
                                 </div>
 
+                                <div class="stf-contents stf-single{{ $multi_mode ? ' stf-off' : '' }}">
                                 @include('common.inc.semester_year_field', ['year_target' => '.semester'])
                                 <div class="form-group col-md-2">
                                     <label for="semester">{{ __('field_semester') }} <span class="text-danger">*</span></label>
@@ -170,6 +175,11 @@
                                         @endforeach
                                         @endif
                                     </select>
+                                </div>
+                                </div>
+                                {{-- Multi-programme mode: a semester type and any number of its semesters. --}}
+                                <div class="stf-contents stf-multi{{ $multi_mode ? '' : ' stf-off' }}">
+                                @include('common.inc.semester_type_field', ['type_col' => 'col-md-2', 'semester_col' => 'col-md-3', 'semester_field_id' => 'semester_multi'])
                                 </div>
 
                                 <div class="form-group col-md-2">
@@ -229,6 +239,13 @@
             </div>
 
             @if($multi_mode && !empty($faculty_groups))
+            @php
+                $semester_blocks = $semester_blocks ?? [];
+                $stfMany = count($semester_blocks) > 1;
+                $stfFacultyCount = $stfMany
+                    ? collect($semester_blocks)->flatMap(fn ($b) => array_keys($b['faculty_groups']))->unique()->count()
+                    : count($faculty_groups);
+            @endphp
             {{-- ============================================ --}}
             {{-- MULTI-PROGRAM MODE --}}
             {{-- ============================================ --}}
@@ -239,7 +256,10 @@
                     <i class="fas fa-layer-group fa-2x mr-3"></i>
                     <div>
                         <strong><i class="fas fa-broadcast-tower"></i> Multi-Program Publishing Mode</strong> —
-                        Loading <strong>all programs</strong> across <strong>{{ count($faculty_groups) }} faculties</strong>
+                        Loading <strong>all programs</strong> across <strong>{{ $stfFacultyCount }} faculties</strong>
+                        @if($stfMany)
+                        in <strong>{{ collect($semester_blocks)->map(fn ($b) => $b['semester']->title)->implode(', ') }}</strong>
+                        @endif
                         for <strong>{{ isset($exam_type) ? $exam_type->title : '' }}</strong>
                         @if(isset($is_final_exam) && $is_final_exam)
                             <span class="badge badge-danger ml-1">Final Exam</span>
@@ -250,88 +270,9 @@
                 </div>
             </div>
 
-            <!-- Multi-Mode Global Stats -->
-            <div class="col-sm-12 no-print">
-                <div class="row">
-                    <div class="col-md-2">
-                        <div class="card bg-dark text-white">
-                            <div class="card-body text-center py-3">
-                                <h3 class="mb-0">{{ count($faculty_groups) }}</h3>
-                                <small>{{ __('Faculties') }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-info text-white">
-                            <div class="card-body text-center py-3">
-                                <h3 class="mb-0">{{ $global_stats['total_programs'] }}</h3>
-                                <small>{{ __('Programs') }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-primary text-white">
-                            <div class="card-body text-center py-3">
-                                <h3 class="mb-0">{{ $global_stats['total_courses'] }}</h3>
-                                <small>{{ __('Total Courses') }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-secondary text-white">
-                            <div class="card-body text-center py-3">
-                                <h3 class="mb-0">{{ number_format($global_stats['total_students']) }}</h3>
-                                <small>{{ __('Total Students') }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-success text-white">
-                            <div class="card-body text-center py-3">
-                                <h3 class="mb-0">{{ $global_stats['published'] }}/{{ $global_stats['total_courses'] }}</h3>
-                                <small>{{ __('Published') }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-warning text-dark">
-                            <div class="card-body text-center py-3">
-                                <h3 class="mb-0">{{ $global_stats['draft'] + $global_stats['submitted'] + $global_stats['checked'] + $global_stats['approved'] }}</h3>
-                                <small>{{ __('Pending') }}</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Multi-Mode State Distribution -->
-            <div class="col-sm-12 no-print">
-                @php
-                    $totalCourses = $global_stats['total_courses'] ?: 1;
-                    $draftPct = round(($global_stats['draft'] / $totalCourses) * 100);
-                    $submittedPct = round(($global_stats['submitted'] / $totalCourses) * 100);
-                    $checkedPct = round(($global_stats['checked'] / $totalCourses) * 100);
-                    $approvedPct = round(($global_stats['approved'] / $totalCourses) * 100);
-                    $publishedPct = round(($global_stats['published'] / $totalCourses) * 100);
-                @endphp
-                <div class="progress mb-3" style="height: 28px; border-radius: 6px;">
-                    <div class="progress-bar bg-secondary" style="width: {{ $draftPct }}%" title="Draft: {{ $global_stats['draft'] }}">
-                        @if($draftPct > 5) Draft ({{ $global_stats['draft'] }}) @endif
-                    </div>
-                    <div class="progress-bar bg-info" style="width: {{ $submittedPct }}%" title="Submitted: {{ $global_stats['submitted'] }}">
-                        @if($submittedPct > 5) Submitted ({{ $global_stats['submitted'] }}) @endif
-                    </div>
-                    <div class="progress-bar bg-primary" style="width: {{ $checkedPct }}%" title="Checked: {{ $global_stats['checked'] }}">
-                        @if($checkedPct > 5) Checked ({{ $global_stats['checked'] }}) @endif
-                    </div>
-                    <div class="progress-bar bg-warning text-dark" style="width: {{ $approvedPct }}%" title="Approved: {{ $global_stats['approved'] }}">
-                        @if($approvedPct > 5) Approved ({{ $global_stats['approved'] }}) @endif
-                    </div>
-                    <div class="progress-bar bg-success" style="width: {{ $publishedPct }}%" title="Published: {{ $global_stats['published'] }}">
-                        @if($publishedPct > 5) Published ({{ $global_stats['published'] }}) @endif
-                    </div>
-                </div>
-            </div>
+            @if(!$stfMany)
+            @include('admin.exam-publishing.partials.multi-stats')
+            @endif
 
             <!-- Multi-Mode Global Bulk Actions -->
             <div class="col-sm-12 no-print">
@@ -415,211 +356,21 @@
                 </div>
             </div>
 
-            <!-- Faculty → Program Accordion Groups -->
-            <div class="col-sm-12">
-                <div class="accordion" id="facultyAccordion">
-                    @foreach($faculty_groups as $facultyId => $fg)
-                    @php
-                        $fac = $fg['faculty'];
-                        $facPrograms = $fg['programs'];
-                        $facCourseCount = 0;
-                        $facStudentCount = 0;
-                        $facPublished = 0;
-                        $facTotal = 0;
-                        foreach ($facPrograms as $pg) {
-                            $facCourseCount += count($pg['subjects']);
-                            $facStudentCount += $pg['total_students'];
-                            foreach ($pg['subject_states'] as $ss) {
-                                $facTotal++;
-                                if (($ss->workflow_state ?? 'draft') === 'published') $facPublished++;
-                            }
-                        }
-                    @endphp
-                    <div class="card mb-2 border-dark">
-                        <div class="card-header bg-dark text-white py-2" id="facultyHead{{ $facultyId }}" style="cursor: pointer;"
-                             data-bs-toggle="collapse" data-bs-target="#facultyBody{{ $facultyId }}" aria-expanded="true">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">
-                                    <i class="fas fa-university mr-1"></i> {{ $fac->title }}
-                                    <span class="badge badge-light ml-2">{{ count($facPrograms) }} {{ __('Programs') }}</span>
-                                </h5>
-                                <div>
-                                    <span class="badge badge-info">{{ $facCourseCount }} Courses</span>
-                                    <span class="badge badge-primary">{{ number_format($facStudentCount) }} Students</span>
-                                    <span class="badge badge-success">{{ $facPublished }}/{{ $facTotal }} Published</span>
-                                    <i class="fas fa-chevron-down ml-2 accordion-arrow"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="facultyBody{{ $facultyId }}" class="collapse show" data-bs-parent="#facultyAccordion">
-                            <div class="card-body p-2">
-                                {{-- Program Sub-Accordion --}}
-                                <div class="accordion" id="programAccordion{{ $facultyId }}">
-                                    @foreach($facPrograms as $programId => $pg)
-                                    @php
-                                        $prog = $pg['program'];
-                                        $progSubjects = $pg['subjects'];
-                                        $progStates = $pg['subject_states'];
-                                        $progStats = $pg['subject_stats'];
-                                        $progStudents = $pg['total_students'];
-                                        $progPublished = collect($progStates)->where('workflow_state', 'published')->count();
-                                        $progDraft = collect($progStates)->where('workflow_state', 'draft')->count();
-                                        $isFinalForProg = $pg['is_final_exam'];
-                                        $caPublishedForProg = $pg['ca_published'] ?? true;
-                                        $caStatusForProg = $pg['ca_publishing_status'] ?? [];
-                                    @endphp
-                                    <div class="card mb-1 border-secondary">
-                                        <div class="card-header bg-light py-2" id="programHead{{ $facultyId }}_{{ $programId }}" style="cursor: pointer;"
-                                             data-bs-toggle="collapse" data-bs-target="#programBody{{ $facultyId }}_{{ $programId }}" aria-expanded="false">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <h6 class="mb-0">
-                                                    <i class="fas fa-graduation-cap mr-1 text-primary"></i> 
-                                                    {{ $prog->title }}
-                                                    @if($prog->short_code)
-                                                    <small class="text-muted">({{ $prog->short_code }})</small>
-                                                    @endif
-                                                </h6>
-                                                <div>
-                                                    <span class="badge badge-secondary">{{ count($progSubjects) }} Courses</span>
-                                                    <span class="badge badge-primary">{{ $progStudents }} Students</span>
-                                                    @if($progPublished === count($progSubjects) && count($progSubjects) > 0)
-                                                        <span class="badge badge-success"><i class="fas fa-check-circle"></i> All Published</span>
-                                                    @elseif($progPublished > 0)
-                                                        <span class="badge badge-warning text-dark">{{ $progPublished }}/{{ count($progSubjects) }} Published</span>
-                                                    @else
-                                                        <span class="badge badge-secondary">{{ $progDraft }} Draft</span>
-                                                    @endif
-                                                    <i class="fas fa-chevron-down ml-1 accordion-arrow text-muted"></i>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div id="programBody{{ $facultyId }}_{{ $programId }}" class="collapse">
-                                            <div class="card-body p-0">
-                                                <div class="table-responsive">
-                                                    <table class="table table-bordered table-hover table-sm mb-0 multi-courses-table">
-                                                        <thead class="thead-light">
-                                                            <tr>
-                                                                <th class="text-center" style="width: 35px;">
-                                                                    <input type="checkbox" class="form-check-input program-check-all" data-program="{{ $programId }}" data-faculty="{{ $facultyId }}">
-                                                                </th>
-                                                                <th style="width: 80px;">{{ __('Code') }}</th>
-                                                                <th>{{ __('Course Title') }}</th>
-                                                                <th class="text-center" style="width: 50px;">CV</th>
-                                                                <th class="text-center" style="width: 80px;">{{ __('Students') }}</th>
-                                                                <th class="text-center" style="width: 80px;">{{ __('With Marks') }}</th>
-                                                                <th class="text-center" style="width: 60px;">{{ __('Pass') }}</th>
-                                                                <th class="text-center" style="width: 60px;">{{ __('Fail') }}</th>
-                                                                <th class="text-center" style="width: 70px;">{{ __('Avg') }}</th>
-                                                                @if($isFinalForProg)
-                                                                <th class="text-center" style="width: 80px;">{{ __('CA') }}</th>
-                                                                @endif
-                                                                <th class="text-center" style="width: 110px;">{{ __('State') }}</th>
-                                                                <th class="text-center no-print" style="width: 160px;">{{ __('Actions') }}</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @foreach($progSubjects as $subject)
-                                                            @php
-                                                                $state = $progStates[$subject->id] ?? null;
-                                                                $stats = $progStats[$subject->id] ?? [];
-                                                                $currentState = $state ? $state->workflow_state : 'draft';
-                                                                $badge = $state ? $state->getStateBadge() : ['class' => 'badge-secondary', 'icon' => 'fa-pencil-alt', 'text' => 'Draft'];
-                                                                $hasMarks = ($stats['with_marks'] ?? 0) > 0;
-                                                                $caStatus = $isFinalForProg ? ($caStatusForProg[$subject->id] ?? false) : true;
-                                                            @endphp
-                                                            <tr class="{{ !$hasMarks ? 'table-light text-muted' : '' }}" 
-                                                                data-state="{{ $currentState }}" 
-                                                                data-subject-id="{{ $subject->id }}"
-                                                                data-program-id="{{ $programId }}"
-                                                                data-has-marks="{{ $hasMarks ? '1' : '0' }}">
-                                                                <td class="text-center">
-                                                                    <input type="checkbox" class="form-check-input multi-course-checkbox"
-                                                                        value="{{ $state ? $state->id : '' }}"
-                                                                        data-state="{{ $currentState }}"
-                                                                        data-program-id="{{ $programId }}"
-                                                                        data-faculty-id="{{ $facultyId }}"
-                                                                        data-subject-code="{{ $subject->code }}"
-                                                                        data-group-key="{{ $subject->course_group_id ? 'g'.$subject->course_group_id : '' }}"
-                                                                        {{ !$hasMarks || !$state ? 'disabled' : '' }}>
-                                                                </td>
-                                                                <td><span class="badge badge-dark">{{ $subject->code }}</span>@if($subject->course_group_id) <span class="badge badge-info" title="{{ __('In a course group: ticking it ticks the same course in the other programmes') }}"><i class="fas fa-link"></i></span>@endif</td>
-                                                                <td>{{ $subject->title ?? $subject->subject_name }}</td>
-                                                                <td class="text-center">{{ $subject->credit_hour }}</td>
-                                                                <td class="text-center">{{ $stats['total'] ?? 0 }}</td>
-                                                                <td class="text-center">
-                                                                    @if($hasMarks)
-                                                                    <span class="badge badge-info">{{ $stats['with_marks'] }}</span>
-                                                                    @else
-                                                                    <span class="badge badge-danger">0</span>
-                                                                    @endif
-                                                                </td>
-                                                                <td class="text-center text-success">{{ $stats['passed'] ?? 0 }}</td>
-                                                                <td class="text-center text-danger">{{ $stats['failed'] ?? 0 }}</td>
-                                                                <td class="text-center">
-                                                                    @if(isset($stats['average']) && $stats['average'] !== '-')
-                                                                        {{ $stats['average'] }}/{{ $stats['contribution'] ?? 100 }}
-                                                                    @else - @endif
-                                                                </td>
-                                                                @if($isFinalForProg)
-                                                                <td class="text-center">
-                                                                    @if($caStatus)
-                                                                    <span class="badge badge-success"><i class="fas fa-check"></i></span>
-                                                                    @else
-                                                                    <span class="badge badge-danger"><i class="fas fa-times"></i></span>
-                                                                    @endif
-                                                                </td>
-                                                                @endif
-                                                                <td class="text-center">
-                                                                    <span class="badge {{ $badge['class'] }}">
-                                                                        <i class="fas {{ $badge['icon'] }}"></i> {{ $badge['text'] }}
-                                                                    </span>
-                                                                </td>
-                                                                <td class="text-center no-print">
-                                                                    @if($state && $hasMarks)
-                                                                        @php $nextStates = $state->getNextStates(); $canPublish = !$isFinalForProg || $caStatus; @endphp
-                                                                        @foreach($nextStates as $nextState)
-                                                                            @if($nextState === 'published' && !$canPublish)
-                                                                                <button type="button" class="btn btn-sm btn-secondary" disabled title="CA must be published first">
-                                                                                    <i class="fas fa-lock"></i>
-                                                                                </button>
-                                                                            @else
-                                                                                @can('exam-publishing-' . ($nextState === 'submitted' ? 'submit' : ($nextState === 'checked' ? 'check' : ($nextState === 'approved' ? 'approve' : 'publish'))))
-                                                                                <button type="button" class="btn btn-sm btn-{{ $nextState === 'published' ? 'success' : 'primary' }} transition-btn"
-                                                                                    data-state-id="{{ $state->id }}"
-                                                                                    data-target-state="{{ $nextState }}"
-                                                                                    data-subject-code="{{ $subject->code }}"
-                                                                                    title="Transition to {{ ucfirst($nextState) }}">
-                                                                                    <i class="fas fa-{{ $nextState === 'submitted' ? 'paper-plane' : ($nextState === 'checked' ? 'check' : ($nextState === 'approved' ? 'thumbs-up' : 'globe')) }}"></i>
-                                                                                </button>
-                                                                                @endcan
-                                                                            @endif
-                                                                        @endforeach
-                                                                        <button type="button" class="btn btn-sm btn-outline-info history-btn"
-                                                                            data-state-id="{{ $state->id }}"
-                                                                            data-subject-code="{{ $subject->code }}"
-                                                                            title="View History">
-                                                                            <i class="fas fa-history"></i>
-                                                                        </button>
-                                                                    @elseif(!$hasMarks)
-                                                                        <span class="text-muted small">No marks</span>
-                                                                    @endif
-                                                                </td>
-                                                            </tr>
-                                                            @endforeach
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    @endforeach
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
+            @foreach($semester_blocks as $sb)
+            @if($stfMany)
+            <!-- {{ $sb['semester']->title }} -->
+            <div class="col-sm-12 semester-block" data-semester-block="{{ $sb['semester']->id }}">
+                <h4 class="mt-3 mb-2 pb-1 border-bottom"><i class="fas fa-bookmark text-primary"></i> {{ $sb['semester']->title }}</h4>
             </div>
+            @include('admin.exam-publishing.partials.multi-stats', ['faculty_groups' => $sb['faculty_groups'], 'global_stats' => $sb['global_stats']])
+            @endif
+            @include('admin.exam-publishing.partials.multi-accordion', [
+                'faculty_groups' => $sb['faculty_groups'],
+                'block_key' => $sb['block_key'],
+                'block_semester_id' => $sb['semester']->id,
+                'block_semester_title' => $sb['semester']->title,
+            ])
+            @endforeach
 
             @elseif(isset($subjects) && count($subjects) > 0)
                     <i class="fas fa-{{ $is_final_exam ? 'exclamation-triangle' : 'info-circle' }} fa-2x mr-3"></i>
@@ -2604,6 +2355,15 @@
     // ==========================================
     // MULTI-PROGRAM MODE TOGGLE
     // ==========================================
+
+    // Single mode picks one semester (behind its Year); multi mode a semester
+    // type and any number of its semesters. The hidden set is disabled so it
+    // is neither validated nor sent.
+    function setSemesterControls(isMulti) {
+        $('.stf-single').toggleClass('stf-off', isMulti).find('select, input').prop('disabled', isMulti);
+        $('.stf-multi').toggleClass('stf-off', !isMulti).find('select, input').prop('disabled', !isMulti);
+    }
+    setSemesterControls({{ $multi_mode ? 'true' : 'false' }});
     $('#multiToggle').on('change', function() {
         var isMulti = $(this).is(':checked');
         $('#multiInput').val(isMulti ? '1' : '0');
@@ -2618,6 +2378,8 @@
             $track.css('background', '#ced4da');
             $thumb.css('left', '2px');
         }
+
+        setSemesterControls(isMulti);
 
         // In multi mode, relax required constraints on faculty/program/section
         if (isMulti) {
@@ -2646,7 +2408,7 @@
         var selected = $('.multi-course-checkbox:checked').length;
         var programIds = [];
         $('.multi-course-checkbox:checked').each(function() {
-            var pid = $(this).data('program-id');
+            var pid = $(this).data('program-id') + '|' + $(this).data('semester-id');
             if (programIds.indexOf(pid) === -1) programIds.push(pid);
         });
 
@@ -2697,9 +2459,11 @@
         // Update program-level "check all" checkbox
         var programId = $(this).data('program-id');
         var facultyId = $(this).data('faculty-id');
-        var $programCheckAll = $('.program-check-all[data-program="' + programId + '"][data-faculty="' + facultyId + '"]');
-        var totalInProgram = $('.multi-course-checkbox[data-program-id="' + programId + '"][data-faculty-id="' + facultyId + '"]:not(:disabled)').length;
-        var checkedInProgram = $('.multi-course-checkbox[data-program-id="' + programId + '"][data-faculty-id="' + facultyId + '"]:checked').length;
+        var semesterId = $(this).data('semester-id');
+        var $programCheckAll = $('.program-check-all[data-program="' + programId + '"][data-faculty="' + facultyId + '"][data-semester="' + semesterId + '"]');
+        var inProgram = '.multi-course-checkbox[data-program-id="' + programId + '"][data-faculty-id="' + facultyId + '"][data-semester-id="' + semesterId + '"]';
+        var totalInProgram = $(inProgram + ':not(:disabled)').length;
+        var checkedInProgram = $(inProgram + ':checked').length;
         $programCheckAll.prop('checked', totalInProgram > 0 && totalInProgram === checkedInProgram);
         $programCheckAll.prop('indeterminate', checkedInProgram > 0 && checkedInProgram < totalInProgram);
     });
@@ -2708,8 +2472,9 @@
     $(document).on('change', '.program-check-all', function() {
         var programId = $(this).data('program');
         var facultyId = $(this).data('faculty');
+        var semesterId = $(this).data('semester');
         var isChecked = $(this).is(':checked');
-        $('.multi-course-checkbox[data-program-id="' + programId + '"][data-faculty-id="' + facultyId + '"]:not(:disabled)').prop('checked', isChecked);
+        $('.multi-course-checkbox[data-program-id="' + programId + '"][data-faculty-id="' + facultyId + '"][data-semester-id="' + semesterId + '"]:not(:disabled)').prop('checked', isChecked);
         updateMultiSelectedCount();
     });
 
@@ -2757,8 +2522,10 @@
         $('.program-check-all').each(function() {
             var pid = $(this).data('program');
             var fid = $(this).data('faculty');
-            var total = $('.multi-course-checkbox[data-program-id="' + pid + '"][data-faculty-id="' + fid + '"]:not(:disabled)').length;
-            var checked = $('.multi-course-checkbox[data-program-id="' + pid + '"][data-faculty-id="' + fid + '"]:checked').length;
+            var sid = $(this).data('semester');
+            var inProgram = '.multi-course-checkbox[data-program-id="' + pid + '"][data-faculty-id="' + fid + '"][data-semester-id="' + sid + '"]';
+            var total = $(inProgram + ':not(:disabled)').length;
+            var checked = $(inProgram + ':checked').length;
             $(this).prop('checked', total > 0 && total === checked);
             $(this).prop('indeterminate', checked > 0 && checked < total);
         });
@@ -2767,21 +2534,23 @@
 
     // Expand All Accordions
     $('#multiExpandAllBtn').on('click', function() {
-        $('#facultyAccordion .collapse').collapse('show');
+        $('.faculty-accordion .collapse').collapse('show');
         setTimeout(function() {
-            $('#facultyAccordion .collapse .collapse').collapse('show');
+            $('.faculty-accordion .collapse .collapse').collapse('show');
         }, 300);
     });
 
     // Collapse All Accordions
     $('#multiCollapseAllBtn').on('click', function() {
-        $('#facultyAccordion .collapse .collapse').collapse('hide');
+        $('.faculty-accordion .collapse .collapse').collapse('hide');
         setTimeout(function() {
-            $('#facultyAccordion > .card > .collapse').collapse('hide');
+            $('.faculty-accordion > .card > .collapse').collapse('hide');
         }, 300);
     });
 
     // Multi-mode bulk form submit (with detailed confirmation modal)
+    var multiSemesterPage = {{ count($semester_blocks ?? []) > 1 ? 'true' : 'false' }};
+
     $('#multiBulkTransitionForm').on('submit', function(e) {
         e.preventDefault();
 
@@ -2811,7 +2580,9 @@
             var state = $(this).data('state');
             states.push(state);
             var $row = $(this).closest('tr');
-            var programId = $(this).data('program-id');
+            // One programme in two semesters is two groups in the summary.
+            var programId = $(this).data('program-id') + '|' + $(this).data('semester-id');
+            var semesterTitle = multiSemesterPage ? ($(this).data('semester-title') || '') : '';
             var subjectCode = $(this).data('subject-code') || $row.find('td:eq(1) .badge').text().trim();
             var title = $row.find('td:eq(2)').text().trim();
             var students = parseInt($row.find('td:eq(4)').text().trim()) || 0;
@@ -2841,7 +2612,7 @@
             if (!programData[programId]) {
                 var $programHeader = $(this).closest('.card-body').closest('.collapse').prev('.card-header');
                 programData[programId] = {
-                    name: $programHeader.find('h6').text().trim(),
+                    name: $programHeader.find('h6').text().trim() + (semesterTitle ? ' - ' + semesterTitle : ''),
                     courses: [],
                     totalStudents: 0,
                     totalMarks: 0,

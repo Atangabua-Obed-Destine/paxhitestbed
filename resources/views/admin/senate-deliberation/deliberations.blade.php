@@ -44,17 +44,8 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                @include('common.inc.semester_year_field', ['year_target' => '.sy-semester'])
-                                <div class="form-group col-md-4">
-                                    <label for="semester">{{ __('Semester') }}</label>
-                                    <select class="form-control sy-semester" name="semester" id="semester">
-                                        <option value="0">{{ __('All Semesters') }}</option>
-                                        @foreach($semesters as $sem)
-                                        <option value="{{ $sem->id }}" @if($selected_semester == $sem->id) selected @endif>{{ $sem->title }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="form-group col-md-4">
+                                @include('common.inc.semester_type_field', ['type_col' => 'col-md-3', 'semester_col' => 'col-md-3', 'type_required' => false])
+                                <div class="form-group col-md-2">
                                     <button type="submit" class="btn btn-primary w-100">
                                         <i class="fas fa-search"></i> {{ __('Filter') }}
                                     </button>
@@ -155,7 +146,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-5 mb-3">
                             <label>{{ __('Academic Session') }} <span class="text-danger">*</span></label>
                             <select class="form-control" name="session_id" required>
                                 <option value="">{{ __('select') }}</option>
@@ -164,9 +155,11 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        {{-- A deliberation is per semester: the Year narrows the list as elsewhere. --}}
+                        @include('common.inc.semester_year_field', ['year_target' => '.sy-semester-create'])
+                        <div class="col-md-4 mb-3">
                             <label>{{ __('Semester') }} <span class="text-danger">*</span></label>
-                            <select class="form-control" name="semester_id" required>
+                            <select class="form-control sy-semester-create" name="semester_id" required>
                                 <option value="">{{ __('select') }}</option>
                                 @foreach($semesters as $sem)
                                 <option value="{{ $sem->id }}" @if($selected_semester == $sem->id) selected @endif>{{ $sem->title }}</option>

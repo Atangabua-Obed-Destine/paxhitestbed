@@ -25,7 +25,8 @@ class AcademicStandingsExport implements FromCollection, WithTitle, WithEvents
 
     public function title(): string
     {
-        return 'Academic Standings';
+        // Several semesters in one workbook name each sheet after its semester.
+        return $this->data['sheet_title'] ?? 'Academic Standings';
     }
 
     public function collection()
