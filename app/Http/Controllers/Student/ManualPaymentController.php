@@ -204,7 +204,7 @@ class ManualPaymentController extends Controller
             'payment_reference' => $request->payment_reference,
             'payment_date' => $request->payment_date,
             'amount' => $request->amount,
-            'payment_method' => $request->payment_method,
+            'payment_method' => \App\Support\FeesPaymentMethod::normalize($request->payment_method),
             'student_note' => $request->student_note,
             'verification_status' => 'pending',
         ]);

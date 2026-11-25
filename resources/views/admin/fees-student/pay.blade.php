@@ -387,7 +387,6 @@
                             <label for="payment_method" class="form-label">{{ __('field_payment_method') }} <span>*</span></label>
                             <select class="form-control" name="payment_method" id="payment_method-{{ $row->id }}" required>
                                 <option value="">{{ __('select') }}</option>
-                                <option value="1">{{ __('payment_method_card') }}</option>
                                 <option value="2">{{ __('payment_method_cash') }}</option>
                                 <option value="3">{{ __('payment_method_cheque') }}</option>
                                 <option value="4">{{ __('payment_method_bank') }}</option>

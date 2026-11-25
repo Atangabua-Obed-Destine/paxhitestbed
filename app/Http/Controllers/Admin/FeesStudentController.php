@@ -1017,7 +1017,7 @@ class FeesStudentController extends Controller
             $fee->assign_date = Carbon::today();
             $fee->due_date = $request->due_date;
             $fee->pay_date = $request->pay_date;
-            $fee->payment_method = $request->payment_method;
+            $fee->payment_method = \App\Support\FeesPaymentMethod::normalize($request->payment_method);
             $fee->payment_account_id = $request->payment_account_id;
             $fee->note = $request->note;
             $fee->status = '1';

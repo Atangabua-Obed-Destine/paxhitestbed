@@ -183,7 +183,6 @@
                                                 <option value="4">{{ __('payment_method_bank') }}</option>
                                                 <option value="2">{{ __('payment_method_cash') }}</option>
                                                 <option value="3">{{ __('payment_method_cheque') }}</option>
-                                                <option value="1">{{ __('payment_method_card') }}</option>
                                                 <option value="5">{{ __('payment_method_e_wallet') }}</option>
                                             </select>
                                         </div>

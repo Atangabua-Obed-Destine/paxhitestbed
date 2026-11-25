@@ -107,7 +107,6 @@
                             <label for="payment_method" class="form-label">{{ __('field_payment_method') }} <span>*</span></label>
                             <select class="form-control" name="payment_method" id="payment_method" required>
                                 <option value="">{{ __('select') }}</option>
-                                <option value="1" @if( $row->payment_method == 1 ) selected @endif>{{ __('payment_method_card') }}</option>
                                 <option value="2" @if( $row->payment_method == 2 ) selected @endif>{{ __('payment_method_cash') }}</option>
                                 <option value="3" @if( $row->payment_method == 3 ) selected @endif>{{ __('payment_method_cheque') }}</option>
                                 <option value="4" @if( $row->payment_method == 4 ) selected @endif>{{ __('payment_method_bank') }}</option>

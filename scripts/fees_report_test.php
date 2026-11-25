@@ -104,12 +104,11 @@ check('the eight values are the ones PaymentReceipt defines',
     [1, 2, 3, 4, 5, 6, 7, 8], FeesPaymentMethod::values());
 
 /*
- * 1 and 2 both read "Cash" because the lang file was repointed at some point.
- * That is left exactly as it was — only the institution knows whether it was
- * deliberate — and pinned here so a later tidy-up cannot silently relabel 199
- * rows of real money.
+ * 1 was "Card", relabelled "Cash" in the lang file. The institution confirmed
+ * (2026-11-25) those payments were cash: Card is retired, stored 1s were moved
+ * to 2, and a stray 1 still reads "Cash".
  */
-check('method 1 is unchanged', __('payment_method_card'), FeesPaymentMethod::label(1));
+check('method 1 (retired Card) reads Cash', __('payment_method_cash'), FeesPaymentMethod::label(1));
 check('method 2 is unchanged', __('payment_method_cash'), FeesPaymentMethod::label(2));
 
 echo PHP_EOL . "=== 2. and no cell on the page is blank ===" . PHP_EOL;

@@ -125,6 +125,7 @@ class FeePaymentRecorder
     public function record(Fee $fee, float $amount, array $payment): array
     {
         $userId = $payment['user_id'] ?? Auth::guard('web')->user()->id;
+        $payment['payment_method'] = \App\Support\FeesPaymentMethod::normalize($payment['payment_method'] ?? null);
 
         $discount_amount = $this->discountFor($fee);
         $fine_amount = $this->fineFor($fee);

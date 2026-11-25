@@ -49,13 +49,24 @@ namespace App\Support;
  */
 class FeesPaymentMethod
 {
+    public const CASH = 2;
+
+    /**
+     * Card (1) is retired (2026-11-25). The school takes no card payments:
+     * every fee and receipt stored as 1 was cash, and the lang repoint above
+     * made the forms offer "Cash" twice. Stored 1s were moved to 2 by
+     * migration 2026_11_25_300000; anything that still arrives as 1 (an old
+     * open form, an old student upload) is saved as cash.
+     */
+    public const RETIRED = [1 => self::CASH];
+
     /**
      * Stored value => lang key, as PaymentReceipt defines them.
      *
      * @var array<int, string>
      */
     private const KEYS = [
-        1 => 'payment_method_card',
+        1 => 'payment_method_cash',
         2 => 'payment_method_cash',
         3 => 'payment_method_cheque',
         4 => 'payment_method_bank',
@@ -94,10 +105,23 @@ class FeesPaymentMethod
         $out = [];
 
         foreach (self::KEYS as $value => $key) {
+            if (isset(self::RETIRED[$value])) {
+                continue;
+            }
             $out[$value] = __($key);
         }
 
         return $out;
+    }
+
+    /** The value to store for what a form sent: a retired method becomes its replacement. */
+    public static function normalize($value)
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        return self::RETIRED[(int) $value] ?? $value;
     }
 
     /**
@@ -116,7 +140,7 @@ class FeesPaymentMethod
             2 => 3, // cheque
             3 => 4, // bank
             4 => 7, // online, which this install reads as Orange Money
-            5 => 1, // card
+            5 => 2, // card — retired, the school takes cash
             6 => 6, // mobile money
             7 => 8, // other
         ];

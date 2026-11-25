@@ -52,7 +52,6 @@
                                     <label for="payment_method">{{ __('field_payment_method') }}</label>
                                     <select class="form-control" name="payment_method" id="payment_method">
                                         <option value="">{{ __('select') }}</option>
-                                        <option value="1" {{ request('payment_method') == '1' ? 'selected' : '' }}>{{ __('payment_method_card') }}</option>
                                         <option value="2" {{ request('payment_method') == '2' ? 'selected' : '' }}>{{ __('payment_method_cash') }}</option>
                                         <option value="3" {{ request('payment_method') == '3' ? 'selected' : '' }}>{{ __('payment_method_cheque') }}</option>
                                         <option value="4" {{ request('payment_method') == '4' ? 'selected' : '' }}>{{ __('payment_method_bank') }}</option>
