@@ -559,7 +559,7 @@
 
 @endsection
 
-@section('page-js')
+@section('page_js')
 <script>
 $(document).ready(function() {
     

@@ -30,6 +30,10 @@
 
 
 <script type="text/javascript">
+// This sits in the page body, before the layout loads jQuery at the end of
+// the page: wait until the page is loaded, or $ is undefined and the
+// district list never follows the province.
+document.addEventListener('DOMContentLoaded', function () {
 "use strict";
 $("#permanent_province").on('change',function(e){
     e.preventDefault();
@@ -60,4 +64,5 @@ $("#permanent_province").on('change',function(e){
 
     });
   });
+});
 </script>

@@ -136,7 +136,7 @@
 
 @endsection
 
-@section('page-js')
+@section('page_js')
 <script>
 // Client-side search over the currently-visible standings rows
 $(document).ready(function(){

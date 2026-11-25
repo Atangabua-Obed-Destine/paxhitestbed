@@ -366,7 +366,7 @@ $(document).ready(function() {
 </script>
 @endsection
 
-@section('styles')
+@section('page_css')
 <style>
     .text-lg {
         font-size: 1.1rem;

@@ -121,7 +121,7 @@
 @endsection
 
 @section('page_js')
-<script src="{{ asset('dashboard/plugins/jquery/js/jquery.min.js') }}"></script>
+{{-- jQuery comes from the layout; loading it again here dropped select2 and DataTables from the page. --}}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script type="text/javascript">

@@ -350,7 +350,7 @@
 </div>
 @endsection
 
-@section('style')
+@section('page_css')
 <style>
     .badge {
         margin: 4px;

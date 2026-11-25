@@ -140,17 +140,17 @@
 
                             <div class="form-group">
                                 <label for="description-{{ $row->id }}">Full Description</label>
-                                <textarea class="form-control texteditor" name="description" id="description-{{ $row->id }}">{{ $row->description }}</textarea>
+                                <textarea class="form-control texteditor-deferred" name="description" id="description-{{ $row->id }}">{{ $row->description }}</textarea>
                             </div>
 
                             <div class="form-group">
                                 <label for="requirements-{{ $row->id }}">Entry Requirements</label>
-                                <textarea class="form-control texteditor" name="requirements" id="requirements-{{ $row->id }}">{{ $row->requirements }}</textarea>
+                                <textarea class="form-control texteditor-deferred" name="requirements" id="requirements-{{ $row->id }}">{{ $row->requirements }}</textarea>
                             </div>
 
                             <div class="form-group">
                                 <label for="career_prospects-{{ $row->id }}">Career Prospects</label>
-                                <textarea class="form-control texteditor" name="career_prospects" id="career_prospects-{{ $row->id }}">{{ $row->career_prospects }}</textarea>
+                                <textarea class="form-control texteditor-deferred" name="career_prospects" id="career_prospects-{{ $row->id }}">{{ $row->career_prospects }}</textarea>
                             </div>
                         </div>
 

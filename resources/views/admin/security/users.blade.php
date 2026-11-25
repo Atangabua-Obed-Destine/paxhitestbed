@@ -497,7 +497,7 @@ $(document).ready(function() {
 </script>
 @endsection
 
-@section('styles')
+@section('page_css')
 <style>
     .table-danger {
         background-color: #f8d7da !important;

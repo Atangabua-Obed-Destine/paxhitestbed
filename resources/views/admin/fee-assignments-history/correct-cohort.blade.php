@@ -261,6 +261,10 @@
     </div>
 </div>
 
+@endsection
+
+@section('page_js')
+{{-- After the layout's jQuery: in the page body this never ran ($ undefined). --}}
 <script>
 (function ($) {
     "use strict";

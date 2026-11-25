@@ -470,7 +470,7 @@
 @endsection
 
 @section('page_js')
-<script src="{{ asset('dashboard/plugins/jquery/js/jquery.min.js') }}"></script>
+{{-- jQuery comes from the layout; loading it again here dropped select2 and DataTables from the page. --}}
 <script type="application/json" id="filter-semester-data" data-selected="{{ $selected_semester !== '0' ? $selected_semester : '' }}" data-year="{{ !empty($filterPreselectedYear) ? $filterPreselectedYear : '' }}">
     @json($semesterOptions ?? [])
 </script>

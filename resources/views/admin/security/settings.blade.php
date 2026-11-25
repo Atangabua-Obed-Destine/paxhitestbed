@@ -510,7 +510,7 @@ $(document).ready(function() {
 </script>
 @endsection
 
-@section('styles')
+@section('page_css')
 <style>
     .info-box {
         min-height: 90px;

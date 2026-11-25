@@ -301,8 +301,8 @@
     @if($version->direction == 1)
     <script type="text/javascript">
       "use strict";
-      tinymce.init({
-        selector: '.texteditor',
+      window.paxEditorConfig = {
+
 
         height: 400,
         menubar: true,
@@ -373,13 +373,22 @@
 
         directionality : 'rtl',
         language: '{{ $version->code }}',
+      };
+      // Editors inside a pop-up can start when it opens (texteditor-deferred),
+      // so a list page with one hidden edit form per row does not build
+      // every editor on load (the programmes list built 120).
+      tinymce.init(Object.assign({ selector: '.texteditor' }, window.paxEditorConfig));
+      document.addEventListener('shown.bs.modal', function (e) {
+        e.target.querySelectorAll('textarea.texteditor-deferred').forEach(function (el) {
+          if (!tinymce.get(el.id)) { tinymce.init(Object.assign({ target: el }, window.paxEditorConfig)); }
+        });
       });
     </script>
     @else
     <script type="text/javascript">
       "use strict";
-      tinymce.init({
-        selector: '.texteditor',
+      window.paxEditorConfig = {
+
 
         height: 400,
         menubar: true,
@@ -450,6 +459,15 @@
 
         directionality : 'ltr',
         language: '{{ $version->code }}',
+      };
+      // Editors inside a pop-up can start when it opens (texteditor-deferred),
+      // so a list page with one hidden edit form per row does not build
+      // every editor on load (the programmes list built 120).
+      tinymce.init(Object.assign({ selector: '.texteditor' }, window.paxEditorConfig));
+      document.addEventListener('shown.bs.modal', function (e) {
+        e.target.querySelectorAll('textarea.texteditor-deferred').forEach(function (el) {
+          if (!tinymce.get(el.id)) { tinymce.init(Object.assign({ target: el }, window.paxEditorConfig)); }
+        });
       });
     </script>
     @endif
