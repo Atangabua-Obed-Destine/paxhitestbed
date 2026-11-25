@@ -94,6 +94,12 @@ class ResultContributionController extends Controller
             
             // Get exam type contributions for this subject
             $data['exam_contributions'] = ExamTypeContribution::where('subject_id', $subject)->get()->keyBy('exam_type_id');
+
+            // The same course in other programmes (its course group), each with
+            // its own distribution: shown so the user can copy this one to them
+            // when, and only when, they should match.
+            $siblings = array_values(array_diff(\App\Services\Academic\CourseGroups::memberIds((int) $subject), [(int) $subject]));
+            $data['group_siblings'] = $siblings ? \App\Models\Subject::whereIn('id', $siblings)->orderBy('code')->get(['id', 'code', 'title']) : collect();
         }
 
         return view($this->view.'.index', $data);
@@ -139,11 +145,12 @@ class ResultContributionController extends Controller
 
 
         $id = $request->id;
-        // A course in a course group is one course taught to several
-        // programmes under their own codes, marked on one shared sheet: its
-        // mark distribution is the group's, so it is saved on every course of
-        // the group (credits stay per course; only the weights are shared).
-        $courseIds = \App\Services\Academic\CourseGroups::memberIds((int) $request->subject);
+        // Programmes set their own mark distribution, even for a course they
+        // share through a course group. It is copied to the group's other
+        // codes only when the user ticks "apply to the other programmes".
+        $courseIds = $request->boolean('apply_to_group')
+            ? \App\Services\Academic\CourseGroups::memberIds((int) $request->subject)
+            : [(int) $request->subject];
         $currentSession = Session::where('current', 1)->where('status', 1)->first();
 
         foreach ($courseIds as $subject_id) {

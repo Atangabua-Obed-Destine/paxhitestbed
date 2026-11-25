@@ -228,12 +228,22 @@ try {
     $html = (string) $call('GET', '/admin/exam/exam-publishing', ['multi' => 1, 'session' => 2, 'semester' => 1, 'type' => $ca])->getContent();
     check('publishing ticks a grouped course\'s other codes with it', str_contains($html, 'data-group-key="g' . $g->id . '"'));
 
-    $types = DB::table('exam_types')->where('status', 1)->whereIn('id', [$final, $ca])->pluck('id')->all();
-    $rcId = DB::table('result_contributions')->where('subject_id', $age->id)->value('id') ?? -1;
-    $call('POST', '/admin/exam/result-contribution', ['subject' => $age->id, 'id' => $rcId, 'attendances' => 10, 'assignments' => 0, 'activities' => 0,
-        'exams' => [$final, $ca], 'contributions' => [60, 30]]);
     $w = fn ($sid) => DB::table('exam_type_contributions')->where('subject_id', $sid)->whereIn('exam_type_id', [$final, $ca])->orderBy('exam_type_id')->pluck('contribution')->map(fn ($v) => (float) $v)->all();
-    check('setting the mark distribution on one code sets it for the group', $w($age->id) === $w($mgt->id) && (float) DB::table('result_contributions')->where('subject_id', $mgt->id)->value('attendances') === 10.0,
+    $post = fn (array $weights, bool $toGroup) => $call('POST', '/admin/exam/result-contribution', ['subject' => $age->id,
+        'id' => DB::table('result_contributions')->where('subject_id', $age->id)->value('id') ?? -1,
+        'attendances' => 100 - array_sum($weights), 'assignments' => 0, 'activities' => 0, 'exams' => [$final, $ca], 'contributions' => $weights]
+        + ($toGroup ? ['apply_to_group' => 1] : []));
+    // Give MGT1101H a distinct distribution first, so a copy would show.
+    DB::table('exam_type_contributions')->where('subject_id', $mgt->id)->where('exam_type_id', $final)->update(['contribution' => 50]);
+    DB::table('exam_type_contributions')->where('subject_id', $mgt->id)->where('exam_type_id', $ca)->update(['contribution' => 40]);
+    $mgtBefore = $w($mgt->id);
+    $post([65, 25], false);
+    check('each programme keeps its own mark distribution: changing AGE118H leaves MGT1101H alone',
+        array_sum($w($age->id)) === 90.0 && in_array(65.0, $w($age->id), true) && $w($mgt->id) === $mgtBefore, json_encode([$w($age->id), $w($mgt->id), $mgtBefore]) . ' ' . $errors());
+    $html = (string) $call('GET', '/admin/exam/result-contribution', ['subject' => $age->id])->getContent();
+    check('the form offers to copy it to the same course in the other programmes', str_contains($html, 'name="apply_to_group"') && str_contains($html, 'MGT1101H'));
+    $post([60, 30], true);
+    check('it is copied only when that is ticked', $w($age->id) === $w($mgt->id) && $w($mgt->id) !== $mgtBefore && (float) DB::table('result_contributions')->where('subject_id', $mgt->id)->value('attendances') === 10.0,
         json_encode([$w($age->id), $w($mgt->id)]) . ' ' . $errors());
 
     echo "\n== Removing the group ==\n";

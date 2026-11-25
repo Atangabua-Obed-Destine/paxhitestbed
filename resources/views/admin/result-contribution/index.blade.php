@@ -186,6 +186,16 @@
                         </div>
                     </div>
                     <div class="card-footer">
+                        @if(isset($group_siblings) && $group_siblings->isNotEmpty())
+                        <div class="mb-2 small">
+                            <label style="cursor:pointer">
+                                <input type="checkbox" name="apply_to_group" value="1">
+                                {{ __('Also apply this distribution to the same course in the other programmes:') }}
+                                <strong>{{ $group_siblings->pluck('code')->implode(', ') }}</strong>
+                            </label>
+                            <div class="text-muted">{{ __('Leave unticked when those programmes weigh their marks differently. Each keeps its own distribution.') }}</div>
+                        </div>
+                        @endif
                         <button type="submit" class="btn btn-success">@isset($row) <i class="fas fa-check"></i> {{ __('btn_update') }} @else <i class="fas fa-check"></i> {{ __('btn_save') }} @endif</button>
                     </div>
 
