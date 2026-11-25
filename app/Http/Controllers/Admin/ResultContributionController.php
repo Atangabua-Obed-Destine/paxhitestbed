@@ -139,66 +139,58 @@ class ResultContributionController extends Controller
 
 
         $id = $request->id;
-        $subject_id = $request->subject;
-
-        // -1 means no data row found
-        if($id == -1){
-            // Insert Data
-            $contribution = new ResultContribution;
-            $contribution->subject_id = $subject_id;
-            $contribution->attendances = $request->attendances;
-            $contribution->assignments = $request->assignments;
-            $contribution->activities = $request->activities;
-            $contribution->save();
-        }
-        else{
-            // Update Data
-            $contribution = ResultContribution::find($id);
-            $contribution->subject_id = $subject_id;
-            $contribution->attendances = $request->attendances;
-            $contribution->assignments = $request->assignments;
-            $contribution->activities = $request->activities;
-            $contribution->save();
-        }
-
-
-        // Update/Create Exam Type Contributions for this subject
-        foreach($request->exams as $key => $exam){
-            ExamTypeContribution::updateOrCreate(
-                [
-                    'subject_id' => $subject_id,
-                    'exam_type_id' => $exam
-                ],
-                [
-                    'contribution' => $request->contributions[$key]
-                ]
-            );
-        }
-
-        // Backfill contribution weights on existing exam records for the current session.
-        // The exams table stores a denormalized copy of the contribution value. When mark
-        // distribution is (re)configured, existing exam records must be updated so the new
-        // weights are reflected everywhere in the system (results preview, publishing, etc.)
+        // A course in a course group is one course taught to several
+        // programmes under their own codes, marked on one shared sheet: its
+        // mark distribution is the group's, so it is saved on every course of
+        // the group (credits stay per course; only the weights are shared).
+        $courseIds = \App\Services\Academic\CourseGroups::memberIds((int) $request->subject);
         $currentSession = Session::where('current', 1)->where('status', 1)->first();
-        if ($currentSession) {
-            // Build a map of exam_type_id => new contribution value
-            $contributionMap = [];
-            foreach ($request->exams as $key => $examTypeId) {
-                $contributionMap[$examTypeId] = (float)$request->contributions[$key];
+
+        foreach ($courseIds as $subject_id) {
+            $contribution = ((int) $subject_id === (int) $request->subject && $id != -1)
+                ? ResultContribution::find($id)
+                : null;
+            $contribution = $contribution ?: (ResultContribution::where('subject_id', $subject_id)->first() ?: new ResultContribution);
+            $contribution->subject_id = $subject_id;
+            $contribution->attendances = $request->attendances;
+            $contribution->assignments = $request->assignments;
+            $contribution->activities = $request->activities;
+            $contribution->save();
+
+            // Update/Create Exam Type Contributions for this subject
+            foreach($request->exams as $key => $exam){
+                ExamTypeContribution::updateOrCreate(
+                    [
+                        'subject_id' => $subject_id,
+                        'exam_type_id' => $exam
+                    ],
+                    [
+                        'contribution' => $request->contributions[$key]
+                    ]
+                );
             }
 
-            // Update all exam records for this subject in the current session
-            foreach ($contributionMap as $examTypeId => $newContribution) {
-                Exam::where('subject_id', $subject_id)
-                    ->where('exam_type_id', $examTypeId)
-                    ->whereHas('studentEnroll', function ($q) use ($currentSession) {
-                        $q->where('session_id', $currentSession->id);
-                    })
-                    ->update(['contribution' => $newContribution]);
-            }
+            // Backfill contribution weights on existing exam records for the current session.
+            // The exams table stores a denormalized copy of the contribution value. When mark
+            // distribution is (re)configured, existing exam records must be updated so the new
+            // weights are reflected everywhere in the system (results preview, publishing, etc.)
+            if ($currentSession) {
+                foreach ($request->exams as $key => $examTypeId) {
+                    Exam::where('subject_id', $subject_id)
+                        ->where('exam_type_id', $examTypeId)
+                        ->whereHas('studentEnroll', function ($q) use ($currentSession) {
+                            $q->where('session_id', $currentSession->id);
+                        })
+                        ->update(['contribution' => (float) $request->contributions[$key]]);
+                }
 
-            // Re-sync subject_markings with updated contribution weights
-            \App\Services\ExamMarksSyncService::syncAllForSubject((int)$subject_id, $currentSession->id);
+                // Re-sync subject_markings with updated contribution weights
+                \App\Services\ExamMarksSyncService::syncAllForSubject((int)$subject_id, $currentSession->id);
+            }
+        }
+
+        if (count($courseIds) > 1) {
+            Flasher::addInfo(__('Saved for the whole course group: :codes.', ['codes' => \App\Models\Subject::whereIn('id', $courseIds)->orderBy('code')->pluck('code')->implode(', ')]), __('msg_success'));
         }
 
 

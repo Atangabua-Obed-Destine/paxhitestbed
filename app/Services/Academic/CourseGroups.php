@@ -175,6 +175,48 @@ class CourseGroups
     }
 
     /**
+     * Each enrolment's own course among a course and its group: the code the
+     * student is registered for (AGE118H for an agric student, MGT1101H for an
+     * accountancy one). Falls back to the course asked about for a student
+     * registered for none of them.
+     *
+     * @param int[] $enrollIds
+     * @return array<int, int> enrolment id => course id
+     */
+    public static function ownCourses(?int $subjectId, array $enrollIds): array
+    {
+        $enrollIds = array_values(array_unique(array_map('intval', $enrollIds)));
+        $out = array_fill_keys($enrollIds, (int) $subjectId);
+        $members = self::memberIds($subjectId);
+        if (count($members) < 2 || !$enrollIds) {
+            return $out;
+        }
+        foreach (array_chunk($enrollIds, 1000) as $chunk) {
+            $rows = DB::table('student_enroll_subject')->whereIn('student_enroll_id', $chunk)->whereIn('subject_id', $members)
+                ->get(['student_enroll_id', 'subject_id']);
+            foreach ($rows as $r) {
+                $out[(int) $r->student_enroll_id] = (int) $r->subject_id;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The programmes that take a course or any course of its group, as a
+     * Program query (active programmes only), for the "all programmes taking
+     * this course" modes of the attendance, marking and exam screens.
+     */
+    public static function programmesQuery(?int $subjectId)
+    {
+        $members = self::memberIds($subjectId);
+
+        return \App\Models\Program::where('programs.status', '1')
+            ->whereHas('subjects', fn ($q) => $q->whereIn('subjects.id', $members))
+            ->orderBy('programs.title');
+    }
+
+    /**
      * The course of a group that a programme takes, or null when the programme
      * takes none of them.
      */

@@ -539,9 +539,10 @@
                                                                         data-program-id="{{ $programId }}"
                                                                         data-faculty-id="{{ $facultyId }}"
                                                                         data-subject-code="{{ $subject->code }}"
+                                                                        data-group-key="{{ $subject->course_group_id ? 'g'.$subject->course_group_id : '' }}"
                                                                         {{ !$hasMarks || !$state ? 'disabled' : '' }}>
                                                                 </td>
-                                                                <td><span class="badge badge-dark">{{ $subject->code }}</span></td>
+                                                                <td><span class="badge badge-dark">{{ $subject->code }}</span>@if($subject->course_group_id) <span class="badge badge-info" title="{{ __('In a course group: ticking it ticks the same course in the other programmes') }}"><i class="fas fa-link"></i></span>@endif</td>
                                                                 <td>{{ $subject->title ?? $subject->subject_name }}</td>
                                                                 <td class="text-center">{{ $subject->credit_hour }}</td>
                                                                 <td class="text-center">{{ $stats['total'] ?? 0 }}</td>
@@ -2680,7 +2681,18 @@
     }
 
     // Course checkbox changes
-    $(document).on('change', '.multi-course-checkbox', function() {
+    $(document).on('change', '.multi-course-checkbox', function(e, fromGroup) {
+        // A course in a course group is one course taught to several
+        // programmes under their own codes: ticking it ticks the others.
+        var groupKey = $(this).data('group-key');
+        if (groupKey && !fromGroup) {
+            var isChecked = $(this).is(':checked');
+            $('.multi-course-checkbox[data-group-key="' + groupKey + '"]:not(:disabled)').not(this).each(function() {
+                if ($(this).is(':checked') !== isChecked) {
+                    $(this).prop('checked', isChecked).trigger('change', [true]);
+                }
+            });
+        }
         updateMultiSelectedCount();
         // Update program-level "check all" checkbox
         var programId = $(this).data('program-id');

@@ -152,6 +152,14 @@
                                 </span>
                                 @endforeach
                             </div>
+                            @if(isset($group_courses) && $group_courses->count() > 1)
+                            <div class="small mt-2">
+                                <i class="fas fa-link"></i>
+                                {{ __('This course is in a course group. Each programme sits it under its own code:') }}
+                                {{ $group_courses->pluck('code')->implode(', ') }}.
+                                {{ __("Each student's attendance is saved on their own course.") }}
+                            </div>
+                            @endif
                         </div>
                     </div>
                 </div>

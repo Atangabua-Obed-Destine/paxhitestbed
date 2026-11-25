@@ -148,7 +148,8 @@
                     @isset($rows)
                     @foreach($rows as $row)
                         @php
-                        foreach($row->subjectMarks->where('subject_id', $selected_subject) as $check){
+                        $ownSubject = $own_course[$row->id] ?? $selected_subject;
+                        foreach($row->subjectMarks->where('subject_id', $ownSubject) as $check){
 
                             if($check->student_enroll_id == $row->id){
                                 $check_data = $check;
@@ -218,6 +219,7 @@
                                                         <input type="hidden" name="state" value="{{ $transition }}">
                                                         <input type="hidden" name="exam_type_id" value="{{ $examType->id }}">
                                                         <input type="hidden" name="subject_id" value="{{ $selected_subject }}">
+                                                        <input type="hidden" name="cross_program" value="{{ !empty($cross_program) ? 1 : 0 }}">
                                                         <input type="hidden" name="program_id" value="{{ $selected_program }}">
                                                         <input type="hidden" name="session_id" value="{{ $selected_session }}">
                                                         @if($selected_semester && $selected_semester != '0')
@@ -291,6 +293,7 @@
                                 <tbody>
                                   @php $currentProgramId = null; @endphp
                                   @foreach( $rows as $key => $row )
+                                  @php $ownSubject = $own_course[$row->id] ?? $selected_subject; @endphp
                                     @if(isset($cross_program) && $cross_program && $row->program_id != $currentProgramId)
                                         @php $currentProgramId = $row->program_id; @endphp
                                         <tr class="table-info font-weight-bold">
@@ -298,11 +301,11 @@
                                         </tr>
                                     @endif
                                     <input type="hidden" name="students[]" value="{{ $row->id }}">
-                                    <input type="hidden" name="subjects[]" value="{{ $subject->id }}">
+                                    <input type="hidden" name="subjects[]" value="{{ $ownSubject }}">
                                     <tr>
                                         <td class="text-center">
                                             @php
-                                                $_mRecord = $row->subjectMarks->firstWhere('subject_id', $selected_subject);
+                                                $_mRecord = $row->subjectMarks->firstWhere('subject_id', $ownSubject);
                                             @endphp
                                             @if($_mRecord && $_mRecord->workflow_state === 'published' && $_mRecord->is_published_override !== false)
                                             <div class="checkbox checkbox-warning d-inline">
@@ -331,7 +334,7 @@
                                             $contributeOfMarks = 0;
                                             $max_marks = $exam_contribution ?? 0;
                                         @endphp
-                                        @foreach($row->exams->where('subject_id', $selected_subject) as $exam)
+                                        @foreach($row->exams->where('subject_id', $ownSubject) as $exam)
                                         @if($exam->attendance == 1 && $exam->student_enroll_id == $row->id && $exam->contribution > 0)
 
                                         @php
@@ -350,7 +353,7 @@
                                         $activity = '0';
 
                                         //Subject Marks
-                                        foreach($row->subjectMarks->where('subject_id', $selected_subject) as $marking){
+                                        foreach($row->subjectMarks->where('subject_id', $ownSubject) as $marking){
                                         if($marking->student_enroll_id == $row->id){
                                          $mark = $marking->exam_marks;
                                          $attend = $marking->attendances;
@@ -364,11 +367,11 @@
                                         style="width: 80px;" data-v-max="{{ $max_marks }}" data-v-min="0" data-sync="total-{{ $row->id }}" onkeyup="marksCalculator('total', {{ $row->id }})" readonly required {{ $contribution != 100 ? 'disabled' : '' }}>
                                         </td>
                                         @php
-                                        $present = $studentAttendance->where('student_enroll_id', $row->id)->where('subject_id', $selected_subject)->where('attendance', 1)->count();
+                                        $present = $studentAttendance->where('student_enroll_id', $row->id)->where('subject_id', $ownSubject)->where('attendance', 1)->count();
 
-                                        $absent = $studentAttendance->where('student_enroll_id', $row->id)->where('subject_id', $selected_subject)->where('attendance', 2)->count();
+                                        $absent = $studentAttendance->where('student_enroll_id', $row->id)->where('subject_id', $ownSubject)->where('attendance', 2)->count();
 
-                                        $leave = $studentAttendance->where('student_enroll_id', $row->id)->where('subject_id', $selected_subject)->where('attendance', 3)->count();
+                                        $leave = $studentAttendance->where('student_enroll_id', $row->id)->where('subject_id', $ownSubject)->where('attendance', 3)->count();
 
                                         $total_present = $present + $leave;
                                         $total_attendance = $total_present + $absent;
@@ -403,7 +406,7 @@
                                             <input type="text" class="form-control total_marks autonumber" name="total_marks[]" id="total_marks" value="{{ round($total_marks, 2) }}" style="width: 80px;" data-v-max="100" data-v-min="0" readonly data-sync="total-{{ $row->id }}" onkeyup="marksCalculator('total', {{ $row->id }})" readonly required>
                                         </td>
                                         @php
-                                            $markingRecord = $row->subjectMarks->firstWhere('subject_id', $selected_subject);
+                                            $markingRecord = $row->subjectMarks->firstWhere('subject_id', $ownSubject);
                                             $workflowInfo = ($markingRecord && !empty($workflowMeta)) ? ($workflowMeta[$markingRecord->id] ?? null) : null;
                                             $overallMeta = $workflowInfo['overall'] ?? null;
                                             $overallBadge = $overallMeta['badge'] ?? 'secondary';
@@ -448,7 +451,7 @@
                                             @endif
                                         </td>
                                         <td>
-                                            @foreach($row->exams->where('subject_id', $selected_subject)->sortByDesc('contribution') as $exam)
+                                            @foreach($row->exams->where('subject_id', $ownSubject)->sortByDesc('contribution') as $exam)
                                                 @if($exam->contribution > 0)
                                                 @php
                                                     $examStateMeta = $examWorkflowMeta[$exam->exam_type_id] ?? null;

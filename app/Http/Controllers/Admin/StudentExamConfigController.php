@@ -170,16 +170,16 @@ class StudentExamConfigController extends Controller
 
         if ($this->canSearch($data)) {
             // ── Find all programmes that share this subject ──
-            $subjectModel = Subject::find($data['selected_subject']);
-            $data['sharing_programs'] = $subjectModel
-                ? $subjectModel->programs()->with('faculty')->where('programs.status', '1')->orderBy('programs.title')->get()
-                : collect();
+            $data['sharing_programs'] = \App\Services\Academic\CourseGroups::programmesQuery((int) $data['selected_subject'])->with('faculty')->get();
 
             $crossProgram = $data['cross_program'];
+            // A course group's other codes are this paper too, in cross-programme
+            // mode; each script code stays on the student's own exam row.
+            $courses = $crossProgram ? \App\Services\Academic\CourseGroups::memberIds((int) $data['selected_subject']) : [(int) $data['selected_subject']];
 
             $exams = Exam::with(['studentEnroll.student', 'studentEnroll.program.faculty', 'studentEnroll.semester', 'studentEnroll.section', 'scriptCode', 'type'])
                 ->where('attendance', '1')
-                ->where('subject_id', $data['selected_subject'])
+                ->whereIn('subject_id', $courses)
                 ->where('exam_type_id', $data['selected_type']);
 
             if ($crossProgram) {
@@ -284,7 +284,7 @@ class StudentExamConfigController extends Controller
             $conflicts = ExamScriptCode::whereIn('anonymous_code', array_values($nonEmptyCodes))
                 ->whereNotIn('exam_id', array_keys($nonEmptyCodes))
                 ->whereHas('exam', function ($query) use ($programId, $sessionId, $semesterId, $subjectId, $examTypeId, $crossProgram) {
-                    $query->where('subject_id', $subjectId)
+                    $query->whereIn('subject_id', $crossProgram ? \App\Services\Academic\CourseGroups::memberIds((int) $subjectId) : [(int) $subjectId])
                           ->where('exam_type_id', $examTypeId)
                           ->whereHas('studentEnroll', function ($q) use ($programId, $sessionId, $semesterId, $crossProgram) {
                               $q->where('session_id', $sessionId);

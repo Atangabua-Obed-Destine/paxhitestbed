@@ -196,9 +196,13 @@ class SubjectMarkingController extends Controller
 
         $crossProgram = $data['cross_program'];
         $sharingProgramIds = [];
+        // In cross-programme mode a course group's other codes are this course
+        // too: each programme takes it under its own code, and each student's
+        // marks stay on their own course.
+        $courses = ($crossProgram && !empty($request->subject)) ? \App\Services\Academic\CourseGroups::memberIds((int) $subject) : [(int) ($subject ?? 0)];
+        $data['group_courses'] = count($courses) > 1 ? Subject::whereIn('id', $courses)->orderBy('code')->get(['id', 'code', 'title']) : collect();
         if (!empty($request->subject)) {
-            $subjectModel = Subject::find($subject);
-            $data['sharing_programs'] = $subjectModel ? $subjectModel->programs()->with('faculty')->where('programs.status', '1')->orderBy('programs.title')->get() : collect();
+            $data['sharing_programs'] = \App\Services\Academic\CourseGroups::programmesQuery((int) $subject)->with('faculty')->get();
             $sharingProgramIds = $crossProgram ? $data['sharing_programs']->pluck('id')->toArray() : [];
         }
 
@@ -245,8 +249,8 @@ class SubjectMarkingController extends Controller
                 }
             }
             if (!empty($request->subject) && $request->subject != '0') {
-                $enrolls->with('exams')->whereHas('exams', function ($query) use ($subject) {
-                    $query->where('subject_id', $subject);
+                $enrolls->with('exams')->whereHas('exams', function ($query) use ($courses) {
+                    $query->whereIn('subject_id', $courses);
                 });
             }
             $enrolls->with('student')->whereHas('student', function ($query) {
@@ -254,6 +258,9 @@ class SubjectMarkingController extends Controller
             });
 
             $rows = $enrolls->get();
+            // Each row's own course: the course of its exam rows among $courses.
+            $data['own_course'] = \Illuminate\Support\Facades\DB::table('exams')->whereIn('student_enroll_id', $rows->pluck('id')->all())
+                ->whereIn('subject_id', $courses)->pluck('subject_id', 'student_enroll_id')->map(fn ($id) => (int) $id)->all();
 
             // Group by unique matricule - keep only latest enrollment per matricule
             $uniqueMatricules = $rows->groupBy('matricule')->map(function($group) {
@@ -297,7 +304,7 @@ class SubjectMarkingController extends Controller
             });
 
             if (!empty($request->subject) && $request->subject != '0') {
-                $attendances->where('subject_id', $subject);
+                $attendances->whereIn('subject_id', $courses);
             }
 
             $data['studentAttendance'] = $attendances->orderBy('id', 'desc')->get();
@@ -312,7 +319,7 @@ class SubjectMarkingController extends Controller
         if (!empty($request->program) && !empty($request->session) && !empty($request->subject)) {
             $selectedSubjectId = (int) $subject;
 
-            $markings = SubjectMarking::where('subject_id', $selectedSubjectId);
+            $markings = SubjectMarking::whereIn('subject_id', $courses);
 
             $markings->whereHas('studentEnroll', function ($query) use ($program, $session, $semester, $section, $crossProgram, $sharingProgramIds) {
                 if ($session != '0') {
@@ -338,8 +345,8 @@ class SubjectMarkingController extends Controller
             $markings->with([
                 'studentEnroll',
                 'studentEnroll.student',
-                'studentEnroll.exams' => function ($query) use ($selectedSubjectId) {
-                    $query->where('subject_id', $selectedSubjectId)->with('type');
+                'studentEnroll.exams' => function ($query) use ($courses) {
+                    $query->whereIn('subject_id', $courses)->with('type');
                 },
                 'examStates.examType',
             ]);
@@ -348,7 +355,7 @@ class SubjectMarkingController extends Controller
 
             foreach ($markingsCollection as $marking) {
                 $examTypeIds = $marking->studentEnroll?->exams
-                    ->where('subject_id', $selectedSubjectId)
+                    ->where('subject_id', $marking->subject_id)
                     ->pluck('exam_type_id')
                     ->filter()
                     ->unique()
@@ -1072,20 +1079,31 @@ class SubjectMarkingController extends Controller
         ]);
 
         try {
-            // Build query for student enrollments
-            $query = \App\Models\StudentEnroll::where('program_id', $request->program_id)
-                ->where('session_id', $request->session_id)
-                ->whereIn('status', [1, 2]); // Active and Completed enrollments
-            
-            // Add optional filters
-            if ($request->filled('semester_id') && $request->semester_id != '0') {
-                $query->where('semester_id', $request->semester_id);
+            // The students on the sheet: those with exam rows for the course —
+            // in cross-programme mode for any course of its group, across the
+            // programmes taking it — each moved on their own course. (This
+            // used to take every enrolment of the programme and create a mark
+            // record for students who do not take the course at all.)
+            $cross = $request->boolean('cross_program');
+            $courses = $cross ? \App\Services\Academic\CourseGroups::memberIds((int) $request->subject_id) : [(int) $request->subject_id];
+            $query = \App\Models\StudentEnroll::where('session_id', $request->session_id)
+                ->whereIn('status', [1, 2]) // Active and Completed enrollments
+                ->whereHas('exams', fn ($q) => $q->whereIn('subject_id', $courses));
+            if ($cross) {
+                $query->whereIn('program_id', \App\Services\Academic\CourseGroups::programmesQuery((int) $request->subject_id)->pluck('programs.id'));
+            } else {
+                $query->where('program_id', $request->program_id);
+                if ($request->filled('semester_id') && $request->semester_id != '0') {
+                    $query->where('semester_id', $request->semester_id);
+                }
+                if ($request->filled('section_id') && $request->section_id != '0') {
+                    $query->where('section_id', $request->section_id);
+                }
             }
-            if ($request->filled('section_id') && $request->section_id != '0') {
-                $query->where('section_id', $request->section_id);
-            }
-            
+
             $enrollments = $query->get();
+            $ownCourse = \Illuminate\Support\Facades\DB::table('exams')->whereIn('student_enroll_id', $enrollments->pluck('id')->all())
+                ->whereIn('subject_id', $courses)->pluck('subject_id', 'student_enroll_id');
 
             $successCount = 0;
             $failCount = 0;
@@ -1096,7 +1114,7 @@ class SubjectMarkingController extends Controller
                     // Find or create subject marking record
                     $subjectMarking = SubjectMarking::firstOrCreate([
                         'student_enroll_id' => $enrollment->id,
-                        'subject_id' => $request->subject_id,
+                        'subject_id' => (int) ($ownCourse[$enrollment->id] ?? $request->subject_id),
                     ], [
                         'total_marks' => 0,
                         'workflow_state' => SubjectMarking::STATE_DRAFT,

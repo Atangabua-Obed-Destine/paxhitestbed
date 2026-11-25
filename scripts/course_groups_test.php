@@ -187,6 +187,55 @@ try {
         ->whereIn('x.id', $onSheet)->distinct()->pluck('sm.subject_id');
     check('course totals are kept per programme course (both codes have totals)', $totals->contains($age->id) && $totals->contains($mgt->id), $totals->toJson());
 
+    echo "\n== Exam attendance, course totals, script codes, publishing, distribution ==\n";
+    $final = DB::table('exam_types')->where('is_final', 1)->where('status', 1)->value('id');
+    $takers = fn ($sid) => DB::table('student_enroll_subject as ses')->join('student_enrolls as e', 'e.id', 'ses.student_enroll_id')->join('students as st', 'st.id', 'e.student_id')
+        ->where('ses.subject_id', $sid)->where('e.session_id', 2)->where('e.semester_id', 1)->whereIn('e.status', [1, 2])->where('st.status', 1)->pluck('e.id');
+    $ageTakers = $takers($age->id); $mgtTakers = $takers($mgt->id);
+    $att = ['program' => 1, 'session' => 2, 'semester' => 1, 'section' => 1, 'subject' => $age->id, 'type' => $final, 'cross_program' => 1];
+    DB::table('exams')->whereIn('subject_id', [$age->id, $mgt->id])->where('exam_type_id', $final)->delete();
+    $html = (string) $call('GET', '/admin/exam/exam-attendance', $att)->getContent();
+    check('exam attendance lists both programmes\' students on one sheet', str_contains($html, 'course group')
+        && $mgtTakers->every(fn ($id) => str_contains($html, 'value="' . $id . '"')) && $ageTakers->every(fn ($id) => str_contains($html, 'value="' . $id . '"')));
+    $students = $ageTakers->merge($mgtTakers)->unique()->values()->all();
+    $ones = implode(',', array_fill(0, count($students), '1'));
+    $call('POST', '/admin/exam/exam-attendance', ['subject' => $age->id, 'type' => $final, 'date' => date('Y-m-d'), 'students' => $students,
+        'attendances' => $ones, 'signins' => $ones, 'signouts' => $ones, 'cross_program' => 1]);
+    $filed = DB::table('exams')->whereIn('student_enroll_id', $students)->where('exam_type_id', $final)->pluck('subject_id', 'student_enroll_id');
+    check('and saves each student\'s exam attendance on their own course', count($filed) === count($students)
+        && $mgtTakers->every(fn ($id) => (int) ($filed[$id] ?? 0) === $mgt->id) && $ageTakers->every(fn ($id) => (int) ($filed[$id] ?? 0) === $age->id),
+        json_encode(collect($filed)->countBy()) . ' ' . $errors());
+
+    $tot = ['program' => 1, 'session' => 2, 'semester' => 1, 'section' => 1, 'subject' => $age->id, 'cross_program' => 1];
+    $html = (string) $call('GET', '/admin/exam/subject-marking', $tot)->getContent();
+    check('the course-totals sheet posts each row on its own course', str_contains($html, 'name="subjects[]" value="' . $mgt->id . '"') && str_contains($html, 'name="subjects[]" value="' . $age->id . '"'));
+    // Start this year's CA round from draft (last year's marks are published).
+    DB::table('subject_marking_exam_states as s')->join('subject_markings as m', 'm.id', 's.subject_marking_id')
+        ->whereIn('m.subject_id', [$age->id, $mgt->id])->where('s.exam_type_id', $ca)->update(['s.workflow_state' => 'draft']);
+    DB::table('subject_markings')->whereIn('subject_id', [$age->id, $mgt->id])->update(['workflow_state' => 'draft']);
+    $before = DB::table('subject_markings')->whereIn('subject_id', [$age->id, $mgt->id])->pluck('id')->all();
+    $call('POST', '/admin/exam/subject-marking-bulk-transition', ['state' => 'submitted', 'exam_type_id' => $ca, 'subject_id' => $age->id, 'program_id' => 1, 'session_id' => 2, 'cross_program' => 1]);
+    $moved = DB::table('subject_marking_exam_states as s')->join('subject_markings as m', 'm.id', 's.subject_marking_id')
+        ->whereIn('m.subject_id', [$age->id, $mgt->id])->where('s.exam_type_id', $ca)->where('s.workflow_state', 'submitted')->distinct()->pluck('m.subject_id');
+    check('submitting the group moves both programmes\' marks on their own courses', $moved->contains($age->id) && $moved->contains($mgt->id), $moved->toJson() . ' ' . $errors());
+    $strays = DB::table('subject_markings as m')->whereIn('m.subject_id', [$age->id, $mgt->id])->whereNotIn('m.id', $before)
+        ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('exams as x')->whereColumn('x.student_enroll_id', 'm.student_enroll_id')->whereColumn('x.subject_id', 'm.subject_id'))->count();
+    check('and creates no mark record for a student who does not take the course', $strays === 0, $strays . ' strays');
+
+    $r = $call('GET', '/admin/exam/student-exam-config', ['program' => 1, 'session' => 2, 'semester' => 1, 'section' => 1, 'subject' => $age->id, 'type' => $final, 'cross_program' => 1]);
+    check('the script-code screen opens on the group', $r->getStatusCode() === 200, $r->getStatusCode());
+
+    $html = (string) $call('GET', '/admin/exam/exam-publishing', ['multi' => 1, 'session' => 2, 'semester' => 1, 'type' => $ca])->getContent();
+    check('publishing ticks a grouped course\'s other codes with it', str_contains($html, 'data-group-key="g' . $g->id . '"'));
+
+    $types = DB::table('exam_types')->where('status', 1)->whereIn('id', [$final, $ca])->pluck('id')->all();
+    $rcId = DB::table('result_contributions')->where('subject_id', $age->id)->value('id') ?? -1;
+    $call('POST', '/admin/exam/result-contribution', ['subject' => $age->id, 'id' => $rcId, 'attendances' => 10, 'assignments' => 0, 'activities' => 0,
+        'exams' => [$final, $ca], 'contributions' => [60, 30]]);
+    $w = fn ($sid) => DB::table('exam_type_contributions')->where('subject_id', $sid)->whereIn('exam_type_id', [$final, $ca])->orderBy('exam_type_id')->pluck('contribution')->map(fn ($v) => (float) $v)->all();
+    check('setting the mark distribution on one code sets it for the group', $w($age->id) === $w($mgt->id) && (float) DB::table('result_contributions')->where('subject_id', $mgt->id)->value('attendances') === 10.0,
+        json_encode([$w($age->id), $w($mgt->id)]) . ' ' . $errors());
+
     echo "\n== Removing the group ==\n";
     $call('DELETE', '/admin/academic/course-group/' . $g->id);
     check('the group is gone and its courses are separate again', CourseGroup::count() === 0 && Subject::whereNotNull('course_group_id')->count() === 0);

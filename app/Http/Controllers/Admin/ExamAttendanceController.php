@@ -118,6 +118,10 @@ class ExamAttendanceController extends Controller
         // Cross-programme toggle: include students from ALL programmes taking this course
         $crossProgram = $request->boolean('cross_program', false);
         $data['cross_program'] = $crossProgram;
+        // With a course group, "this course" in cross-programme mode is every
+        // course of the group: each programme sits it under its own code.
+        $groupCourses = ($crossProgram && !empty($request->subject)) ? \App\Services\Academic\CourseGroups::memberIds((int) $request->subject) : [(int) $request->subject];
+        $data['group_courses'] = count($groupCourses) > 1 ? Subject::whereIn('id', $groupCourses)->orderBy('code')->get(['id', 'code', 'title']) : collect();
 
 
         // Search Filter
@@ -235,10 +239,7 @@ class ExamAttendanceController extends Controller
             }
 
             // ── Find all programmes that share this subject ──
-            $subjectModel = Subject::find($subject);
-            $data['sharing_programs'] = $subjectModel
-                ? $subjectModel->programs()->with('faculty')->where('programs.status', '1')->orderBy('programs.title')->get()
-                : collect();
+            $data['sharing_programs'] = \App\Services\Academic\CourseGroups::programmesQuery((int) $subject)->with('faculty')->get();
 
 
             // Enrolls
@@ -281,8 +282,8 @@ class ExamAttendanceController extends Controller
             }
 
             if(!empty($request->subject) && $request->subject != '0'){
-                $enrolls->with('subjects')->whereHas('subjects', function ($query) use ($subject){
-                    $query->where('subject_id', $subject);
+                $enrolls->with('subjects')->whereHas('subjects', function ($query) use ($groupCourses){
+                    $query->whereIn('subject_id', $groupCourses);
                 });
             }
             $enrolls->with(['student', 'program.faculty', 'semester', 'section'])->whereHas('student', function ($query){
@@ -360,7 +361,7 @@ class ExamAttendanceController extends Controller
                 }
             }
             if(!empty($request->subject) && $request->subject != '0'){
-                $attendances->where('subject_id', $subject);
+                $attendances->whereIn('subject_id', $groupCourses);
             }
             if(!empty($request->type) && $request->type != '0'){
                 $attendances->where('exam_type_id', $type);
@@ -384,7 +385,7 @@ class ExamAttendanceController extends Controller
         if(!empty($request->program) && !empty($request->session) && !empty($request->subject) && !empty($request->type)){
             $examRoutineQuery = ExamRoutine::where('exam_type_id', $request->type)
                 ->where('session_id', $request->session)
-                ->where('subject_id', $request->subject)
+                ->whereIn('subject_id', $groupCourses)
                 ->where('status', 1);
 
             if ($crossProgram) {
@@ -419,9 +420,10 @@ class ExamAttendanceController extends Controller
         // Calculate course attendance percentage for each student (only for final exams)
         if(!empty($data['rows']) && !empty($request->subject) && !empty($data['selected_exam_type']) && $data['selected_exam_type']->is_final == 1){
             $data['student_attendance_percentages'] = [];
+            $own = \App\Services\Academic\CourseGroups::ownCourses((int) $request->subject, collect($data['rows'])->pluck('id')->all());
 
             foreach($data['rows'] as $row){
-                $data['student_attendance_percentages'][$row->id] = $this->courseAttendanceStats($row->id, $request->subject);
+                $data['student_attendance_percentages'][$row->id] = $this->courseAttendanceStats($row->id, $own[$row->id] ?? $request->subject);
             }
         }
 
@@ -431,12 +433,12 @@ class ExamAttendanceController extends Controller
         $data['ca_marks'] = [];
         if(!empty($data['rows']) && !empty($request->subject) && !empty($data['selected_exam_type']) && $data['selected_exam_type']->is_final == 1){
             $data['ca_types'] = ExamType::where('is_final', 0)->where('status', 1)
-                ->whereHas('exams', function($q) use ($subject){ $q->where('subject_id', $subject); })
+                ->whereHas('exams', function($q) use ($groupCourses){ $q->whereIn('subject_id', $groupCourses); })
                 ->orderBy('id')->get();
 
             $enrollIds = collect($data['rows'])->pluck('id')->all();
             if($data['ca_types']->isNotEmpty() && !empty($enrollIds)){
-                $caRows = Exam::where('subject_id', $subject)
+                $caRows = Exam::whereIn('subject_id', $groupCourses)
                     ->whereIn('exam_type_id', $data['ca_types']->pluck('id')->all())
                     ->whereIn('student_enroll_id', $enrollIds)
                     ->get();
@@ -470,9 +472,16 @@ class ExamAttendanceController extends Controller
             'students' => 'required',
         ]);
 
-        // Block submission if mark distribution is not configured for this course
-        if (!\App\Services\ResultContributionService::isConfigured($request->subject)) {
-            Flasher::addError('Mark distribution has not been configured for this course. Please configure it before taking exam attendance.', 'Error');
+        // Each student's own course: on a course-group sheet (cross-programme
+        // mode) a student of another programme sits the paper under their own
+        // code, and their attendance is filed there.
+        $ownCourse = \App\Services\Academic\CourseGroups::ownCourses((int) $request->subject, (array) $request->students);
+        $sheetCourses = array_values(array_unique(array_merge([(int) $request->subject], array_values($ownCourse))));
+
+        // Block submission if mark distribution is not configured for a course on the sheet
+        $unconfigured = array_values(array_filter($sheetCourses, fn ($id) => !\App\Services\ResultContributionService::isConfigured($id)));
+        if ($unconfigured) {
+            Flasher::addError(__('Mark distribution has not been configured for :codes. Please configure it before taking exam attendance.', ['codes' => Subject::whereIn('id', $unconfigured)->pluck('code')->implode(', ')]), 'Error');
             return redirect()->back();
         }
 
@@ -488,15 +497,15 @@ class ExamAttendanceController extends Controller
         $signins  = $isFinal && $request->filled('signins')  ? explode(",", $request->signins)  : [];
         $signouts = $isFinal && $request->filled('signouts') ? explode(",", $request->signouts) : [];
 
-        $contribution = \App\Services\ResultContributionService::getExamTypeContribution(
-            $request->subject,
-            $request->type
-        );
+        $contributionOf = [];
+        foreach ($sheetCourses as $courseId) {
+            $contributionOf[$courseId] = \App\Services\ResultContributionService::getExamTypeContribution($courseId, $request->type);
+        }
 
         $currentUserId = Auth::guard('web')->id();
 
         // ── Pre-load existing exam records for all students in one query ──
-        $existingExams = Exam::where('subject_id', $request->subject)
+        $existingExams = Exam::whereIn('subject_id', $sheetCourses)
             ->where('exam_type_id', $request->type)
             ->whereIn('student_enroll_id', $request->students)
             ->get()
@@ -518,6 +527,8 @@ class ExamAttendanceController extends Controller
 
                 // Bypass only takes effect when the user is permitted to bypass.
                 $bypass_enabled = $canBypass && in_array($student_id, $bypasses);
+                $courseId = $ownCourse[(int) $student_id] ?? (int) $request->subject;
+                $contribution = $contributionOf[$courseId] ?? null;
 
                 // Check lock status using pre-loaded records
                 $existingExam = $existingExams->get($student_id);
@@ -532,7 +543,7 @@ class ExamAttendanceController extends Controller
                 $attendanceValue = $attendances[$key] ?? 2;
                 $values = [
                     'student_enroll_id' => $student_id,
-                    'subject_id' => $request->subject,
+                    'subject_id' => $courseId,
                     'exam_type_id' => $request->type,
                     'date' => $request->date,
                     'marks' => $examType->marks,
@@ -550,7 +561,7 @@ class ExamAttendanceController extends Controller
 
                     // Enforce eligibility server-side: an ineligible, non-bypassed student
                     // is forced Absent regardless of what was submitted.
-                    $eligible = $this->isCourseAttendanceEligible($student_id, $request->subject, $attendanceSetting);
+                    $eligible = $this->isCourseAttendanceEligible($student_id, $courseId, $attendanceSetting);
                     if (!$eligible && !$bypass_enabled) {
                         $si = false;
                         $so = false;
@@ -568,7 +579,7 @@ class ExamAttendanceController extends Controller
                 $exam = Exam::updateOrCreate(
                 [
                     'student_enroll_id' => $student_id,
-                    'subject_id' => $request->subject,
+                    'subject_id' => $courseId,
                     'exam_type_id' => $request->type
                 ], $values);
 
@@ -585,7 +596,7 @@ class ExamAttendanceController extends Controller
         // Sync exam data to subject_markings so Subject Result page reflects updated data
         $syncedStudents = collect($request->students)->unique();
         foreach ($syncedStudents as $studentEnrollId) {
-            \App\Services\ExamMarksSyncService::sync((int)$studentEnrollId, (int)$request->subject);
+            \App\Services\ExamMarksSyncService::sync((int)$studentEnrollId, (int) ($ownCourse[(int) $studentEnrollId] ?? $request->subject));
         }
 
         Flasher::addSuccess(__('msg_updated_successfully'), __('msg_success'));
@@ -626,9 +637,9 @@ class ExamAttendanceController extends Controller
         }
 
         $subjectModel = Subject::find($subject);
-        $sharingPrograms = $subjectModel
-            ? $subjectModel->programs()->where('programs.status', '1')->orderBy('programs.title')->get()
-            : collect();
+        $sharingPrograms = \App\Services\Academic\CourseGroups::programmesQuery((int) $subject)->get();
+        // A course group's other codes, in all-programmes mode (see index()).
+        $groupCourses = $crossProgram ? \App\Services\Academic\CourseGroups::memberIds((int) $subject) : [(int) $subject];
 
         // Gather enrolls (same rules as index()).
         $enrolls = StudentEnroll::query();
@@ -643,7 +654,7 @@ class ExamAttendanceController extends Controller
             if (!empty($semester) && $semester != '0') { $enrolls->where('semester_id', $semester); }
             if (!empty($section) && $section != '0') { $enrolls->where('section_id', $section); }
         }
-        $enrolls->whereHas('subjects', function ($q) use ($subject) { $q->where('subject_id', $subject); })
+        $enrolls->whereHas('subjects', function ($q) use ($groupCourses) { $q->whereIn('subject_id', $groupCourses); })
             ->with(['student', 'program'])
             ->whereHas('student', function ($q) { $q->where('status', '1'); });
         $rows = $enrolls->get();
@@ -663,7 +674,7 @@ class ExamAttendanceController extends Controller
         $attendanceSetting = ExamAttendanceSetting::first();
 
         // Saved bypass state, to flag bypassed students on the sheet.
-        $bypassMap = Exam::where('subject_id', $subject)->where('exam_type_id', $type)
+        $bypassMap = Exam::whereIn('subject_id', $groupCourses)->where('exam_type_id', $type)
             ->whereIn('student_enroll_id', $rows->pluck('id')->all())
             ->pluck('bypass_course_attendance', 'student_enroll_id');
 
@@ -672,12 +683,12 @@ class ExamAttendanceController extends Controller
         $ca_marks = [];
         if($examTypeModel && $examTypeModel->is_final == 1){
             $ca_types = ExamType::where('is_final', 0)->where('status', 1)
-                ->whereHas('exams', function($q) use ($subject){ $q->where('subject_id', $subject); })
+                ->whereHas('exams', function($q) use ($groupCourses){ $q->whereIn('subject_id', $groupCourses); })
                 ->orderBy('id')->get();
 
             $enrollIds = $rows->pluck('id')->all();
             if($ca_types->isNotEmpty() && !empty($enrollIds)){
-                $caRows = Exam::where('subject_id', $subject)
+                $caRows = Exam::whereIn('subject_id', $groupCourses)
                     ->whereIn('exam_type_id', $ca_types->pluck('id')->all())
                     ->whereIn('student_enroll_id', $enrollIds)
                     ->get();
@@ -691,8 +702,9 @@ class ExamAttendanceController extends Controller
         }
 
         $sheet = [];
+        $own = \App\Services\Academic\CourseGroups::ownCourses((int) $subject, $rows->pluck('id')->all());
         foreach ($rows as $r) {
-            $stats = $this->courseAttendanceStats($r->id, $subject);
+            $stats = $this->courseAttendanceStats($r->id, $own[$r->id] ?? $subject);
             $sheet[] = [
                 'id'         => $r->id,
                 'matricule'  => $r->matricule,
@@ -701,7 +713,7 @@ class ExamAttendanceController extends Controller
                 'percentage' => $stats['percentage'],
                 'attendance_mark' => $stats['attendance_mark'],
                 'attendance_contribution' => $stats['attendance_contribution'],
-                'eligible'   => $this->isCourseAttendanceEligible($r->id, $subject, $attendanceSetting),
+                'eligible'   => $this->isCourseAttendanceEligible($r->id, $own[$r->id] ?? $subject, $attendanceSetting),
                 'bypassed'   => (bool) ($bypassMap[$r->id] ?? false),
             ];
         }
@@ -813,7 +825,7 @@ class ExamAttendanceController extends Controller
         }
 
         $exam = Exam::where('student_enroll_id', $request->student_enroll_id)
-            ->where('subject_id', $request->subject_id)
+            ->whereIn('subject_id', \App\Services\Academic\CourseGroups::memberIds((int) $request->subject_id))
             ->where('exam_type_id', $request->exam_type_id)
             ->first();
 
@@ -842,7 +854,7 @@ class ExamAttendanceController extends Controller
         }
 
         $count = Exam::whereIn('student_enroll_id', $request->student_enroll_ids)
-            ->where('subject_id', $request->subject_id)
+            ->whereIn('subject_id', \App\Services\Academic\CourseGroups::memberIds((int) $request->subject_id))
             ->where('exam_type_id', $request->exam_type_id)
             ->update(['attendance_locked' => 0]);
 
