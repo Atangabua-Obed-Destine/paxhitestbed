@@ -93,7 +93,22 @@ try {
     check('the print page opens', $st === 200, $st);
     check('and shows both sheets with their breaks', substr_count($html, 'class="sheet"') === 2 && str_contains($html, 'Break (Holy Mass)') && str_contains($html, 'SPECIALTY'));
     [$st, $html] = $get('web', $admin, 'GET', '/admin/routine/class-routine-document');
-    check('without a semester it asks for one', $st === 200 && str_contains($html, 'Choose a session and a semester'));
+    check('without a semester it asks for a semester type', $st === 200 && str_contains($html, 'Choose a semester type'));
+    check('the bar offers semester types and a multi-select of semesters', str_contains($html, 'id="tt-type"') && str_contains($html, 'value="FIRST SEMESTER"') && str_contains($html, 'name="semester[]"') && str_contains($html, 'multiple'));
+
+    // Year 2's first semester gets one class, so "First Semester" covers two semesters.
+    $y2 = Semester::where('status', 1)->where('id', '!=', 1)->get()->first(fn ($s) => stripos($s->title, 'first semester') === 0);
+    if ($y2) {
+        ClassRoutine::where('session_id', 5)->where('semester_id', $y2->id)->delete();
+        ClassRoutine::create(['teacher_id' => 14, 'subject_id' => Subject::where('code', 'ENG1101H')->value('id'), 'room_id' => 1, 'session_id' => 5, 'program_id' => 9,
+            'semester_id' => $y2->id, 'section_id' => 1, 'day' => 4, 'start_time' => '08:00:00', 'end_time' => '10:00:00', 'status' => 1]);
+        [$st, $html] = $get('web', $admin, 'GET', '/admin/routine/class-routine-document', ['session' => 5, 'type' => 'FIRST SEMESTER']);
+        check('a semester type alone prints every semester of that type (Year 1 and Year 2)', substr_count($html, 'class="sheet"') === 3 && str_contains($html, 'TIME TABLE YEAR I') && str_contains($html, 'TIME TABLE YEAR II'), substr_count($html, 'class="sheet"') . ' sheets');
+        [$st, $html] = $get('web', $admin, 'GET', '/admin/routine/class-routine-document', ['session' => 5, 'type' => 'FIRST SEMESTER', 'semester' => [$y2->id]]);
+        check('ticking one semester prints only that one', substr_count($html, 'class="sheet"') === 1 && str_contains($html, 'TIME TABLE YEAR II'));
+        [$st, $html] = $get('web', $admin, 'GET', '/admin/routine/class-routine-document', ['session' => 5, 'semester' => 1]);
+        check('an old single-semester link still works', substr_count($html, 'class="sheet"') === 2 && str_contains($html, 'value="FIRST SEMESTER" selected'));
+    }
 
     echo "\n== Breaks on the other timetables ==\n";
     [$st, $html] = $get('web', $admin, 'GET', '/admin/routine/class-routine', ['program' => 6, 'session' => 5, 'semester' => 1, 'section' => 1]);

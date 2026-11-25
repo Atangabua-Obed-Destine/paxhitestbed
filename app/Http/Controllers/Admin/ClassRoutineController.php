@@ -65,21 +65,49 @@ class ClassRoutineController extends Controller
     public function document(Request $request)
     {
         $session = $request->session ? Session::find($request->session) : Session::where('current', '1')->first();
-        $semester = $request->semester ? Semester::find($request->semester) : null;
+
+        // Semester type (First Semester, Second Semester, First Resit…): the
+        // semester's name without its year ("FIRST SEMESTER - Year 2" and
+        // "FIRST SEMESTER - Year 1" are both FIRST SEMESTER). The semesters
+        // picker lists that type's semesters; several can be printed at once.
+        $semesters = Semester::where('status', '1')->orderBy('year')->orderBy('id')->get();
+        $typeOf = fn ($s) => strtoupper(trim(preg_replace('/\s*-\s*(Year\s*\d+|Y\s*\d+)\s*$/i', '', (string) $s->title)));
+        $types = $semesters->sortBy('id')->map($typeOf)->unique()->values();
+
+        $chosen = collect((array) $request->semester)->filter()->map(fn ($id) => (int) $id)->values();
+        $type = $request->type ? strtoupper($request->type) : null;
+        if (!$type && $chosen->isNotEmpty()) {
+            $type = optional($semesters->firstWhere('id', $chosen->first()), $typeOf);
+        }
+        if ($type && $chosen->isEmpty()) {
+            // A type with no semester ticked means all of that type.
+            $chosen = $semesters->filter(fn ($s) => $typeOf($s) === $type)->pluck('id')->values();
+        }
+        $selected = $semesters->whereIn('id', $chosen->all())->values();
+
+        $sheets = [];
+        if ($session) {
+            $doc = new \App\Services\Academic\TimetableDocument();
+            foreach ($selected as $semester) {
+                $sheets = array_merge($sheets, $doc->sheets($session, $semester, $request->program ? (int) $request->program : null));
+            }
+        }
 
         return view($this->view.'.document', [
-            'title' => __('Timetables') . ($semester ? ' — ' . $semester->title : ''),
+            'title' => __('Timetables') . ($selected->isNotEmpty() ? ' — ' . $selected->pluck('title')->implode(', ') : ''),
             'controls' => true,
             'action' => route('admin.class-routine.document'),
             'back' => route('admin.class-routine.index'),
             'sessions' => Session::where('status', '1')->orderBy('id', 'desc')->get(),
-            'semesters' => Semester::where('status', '1')->orderBy('year')->orderBy('id')->get(),
+            'semesters' => $semesters,
+            'semesterTypes' => $types,
+            'semesterTypeOf' => $semesters->mapWithKeys(fn ($s) => [$s->id => $typeOf($s)]),
+            'selectedType' => $type,
+            'selectedSemesters' => $selected->pluck('id')->all(),
             'programs' => Program::where('status', '1')->orderBy('title')->get(),
             'session' => $session,
-            'semester' => $semester,
-            'sheets' => ($session && $semester)
-                ? (new \App\Services\Academic\TimetableDocument())->sheets($session, $semester, $request->program ? (int) $request->program : null)
-                : [],
+            'semester' => $selected->first(),
+            'sheets' => $sheets,
         ]);
     }
 

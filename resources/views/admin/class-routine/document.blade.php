@@ -4,7 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ $title }}</title>
+@if(!empty($controls))
+<link rel="stylesheet" href="{{ asset('dashboard/plugins/select2/css/select2.min.css') }}">
+@endif
 <style>
+    .tt-sem { min-width: 340px; display: inline-block; }
+    .tt-sem .select2-container { min-width: 340px; color: #222; }
+    .bar .select2-container--default .select2-selection--multiple { border: 0; border-radius: 4px; min-height: 31px; }
     @page { size: A4 landscape; margin: 12mm 10mm; }
     * { box-sizing: border-box; }
     body { margin: 0; background: #e9ecef; color: #000; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
@@ -52,11 +58,19 @@
             <option value="{{ $s->id }}" {{ (int) optional($session)->id === (int) $s->id ? 'selected' : '' }}>{{ $s->title }}</option>
             @endforeach
         </select>
-        <select name="semester" aria-label="{{ __('Semester') }}">
-            @foreach($semesters as $s)
-            <option value="{{ $s->id }}" {{ (int) optional($semester)->id === (int) $s->id ? 'selected' : '' }}>{{ $s->title }}</option>
+        <select name="type" id="tt-type" aria-label="{{ __('Semester type') }}">
+            <option value="">{{ __('Semester type') }}</option>
+            @foreach($semesterTypes as $t)
+            <option value="{{ $t }}" {{ $selectedType === $t ? 'selected' : '' }}>{{ ucwords(strtolower($t)) }}</option>
             @endforeach
         </select>
+        <span class="tt-sem">
+            <select name="semester[]" id="tt-semester" multiple aria-label="{{ __('Semesters') }}">
+                @foreach($semesters as $s)
+                <option value="{{ $s->id }}" data-type="{{ $semesterTypeOf[$s->id] }}" {{ in_array((int) $s->id, $selectedSemesters, true) ? 'selected' : '' }}>{{ $s->title }}</option>
+                @endforeach
+            </select>
+        </span>
         <select name="program" aria-label="{{ __('Programme') }}">
             <option value="">{{ __('All specialties') }}</option>
             @foreach($programs as $p)
@@ -124,8 +138,35 @@
 </section>
 @empty
 <div class="empty-state">
-    {{ $session && $semester ? __('No classes are scheduled for this semester yet.') : __('Choose a session and a semester.') }}
+    {{ $session && $semester ? __('No classes are scheduled for this semester yet.') : __('Choose a semester type (and, if you like, the semesters), then Show.') }}
 </div>
 @endforelse
+@if(!empty($controls))
+<script src="{{ asset('dashboard/plugins/jquery/js/jquery.min.js') }}"></script>
+<script src="{{ asset('dashboard/plugins/select2/js/select2.full.min.js') }}"></script>
+<script>
+(function () {
+    var $type = $('#tt-type'), $sem = $('#tt-semester');
+    var all = $sem.find('option').map(function () { return { id: this.value, text: $(this).text(), type: $(this).data('type') }; }).get();
+    var chosen = ($sem.val() || []);
+    // The semesters picker lists the chosen type's semesters; choosing a
+    // type ticks all of them, and any can be unticked.
+    function fill(selectAll) {
+        var t = $type.val();
+        $sem.empty();
+        all.forEach(function (o) {
+            if (!t || o.type === t) {
+                var on = selectAll ? true : chosen.indexOf(o.id) !== -1;
+                $sem.append(new Option(o.text, o.id, on, on));
+            }
+        });
+        $sem.trigger('change');
+    }
+    $sem.select2({ placeholder: '{{ __('All semesters of this type') }}', width: 'resolve' });
+    fill(false);
+    $type.on('change', function () { fill(true); });
+})();
+</script>
+@endif
 </body>
 </html>
