@@ -339,16 +339,21 @@
             <div class="et-figures">
                 <a class="et-figure" href="{{ route('student.transcript.index') }}">
                     <p class="et-figure-label"><i class="fas fa-chart-line" aria-hidden="true"></i> {{ __('Grade point average') }}</p>
-                    <p class="et-figure-value">{{ number_format($cgpa ?? 0, 2) }} <small>/ 4.00</small></p>
-                    <div class="et-meter" aria-hidden="true"><span class="accent" style="width: {{ min(100, round(($cgpa ?? 0) / 4 * 100)) }}%"></span></div>
-                    <p class="et-figure-sub"><b>{{ $totalCredits ?? 0 }}</b> {{ __('credits earned') }}</p>
+                    @if(($totalCourses ?? 0) > 0)
+                        <p class="et-figure-value">{{ number_format($cgpa ?? 0, 2) }} <small>/ 4.00</small></p>
+                        <div class="et-meter" aria-hidden="true"><span class="accent" style="width: {{ min(100, round(($cgpa ?? 0) / 4 * 100)) }}%"></span></div>
+                        <p class="et-figure-sub"><b>{{ $totalCredits ?? 0 }}</b> {{ __('credits earned') }}</p>
+                    @else
+                        <p class="et-figure-value">— <small>{{ __('no grades yet') }}</small></p>
+                        <p class="et-figure-sub">{{ __('Worked out once your first results are published.') }}</p>
+                    @endif
                 </a>
                 <a class="et-figure" href="{{ route('student.exam-results.index') }}">
                     <p class="et-figure-label"><i class="fas fa-book-reader" aria-hidden="true"></i> {{ __('Courses passed') }}</p>
                     <p class="et-figure-value">{{ $passedCourses ?? 0 }} <small>{{ __('of :n', ['n' => $totalCourses ?? 0]) }}</small></p>
                     <div class="et-meter" role="img" aria-label="{{ __(':p% of courses taken have been passed', ['p' => $passShare]) }}"><span class="good" style="width: {{ $passShare }}%"></span>@if(($failedCourses ?? 0) > 0)<span class="bad" style="width: {{ 100 - $passShare }}%"></span>@endif</div>
                     <p class="et-figure-sub">
-                        @if(($failedCourses ?? 0) > 0)<b>{{ $failedCourses }}</b> {{ __('still to pass') }}@else{{ __('Every course taken is passed.') }}@endif
+                        @if(($totalCourses ?? 0) === 0){{ __('No results published yet.') }}@elseif(($failedCourses ?? 0) > 0)<b>{{ $failedCourses }}</b> {{ __('still to pass') }}@else{{ __('Every course taken is passed.') }}@endif
                     </p>
                 </a>
                 <a class="et-figure" href="{{ route('student.attendance.index') }}">
@@ -418,8 +423,12 @@
                             <div class="et-bar-track" style="margin-top:6px"><span class="et-bar-fill" style="width: {{ $pct($have, $need) }}%"></span></div>
                         </div>
                         @endforeach
-                        @if(!$g['is_eligible'] && !empty($g['reasons']))
-                        <ul class="et-reasons">@foreach($g['reasons'] as $reason)<li>{{ $reason }}</li>@endforeach</ul>
+                        @php
+                            // "Failed 0 compulsory course(s)" is not a reason; drop counts of zero.
+                            $reasons = collect($g['reasons'] ?? [])->reject(fn ($r) => preg_match('/\b0\b/', (string) $r))->values();
+                        @endphp
+                        @if(!$g['is_eligible'] && $reasons->count())
+                        <ul class="et-reasons">@foreach($reasons as $reason)<li>{{ $reason }}</li>@endforeach</ul>
                         @endif
                     </div>
                 </div>
