@@ -241,7 +241,8 @@
                         <ol class="et-timeline">
                             @foreach($todayAgenda as $row)
                                 @php
-                                    $isBreak = $row instanceof \App\Models\TimetableBreak;
+                                    // Breaks arrive as plain rows marked is_break (TimetableBreak::forClasses).
+                                    $isBreak = !empty($row->is_break);
                                     $start = date('H:i:s', strtotime($row->start_time));
                                     $end = date('H:i:s', strtotime($row->end_time));
                                     $state = $isBreak ? 'break' : ($end <= $clock ? 'done' : ($start <= $clock ? 'now' : ($next && $row->id === $next->id ? 'next' : 'later')));

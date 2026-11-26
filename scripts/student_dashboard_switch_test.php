@@ -97,12 +97,15 @@ try {
     DB::table('class_routines')->insert(['teacher_id' => App\User::where('status', '1')->value('id'), 'subject_id' => $subject->id, 'room_id' => DB::table('class_rooms')->value('id') ?? 1,
         'session_id' => $active->session_id, 'program_id' => $active->program_id, 'semester_id' => $active->semester_id, 'section_id' => $active->section_id,
         'start_time' => '23:58:00', 'end_time' => '23:59:00', 'day' => $today, 'status' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    // A break every day, as paxhi.org has (Holy Mass): breaks come as plain rows.
+    DB::table('timetable_breaks')->insert(['title' => 'Test Holy Mass', 'start_time' => '23:58:30', 'end_time' => '23:58:45', 'days' => null, 'status' => 1, 'created_at' => now(), 'updated_at' => now()]);
     [$st, $html, $res] = $http('student', $student, 'GET', '/student/dashboard', [], ['selected_enrollment_id' => $active->id]);
     if ($st === 302) { echo '        (redirect to ' . $res->headers->get('Location') . ' for student ' . $student->id . ")
 "; }
     check('the dashboard opens', $st === 200, $st . ' ' . ($st === 302 ? $http_last_location = '' : ''));
     check('it is the new design', str_contains($html, 'et-mast') && str_contains($html, 'Your studies at a glance'));
     check('today\'s classes now show (the old query never matched a day)', str_contains($html, $subject->code) && str_contains($html, 'Your classes today'));
+    check('the day\'s break shows between the classes', str_contains($html, 'Test Holy Mass'));
     check('it has the Messages panel', str_contains($html, 'Open the mailbox'));
     check('the old month calendar is gone', !str_contains($html, "id='calendar'") && !str_contains($html, 'id="calendar"'));
     check('the course overview is there', str_contains($html, 'Your courses, semester by semester'));
