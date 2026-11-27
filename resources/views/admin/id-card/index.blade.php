@@ -119,7 +119,16 @@
                                             @endif
                                             </a>
                                         </td>
-                                        <td>{{ $student->first_name }} {{ $student->last_name }}</td>
+                                        <td>
+                                            <span style="white-space: nowrap;">
+                                                <span id="name-text-{{ $student->id }}">{{ trim($student->first_name . ' ' . $student->last_name) }}</span>
+                                                <a href="#" class="name-edit-icon" title="{{ __('btn_edit') }} {{ __('field_name') }}"
+                                                   style="margin-left: 6px; color: #667eea;"
+                                                   onclick="openNameModal(event, {{ $student->id }}, @js($student->first_name), @js($student->last_name))">
+                                                    <i class="fas fa-pen"></i>
+                                                </a>
+                                            </span>
+                                        </td>
                                         <td>{{ $row->program->shortcode ?? '' }}</td>
                                         <td>{{ $row->session->title ?? '' }}</td>
                                         <td>{{ $row->semester->title ?? '' }}</td>
@@ -210,6 +219,48 @@
     </div>
 </div>
 
+<!-- Name Update Modal -->
+<div class="modal fade" id="nameUpdateModal" tabindex="-1" role="dialog" aria-labelledby="nameUpdateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="nameUpdateModalLabel">
+                    <i class="fas fa-pen"></i> {{ __('btn_edit') }} {{ __('field_name') }}
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" onclick="$('#nameUpdateModal').modal('hide');">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="nameUpdateForm" onsubmit="return false;">
+                    @csrf
+                    <input type="hidden" id="modal-name-student-id" value="">
+
+                    <div class="form-group">
+                        <label for="modal-first-name" class="form-label">{{ __('field_first_name') }} <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="modal-first-name" maxlength="255" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="modal-last-name" class="form-label">{{ __('field_last_name') }}</label>
+                        <input type="text" class="form-control" id="modal-last-name" maxlength="255" autocomplete="off">
+                    </div>
+
+                    <div id="name-error" class="alert alert-danger" style="display: none;"></div>
+                    <div id="name-success" class="alert alert-success" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="$('#nameUpdateModal').modal('hide');">
+                    <i class="fas fa-times"></i> {{ __('btn_close') }}
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-save-name" onclick="saveName()">
+                    <i class="fas fa-save"></i> {{ __('btn_save') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @section('page_js')
@@ -237,6 +288,64 @@
         $('#photoUpdateModal').modal('show');
     }
     
+    // Open the name-correction modal for a student.
+    var currentNameStudentId = null;
+    function openNameModal(e, studentId, firstName, lastName) {
+        if (e) { e.preventDefault(); }
+        currentNameStudentId = studentId;
+        $('#modal-name-student-id').val(studentId);
+        $('#modal-first-name').val(firstName || '');
+        $('#modal-last-name').val(lastName || '');
+        $('#name-error').hide();
+        $('#name-success').hide();
+        $('#nameUpdateModal').modal('show');
+        setTimeout(function () { $('#modal-first-name').trigger('focus'); }, 500);
+    }
+
+    // Save the corrected name via AJAX and update the row in place.
+    function saveName() {
+        var firstName = $.trim($('#modal-first-name').val());
+        var lastName = $.trim($('#modal-last-name').val());
+
+        if (firstName === '') {
+            $('#name-error').text('{{ __("field_first_name") }} {{ __("required_field") }}').show();
+            return;
+        }
+
+        $('#btn-save-name').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> {{ __("btn_save") }}');
+        $('#name-error').hide();
+        $('#name-success').hide();
+
+        $.ajax({
+            url: '{{ url("admin/admission/id-card-update-name") }}/' + currentNameStudentId,
+            type: 'POST',
+            data: {
+                _token: '{{ csrf_token() }}',
+                first_name: firstName,
+                last_name: lastName
+            },
+            success: function (response) {
+                if (response.success) {
+                    $('#name-text-' + currentNameStudentId).text(response.full_name);
+                    $('#name-success').text(response.message).show();
+                    setTimeout(function () { $('#nameUpdateModal').modal('hide'); }, 1200);
+                } else {
+                    $('#name-error').text(response.message).show();
+                }
+            },
+            error: function (xhr) {
+                var message = '{{ __("msg_updated_error") }}';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                }
+                $('#name-error').text(message).show();
+            },
+            complete: function () {
+                $('#btn-save-name').prop('disabled', false).html('<i class="fas fa-save"></i> {{ __("btn_save") }}');
+            }
+        });
+    }
+
     // Download selected ID cards as ZIP
     function downloadSelectedAsZip() {
         var numberOfChecked = $("input[data_id]:checked").length;

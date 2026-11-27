@@ -279,6 +279,51 @@ class StudentIdCardController extends Controller
     }
 
     /**
+     * Correct a student's name from the ID card list, without leaving the
+     * screen. The card prints "first last", so both are editable here; the
+     * same two fields the full student-edit form holds, kept in step with it.
+     *
+     * @param Request $request
+     * @param int $id Student ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateName(Request $request, $id)
+    {
+        try {
+            $student = Student::findOrFail($id);
+
+            $data = $request->validate([
+                'first_name' => 'required|string|max:255',
+                'last_name'  => 'nullable|string|max:255',
+            ]);
+
+            $student->first_name = trim($data['first_name']);
+            $student->last_name  = trim($data['last_name'] ?? '');
+            $student->save();
+
+            $fullName = trim($student->first_name . ' ' . $student->last_name);
+
+            return response()->json([
+                'success'    => true,
+                'message'    => __('msg_updated_successfully'),
+                'first_name' => $student->first_name,
+                'last_name'  => $student->last_name,
+                'full_name'  => $fullName,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => implode(' ', \Illuminate\Support\Arr::flatten($e->errors())),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Download single ID card as image
      *
      * @param int $id Enrollment ID

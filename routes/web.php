@@ -350,6 +350,7 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::get('admission/id-card-print/{id}', 'StudentIdCardController@print')->name('id-card.print');
     Route::get('admission/id-card-multiprint', 'StudentIdCardController@multiPrint')->name('id-card.multiprint');
     Route::post('admission/id-card-update-photo/{id}', 'StudentIdCardController@updatePhoto')->name('id-card.update-photo');
+    Route::post('admission/id-card-update-name/{id}', 'StudentIdCardController@updateName')->name('id-card.update-name');
     Route::get('admission/id-card-download/{id}', 'StudentIdCardController@download')->name('id-card.download');
     Route::post('admission/id-card-download-zip', 'StudentIdCardController@downloadZip')->name('id-card.download-zip');
     Route::resource('admission/id-card-setting', 'StudentIdCardSettingController');
