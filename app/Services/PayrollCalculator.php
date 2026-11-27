@@ -169,8 +169,16 @@ class PayrollCalculator
         $employerTax = 0.0;
 
         try {
-            ['lines' => $taxLines, 'employee' => $tax, 'employer' => $employerTax]
-                = $this->taxFor($user->id, $taxableSalary, $month);
+            $taxResult = $this->taxFor($user->id, $taxableSalary, $month);
+            $taxLines = $taxResult['lines'];
+            $tax = $taxResult['employee'];
+            $employerTax = $taxResult['employer'];
+
+            if (!empty($taxResult['untaxed'])) {
+                $notes[] = __('No income tax rates are in force for :month, so this payroll withholds no income tax.', [
+                    'month' => $month->format('F Y'),
+                ]);
+            }
         } catch (\RuntimeException $e) {
             $problems[] = $e->getMessage();
         }
@@ -225,7 +233,11 @@ class PayrollCalculator
     {
         $month = Carbon::parse($salaryMonth)->startOfMonth();
 
-        $this->assertRatesCover($taxableSalary, $month);
+        // false means: no income tax is in force and the institution has opted
+        // in to running payroll untaxed. Charge no income tax and say so.
+        if ($this->assertRatesCover($taxableSalary, $month) === false) {
+            return ['lines' => [], 'employee' => 0.0, 'employer' => 0.0, 'untaxed' => true];
+        }
 
         $lines = array_map(function ($line) {
             $line['employee'] = round((float) $line['employee'], 2);
@@ -240,6 +252,7 @@ class PayrollCalculator
             'lines' => $lines,
             'employee' => round(array_sum(array_column($lines, 'employee')), 2),
             'employer' => round(array_sum(array_column($lines, 'employer')), 2),
+            'untaxed' => false,
         ];
     }
 
@@ -415,7 +428,7 @@ class PayrollCalculator
      * that falls in a hole between bands is charged the band below it, which
      * looks normal on the payslip, so it is refused instead.
      */
-    private function assertRatesCover(float $taxableSalary, Carbon $month): void
+    private function assertRatesCover(float $taxableSalary, Carbon $month): bool
     {
         $incomeTax = TaxGroup::getEffectiveGroups($month)
             ->first(fn ($group) => (int) $group->id === self::GROUP_INCOME_TAX);
@@ -425,6 +438,14 @@ class PayrollCalculator
         $bandsInForce = $incomeTax ? $incomeTax->brackets->where('status', 1)->count() : 0;
 
         if (!$incomeTax || $bandsInForce === 0) {
+            // By default this is an error: "no rates in force" must never quietly
+            // become "no tax due". An institution that deliberately withholds no
+            // income tax opts in with PAYROLL_ALLOW_UNTAXED=true, and payroll then
+            // runs untaxed (the caller adds a visible note).
+            if (config('payroll.allow_untaxed')) {
+                return false;
+            }
+
             throw new \RuntimeException(sprintf(
                 'No income tax rates are in force for %s, so the tax on this payroll cannot be worked out. Configure rates effective from that month before generating it.',
                 $month->format('F Y')
@@ -432,7 +453,7 @@ class PayrollCalculator
         }
 
         if ($taxableSalary <= 0) {
-            return;
+            return true;
         }
 
         $gap = $incomeTax->gapFor($taxableSalary);
@@ -449,5 +470,7 @@ class PayrollCalculator
                 $gap['charged_as'] ?? 'the band below'
             ));
         }
+
+        return true;
     }
 }
