@@ -30,3 +30,4 @@ test-db.php
 
 # Ignore user uploads
 /public/uploads
+storage/backups/
