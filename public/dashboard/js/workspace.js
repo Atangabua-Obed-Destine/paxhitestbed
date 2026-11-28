@@ -117,7 +117,7 @@
         ['academic', /\/admin\/(academic|download|content|study|subject|program|semester|session|faculty|course|section|enroll)/],
         ['finance', /\/admin\/(fees|fee-|platform-fee|income|expense|budget|payment|account|accounting|ledger|journal|edutrustpay|finance|tax|bank|asset)/],
         ['people', /\/admin\/(hr|human|staff|user|leave|payroll|designation|department|employee|work-shift|attendance)/],
-        ['campus', /\/admin\/(communicate|mailbox|inventory|hostel|transport|front-desk|frontdesk|visitor|postal|complain|meeting|notice|email|sms|event|item|vehicle|room)/],
+        ['campus', /\/admin\/(communicate|mailbox|inventory|equipment|hostel|transport|front-desk|frontdesk|visitor|postal|complain|meeting|notice|email|sms|event|item|vehicle|room)/],
         ['reports', /\/admin\/(report|audit)/],
         ['website', /\/admin\/(web|front|marketing|page|slider|news|gallery|faq|testimonial|about|social|topbar|call-to-action|feature|course-web)/],
         ['settings', /\/admin\/(setting|security|role|profile|language|translation|field|mail|sms-setting|schedule)/]

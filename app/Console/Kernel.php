@@ -131,6 +131,16 @@ class Kernel extends ConsoleKernel
         $schedule->command('fapshi:reconcile')
                 ->everyFiveMinutes()
                 ->withoutOverlapping();
+
+        /*
+         * Equipment loans: chase what is late. The first reminder goes once the
+         * grace period after the due time has passed, then one a day at the
+         * time set in Desk settings. Checking every five minutes is what lets
+         * "half an hour after it was due" mean that, not "tomorrow".
+         */
+        $schedule->command('equipment:remind')
+                ->everyFiveMinutes()
+                ->withoutOverlapping();
     }
 
     /**

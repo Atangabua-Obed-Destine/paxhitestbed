@@ -1206,6 +1206,7 @@
             </a>
             <ul class="pcoded-submenu">
                 @canany(['book-issue-action'])
+                <li class="{{ Request::is('admin/library/scan-desk*') ? 'active' : '' }}"><a href="{{ route('admin.library.scan-desk') }}" class="">{{ __('Scan desk') }}</a></li>
                 <li class="{{ Request::is('admin/library/issue-return/create') ? 'active' : '' }}"><a href="{{ route('admin.issue-return.create') }}" class="">{{ trans_choice('module_book_issue', 1) }}</a></li>
                 @endcanany
 
@@ -1285,6 +1286,25 @@
                         <i class="fas fa-chart-bar"></i> Statistics
                     </a>
                 </li>
+            </ul>
+        </li>
+        @endcanany
+
+        @canany(['equipment-desk', 'equipment-view', 'equipment-manage'])
+        <li class="nav-item pcoded-hasmenu {{ Request::is('admin/equipment*') ? 'pcoded-trigger active' : '' }}">
+            <a href="#!" class="nav-link">
+                <span class="pcoded-micon"><i class="fas fa-video"></i></span>
+                <span class="pcoded-mtext">{{ __('Equipment loans') }}</span>
+            </a>
+            <ul class="pcoded-submenu">
+                @can('equipment-desk')
+                <li class="{{ Request::is('admin/equipment/desk*') ? 'active' : '' }}"><a href="{{ route('admin.equipment.desk') }}" class="">{{ __('Equipment desk') }}</a></li>
+                @endcan
+                <li class="{{ Request::is('admin/equipment/out-now*') || Request::is('admin/equipment/history*') ? 'active' : '' }}"><a href="{{ route('admin.equipment.board') }}" class="">{{ __('Out right now') }}</a></li>
+                <li class="{{ Request::is('admin/equipment/items*') ? 'active' : '' }}"><a href="{{ route('admin.equipment.items.index') }}" class="">{{ __('Equipment list') }}</a></li>
+                @can('equipment-manage')
+                <li class="{{ Request::is('admin/equipment/settings*') ? 'active' : '' }}"><a href="{{ route('admin.equipment.settings') }}" class="">{{ __('Desk settings') }}</a></li>
+                @endcan
             </ul>
         </li>
         @endcanany

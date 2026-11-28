@@ -1162,6 +1162,29 @@ Route::middleware(['auth:web', 'XSS', 'license'])->name('admin.')->namespace('Ad
     Route::resource('library/issue-return', 'IssueReturnController');
     Route::post('library/issue-return-penalty/{id}', 'IssueReturnController@penalty')->name('issue-return.penalty');
 
+    // Library scan desk: issue and return by scanning the ID card and the book
+    Route::get('library/scan-desk', 'LibraryScanDeskController@desk')->name('library.scan-desk');
+    Route::post('library/scan-desk/scan', 'LibraryScanDeskController@scan')->name('library.scan-desk.scan');
+    Route::post('library/scan-desk/issue', 'LibraryScanDeskController@issue')->name('library.scan-desk.issue');
+    Route::post('library/scan-desk/return', 'LibraryScanDeskController@returnBook')->name('library.scan-desk.return');
+
+    // Equipment loans: projectors, laptops and the like, lent at a desk by ID card
+    Route::get('equipment/desk', 'EquipmentDeskController@desk')->name('equipment.desk');
+    Route::post('equipment/desk/scan', 'EquipmentDeskController@scan')->name('equipment.desk.scan');
+    Route::post('equipment/desk/lend', 'EquipmentDeskController@lend')->name('equipment.desk.lend');
+    Route::post('equipment/desk/check-in', 'EquipmentDeskController@checkIn')->name('equipment.desk.check-in');
+    Route::get('equipment/out-now', 'EquipmentBoardController@board')->name('equipment.board');
+    Route::get('equipment/history/item/{item}', 'EquipmentBoardController@itemHistory')->name('equipment.history.item');
+    Route::get('equipment/history/{type}/{id}', 'EquipmentBoardController@personHistory')->whereIn('type', ['staff', 'student'])->whereNumber('id')->name('equipment.history.person');
+    Route::post('equipment/loans/{loan}/clear', 'EquipmentBoardController@clearFollowUp')->name('equipment.loans.clear');
+    Route::post('equipment/loans/{loan}/lost', 'EquipmentBoardController@markLost')->name('equipment.loans.lost');
+    Route::get('equipment/items/stickers', 'EquipmentItemController@stickers')->name('equipment.items.stickers');
+    Route::resource('equipment/items', 'EquipmentItemController')->except(['show'])->names('equipment.items')->parameters(['items' => 'item']);
+    Route::get('equipment/settings', 'EquipmentSettingController@edit')->name('equipment.settings');
+    Route::put('equipment/settings', 'EquipmentSettingController@update')->name('equipment.settings.update');
+    Route::post('equipment/desks', 'EquipmentSettingController@storeDesk')->name('equipment.desks.store');
+    Route::put('equipment/desks/{desk}', 'EquipmentSettingController@updateDesk')->name('equipment.desks.update');
+
     // Library Member Routes
     Route::resource('member/library-student', 'LibraryStudentController');
     Route::resource('member/library-staff', 'LibraryStaffController');
